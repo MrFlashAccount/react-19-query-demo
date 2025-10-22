@@ -50,12 +50,14 @@ export async function updateMovieRating(
     throw new Error(`Movie with id ${movieId} not found`);
   }
 
-  movie.rating = newRating;
+  const randomDecimal = Math.random() * 1.9;
+
+  movie.rating = Math.min(
+    10,
+    parseFloat((newRating + randomDecimal).toFixed(1))
+  );
 
   // In a real app, this would update the database
   // For this mock, we'll return a copy with the updated rating
-  return {
-    ...movie,
-    rating: newRating,
-  };
+  return movie;
 }

@@ -1,5 +1,4 @@
-import { useState, use, Suspense } from "react";
-import { useTransition } from "react";
+import { useState, use, Suspense, useTransition } from "react";
 import { QueryProvider, useQuery, useMutation } from "./QueryProvider";
 import type { Movie } from "./types/movie";
 import { searchMovies, updateMovieRating } from "./api/movieApi";
@@ -53,7 +52,7 @@ export default function App() {
         href="https://github.com/MrFlashAccount/react-19-query-demo"
         bannerColor="#000"
         octoColor="#fff"
-        size={80}
+        size={100}
         direction="right"
       />
       <Suspense
@@ -76,11 +75,14 @@ export default function App() {
 
 function AppInternal() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [isTransitioning, startTransition] = useTransition();
 
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-  };
+  const { promise, isPending } = useQuery({
+    key: ["movies", searchQuery],
+    queryFn: ([, query]) => searchMovies(query),
+    gcTime: 60_000,
+  });
+
+  const movies = use(promise);
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pt-12 pb-20 md:pt-40 md:pb-60">
@@ -115,13 +117,13 @@ function AppInternal() {
           </div>
           <input
             type="text"
-            onChange={(e) =>
-              startTransition(() => handleSearch(e.target.value))
-            }
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+            }}
             placeholder="Search by title, director, genre, or tags..."
             className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-sm md:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
           />
-          {isTransitioning && (
+          {isPending && (
             <div className="absolute inset-y-0 right-0 pr-3 md:pr-5 flex items-center">
               <div className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-gray-300 border-t-black rounded-full" />
             </div>
@@ -134,29 +136,13 @@ function AppInternal() {
 
       {/* Results */}
       <div className="w-full max-w-6xl">
-        <MovieList query={searchQuery} />
+        <MovieList movies={movies} />
       </div>
     </div>
   );
 }
 
-function MovieList({ query }: { query: string }) {
-  const promise = useQuery({
-    key: ["movies", query],
-    queryFn: () => searchMovies(query),
-    gcTime: 60_000,
-  });
-
-  const movies = use(promise);
-
-  const { mutate: updateRating } = useMutation({
-    mutationFn: ({ movieId, rating }: { movieId: number; rating: number }) => {
-      return updateMovieRating(movieId, rating);
-    },
-    // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
-    invalidateQueries: [["movies"]],
-  });
-
+function MovieList({ movies }: { movies: Movie[] }) {
   if (movies.length === 0) {
     return (
       <div className="text-center py-12 md:py-20">
@@ -178,42 +164,28 @@ function MovieList({ query }: { query: string }) {
       </div>
       <div className="flex flex-col gap-3 md:gap-4">
         {movies.map((movie) => (
-          <MovieCard
-            key={movie.id}
-            movie={movie}
-            onUpdateRating={updateRating}
-          />
+          <MovieCard key={movie.id} movie={movie} />
         ))}
       </div>
     </div>
   );
 }
 
-function MovieCard({
-  movie,
-  onUpdateRating,
-}: {
-  movie: Movie;
-  onUpdateRating: (variables: {
-    movieId: number;
-    rating: number;
-  }) => Promise<Movie>;
-}) {
+function MovieCard({ movie }: { movie: Movie }) {
   const [hoveredStar, setHoveredStar] = useState<number | null>(null);
-  const [isPending, startTransition] = useTransition();
+
+  const { mutate: updateRating, isPending } = useMutation({
+    mutationFn: ({ movieId, rating }: { movieId: number; rating: number }) => {
+      return updateMovieRating(movieId, rating);
+    },
+    // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
+    invalidateQueries: [["movies"]],
+  });
 
   const handleStarClick = (starIndex: number) => {
-    // Convert 1-5 stars to 2-10 rating (each star = 2 points)
-    // Add random decimal between 0 and 1.9 for variety
-    const baseRating = starIndex * 2;
-    const randomDecimal = Math.random() * 1.9;
-    const newRating = Math.min(10, baseRating + randomDecimal);
-
-    startTransition(async () => {
-      await onUpdateRating({
-        movieId: movie.id,
-        rating: parseFloat(newRating.toFixed(1)),
-      });
+    void updateRating({
+      movieId: movie.id,
+      rating: starIndex * 2,
     });
   };
 

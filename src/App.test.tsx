@@ -486,7 +486,7 @@ describe("QueryProvider", () => {
 
       function TestComponent() {
         contextValue = useQueryContext();
-        const promise = useQuery({
+        const { promise } = useQuery({
           key: ["test"],
           queryFn,
           gcTime: 5000,
@@ -540,7 +540,7 @@ describe("QueryProvider", () => {
 
       function TestComponent() {
         contextValue = useQueryContext();
-        const promise = useQuery({
+        const { promise } = useQuery({
           key: ["test"],
           queryFn,
           gcTime: 5000,
@@ -597,7 +597,7 @@ describe("QueryProvider", () => {
 
       function TestComponent() {
         contextValue = useQueryContext();
-        const promise = useQuery({
+        const { promise } = useQuery({
           key: ["test"],
           queryFn,
           gcTime: 5000,
@@ -648,7 +648,7 @@ describe("QueryProvider", () => {
       });
 
       function TestComponent1() {
-        const promise = useQuery({
+        const { promise } = useQuery({
           key: ["shared"],
           queryFn,
           gcTime: 5000,
@@ -658,7 +658,7 @@ describe("QueryProvider", () => {
       }
 
       function TestComponent2() {
-        const promise = useQuery({
+        const { promise } = useQuery({
           key: ["shared"],
           queryFn,
           gcTime: 5000,

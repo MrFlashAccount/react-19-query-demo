@@ -5,6 +5,7 @@ import {
   use,
   useEffect,
   useTransition,
+  useDeferredValue,
 } from "react";
 import { useEvent } from "./useEvent";
 import { QueryCache } from "./QueryCache";
@@ -90,14 +91,18 @@ export interface UseQueryOptions<
 export function useQuery<
   const Key extends Array<unknown>,
   PromiseValue extends unknown
->(options: UseQueryOptions<Key, PromiseValue>): Promise<PromiseValue> {
+>(
+  options: UseQueryOptions<Key, PromiseValue>
+): { promise: Promise<PromiseValue>; isPending: boolean } {
   const { key, queryFn, gcTime } = options;
   const queryFnCallback = useEvent(queryFn);
+  const deferredKey = useDeferredValue(key);
+  const isPending = key !== deferredKey;
 
   const { queryCache } = use(QueryContext);
 
   const promise = queryCache.addPromise<Key, PromiseValue>({
-    key,
+    key: deferredKey,
     promise: new Promise<PromiseValue>((res, rej) =>
       queryFnCallback(key).then(res).catch(rej)
     ),
@@ -113,7 +118,7 @@ export function useQuery<
     };
   }, [JSON.stringify(key)]);
 
-  return promise;
+  return { promise, isPending };
 }
 
 /**
