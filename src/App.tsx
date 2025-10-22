@@ -3,6 +3,7 @@ import { useTransition } from "react";
 import { QueryProvider, useQuery, useMutation } from "./QueryProvider";
 import type { Movie } from "./types/movie";
 import { searchMovies, updateMovieRating } from "./api/movieApi";
+import GitHubCorner from "react-github-corner";
 
 /**
  * Star icon component
@@ -48,6 +49,13 @@ function StarIcon({
 export default function App() {
   return (
     <QueryProvider>
+      <GitHubCorner
+        href="https://github.com/MrFlashAccount/react-19-query-demo"
+        bannerColor="#000"
+        octoColor="#fff"
+        size={80}
+        direction="right"
+      />
       <Suspense
         fallback={
           <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4">
