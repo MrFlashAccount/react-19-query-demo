@@ -16,32 +16,20 @@ export function TabSelector({
   const handleTabChange = (tab: "custom" | "tanstack") => {
     tabChangeRef.current = tab;
 
-    startTransition(() => {
-      onTabChange("unset");
-    });
+    onTabChange("unset");
+
+    setTimeout(() => {
+      startTransition(() => {
+        onTabChange(tab);
+      });
+    }, 100);
   };
-
-  useEffect(() => {
-    if (activeTab !== "unset") {
-      return;
-    }
-
-    if (tabChangeRef.current == null) {
-      return;
-    }
-
-    const tab = tabChangeRef.current;
-    tabChangeRef.current = null;
-
-    startTransition(() => {
-      onTabChange(tab);
-    });
-  }, [onTabChange, activeTab]);
 
   return (
     <div className="flex justify-center mb-8">
       <div className="inline-flex rounded-xl border-2 border-gray-200 p-1 bg-gray-50">
         <button
+          disabled={activeTab === "unset"}
           onClick={() => handleTabChange("custom")}
           className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             activeTab === "custom"
@@ -52,6 +40,7 @@ export function TabSelector({
           Custom Library
         </button>
         <button
+          disabled={activeTab === "unset"}
           onClick={() => handleTabChange("tanstack")}
           className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
             activeTab === "tanstack"
