@@ -82,7 +82,7 @@ function AppInternal() {
 
   const { promise, isPending } = useQuery({
     key: ["movies", searchQuery],
-    queryFn: ([, query]) => searchMovies(query),
+    queryFn: ([, query]) => searchMovies(query, 500),
     gcTime: 60_000,
   });
 

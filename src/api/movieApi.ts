@@ -2,7 +2,7 @@ import type { Movie } from "../types/movie";
 import MOVIE_DATABASE_RAW from "../mocks/movieDatabase.json" with { type: "json" };
 
 const MOVIE_DATABASE = MOVIE_DATABASE_RAW as Movie[];
-
+const DEFAULT_LIMIT = 500;
 /**
  * Search for movies by query string.
  * Searches in title, genres, director, and plot.
@@ -11,14 +11,14 @@ const MOVIE_DATABASE = MOVIE_DATABASE_RAW as Movie[];
  * @param query - Search query string
  * @returns Promise that resolves to an array of matching movies
  */
-export async function searchMovies(query: string): Promise<Movie[]> {
+export async function searchMovies(query: string, limit: number = DEFAULT_LIMIT): Promise<Movie[]> {
   await Promise.resolve();
   // Simulate network delay (300-800ms)
   const delay = 300 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
 
   if (!query.trim()) {
-    return MOVIE_DATABASE.slice(0, 500); // Return first 50 movies for empty search
+    return MOVIE_DATABASE.slice(0, limit); // Return first limit movies for empty search
   }
 
   // Search in title, genres, director, and plot
@@ -58,7 +58,7 @@ export async function searchMovies(query: string): Promise<Movie[]> {
     }
 
     return false;
-  }).slice(0, 50); // Limit results to 50 movies
+  }).slice(0, limit); // Limit results to limit movies
 }
 
 export async function getMovieById(movieId: string): Promise<Movie> {

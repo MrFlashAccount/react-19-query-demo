@@ -71,7 +71,7 @@ describe("PromiseEntry", () => {
       expect(entry.status).toBe("pending");
 
       try {
-        await promise;
+        await entry();
       } catch (e) {
         // Expected to throw
       }
@@ -110,7 +110,7 @@ describe("PromiseEntry", () => {
       expect(onStatusChange).not.toHaveBeenCalled();
 
       try {
-        await promise;
+        await entry();
       } catch (e) {
         // Expected to throw
       }
@@ -191,7 +191,7 @@ describe("PromiseEntry", () => {
       const entry = PromiseEntryFactory.create(promise);
 
       try {
-        await promise;
+        await entry();
       } catch (e) {
         // Expected to throw
       }

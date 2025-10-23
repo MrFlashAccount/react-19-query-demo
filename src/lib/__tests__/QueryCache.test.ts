@@ -554,7 +554,7 @@ describe("QueryCache", () => {
       expect(entry.isPending).toBe(true);
 
       try {
-        await promise;
+        await entry();
       } catch (e) {
         // Expected to throw
       }
