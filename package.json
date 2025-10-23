@@ -15,7 +15,8 @@
     "@tanstack/react-query": "5.90.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-github-corner": "2.5.0"
+    "react-github-corner": "2.5.0",
+    "react-lag-radar": "1.0.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "6.9.1",

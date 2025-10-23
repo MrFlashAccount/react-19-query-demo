@@ -20,6 +20,9 @@ importers:
       react-github-corner:
         specifier: 2.5.0
         version: 2.5.0(react@19.2.0)
+      react-lag-radar:
+        specifier: 1.0.0
+        version: 1.0.0(react@19.2.0)
     devDependencies:
       '@testing-library/jest-dom':
         specifier: 6.9.1
@@ -325,6 +328,9 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@gaearon/lag-radar@0.1.0':
+    resolution: {integrity: sha512-gRBjSuEG6HuyoXhy+yedPXlcGKyUNMlNpgKTncgfXwIi6ejt/0KuqOzck/geYqy8z02fuJrz1VjkF4EwH2Oq8g==}
 
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -1273,6 +1279,11 @@ packages:
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
+  react-lag-radar@1.0.0:
+    resolution: {integrity: sha512-3Pv3B3PuMgFgnakXBrVGYPt0eOHQX+zwcImXSKI9CcF2RDw7VUImr5yb+F1hNl35niL7HSF1wAsMko6I4bO7LQ==}
+    peerDependencies:
+      react: '*'
+
   react-refresh@0.17.0:
     resolution: {integrity: sha512-z6F7K9bV85EfseRCp2bzrpyQ0Gkw1uLoCel9XBVWPg/TjRj94SkJzUTGfOa4bs7iJvBWtQG0Wq7wnI0syw3EBQ==}
     engines: {node: '>=0.10.0'}
@@ -1791,6 +1802,8 @@ snapshots:
 
   '@esbuild/win32-x64@0.25.11':
     optional: true
+
+  '@gaearon/lag-radar@0.1.0': {}
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -2731,6 +2744,11 @@ snapshots:
       react: 19.2.0
 
   react-is@17.0.2: {}
+
+  react-lag-radar@1.0.0(react@19.2.0):
+    dependencies:
+      '@gaearon/lag-radar': 0.1.0
+      react: 19.2.0
 
   react-refresh@0.17.0: {}
 

@@ -2,6 +2,7 @@ import { useState, Suspense } from "react";
 import { QueryProvider, QueryCache } from "./lib";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import GitHubCorner from "react-github-corner";
+import LagRadar from "react-lag-radar";
 import { TabSelector } from "./components/shared/TabSelector";
 import { CustomLibraryTab } from "./components/CustomLibraryTab";
 import { TanStackQueryTab } from "./components/TanStackQueryTab";
@@ -33,6 +34,9 @@ export default function App() {
         size={100}
         direction="right"
       />
+      <div className="fixed bottom-4 left-4 z-50 bg-gray-900 rounded-full shadow-lg p-2 border-2 border-gray-700">
+        <LagRadar size={120} />
+      </div>
       <div className="min-h-screen bg-white">
         {/* Header */}
         <div className="text-center pt-12 mb-8 md:pt-16 md:mb-12">
