@@ -1,17 +1,20 @@
 import type { Movie } from "../types/movie";
 
 const DEFAULT_LIMIT = 500;
-let movieDatabaseCache = null as Movie[] | null;
+let movieDatabaseCache: Movie[] | null = null;
 
 async function getDatabase(): Promise<Movie[]> {
-  movieDatabaseCache = await Promise.all([
+  const database = await Promise.all([
     fetch("/movies/1.json").then((res) => res.json()),
     fetch("/movies/2.json").then((res) => res.json()),
-  ]).then(([movies1, movies2]) => {
-    return [...(movies1 as Movie[]), ...(movies2 as Movie[])];
-  });
+  ]).then(([movies1, movies2]) => [
+    ...(movies1 as Movie[]),
+    ...(movies2 as Movie[]),
+  ]);
 
-  return Promise.resolve(movieDatabaseCache as Movie[]);
+  movieDatabaseCache = database;
+
+  return database;
 }
 
 async function getCachedDatabase(): Promise<Movie[]> {

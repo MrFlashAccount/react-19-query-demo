@@ -23,7 +23,7 @@ const LazyCustomLibraryTab = lazy(() =>
  */
 export default function App() {
   const [activeTab, setActiveTab] = useState<"custom" | "tanstack">("custom");
-  const [movieLimit, setMovieLimit] = useState(100);
+  const [movieLimit, setMovieLimit] = useState(1000);
 
   const queryCache = new QueryCache({ debug: { enabled: false } });
 
@@ -49,7 +49,7 @@ export default function App() {
 
           <div className="min-h-screen bg-white">
             {/* Header */}
-            <div className="text-center pt-12 mb-8 md:pt-16 md:mb-12">
+            <div className="text-center pt-12 mb-12 md:pt-16 md:mb-12">
               <h1 className="text-3xl md:text-5xl font-bold mb-2 tracking-tight">
                 <span className="text-black">Movie</span>
                 <span className="text-gray-400">DB</span>

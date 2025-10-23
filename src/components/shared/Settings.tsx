@@ -25,6 +25,17 @@ export function Settings({
 
   return (
     <div className="flex flex-none relative">
+      {/* Tooltip */}
+      <div className="absolute -top-10 left-[20%] z-50 pointer-events-none">
+        <div className="relative">
+          <div className="bg-black text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-lg">
+            Try playing with settings!
+          </div>
+          {/* Arrow pointing down to the button */}
+          <div className="absolute left-2 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-black"></div>
+        </div>
+      </div>
+
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-2 border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
