@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import type { Movie } from "../../types/movie";
 
 /**
@@ -30,9 +29,7 @@ export function MovieList({
           Found {movies.length} {movies.length === 1 ? "movie" : "movies"}
         </p>
       </div>
-      <div className="flex flex-col gap-3 md:gap-4">
-        <Suspense fallback={<div>Loading movies...</div>}>{children}</Suspense>
-      </div>
+      <div className="flex flex-col gap-3 md:gap-4">{children}</div>
     </div>
   );
 }
