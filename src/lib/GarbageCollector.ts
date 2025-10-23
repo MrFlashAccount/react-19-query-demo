@@ -11,6 +11,10 @@ export interface CacheEntry {
   gcTime?: number;
   /** Timestamp when entry became eligible for GC (when subscriptions reached 0) */
   gcEligibleAt?: number;
+  /** Stale time in milliseconds, 'static', or Infinity */
+  staleTime?: number | "static";
+  /** Timestamp when the data was last fetched successfully */
+  dataUpdatedAt?: number;
 }
 
 /**

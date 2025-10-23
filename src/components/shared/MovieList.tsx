@@ -1,16 +1,14 @@
-import type { Movie } from "../../types/movie";
-
 /**
  * Movie list component that displays search results
  */
 export function MovieList({
-  movies,
+  moviesAmount,
   children,
 }: {
-  movies: Movie[];
+  moviesAmount: number;
   children: React.ReactNode;
 }) {
-  if (movies.length === 0) {
+  if (moviesAmount === 0) {
     return (
       <div className="text-center py-12 md:py-20">
         <div className="text-4xl md:text-6xl mb-4">🎬</div>
@@ -26,7 +24,7 @@ export function MovieList({
     <div>
       <div className="mb-4 md:mb-6 text-center">
         <p className="text-xs md:text-sm text-gray-500">
-          Found {movies.length} {movies.length === 1 ? "movie" : "movies"}
+          Found {moviesAmount} {moviesAmount === 1 ? "movie" : "movies"}
         </p>
       </div>
       <div className="flex flex-col gap-3 md:gap-4">{children}</div>

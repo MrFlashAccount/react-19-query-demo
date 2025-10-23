@@ -14,6 +14,8 @@ export {
   QueryProvider,
   useQuery,
   useMutation,
+  useQueryCache,
+  useQueryContext,
   QueryContext,
   type QueryProviderProps,
   type UseQueryOptions,
@@ -41,3 +43,8 @@ export {
 } from "./QueryCacheDebugger";
 
 export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
+
+export {
+  BackgroundRefetch,
+  type BackgroundRefetchOptions,
+} from "./BackgroundRefetch";

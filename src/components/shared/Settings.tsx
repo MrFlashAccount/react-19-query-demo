@@ -1,5 +1,9 @@
 import { useState } from "react";
 
+const MIN_LIMIT = 1;
+const MAX_LIMIT = 2000;
+const LIMIT_OPTIONS = [100, 250, 500, 1000, 1500, 2000];
+
 /**
  * Settings component for configuring movie display preferences
  */
@@ -14,7 +18,7 @@ export function Settings({
 
   const handleLimitChange = (value: string) => {
     const numValue = parseInt(value, 10);
-    if (numValue >= 1 && numValue <= 1000) {
+    if (numValue >= MIN_LIMIT && numValue <= MAX_LIMIT) {
       onMovieLimitChange(numValue);
     }
   };
@@ -48,7 +52,7 @@ export function Settings({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border-2 border-gray-200 p-4 w-80 z-50">
+        <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border-2 border-gray-200 p-4 w-[400px] z-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Settings</h3>
             <button
@@ -107,46 +111,19 @@ export function Settings({
 
             <div className="pt-3 border-t border-gray-200">
               <div className="flex gap-2">
-                <button
-                  onClick={() => onMovieLimitChange(100)}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
-                    movieLimit === 100
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  100
-                </button>
-                <button
-                  onClick={() => onMovieLimitChange(250)}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
-                    movieLimit === 250
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  250
-                </button>
-                <button
-                  onClick={() => onMovieLimitChange(500)}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
-                    movieLimit === 500
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  500
-                </button>
-                <button
-                  onClick={() => onMovieLimitChange(1000)}
-                  className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
-                    movieLimit === 1000
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  1000
-                </button>
+                {LIMIT_OPTIONS.map((limit) => (
+                  <button
+                    key={limit}
+                    onClick={() => onMovieLimitChange(limit)}
+                    className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
+                      movieLimit === limit
+                        ? "bg-black text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    {limit}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

@@ -1,8 +1,27 @@
 import type { Movie } from "../types/movie";
-import MOVIE_DATABASE_RAW from "../mocks/movieDatabase.json" with { type: "json" };
 
-const MOVIE_DATABASE = MOVIE_DATABASE_RAW as Movie[];
 const DEFAULT_LIMIT = 500;
+let movieDatabaseCache = null as Movie[] | null;
+
+async function getDatabase(): Promise<Movie[]> {
+  movieDatabaseCache = await Promise.all([
+    fetch("/movies/1.json").then((res) => res.json()),
+    fetch("/movies/2.json").then((res) => res.json()),
+  ]).then(([movies1, movies2]) => {
+    return [...(movies1 as Movie[]), ...(movies2 as Movie[])];
+  });
+
+  return Promise.resolve(movieDatabaseCache as Movie[]);
+}
+
+async function getCachedDatabase(): Promise<Movie[]> {
+  if (movieDatabaseCache != null) {
+    return Promise.resolve(movieDatabaseCache);
+  }
+
+  return getDatabase();
+}
+
 /**
  * Search for movies by query string.
  * Searches in title, genres, director, and plot.
@@ -11,11 +30,16 @@ const DEFAULT_LIMIT = 500;
  * @param query - Search query string
  * @returns Promise that resolves to an array of matching movies
  */
-export async function searchMovies(query: string, limit: number = DEFAULT_LIMIT): Promise<Movie[]> {
+export async function searchMovies(
+  query: string,
+  limit: number = DEFAULT_LIMIT
+): Promise<Movie[]> {
   await Promise.resolve();
   // Simulate network delay (300-800ms)
   const delay = 300 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
+
+  const MOVIE_DATABASE = await getDatabase();
 
   if (!query.trim()) {
     return MOVIE_DATABASE.slice(0, limit); // Return first limit movies for empty search
@@ -39,9 +63,7 @@ export async function searchMovies(query: string, limit: number = DEFAULT_LIMIT)
     }
 
     // Search in plot
-    if (
-      movie.plot?.plotText.plainText.toLowerCase().includes(searchTerm)
-    ) {
+    if (movie.plot?.plotText.plainText.toLowerCase().includes(searchTerm)) {
       return true;
     }
 
@@ -65,6 +87,8 @@ export async function getMovieById(movieId: string): Promise<Movie> {
   await Promise.resolve();
   const delay = 100 + Math.random() * 100;
   await new Promise((resolve) => setTimeout(resolve, delay));
+
+  const MOVIE_DATABASE = await getCachedDatabase();
 
   const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
 
@@ -91,6 +115,8 @@ export async function updateMovieRating(
   // Simulate network delay (500-1000ms)
   const delay = 500 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
+
+  const MOVIE_DATABASE = await getDatabase();
 
   const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
   if (movie == null) {

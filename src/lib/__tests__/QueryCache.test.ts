@@ -585,6 +585,186 @@ describe("QueryCache", () => {
     });
   });
 
+  describe("staleTime", () => {
+    beforeEach(() => {
+      queryCache = new QueryCache();
+    });
+
+    it("should mark data as stale when staleTime is 0 (default)", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: 0,
+      });
+
+      await promise;
+
+      // Data should be stale immediately
+      expect(queryCache.isStale(["test"])).toBe(true);
+    });
+
+    it("should mark data as fresh within staleTime window", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: 5000, // 5 seconds
+      });
+
+      await promise;
+
+      // Data should be fresh immediately after fetch
+      expect(queryCache.isStale(["test"])).toBe(false);
+    });
+
+    it("should mark data as stale after staleTime elapses", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: 1000, // 1 second
+      });
+
+      await promise;
+
+      // Fresh initially
+      expect(queryCache.isStale(["test"])).toBe(false);
+
+      // Advance time past staleTime
+      vi.advanceTimersByTime(1001);
+
+      // Should now be stale
+      expect(queryCache.isStale(["test"])).toBe(true);
+    });
+
+    it("should never mark data as stale when staleTime is Infinity", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: Infinity,
+      });
+
+      await promise;
+
+      // Fresh initially
+      expect(queryCache.isStale(["test"])).toBe(false);
+
+      // Advance time significantly
+      vi.advanceTimersByTime(1000000);
+
+      // Should still be fresh
+      expect(queryCache.isStale(["test"])).toBe(false);
+    });
+
+    it("should never mark data as stale when staleTime is 'static'", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: "static",
+      });
+
+      await promise;
+
+      // Fresh initially
+      expect(queryCache.isStale(["test"])).toBe(false);
+
+      // Advance time significantly
+      vi.advanceTimersByTime(1000000);
+
+      // Should still be fresh
+      expect(queryCache.isStale(["test"])).toBe(false);
+    });
+
+    it("should not invalidate entries with staleTime='static'", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: "static",
+      });
+
+      await promise;
+
+      // Try to invalidate
+      queryCache.invalidate(["test"]);
+
+      // Should still exist in cache
+      expect(queryCache.has(["test"])).toBe(true);
+    });
+
+    it("should invalidate entries with numeric staleTime", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: 5000,
+      });
+
+      await promise;
+
+      // Should be able to invalidate
+      queryCache.invalidate(["test"]);
+
+      // Should not exist in cache
+      expect(queryCache.has(["test"])).toBe(false);
+    });
+
+    it("should invalidate entries with staleTime=Infinity", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: Infinity,
+      });
+
+      await promise;
+
+      // Should be able to invalidate
+      queryCache.invalidate(["test"]);
+
+      // Should not exist in cache
+      expect(queryCache.has(["test"])).toBe(false);
+    });
+
+    it("should return true for isStale when key doesn't exist", () => {
+      expect(queryCache.isStale(["non-existent"])).toBe(true);
+    });
+
+    it("should return true for isStale when promise hasn't resolved yet", () => {
+      const promise = new Promise(() => {}); // Never resolves
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: 5000,
+      });
+
+      // Should be stale since dataUpdatedAt is undefined
+      expect(queryCache.isStale(["test"])).toBe(true);
+    });
+
+    it("should update dataUpdatedAt when promise resolves", async () => {
+      const promise = Promise.resolve("data");
+      queryCache.addPromise({
+        key: ["test"],
+        promise,
+        staleTime: 5000,
+      });
+
+      // dataUpdatedAt should be undefined initially
+      const cacheEntry = queryCache.getCache().get(JSON.stringify(["test"]));
+      expect(cacheEntry?.dataUpdatedAt).toBeUndefined();
+
+      await promise;
+
+      // After resolution, dataUpdatedAt should be set
+      expect(cacheEntry?.dataUpdatedAt).toBeDefined();
+      expect(typeof cacheEntry?.dataUpdatedAt).toBe("number");
+    });
+  });
+
   describe("edge cases", () => {
     beforeEach(() => {
       queryCache = new QueryCache();

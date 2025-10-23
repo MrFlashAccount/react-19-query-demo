@@ -9,21 +9,25 @@ import {
 } from "react";
 import { useEvent } from "../useEvent";
 import { QueryCache, type PromiseEntry } from "./QueryCache";
-import { Retrier, type RetryConfig } from "./Retrier";
+import { BackgroundRefetch } from "./BackgroundRefetch";
+import type { RetryConfig } from "./Retrier";
 
 /**
  * Context value for the query provider
  */
 export interface QueryContextValue {
   queryCache: QueryCache;
+  backgroundRefetch: BackgroundRefetch;
 }
 
 /**
  * Query Context - exposed for testing purposes.
  * In production code, use the useQuery hook instead of accessing this directly.
  */
+const defaultQueryCache = new QueryCache();
 export const QueryContext = createContext<QueryContextValue>({
-  queryCache: new QueryCache(),
+  queryCache: defaultQueryCache,
+  backgroundRefetch: new BackgroundRefetch({ queryCache: defaultQueryCache }),
 });
 
 /**
@@ -41,16 +45,33 @@ export interface QueryProviderProps extends PropsWithChildren {
  * - Tracks active subscriptions per cache entry
  * - Only triggers GC when there are no active subscriptions
  * - Cancels GC timer when new subscriptions are added
+ * - Background refetching on focus and reconnect
  *
  * @example
  * ```tsx
- * <QueryProvider options={{ debug: { enabled: true } }}>
+ * <QueryProvider queryCache={new QueryCache()}>
  *   <App />
  * </QueryProvider>
  * ```
  */
 export function QueryProvider({ children, queryCache }: QueryProviderProps) {
-  return <QueryContext value={{ queryCache }}>{children}</QueryContext>;
+  const [backgroundRefetch] = useState(() => {
+    const bgRefetch = new BackgroundRefetch({ queryCache });
+    queryCache.setBackgroundRefetch(bgRefetch);
+    return bgRefetch;
+  });
+
+  useEffect(() => {
+    return () => {
+      backgroundRefetch.stop();
+    };
+  }, [backgroundRefetch]);
+
+  return (
+    <QueryContext value={{ queryCache, backgroundRefetch }}>
+      {children}
+    </QueryContext>
+  );
 }
 
 /**
@@ -66,6 +87,8 @@ export interface UseQueryOptions<
   queryFn: (key: Key) => Promise<PromiseValue>;
   /** Time in milliseconds after which the cache entry will be removed. Default: Infinity */
   gcTime?: number;
+  /** Time in milliseconds until data becomes stale. Can be 'static' or Infinity. Default: 0 */
+  staleTime?: number | "static";
   /** Retry configuration - number of retries, boolean, or custom function. Default: true (3 retries) */
   retry?: RetryConfig;
   /** Delay between retries in milliseconds. Default: 0 */
@@ -74,6 +97,10 @@ export interface UseQueryOptions<
 
 export function useQueryCache(): QueryCache {
   return use(QueryContext).queryCache;
+}
+
+export function useQueryContext(): QueryContextValue {
+  return use(QueryContext);
 }
 
 /**
@@ -89,13 +116,20 @@ export function useQueryCache(): QueryCache {
  * - Timer is cancelled when component mounts
  * - Timer starts when component unmounts
  *
+ * Stale behavior:
+ * - Stale queries are refetched automatically in the background when:
+ *   - New instances of the query mount (handled by QueryCache.addPromise)
+ *   - The window is refocused (handled by BackgroundRefetch)
+ *   - The network is reconnected (handled by BackgroundRefetch)
+ *
  * @example
  * ```tsx
  * function UserProfile({ userId }) {
  *   const promise = useQuery({
  *     key: ['user', userId],
  *     queryFn: () => fetchUser(userId),
- *     gcTime: 5000 // Cache for 5 seconds after unmount
+ *     gcTime: 5000, // Cache for 5 seconds after unmount
+ *     staleTime: 2 * 60 * 1000 // Fresh for 2 minutes
  *   })
  *   const user = use(promise)
  *   return <div>{user.name}</div>
@@ -107,29 +141,28 @@ export function useQuery<
   PromiseValue extends unknown
 >(
   options: UseQueryOptions<Key, PromiseValue>
-): { promise: PromiseEntry<PromiseValue>; isPending: boolean } {
-  const { key, queryFn, gcTime, retry, retryDelay } = options;
+): {
+  promise: PromiseEntry<PromiseValue>;
+  isPending: boolean;
+} {
+  const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
   const queryFnCallback = useEvent(queryFn);
   const deferredKey = useDeferredValue(key);
   const isPending = key !== deferredKey;
 
   const { queryCache } = use(QueryContext);
 
-  // Create retrier instance
-  const retrier = new Retrier({ retry, retryDelay });
-
+  // Add or get promise from cache (staleness check happens inside addPromise)
   const promiseEntry = queryCache.addPromise<Key, PromiseValue>({
     key: deferredKey,
-    promise: new Promise<PromiseValue>((res, rej) =>
-      retrier
-        .execute(() => queryFnCallback(key))
-        .then(res)
-        .catch(rej)
-    ),
+    queryFn: queryFnCallback,
     gcTime,
+    staleTime,
+    retry,
+    retryDelay,
   });
 
-  // Track subscription lifecycle
+  // Track subscription lifecycle (also handles background refetch registration)
   useEffect(() => {
     queryCache.subscribe(key);
 

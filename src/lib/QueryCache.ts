@@ -8,6 +8,8 @@ import {
   type CacheEntry,
   type GarbageCollectorOptions,
 } from "./GarbageCollector";
+import { Retrier, type RetryConfig } from "./Retrier";
+import type { BackgroundRefetch } from "./BackgroundRefetch";
 
 // Re-export PromiseEntry for convenience
 export type { PromiseEntry } from "./PromiseEntry";
@@ -21,10 +23,18 @@ export interface AddPromiseOptions<
 > {
   /** The cache key */
   key: Key;
-  /** The promise to cache */
-  promise: Promise<PromiseValue>;
+  /** Function that returns a promise to fetch data (preferred) */
+  queryFn?: (key: Key) => Promise<PromiseValue>;
+  /** The promise to cache (deprecated, use queryFn instead) */
+  promise?: Promise<PromiseValue>;
   /** Time in milliseconds after which the cache entry will be removed. Default: Infinity */
   gcTime?: number;
+  /** Time in milliseconds until data becomes stale. Can be 'static' to never refetch. Default: 0 */
+  staleTime?: number | "static";
+  /** Retry configuration - number of retries, boolean, or custom function. Default: true (3 retries) */
+  retry?: RetryConfig;
+  /** Delay between retries in milliseconds. Default: 0 */
+  retryDelay?: number | ((failureCount: number, error: unknown) => number);
 }
 
 /**
@@ -72,10 +82,26 @@ export class QueryCache {
   private cache: Map<string, CacheEntry>;
   private debugger: QueryCacheDebugger;
   private garbageCollector: GarbageCollector;
+  private backgroundRefetch?: BackgroundRefetch;
+  private queryRegistry: Map<
+    string,
+    {
+      queryFn: (key: Array<unknown>) => Promise<unknown>;
+      options: {
+        gcTime?: number;
+        staleTime?: number | "static";
+        retry?: RetryConfig;
+        retryDelay?:
+          | number
+          | ((failureCount: number, error: unknown) => number);
+      };
+    }
+  >;
 
   constructor(options: QueryCacheOptions = {}) {
     this.cache = new Map<string, CacheEntry>();
     this.debugger = new QueryCacheDebugger(options.debug);
+    this.queryRegistry = new Map();
 
     // Create garbage collector with callback to log deletions
     this.garbageCollector = new GarbageCollector({
@@ -88,6 +114,14 @@ export class QueryCache {
     });
 
     this.garbageCollector.start(this.cache);
+  }
+
+  /**
+   * Set the BackgroundRefetch instance for this cache
+   * This should be called by QueryProvider after creating the BackgroundRefetch
+   */
+  setBackgroundRefetch(backgroundRefetch: BackgroundRefetch): void {
+    this.backgroundRefetch = backgroundRefetch;
   }
 
   /**
@@ -129,22 +163,109 @@ export class QueryCache {
 
   /**
    * Add a promise to the cache. If a promise with the same key already exists,
-   * returns the existing promise.
+   * checks if it's stale and optionally refetches.
    *
-   * @param options - Options containing key, promise, and optional gcTime
+   * @param options - Options containing key, queryFn (or promise for backwards compat), and optional gcTime/staleTime/retry
    * @returns The cached promise entry
    */
   addPromise<const Key extends Array<unknown>, PromiseValue extends unknown>(
     options: AddPromiseOptions<Key, PromiseValue>
   ): PromiseEntry<PromiseValue> {
-    const { key, promise, gcTime } = options;
+    const {
+      key,
+      queryFn,
+      promise: rawPromise,
+      gcTime,
+      staleTime,
+      retry,
+      retryDelay,
+    } = options;
     const keySerialized = stableKeySerialize(key);
     const existingEntry = this.cache.get(keySerialized);
 
-    if (existingEntry != null) {
+    // For backwards compatibility: if only promise is provided, use it directly
+    if (queryFn == null && rawPromise != null) {
+      if (existingEntry != null) {
+        this.debugger.logUpdate(key, existingEntry.promise);
+        return existingEntry.promise as PromiseEntry<PromiseValue>;
+      }
+
+      const promiseEntry = PromiseEntryFactory.create(rawPromise, {
+        gcTime,
+        key,
+        onStatusChange: (oldStatus, newStatus, entry) => {
+          this.debugger.logStatusChange(key, entry, oldStatus, newStatus);
+        },
+      });
+
+      const entry: CacheEntry = {
+        promise: promiseEntry,
+        subscriptions: 0,
+        gcTime,
+        staleTime,
+        dataUpdatedAt: undefined,
+      };
+
+      this.cache.set(keySerialized, entry);
+      this.debugger.logAdd(key, promiseEntry);
+
+      rawPromise
+        .then(() => {
+          const cachedEntry = this.cache.get(keySerialized);
+          if (cachedEntry != null) {
+            cachedEntry.dataUpdatedAt = Date.now();
+          }
+        })
+        .catch(() => {});
+
+      return promiseEntry as PromiseEntry<PromiseValue>;
+    }
+
+    if (queryFn == null) {
+      throw new Error("Either queryFn or promise must be provided");
+    }
+
+    // Store query info in registry for background refetching
+    this.queryRegistry.set(keySerialized, {
+      queryFn: queryFn as (key: Array<unknown>) => Promise<unknown>,
+      options: { gcTime, staleTime, retry, retryDelay },
+    });
+
+    // If entry exists and is not stale, return it
+    if (existingEntry != null && !this.isStale(key)) {
       this.debugger.logUpdate(key, existingEntry.promise);
       return existingEntry.promise as PromiseEntry<PromiseValue>;
     }
+
+    // If entry exists but is stale and fulfilled, trigger background refetch
+    if (
+      existingEntry != null &&
+      this.isStale(key) &&
+      existingEntry.promise.isFulfilled
+    ) {
+      // Return existing data immediately
+      const existingPromise =
+        existingEntry.promise as PromiseEntry<PromiseValue>;
+
+      // Trigger background refetch
+      this.refetchInBackground(key, queryFn, {
+        gcTime,
+        staleTime,
+        retry,
+        retryDelay,
+      });
+
+      return existingPromise;
+    }
+
+    // Create new entry
+    const retrier = new Retrier({ retry, retryDelay });
+    const promise = new Promise<PromiseValue>((res, rej) =>
+      retrier
+        .execute(() => queryFn(key))
+        .then(res)
+        .catch(rej)
+    );
 
     // Create a PromiseEntry using the factory
     const promiseEntry = PromiseEntryFactory.create(promise, {
@@ -159,11 +280,91 @@ export class QueryCache {
       promise: promiseEntry,
       subscriptions: 0,
       gcTime,
+      staleTime,
+      dataUpdatedAt: undefined,
     };
 
     this.cache.set(keySerialized, entry);
     this.debugger.logAdd(key, promiseEntry);
+
+    // Set dataUpdatedAt when promise fulfills
+    promise
+      .then(() => {
+        const cachedEntry = this.cache.get(keySerialized);
+        if (cachedEntry != null) {
+          cachedEntry.dataUpdatedAt = Date.now();
+        }
+      })
+      .catch(() => {
+        // Ignore errors - they're handled elsewhere
+      });
+
     return promiseEntry as PromiseEntry<PromiseValue>;
+  }
+
+  /**
+   * Refetch data in the background for a stale entry
+   *
+   * @param key - The cache key
+   * @param queryFn - Function to fetch data
+   * @param options - Optional gcTime, staleTime, retry, retryDelay
+   */
+  private refetchInBackground<
+    const Key extends Array<unknown>,
+    PromiseValue extends unknown
+  >(
+    key: Key,
+    queryFn: (key: Key) => Promise<PromiseValue>,
+    options: {
+      gcTime?: number;
+      staleTime?: number | "static";
+      retry?: RetryConfig;
+      retryDelay?: number | ((failureCount: number, error: unknown) => number);
+    }
+  ): void {
+    const { gcTime, staleTime, retry, retryDelay } = options;
+    const keySerialized = stableKeySerialize(key);
+
+    // Create new promise with retrier
+    const retrier = new Retrier({ retry, retryDelay });
+    const promise = new Promise<PromiseValue>((res, rej) =>
+      retrier
+        .execute(() => queryFn(key))
+        .then(res)
+        .catch(rej)
+    );
+
+    // Create a PromiseEntry using the factory
+    const promiseEntry = PromiseEntryFactory.create(promise, {
+      gcTime,
+      key,
+      onStatusChange: (oldStatus, newStatus, entry) => {
+        this.debugger.logStatusChange(key, entry, oldStatus, newStatus);
+      },
+    });
+
+    const entry: CacheEntry = {
+      promise: promiseEntry,
+      subscriptions: 0,
+      gcTime,
+      staleTime,
+      dataUpdatedAt: undefined,
+    };
+
+    // Update the cache with the new promise
+    this.cache.set(keySerialized, entry);
+
+    // Set dataUpdatedAt when promise fulfills
+    promise
+      .then(() => {
+        const cachedEntry = this.cache.get(keySerialized);
+        if (cachedEntry != null) {
+          cachedEntry.dataUpdatedAt = Date.now();
+        }
+      })
+      .catch(() => {
+        // Ignore errors - they're handled elsewhere
+      });
   }
 
   /**
@@ -193,6 +394,46 @@ export class QueryCache {
   }
 
   /**
+   * Check if cached data is stale based on staleTime
+   *
+   * @param key - The cache key to check
+   * @returns True if the data is stale and should be refetched
+   */
+  isStale<const Key extends Array<unknown>>(key: Key): boolean {
+    const keySerialized = stableKeySerialize(key);
+    const entry = this.cache.get(keySerialized);
+
+    if (entry == null) {
+      return true;
+    }
+
+    // If staleTime is 'static', data is never stale
+    if (entry.staleTime === "static") {
+      return false;
+    }
+
+    // If staleTime is Infinity, data is never stale
+    if (entry.staleTime === Infinity) {
+      return false;
+    }
+
+    // If data hasn't been fetched yet, it's stale
+    if (entry.dataUpdatedAt == null) {
+      return true;
+    }
+
+    // If staleTime is 0 or undefined (default), data is always stale
+    const staleTime = entry.staleTime ?? 0;
+    if (staleTime === 0) {
+      return true;
+    }
+
+    // Check if staleTime has elapsed since last update
+    const now = Date.now();
+    return now >= entry.dataUpdatedAt + staleTime;
+  }
+
+  /**
    * Clear all entries from the cache
    */
   clear(): void {
@@ -202,7 +443,8 @@ export class QueryCache {
 
   /**
    * Subscribe to a cache entry. Increments the subscription count and
-   * clears the GC eligibility timestamp.
+   * clears the GC eligibility timestamp. Also registers the query for
+   * background refetching if BackgroundRefetch is available.
    *
    * @param key - The cache key to subscribe to
    */
@@ -215,12 +457,23 @@ export class QueryCache {
 
       // Clear GC eligibility when there are active subscriptions
       this.garbageCollector.clearEligibility(keySerialized);
+
+      // Register for background refetching if BackgroundRefetch is available
+      const queryInfo = this.queryRegistry.get(keySerialized);
+      if (this.backgroundRefetch != null && queryInfo != null) {
+        this.backgroundRefetch.register(
+          key,
+          queryInfo.queryFn,
+          queryInfo.options
+        );
+      }
     }
   }
 
   /**
    * Unsubscribe from a cache entry. Decrements the subscription count and
    * marks the entry as eligible for GC if there are no more active subscriptions.
+   * Also unregisters the query from background refetching when no subscriptions remain.
    *
    * @param key - The cache key to unsubscribe from
    */
@@ -234,6 +487,11 @@ export class QueryCache {
       // Mark as eligible for GC when no active subscriptions
       if (entry.subscriptions === 0) {
         this.garbageCollector.markEligible(keySerialized);
+
+        // Unregister from background refetching when no subscriptions remain
+        if (this.backgroundRefetch != null) {
+          this.backgroundRefetch.unregister(key);
+        }
       }
     }
   }
@@ -246,6 +504,8 @@ export class QueryCache {
    * - `['movies']` invalidates `['movies']`, `['movies', 'action']`, `['movies', 'search', 'query']`, etc.
    * - `['movies', 'action']` invalidates `['movies', 'action']` and `['movies', 'action', 'popular']`, etc.
    *
+   * Note: Entries with staleTime='static' are never invalidated.
+   *
    * @param key - The cache key prefix to invalidate
    */
   invalidate<const Key extends Array<unknown>>(key: Key): void {
@@ -254,6 +514,13 @@ export class QueryCache {
     // Find all cache keys that start with the specified key prefix
     for (const cacheKey of this.cache.keys()) {
       if (this.keyStartsWith(cacheKey, key)) {
+        const entry = this.cache.get(cacheKey);
+
+        // Skip entries with staleTime='static'
+        if (entry != null && entry.staleTime === "static") {
+          continue;
+        }
+
         keysToDelete.push(cacheKey);
       }
     }
