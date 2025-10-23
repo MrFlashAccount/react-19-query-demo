@@ -39,11 +39,17 @@ export function TanStackQueryTab({
     });
   };
 
+  const handleMovieLimitChange = (value: number) => {
+    startTransition(() => {
+      onMovieLimitChange(value);
+    });
+  };
+
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
       <SearchBox
         movieLimit={movieLimit}
-        onMovieLimitChange={onMovieLimitChange}
+        onMovieLimitChange={handleMovieLimitChange}
         handleSearchChange={handleSearchChange}
         isPending={isPending}
       />
