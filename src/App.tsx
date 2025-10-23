@@ -1,16 +1,22 @@
-import { useState, Suspense, lazy } from "react";
+import { useState, Suspense, lazy, ComponentType } from "react";
 import { QueryProvider, QueryCache } from "./lib";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TabSelector } from "./components/shared/TabSelector";
 
 const LazyGitHubCorner = lazy(() => import("react-github-corner"));
 const LazyLagRadar = lazy(() => import("react-lag-radar"));
-const LazyTanStackQueryTab = lazy(() =>
+const LazyTanStackQueryTab: ComponentType<{
+  movieLimit: number;
+  onMovieLimitChange: (limit: number) => void;
+}> = lazy(() =>
   import("./components/TanStackQueryTab").then((mod) => ({
     default: mod.TanStackQueryTab,
   }))
 );
-const LazyCustomLibraryTab = lazy(() =>
+const LazyCustomLibraryTab: ComponentType<{
+  movieLimit: number;
+  onMovieLimitChange: (limit: number) => void;
+}> = lazy(() =>
   import("./components/CustomLibraryTab").then((mod) => ({
     default: mod.CustomLibraryTab,
   }))
@@ -22,6 +28,7 @@ const LazyCustomLibraryTab = lazy(() =>
  */
 export default function App() {
   const [activeTab, setActiveTab] = useState<"custom" | "tanstack">("custom");
+  const [movieLimit, setMovieLimit] = useState(100);
   const queryCache = new QueryCache({
     debug: { enabled: false, showTimestamps: true, verboseData: false },
   });
@@ -62,9 +69,15 @@ export default function App() {
             </div>
 
             {activeTab === "custom" ? (
-              <LazyCustomLibraryTab />
+              <LazyCustomLibraryTab
+                movieLimit={movieLimit}
+                onMovieLimitChange={setMovieLimit}
+              />
             ) : (
-              <LazyTanStackQueryTab />
+              <LazyTanStackQueryTab
+                movieLimit={movieLimit}
+                onMovieLimitChange={setMovieLimit}
+              />
             )}
           </div>
         </Suspense>

@@ -11,11 +11,13 @@ export function TabSelector({
   onTabChange: (tab: "custom" | "tanstack") => void;
 }) {
   const [isPending, startTransition] = useTransition();
+
   const handleTabChange = (tab: "custom" | "tanstack") => {
     startTransition(() => {
       onTabChange(tab);
     });
   };
+
   return (
     <div className="flex justify-center mb-8">
       <div className="inline-flex rounded-xl border-2 border-gray-200 p-1 bg-gray-50">
