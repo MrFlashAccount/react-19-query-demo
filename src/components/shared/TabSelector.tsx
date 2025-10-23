@@ -1,4 +1,4 @@
-import { useEffect, useRef, useTransition } from "react";
+import { useRef, useTransition } from "react";
 
 /**
  * Tab selector component for switching between custom library and TanStack Query implementations
