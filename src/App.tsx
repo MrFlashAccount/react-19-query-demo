@@ -1,57 +1,31 @@
-import { useState, use, Suspense } from "react";
-import { QueryProvider, useQuery, useMutation, QueryCache } from "./lib";
-import type { Movie } from "./types/movie";
-import { getMovieById, searchMovies, updateMovieRating } from "./api/movieApi";
+import { useState, Suspense } from "react";
+import { QueryProvider, QueryCache } from "./lib";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import GitHubCorner from "react-github-corner";
+import { TabSelector } from "./components/shared/TabSelector";
+import { CustomLibraryTab } from "./components/CustomLibraryTab";
+import { TanStackQueryTab } from "./components/TanStackQueryTab";
 
 /**
- * Star icon component
+ * Main application component with tabbed interface
+ * Compares custom query library implementation with TanStack Query
  */
-function StarIcon({
-  filled,
-  className = "",
-}: {
-  filled: boolean;
-  className?: string;
-}) {
-  if (filled) {
-    return (
-      <svg
-        className={className}
-        fill="currentColor"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-      </svg>
-    );
-  } else {
-    return (
-      <svg
-        className={className}
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-        />
-      </svg>
-    );
-  }
-}
-
 export default function App() {
+  const [activeTab, setActiveTab] = useState<"custom" | "tanstack">("custom");
   const queryCache = new QueryCache({
     debug: { enabled: false, showTimestamps: true, verboseData: false },
   });
 
+  const tanStackQueryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        gcTime: 60_000,
+      },
+    },
+  });
+
   return (
-    <QueryProvider queryCache={queryCache}>
+    <>
       <GitHubCorner
         href="https://github.com/MrFlashAccount/react-19-query-demo"
         bannerColor="#000"
@@ -59,255 +33,51 @@ export default function App() {
         size={100}
         direction="right"
       />
-      <Suspense
-        fallback={
-          <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4">
-            <div className="animate-spin h-8 w-8 md:h-10 md:w-10 border-3 border-gray-300 border-t-black rounded-full mb-4" />
-            <p className="text-sm md:text-base text-gray-500">
-              Loading movies...
-            </p>
-          </div>
-        }
-      >
-        <div className="min-h-screen bg-white">
-          <AppInternal />
+      <div className="min-h-screen bg-white">
+        {/* Header */}
+        <div className="text-center pt-12 mb-8 md:pt-16 md:mb-12">
+          <h1 className="text-3xl md:text-5xl font-bold mb-2 tracking-tight">
+            <span className="text-black">Movie</span>
+            <span className="text-gray-400">DB</span>
+          </h1>
+          <p className="text-gray-500 text-xs md:text-sm mb-6">
+            Search thousands of movies
+          </p>
+          <TabSelector activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
-      </Suspense>
-    </QueryProvider>
-  );
-}
 
-function AppInternal() {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const { promise, isPending } = useQuery({
-    key: ["movies", searchQuery],
-    queryFn: ([, query]) => searchMovies(query, 500),
-    gcTime: 60_000,
-  });
-
-  const movies = use(promise());
-
-  return (
-    <div className="flex flex-col items-center min-h-screen px-4 pt-12 pb-20 md:pt-40 md:pb-60">
-      {/* Header */}
-      <div className="text-center mb-8 md:mb-40">
-        <h1 className="text-3xl md:text-5xl font-bold mb-2 tracking-tight">
-          <span className="text-black">Movie</span>
-          <span className="text-gray-400">DB</span>
-        </h1>
-        <p className="text-gray-500 text-xs md:text-sm">
-          Search thousands of movies
-        </p>
-      </div>
-
-      {/* Search Box - Same width as grid */}
-      <div className="w-full max-w-6xl mb-6 md:mb-8">
-        <div className="relative max-w-3xl mx-auto">
-          <div className="absolute inset-y-0 left-0 pl-3 md:pl-5 flex items-center pointer-events-none">
-            <svg
-              className="w-4 h-4 md:w-5 md:h-5 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        {activeTab === "custom" ? (
+          <QueryProvider queryCache={queryCache}>
+            <Suspense
+              fallback={
+                <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4">
+                  <div className="animate-spin h-8 w-8 md:h-10 md:w-10 border-3 border-gray-300 border-t-black rounded-full mb-4" />
+                  <p className="text-sm md:text-base text-gray-500">
+                    Loading movies...
+                  </p>
+                </div>
+              }
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
-          </div>
-          <input
-            type="text"
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-            }}
-            placeholder="Search by title, director, genre, or tags..."
-            className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-sm md:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
-          />
-          {isPending && (
-            <div className="absolute inset-y-0 right-0 pr-3 md:pr-5 flex items-center">
-              <div className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-gray-300 border-t-black rounded-full" />
-            </div>
-          )}
-        </div>
-        <div className="mt-2 text-center text-xs text-gray-400">
-          Cached for 1 minute after last view
-        </div>
-      </div>
-
-      {/* Results */}
-      <div className="w-full max-w-6xl">
-        <MovieList movies={movies} />
-      </div>
-    </div>
-  );
-}
-
-function MovieList({ movies }: { movies: Movie[] }) {
-  if (movies.length === 0) {
-    return (
-      <div className="text-center py-12 md:py-20">
-        <div className="text-4xl md:text-6xl mb-4">🎬</div>
-        <p className="text-lg md:text-xl text-gray-600 mb-2">No movies found</p>
-        <p className="text-xs md:text-sm text-gray-400">
-          Try a different search term
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-4 md:mb-6 text-center">
-        <p className="text-xs md:text-sm text-gray-500">
-          Found {movies.length} {movies.length === 1 ? "movie" : "movies"}
-        </p>
-      </div>
-      <div className="flex flex-col gap-3 md:gap-4">
-        <Suspense fallback={<div>Loading movies...</div>}>
-          {movies.map((movie) => (
-            <MovieCard key={movie.id} movie={movie} />
-          ))}
-        </Suspense>
-      </div>
-    </div>
-  );
-}
-
-function MovieCard({ movie }: { movie: Movie }) {
-  const [hoveredStar, setHoveredStar] = useState<number | null>(null);
-
-  const movieId = movie.id;
-
-  const { mutate: updateRating, isPending } = useMutation({
-    mutationFn: ({ rating }: { rating: number }) =>
-      updateMovieRating(movieId, rating),
-    // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
-    invalidateQueries: [["movies"], ["movie", movieId]],
-  });
-
-  useQuery({
-    key: ["movie", movieId],
-    queryFn: () => getMovieById(movieId),
-    gcTime: 60_000,
-  });
-
-  const handleStarClick = (starIndex: number) => {
-    void updateRating({ rating: starIndex * 2 });
-  };
-
-  const rating = movie.ratingsSummary.aggregateRating;
-  const currentStars = Math.ceil(rating ?? 0 / 2); // Convert 0-10 rating to 0-5 stars
-  const director =
-    movie.principalCredits?.find((credit) => credit.category.id === "director")
-      ?.credits[0]?.name.nameText.text || "Unknown";
-  const genres = movie.genres.genres.map((g) => g.text).join(", ");
-  const imageUrl =
-    movie.primaryImage?.url ||
-    "https://via.placeholder.com/300x450?text=No+Image";
-
-  return (
-    <div className="[content-visibility:auto] [contain-intrinsic-size:160px] group bg-white border-2 border-gray-100 rounded-lg overflow-hidden hover:border-black hover:shadow-lg transition-all duration-200 flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
-      {/* Movie Image */}
-      <div className="relative h-48 sm:h-36 md:h-40 w-full sm:w-auto sm:aspect-[1.5/1] flex-shrink-0 overflow-hidden bg-gray-100 sm:rounded-l-lg">
-        <img
-          src={imageUrl}
-          alt={movie.titleText.text}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-        <div className="absolute top-2 right-2">
-          <span className="px-2 py-0.5 text-xs font-bold bg-black text-white rounded-md shadow-lg">
-            {rating?.toFixed(1) ?? "N/A"}
-          </span>
-        </div>
-      </div>
-
-      {/* Movie Info */}
-      <div className="p-3 sm:p-4 flex-1 flex flex-col gap-2">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-sm sm:text-base font-bold text-black line-clamp-2 sm:truncate group-hover:text-gray-900">
-            {movie.titleText.text}
-          </h3>
-
-          {isPending && (
-            <div className="flex items-center gap-1 text-xs text-gray-500 flex-shrink-0">
-              <div className="animate-spin h-3 w-3 border-2 border-gray-300 border-t-black rounded-full" />
-              <span className="hidden sm:inline">Saving...</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs text-gray-600">
-          <span className="flex items-center gap-1">
-            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" />
-            </svg>
-            {movie.releaseYear?.year ?? "N/A"}
-          </span>
-          <span className="text-gray-400">•</span>
-          <span className="truncate max-w-[120px] sm:max-w-none">
-            {director}
-          </span>
-          <span className="text-gray-400">•</span>
-          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md truncate max-w-[150px]">
-            {genres}
-          </span>
-        </div>
-
-        {/* Star Rating */}
-        <div className="flex items-center gap-2">
-          <div
-            className={`flex gap-0.5 ${
-              isPending ? "opacity-75 cursor-not-allowed" : ""
-            }`}
-            onMouseLeave={() => setHoveredStar(null)}
-          >
-            {[1, 2, 3, 4, 5].map((star) => {
-              const displayStar =
-                hoveredStar != null
-                  ? star <= hoveredStar
-                  : star <= currentStars;
-
-              return (
-                <button
-                  key={star}
-                  onClick={() => {
-                    handleStarClick(star);
-                  }}
-                  onMouseEnter={() => setHoveredStar(star)}
-                  disabled={isPending}
-                  className={`transition-all duration-150 ${
-                    displayStar ? "text-yellow-400" : "text-gray-300"
-                  } hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <StarIcon
-                    filled={displayStar}
-                    className="w-4 h-4 sm:w-5 sm:h-5"
-                  />
-                </button>
-              );
-            })}
-          </div>
-          <span className="text-xs text-gray-500 hidden sm:inline">
-            {hoveredStar != null
-              ? `Rate ${hoveredStar} star${hoveredStar > 1 ? "s" : ""}`
-              : "Click to rate"}
-          </span>
-          <span className="text-xs text-gray-500 sm:hidden">
-            {hoveredStar != null ? `${hoveredStar}★` : "Tap to rate"}
-          </span>
-        </div>
-
-        {/* Plot */}
-        {movie.plot?.plotText.plainText && (
-          <div className="text-xs text-gray-600 line-clamp-2">
-            {movie.plot.plotText.plainText}
-          </div>
+              <CustomLibraryTab />
+            </Suspense>
+          </QueryProvider>
+        ) : (
+          <QueryClientProvider client={tanStackQueryClient}>
+            <Suspense
+              fallback={
+                <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4">
+                  <div className="animate-spin h-8 w-8 md:h-10 md:w-10 border-3 border-gray-300 border-t-black rounded-full mb-4" />
+                  <p className="text-sm md:text-base text-gray-500">
+                    Loading movies...
+                  </p>
+                </div>
+              }
+            >
+              <TanStackQueryTab />
+            </Suspense>
+          </QueryClientProvider>
         )}
       </div>
-    </div>
+    </>
   );
 }
