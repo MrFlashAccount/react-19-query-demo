@@ -1,4 +1,4 @@
-import { useTransition } from "react";
+import { useEffect, useRef, useTransition } from "react";
 
 /**
  * Tab selector component for switching between custom library and TanStack Query implementations
@@ -7,16 +7,36 @@ export function TabSelector({
   activeTab,
   onTabChange,
 }: {
-  activeTab: "custom" | "tanstack";
-  onTabChange: (tab: "custom" | "tanstack") => void;
+  activeTab: "custom" | "tanstack" | "unset";
+  onTabChange: (tab: "custom" | "tanstack" | "unset") => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const tabChangeRef = useRef<"custom" | "tanstack" | null>(null);
 
   const handleTabChange = (tab: "custom" | "tanstack") => {
+    tabChangeRef.current = tab;
+
+    startTransition(() => {
+      onTabChange("unset");
+    });
+  };
+
+  useEffect(() => {
+    if (activeTab !== "unset") {
+      return;
+    }
+
+    if (tabChangeRef.current == null) {
+      return;
+    }
+
+    const tab = tabChangeRef.current;
+    tabChangeRef.current = null;
+
     startTransition(() => {
       onTabChange(tab);
     });
-  };
+  }, [onTabChange, activeTab]);
 
   return (
     <div className="flex justify-center mb-8">

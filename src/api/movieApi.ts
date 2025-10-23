@@ -88,6 +88,7 @@ export async function searchMovies(
 
 export async function getMovieById(movieId: string): Promise<Movie> {
   await Promise.resolve();
+
   const delay = 100 + Math.random() * 100;
   await new Promise((resolve) => setTimeout(resolve, delay));
 
