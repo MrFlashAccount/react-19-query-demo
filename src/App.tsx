@@ -1,7 +1,7 @@
-import { useState, use, Suspense, useTransition } from "react";
-import { QueryProvider, useQuery, useMutation } from "./QueryProvider";
+import { useState, use, Suspense } from "react";
+import { QueryProvider, useQuery, useMutation } from "./lib";
 import type { Movie } from "./types/movie";
-import { searchMovies, updateMovieRating } from "./api/movieApi";
+import { getMovieById, searchMovies, updateMovieRating } from "./api/movieApi";
 import GitHubCorner from "react-github-corner";
 
 /**
@@ -47,7 +47,11 @@ function StarIcon({
 
 export default function App() {
   return (
-    <QueryProvider>
+    <QueryProvider
+      options={{
+        debug: { enabled: false, showTimestamps: true, verboseData: false },
+      }}
+    >
       <GitHubCorner
         href="https://github.com/MrFlashAccount/react-19-query-demo"
         bannerColor="#000"
@@ -82,7 +86,7 @@ function AppInternal() {
     gcTime: 60_000,
   });
 
-  const movies = use(promise);
+  const movies = use(promise());
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pt-12 pb-20 md:pt-40 md:pb-60">
@@ -163,9 +167,11 @@ function MovieList({ movies }: { movies: Movie[] }) {
         </p>
       </div>
       <div className="flex flex-col gap-3 md:gap-4">
-        {movies.map((movie) => (
-          <MovieCard key={movie.id} movie={movie} />
-        ))}
+        <Suspense fallback={<div>Loading movies...</div>}>
+          {movies.map((movie) => (
+            <MovieCard key={movie.id} movie={movie} />
+          ))}
+        </Suspense>
       </div>
     </div>
   );
@@ -174,35 +180,47 @@ function MovieList({ movies }: { movies: Movie[] }) {
 function MovieCard({ movie }: { movie: Movie }) {
   const [hoveredStar, setHoveredStar] = useState<number | null>(null);
 
+  const movieId = movie.id;
+
   const { mutate: updateRating, isPending } = useMutation({
-    mutationFn: ({ movieId, rating }: { movieId: number; rating: number }) => {
-      return updateMovieRating(movieId, rating);
-    },
+    mutationFn: ({ rating }: { rating: number }) =>
+      updateMovieRating(movieId, rating),
     // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
-    invalidateQueries: [["movies"]],
+    invalidateQueries: [["movies"], ["movie", movieId]],
+  });
+
+  useQuery({
+    key: ["movie", movieId],
+    queryFn: () => getMovieById(movieId),
+    gcTime: 60_000,
   });
 
   const handleStarClick = (starIndex: number) => {
-    void updateRating({
-      movieId: movie.id,
-      rating: starIndex * 2,
-    });
+    void updateRating({ rating: starIndex * 2 });
   };
 
-  const currentStars = Math.ceil(movie.rating / 2); // Convert 0-10 rating to 0-5 stars
+  const rating = movie.ratingsSummary.aggregateRating;
+  const currentStars = Math.ceil(rating ?? 0 / 2); // Convert 0-10 rating to 0-5 stars
+  const director =
+    movie.principalCredits?.find((credit) => credit.category.id === "director")
+      ?.credits[0]?.name.nameText.text || "Unknown";
+  const genres = movie.genres.genres.map((g) => g.text).join(", ");
+  const imageUrl =
+    movie.primaryImage?.url ||
+    "https://via.placeholder.com/300x450?text=No+Image";
 
   return (
-    <div className="group bg-white border-2 border-gray-100 rounded-lg overflow-hidden hover:border-black hover:shadow-lg transition-all duration-200 flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
+    <div className="[content-visibility:auto] [contain-intrinsic-size:160px] group bg-white border-2 border-gray-100 rounded-lg overflow-hidden hover:border-black hover:shadow-lg transition-all duration-200 flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
       {/* Movie Image */}
       <div className="relative h-48 sm:h-36 md:h-40 w-full sm:w-auto sm:aspect-[1.5/1] flex-shrink-0 overflow-hidden bg-gray-100 sm:rounded-l-lg">
         <img
-          src={movie.image}
-          alt={movie.title}
+          src={imageUrl}
+          alt={movie.titleText.text}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         <div className="absolute top-2 right-2">
           <span className="px-2 py-0.5 text-xs font-bold bg-black text-white rounded-md shadow-lg">
-            {movie.rating}
+            {rating?.toFixed(1) ?? "N/A"}
           </span>
         </div>
       </div>
@@ -211,7 +229,7 @@ function MovieCard({ movie }: { movie: Movie }) {
       <div className="p-3 sm:p-4 flex-1 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-sm sm:text-base font-bold text-black line-clamp-2 sm:truncate group-hover:text-gray-900">
-            {movie.title}
+            {movie.titleText.text}
           </h3>
 
           {isPending && (
@@ -227,15 +245,15 @@ function MovieCard({ movie }: { movie: Movie }) {
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" />
             </svg>
-            {movie.year}
+            {movie.releaseYear?.year ?? "N/A"}
           </span>
           <span className="text-gray-400">•</span>
           <span className="truncate max-w-[120px] sm:max-w-none">
-            {movie.director}
+            {director}
           </span>
           <span className="text-gray-400">•</span>
-          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
-            {movie.genre}
+          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md truncate max-w-[150px]">
+            {genres}
           </span>
         </div>
 
@@ -283,17 +301,12 @@ function MovieCard({ movie }: { movie: Movie }) {
           </span>
         </div>
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5">
-          {movie.tags.slice(0, 3).map((tag) => (
-            <span
-              key={tag}
-              className="text-xs px-2 py-0.5 bg-gray-50 text-gray-600 rounded-md border border-gray-200"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
+        {/* Plot */}
+        {movie.plot?.plotText.plainText && (
+          <div className="text-xs text-gray-600 line-clamp-2">
+            {movie.plot.plotText.plainText}
+          </div>
+        )}
       </div>
     </div>
   );
