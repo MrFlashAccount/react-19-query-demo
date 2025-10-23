@@ -1,32 +1,105 @@
 import type { Movie } from "../types/movie";
-import { MOVIE_DATABASE } from "../mocks/movieDatabase";
+
+const DEFAULT_LIMIT = 500;
+let movieDatabaseCache: Movie[] | null = null;
+
+async function getDatabase(): Promise<Movie[]> {
+  const database = await Promise.all([
+    fetch("/movies/1.json").then((res) => res.json()),
+    fetch("/movies/2.json").then((res) => res.json()),
+  ]).then(([movies1, movies2]) => [
+    ...(movies1 as Movie[]),
+    ...(movies2 as Movie[]),
+  ]);
+
+  movieDatabaseCache = database;
+
+  return database;
+}
+
+async function getCachedDatabase(): Promise<Movie[]> {
+  if (movieDatabaseCache != null) {
+    return Promise.resolve(movieDatabaseCache);
+  }
+
+  return getDatabase();
+}
 
 /**
  * Search for movies by query string.
- * Searches in title, director, genre, and tags.
+ * Searches in title, genres, director, and plot.
  * Simulates API call with realistic network delay (300-800ms).
  *
  * @param query - Search query string
  * @returns Promise that resolves to an array of matching movies
  */
-export async function searchMovies(query: string): Promise<Movie[]> {
+export async function searchMovies(
+  query: string,
+  limit: number = DEFAULT_LIMIT
+): Promise<Movie[]> {
+  await Promise.resolve();
   // Simulate network delay (300-800ms)
   const delay = 300 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
 
+  const MOVIE_DATABASE = await getDatabase();
+
   if (!query.trim()) {
-    return MOVIE_DATABASE;
+    return MOVIE_DATABASE.slice(0, limit); // Return first limit movies for empty search
   }
 
-  // Search in title, director, genre, and tags
+  // Search in title, genres, director, and plot
   const searchTerm = query.toLowerCase();
-  return MOVIE_DATABASE.filter(
-    (movie) =>
-      movie.title.toLowerCase().includes(searchTerm) ||
-      movie.director.toLowerCase().includes(searchTerm) ||
-      movie.genre.toLowerCase().includes(searchTerm) ||
-      movie.tags.some((tag) => tag.toLowerCase().includes(searchTerm))
-  );
+  return MOVIE_DATABASE.filter((movie) => {
+    // Search in title
+    if (movie.titleText.text.toLowerCase().includes(searchTerm)) {
+      return true;
+    }
+
+    // Search in genres
+    if (
+      movie.genres.genres.some((genre) =>
+        genre.text.toLowerCase().includes(searchTerm)
+      )
+    ) {
+      return true;
+    }
+
+    // Search in plot
+    if (movie.plot?.plotText.plainText.toLowerCase().includes(searchTerm)) {
+      return true;
+    }
+
+    // Search in director
+    const directorCredit = movie.principalCredits?.find(
+      (credit) => credit.category.id === "director"
+    );
+    if (
+      directorCredit?.credits.some((credit) =>
+        credit.name.nameText.text.toLowerCase().includes(searchTerm)
+      )
+    ) {
+      return true;
+    }
+
+    return false;
+  }).slice(0, limit); // Limit results to limit movies
+}
+
+export async function getMovieById(movieId: string): Promise<Movie> {
+  await Promise.resolve();
+  const delay = 100 + Math.random() * 100;
+  await new Promise((resolve) => setTimeout(resolve, delay));
+
+  const MOVIE_DATABASE = await getCachedDatabase();
+
+  const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
+
+  if (movie == null) {
+    throw new Error(`Movie with id ${movieId} not found`);
+  }
+
+  return movie;
 }
 
 /**
@@ -38,12 +111,15 @@ export async function searchMovies(query: string): Promise<Movie[]> {
  * @returns Promise that resolves to the updated movie
  */
 export async function updateMovieRating(
-  movieId: number,
+  movieId: string,
   newRating: number
 ): Promise<Movie> {
+  await Promise.resolve();
   // Simulate network delay (500-1000ms)
   const delay = 500 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
+
+  const MOVIE_DATABASE = await getDatabase();
 
   const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
   if (movie == null) {
@@ -52,7 +128,7 @@ export async function updateMovieRating(
 
   const randomDecimal = Math.random() * 1.9;
 
-  movie.rating = Math.min(
+  movie.ratingsSummary.aggregateRating = Math.min(
     10,
     parseFloat((newRating + randomDecimal).toFixed(1))
   );
