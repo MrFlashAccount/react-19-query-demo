@@ -6,6 +6,7 @@ import {
   useQuery,
   QueryContext,
   type QueryContextValue,
+  QueryCache,
 } from "..";
 
 /**
@@ -24,9 +25,12 @@ async function flushPromises() {
   });
 }
 
+let queryCache = new QueryCache();
+
 describe("QueryProvider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    queryCache = new QueryCache();
   });
 
   afterEach(() => {
@@ -44,7 +48,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -78,7 +82,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -110,7 +114,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -135,7 +139,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -155,7 +159,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -187,7 +191,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -222,7 +226,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -245,7 +249,8 @@ describe("QueryProvider", () => {
 
   describe("GC timing without active subscriptions", () => {
     it("should remove cache entry after gcTime expires with no subscriptions", () => {
-      let contextValue: QueryContextValue | null = null;
+      let contextValue: QueryContextValue =
+        null as unknown as QueryContextValue;
 
       function TestComponent() {
         contextValue = useQueryContext();
@@ -253,13 +258,13 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
 
       const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      contextValue.queryCache.addPromise({
         key: ["test"],
         promise,
         gcTime: 5000,
@@ -267,22 +272,22 @@ describe("QueryProvider", () => {
 
       // Entry should exist
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Unsubscribe to mark entry as GC eligible (simulating no active subscriptions)
-      contextValue!.queryCache.unsubscribe(["test"]);
+      contextValue.queryCache.unsubscribe(["test"]);
 
       // Fast-forward time - need to account for gcTime + scheduler interval (100ms)
       vi.advanceTimersByTime(4999);
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Advance past gcTime and trigger scheduler (100ms intervals + setTimeout(0))
       vi.advanceTimersByTime(101);
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(false);
     });
 
@@ -295,7 +300,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -326,7 +331,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -359,7 +364,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -395,7 +400,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -447,7 +452,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -503,7 +508,7 @@ describe("QueryProvider", () => {
       let result: ReturnType<typeof render> | undefined;
       await act(async () => {
         result = render(
-          <QueryProvider>
+          <QueryProvider queryCache={queryCache}>
             <Suspense fallback={<div>Loading...</div>}>
               <TestComponent />
             </Suspense>
@@ -534,8 +539,12 @@ describe("QueryProvider", () => {
     });
 
     it("should trigger GC after component unmounts", async () => {
-      // Use real timers for promises, then fake for GC
+      // Use real timers for this test
       vi.useRealTimers();
+
+      // Create a new QueryCache with real timers
+      // (The one from beforeEach was created with fake timers)
+      const realTimerCache = new QueryCache();
 
       let contextValue: QueryContextValue | null = null;
       const queryFn = vi.fn(async () => {
@@ -557,7 +566,7 @@ describe("QueryProvider", () => {
       let result: ReturnType<typeof render> | undefined;
       await act(async () => {
         result = render(
-          <QueryProvider>
+          <QueryProvider queryCache={realTimerCache}>
             <Suspense fallback={<div>Loading...</div>}>
               <TestComponent />
             </Suspense>
@@ -578,13 +587,19 @@ describe("QueryProvider", () => {
       // Unmount component
       result?.unmount();
 
-      // Wait for GC with real timers (gcTime + a bit extra for scheduler)
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await waitFor(
+        () => {
+          expect(
+            contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+          ).toBe(false);
+        },
+        {
+          timeout: 2000, // gcTime (500ms) + scheduler interval (100ms) + buffer
+        }
+      );
 
-      // Cache should be cleared
-      expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
-      ).toBe(false);
+      // Clean up
+      realTimerCache.destroy();
     });
 
     it("should not trigger GC while component is still mounted", async () => {
@@ -610,7 +625,7 @@ describe("QueryProvider", () => {
 
       await act(async () => {
         render(
-          <QueryProvider>
+          <QueryProvider queryCache={queryCache}>
             <Suspense fallback={<div>Loading...</div>}>
               <TestComponent />
             </Suspense>
@@ -671,7 +686,7 @@ describe("QueryProvider", () => {
 
       await act(async () => {
         render(
-          <QueryProvider>
+          <QueryProvider queryCache={queryCache}>
             <Suspense fallback={<div>Loading...</div>}>
               <TestComponent1 />
               <TestComponent2 />
@@ -705,7 +720,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -745,7 +760,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -782,7 +797,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -821,7 +836,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -857,7 +872,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -954,7 +969,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -1020,7 +1035,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -1059,7 +1074,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );
@@ -1079,7 +1094,7 @@ describe("QueryProvider", () => {
       }
 
       render(
-        <QueryProvider>
+        <QueryProvider queryCache={queryCache}>
           <TestComponent />
         </QueryProvider>
       );

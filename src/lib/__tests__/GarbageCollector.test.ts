@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  GarbageCollector,
-  type CacheEntry,
-  type GarbageCollectorOptions,
-} from "../GarbageCollector";
+import { GarbageCollector, type CacheEntry } from "../GarbageCollector";
 import { PromiseEntryFactory } from "../PromiseEntry";
 
 describe("GarbageCollector", () => {

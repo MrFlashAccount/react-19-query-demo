@@ -1,5 +1,5 @@
 import { useState, use, Suspense } from "react";
-import { QueryProvider, useQuery, useMutation } from "./lib";
+import { QueryProvider, useQuery, useMutation, QueryCache } from "./lib";
 import type { Movie } from "./types/movie";
 import { getMovieById, searchMovies, updateMovieRating } from "./api/movieApi";
 import GitHubCorner from "react-github-corner";
@@ -46,12 +46,12 @@ function StarIcon({
 }
 
 export default function App() {
+  const queryCache = new QueryCache({
+    debug: { enabled: false, showTimestamps: true, verboseData: false },
+  });
+
   return (
-    <QueryProvider
-      options={{
-        debug: { enabled: false, showTimestamps: true, verboseData: false },
-      }}
-    >
+    <QueryProvider queryCache={queryCache}>
       <GitHubCorner
         href="https://github.com/MrFlashAccount/react-19-query-demo"
         bannerColor="#000"

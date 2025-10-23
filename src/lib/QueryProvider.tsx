@@ -8,11 +8,7 @@ import {
   useDeferredValue,
 } from "react";
 import { useEvent } from "../useEvent";
-import {
-  QueryCache,
-  type PromiseEntry,
-  type QueryCacheOptions,
-} from "./QueryCache";
+import { QueryCache, type PromiseEntry } from "./QueryCache";
 import { Retrier, type RetryConfig } from "./Retrier";
 
 /**
@@ -34,8 +30,7 @@ export const QueryContext = createContext<QueryContextValue>({
  * Props for {@link QueryProvider}
  */
 export interface QueryProviderProps extends PropsWithChildren {
-  /** Query cache options */
-  options?: QueryCacheOptions;
+  queryCache: QueryCache;
 }
 
 /**
@@ -54,9 +49,7 @@ export interface QueryProviderProps extends PropsWithChildren {
  * </QueryProvider>
  * ```
  */
-export function QueryProvider({ children, options }: QueryProviderProps) {
-  const [queryCache] = useState(() => new QueryCache(options));
-
+export function QueryProvider({ children, queryCache }: QueryProviderProps) {
   return <QueryContext value={{ queryCache }}>{children}</QueryContext>;
 }
 
@@ -77,6 +70,10 @@ export interface UseQueryOptions<
   retry?: RetryConfig;
   /** Delay between retries in milliseconds. Default: 0 */
   retryDelay?: number | ((failureCount: number, error: unknown) => number);
+}
+
+export function useQueryCache(): QueryCache {
+  return use(QueryContext).queryCache;
 }
 
 /**

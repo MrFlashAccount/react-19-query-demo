@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { QueryCache, type QueryCacheOptions } from "../QueryCache";
-import type { PromiseEntry } from "../PromiseEntry";
+import { QueryCache } from "../QueryCache";
 
 describe("QueryCache", () => {
   let queryCache: QueryCache;
@@ -510,7 +509,7 @@ describe("QueryCache", () => {
         gcTime: 1000,
       });
 
-      queryCache.unsubscribe(["test", 1], "subscriber1");
+      queryCache.unsubscribe(["test", 1]);
 
       vi.advanceTimersByTime(1100);
       vi.advanceTimersByTime(1);

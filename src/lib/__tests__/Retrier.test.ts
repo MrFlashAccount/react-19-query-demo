@@ -239,7 +239,9 @@ describe("Retrier", () => {
     });
 
     it("should use custom delay function", async () => {
-      const delayFn = vi.fn((failureCount: number) => (failureCount + 1) * 500);
+      const delayFn = vi.fn(
+        (_failureCount: number) => (_failureCount + 1) * 500
+      );
       const retrier = new Retrier({ retry: 3, retryDelay: delayFn });
       const fn = vi
         .fn()
@@ -268,7 +270,7 @@ describe("Retrier", () => {
     });
 
     it("should pass error to delay function", async () => {
-      const delayFn = vi.fn((failureCount: number, error: unknown) => {
+      const delayFn = vi.fn((_failureCount: number, error: unknown) => {
         if (error instanceof Error && error.message.includes("network")) {
           return 2000; // Longer delay for network errors
         }
@@ -367,11 +369,6 @@ describe("Retrier", () => {
     it("should preserve return type", async () => {
       const retrier = new Retrier({ retry: 3 });
 
-      interface User {
-        id: number;
-        name: string;
-      }
-
       const fn = vi.fn(() =>
         Promise.resolve({
           id: 1,
@@ -381,7 +378,7 @@ describe("Retrier", () => {
 
       const result = await retrier.execute(fn);
 
-      // TypeScript should know result is User
+      // TypeScript should know result has id and name
       expect(result.id).toBe(1);
       expect(result.name).toBe("Test User");
     });
