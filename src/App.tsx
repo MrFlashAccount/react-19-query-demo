@@ -22,7 +22,9 @@ const LazyCustomLibraryTab = lazy(() =>
  * Compares custom query library implementation with TanStack Query
  */
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"custom" | "tanstack">("custom");
+  const [activeTab, setActiveTab] = useState<"custom" | "tanstack" | "unset">(
+    "custom"
+  );
   const [movieLimit, setMovieLimit] = useState(1000);
 
   const queryCache = new QueryCache({ debug: { enabled: false } });
@@ -60,17 +62,33 @@ export default function App() {
               <TabSelector activeTab={activeTab} onTabChange={setActiveTab} />
             </div>
 
-            {activeTab === "custom" ? (
-              <LazyCustomLibraryTab
-                movieLimit={movieLimit}
-                onMovieLimitChange={setMovieLimit}
-              />
-            ) : (
-              <LazyTanStackQueryTab
-                movieLimit={movieLimit}
-                onMovieLimitChange={setMovieLimit}
-              />
-            )}
+            {(() => {
+              switch (activeTab) {
+                case "custom":
+                  return (
+                    <LazyCustomLibraryTab
+                      movieLimit={movieLimit}
+                      onMovieLimitChange={setMovieLimit}
+                    />
+                  );
+                case "tanstack":
+                  return (
+                    <LazyTanStackQueryTab
+                      movieLimit={movieLimit}
+                      onMovieLimitChange={setMovieLimit}
+                    />
+                  );
+                default:
+                  return (
+                    <div className="flex flex-col items-center justify-center py-20 px-4">
+                      <div className="animate-pulse h-6 w-6 border-2 border-gray-300 border-t-black rounded-full mb-4" />
+                      <p className="text-gray-500 text-sm">
+                        Cleaning up from the last tab...
+                      </p>
+                    </div>
+                  );
+              }
+            })()}
           </div>
         </Suspense>
       </QueryClientProvider>
