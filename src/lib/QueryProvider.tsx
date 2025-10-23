@@ -164,12 +164,12 @@ export function useQuery<
 
   // Track subscription lifecycle (also handles background refetch registration)
   useEffect(() => {
-    queryCache.subscribe(key);
+    queryCache.subscribe(deferredKey);
 
     return () => {
-      queryCache.unsubscribe(key);
+      queryCache.unsubscribe(deferredKey);
     };
-  }, [JSON.stringify(key)]);
+  }, [JSON.stringify(deferredKey)]);
 
   return { promise: promiseEntry, isPending };
 }

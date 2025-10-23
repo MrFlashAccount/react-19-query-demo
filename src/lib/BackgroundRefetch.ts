@@ -136,26 +136,39 @@ export class BackgroundRefetch {
   };
 
   /**
+   * Refetch a specific query if it's stale
+   *
+   * @param key - The query key to refetch
+   */
+  refetchQuery<Key extends Array<unknown>>(key: Key): void {
+    const keySerialized = JSON.stringify(key);
+    const queryInfo = this.activeQueries.get(keySerialized);
+
+    if (queryInfo == null) {
+      return;
+    }
+
+    const { queryFn, options } = queryInfo;
+
+    // Check if query is stale
+    if (this.queryCache.has(key) && this.queryCache.isStale(key)) {
+      const entry = this.queryCache.getPromise(key);
+
+      // Only refetch if data has been successfully fetched before
+      if (entry != null && entry.isFulfilled) {
+        // Trigger background refetch
+        this.queryCache.refetchInBackground(key, queryFn, options);
+      }
+    }
+  }
+
+  /**
    * Refetch all stale queries
    */
   private refetchStaleQueries(): void {
     for (const [, queryInfo] of this.activeQueries.entries()) {
-      const { key, queryFn, options } = queryInfo;
-
-      // Check if query is stale
-      if (this.queryCache.has(key) && this.queryCache.isStale(key)) {
-        const entry = this.queryCache.getPromise(key);
-
-        // Only refetch if data has been successfully fetched before
-        if (entry != null && entry.isFulfilled) {
-          // Trigger a new addPromise which will handle the background refetch
-          this.queryCache.addPromise({
-            key,
-            queryFn,
-            ...options,
-          });
-        }
-      }
+      const { key } = queryInfo;
+      this.refetchQuery(key);
     }
   }
 }

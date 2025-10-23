@@ -702,9 +702,9 @@ describe("QueryProvider", () => {
         expect(screen.queryByText("Component2: shared data")).toBeDefined();
       });
 
-      // Should call queryFn a small number of times (React may re-render)
-      // The important thing is it's not called separately for each component
-      expect(queryFn.mock.calls.length).toBeLessThan(10);
+      // Should call queryFn only once for initial fetch (cache should be shared)
+      // May have 1 additional call if stale-on-subscribe triggers a background refetch
+      expect(queryFn.mock.calls.length).toBeLessThanOrEqual(2);
 
       vi.useFakeTimers();
     });

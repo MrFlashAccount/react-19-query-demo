@@ -225,38 +225,30 @@ export class QueryCache {
       throw new Error("Either queryFn or promise must be provided");
     }
 
+    // If entry exists, return it in most cases (don't create new promises unnecessarily)
+    if (existingEntry != null) {
+      // Always return pending promises
+      if (existingEntry.promise.isPending) {
+        this.debugger.logUpdate(key, existingEntry.promise);
+        return existingEntry.promise as PromiseEntry<PromiseValue>;
+      }
+
+      // If stale and fulfilled, return existing data immediately
+      // (background refetch will happen through BackgroundRefetch system, not here)
+      if (existingEntry.promise.isFulfilled) {
+        this.debugger.logUpdate(key, existingEntry.promise);
+        return existingEntry.promise as PromiseEntry<PromiseValue>;
+      }
+
+      // If rejected, create a new promise to retry
+    }
+
     // Store query info in registry for background refetching
+    // (only when creating a new entry or refetching)
     this.queryRegistry.set(keySerialized, {
       queryFn: queryFn as (key: Array<unknown>) => Promise<unknown>,
       options: { gcTime, staleTime, retry, retryDelay },
     });
-
-    // If entry exists and is not stale, return it
-    if (existingEntry != null && !this.isStale(key)) {
-      this.debugger.logUpdate(key, existingEntry.promise);
-      return existingEntry.promise as PromiseEntry<PromiseValue>;
-    }
-
-    // If entry exists but is stale and fulfilled, trigger background refetch
-    if (
-      existingEntry != null &&
-      this.isStale(key) &&
-      existingEntry.promise.isFulfilled
-    ) {
-      // Return existing data immediately
-      const existingPromise =
-        existingEntry.promise as PromiseEntry<PromiseValue>;
-
-      // Trigger background refetch
-      this.refetchInBackground(key, queryFn, {
-        gcTime,
-        staleTime,
-        retry,
-        retryDelay,
-      });
-
-      return existingPromise;
-    }
 
     // Create new entry
     const retrier = new Retrier({ retry, retryDelay });
@@ -303,13 +295,15 @@ export class QueryCache {
   }
 
   /**
-   * Refetch data in the background for a stale entry
+   * Trigger a background refetch for a query.
+   * This creates a new promise and replaces the cache entry,
+   * but should only be called when the data is stale and fulfilled.
    *
    * @param key - The cache key
    * @param queryFn - Function to fetch data
    * @param options - Optional gcTime, staleTime, retry, retryDelay
    */
-  private refetchInBackground<
+  refetchInBackground<
     const Key extends Array<unknown>,
     PromiseValue extends unknown
   >(
@@ -324,6 +318,18 @@ export class QueryCache {
   ): void {
     const { gcTime, staleTime, retry, retryDelay } = options;
     const keySerialized = stableKeySerialize(key);
+    const existingEntry = this.cache.get(keySerialized);
+
+    // Only refetch if there's an existing fulfilled entry
+    if (existingEntry == null || !existingEntry.promise.isFulfilled) {
+      return;
+    }
+
+    // Store/update query info in registry
+    this.queryRegistry.set(keySerialized, {
+      queryFn: queryFn as (key: Array<unknown>) => Promise<unknown>,
+      options: { gcTime, staleTime, retry, retryDelay },
+    });
 
     // Create new promise with retrier
     const retrier = new Retrier({ retry, retryDelay });
@@ -343,9 +349,10 @@ export class QueryCache {
       },
     });
 
+    // Preserve subscriptions from the old entry
     const entry: CacheEntry = {
       promise: promiseEntry,
-      subscriptions: 0,
+      subscriptions: existingEntry.subscriptions,
       gcTime,
       staleTime,
       dataUpdatedAt: undefined,
@@ -353,6 +360,7 @@ export class QueryCache {
 
     // Update the cache with the new promise
     this.cache.set(keySerialized, entry);
+    this.debugger.logAdd(key, promiseEntry);
 
     // Set dataUpdatedAt when promise fulfills
     promise
@@ -446,6 +454,10 @@ export class QueryCache {
    * clears the GC eligibility timestamp. Also registers the query for
    * background refetching if BackgroundRefetch is available.
    *
+   * If the cached data is stale and fulfilled, triggers an immediate
+   * background refetch to update the data (only on the first subscription
+   * to avoid duplicate refetches).
+   *
    * @param key - The cache key to subscribe to
    */
   subscribe<const Key extends Array<unknown>>(key: Key): void {
@@ -453,6 +465,7 @@ export class QueryCache {
     const entry = this.cache.get(keySerialized);
 
     if (entry != null) {
+      const wasFirstSubscription = entry.subscriptions === 0;
       entry.subscriptions++;
 
       // Clear GC eligibility when there are active subscriptions
@@ -466,6 +479,16 @@ export class QueryCache {
           queryInfo.queryFn,
           queryInfo.options
         );
+
+        // If data is stale and fulfilled, trigger immediate background refetch
+        // Only trigger on the first subscription to avoid duplicate fetches
+        if (
+          wasFirstSubscription &&
+          this.isStale(key) &&
+          entry.promise.isFulfilled
+        ) {
+          this.backgroundRefetch.refetchQuery(key);
+        }
       }
     }
   }
