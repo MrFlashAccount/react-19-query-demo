@@ -88,24 +88,24 @@ export function Settings({
                 <input
                   id="movie-limit"
                   type="range"
-                  min="1"
-                  max="1000"
+                  min={MIN_LIMIT}
+                  max={MAX_LIMIT}
                   value={movieLimit}
                   onChange={(e) => handleLimitChange(e.target.value)}
                   className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
                 />
                 <input
                   type="number"
-                  min="1"
-                  max="1000"
+                  min={MIN_LIMIT}
+                  max={MAX_LIMIT}
                   value={movieLimit}
                   onChange={(e) => handleLimitChange(e.target.value)}
                   className="w-20 px-2 py-1 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
                 />
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>1</span>
-                <span>1000</span>
+                <span>{MIN_LIMIT}</span>
+                <span>{MAX_LIMIT}</span>
               </div>
             </div>
 
