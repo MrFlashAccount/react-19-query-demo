@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
   useSuspenseQuery,
-} from "@tanstack/react-query";
+} from "@tanstack/react-query-local";
 import {
   getMovieById,
   searchMovies,
@@ -19,7 +19,7 @@ import { MovieCard } from "../shared/MovieCard";
 
 const queryClient = new QueryClient();
 
-export function TanStackQueryTab({
+export function LocalTanStackQueryTab({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -28,7 +28,7 @@ export function TanStackQueryTab({
 }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <TanStackQueryTabContent
+      <LocalTanStackQueryTabContent
         movieLimit={movieLimit}
         onMovieLimitChange={onMovieLimitChange}
       />
@@ -36,7 +36,10 @@ export function TanStackQueryTab({
   );
 }
 
-export function TanStackQueryTabContent({
+/**
+ * Local TanStack Query tab component - demonstrates the local TanStack Query implementation
+ */
+export function LocalTanStackQueryTabContent({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -75,7 +78,7 @@ export function TanStackQueryTabContent({
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardTanStack key={movie.id} movie={movie} />
+            <MovieCardLocalTanStack key={movie.id} movie={movie} />
           ))}
         </MovieList>
       </div>
@@ -84,9 +87,9 @@ export function TanStackQueryTabContent({
 }
 
 /**
- * Movie card component using TanStack Query
+ * Movie card component using local TanStack Query
  */
-export function MovieCardTanStack({ movie }: { movie: Movie }) {
+export function MovieCardLocalTanStack({ movie }: { movie: Movie }) {
   const [isPending, startTransition] = useTransition();
 
   const movieId = movie.id;

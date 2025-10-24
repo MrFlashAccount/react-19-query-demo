@@ -1,5 +1,5 @@
 import { use, useState } from "react";
-import { useMutation, useQuery } from "../../lib";
+import { QueryCache, QueryProvider, useMutation, useQuery } from "../../lib";
 import {
   getMovieById,
   searchMovies,
@@ -10,10 +10,29 @@ import { SearchBox } from "../shared/SearchBox";
 import { MovieCard } from "../shared/MovieCard";
 import type { Movie } from "../../types/movie";
 
+const queryCache = new QueryCache();
+
+export function CustomLibraryTab({
+  movieLimit,
+  onMovieLimitChange,
+}: {
+  movieLimit: number;
+  onMovieLimitChange: (limit: number) => void;
+}) {
+  return (
+    <QueryProvider queryCache={queryCache}>
+      <CustomLibraryTabContent
+        movieLimit={movieLimit}
+        onMovieLimitChange={onMovieLimitChange}
+      />
+    </QueryProvider>
+  );
+}
+
 /**
  * Custom library tab component - demonstrates the custom query library implementation
  */
-export function CustomLibraryTab({
+export function CustomLibraryTabContent({
   movieLimit,
   onMovieLimitChange,
 }: {

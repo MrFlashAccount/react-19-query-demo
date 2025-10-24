@@ -12,28 +12,39 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@tanstack/query-core-local": "link:../query/packages/query-core",
     "@tanstack/react-query": "5.90.5",
+    "@tanstack/react-query-local": "link:../query/packages/react-query",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-github-corner": "2.5.0",
     "react-lag-radar": "1.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.16",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.0",
     "@testing-library/user-event": "14.6.1",
     "@types/node": "^22.10.5",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "@vitejs/plugin-react": "5.0.4",
-    "@vitest/coverage-v8": "4.0.1",
-    "autoprefixer": "10.4.19",
+    "@vitejs/plugin-react": "5.1.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "happy-dom": "^12.10.3",
-    "postcss": "8.4.38",
-    "tailwindcss": "3.4.3",
+    "tailwindcss": "4.1.16",
     "typescript": "^5.4.2",
     "vite": "7.1.11",
     "vitest": "4.0.1"
+  },
+  "overrides": {
+    "@tanstack/react-query": {
+      "dependencies": {
+        "@tanstack/query-core": "5.90.5"
+      }
+    },
+    "@tanstack/react-query-local": {
+      "dependencies": {
+        "@tanstack/query-core": "link:../query/packages/query-core"
+      }
+    }
   }
 }
