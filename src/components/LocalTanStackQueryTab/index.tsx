@@ -1,4 +1,4 @@
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -7,31 +7,42 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query-local";
-import {
-  getMovieById,
-  searchMovies,
-  updateMovieRating,
-} from "../../api/movieApi";
-import { MovieList } from "../shared/MovieList";
-import { SearchBox } from "../shared/SearchBox";
+import { MovieCard, MovieList, SearchBox } from "../shared";
 import type { Movie } from "../../types/movie";
-import { MovieCard } from "../shared/MovieCard";
+import type { Api } from "../../types/api";
+import type { TabProps } from "../shared/types";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { gcTime: 0 } },
+});
 
 export default function LocalTanStackQueryTab({
+  gcTimeout,
+  onGcTimeoutChange,
   movieLimit,
   onMovieLimitChange,
-}: {
-  movieLimit: number;
-  onMovieLimitChange: (limit: number) => void;
-}) {
+  devtools: Devtools,
+  api,
+  searchQuery,
+  onSearchQueryChange,
+  showDevtools,
+  onShowDevtoolsChange,
+}: TabProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <LocalTanStackQueryTabContent
+        api={api}
+        gcTimeout={gcTimeout}
+        onGcTimeoutChange={onGcTimeoutChange}
         movieLimit={movieLimit}
         onMovieLimitChange={onMovieLimitChange}
+        searchQuery={searchQuery}
+        onSearchQueryChange={onSearchQueryChange}
+        showDevtools={showDevtools}
+        onShowDevtoolsChange={onShowDevtoolsChange}
+        devtools={Devtools}
       />
+      {Devtools && <Devtools client={queryClient} />}
     </QueryClientProvider>
   );
 }
@@ -40,24 +51,28 @@ export default function LocalTanStackQueryTab({
  * Local TanStack Query tab component - demonstrates the local TanStack Query implementation
  */
 function LocalTanStackQueryTabContent({
+  gcTimeout,
+  onGcTimeoutChange,
   movieLimit,
   onMovieLimitChange,
-}: {
-  movieLimit: number;
-  onMovieLimitChange: (limit: number) => void;
-}) {
+  showDevtools,
+  onShowDevtoolsChange,
+  searchQuery,
+  onSearchQueryChange,
+  api,
+}: TabProps) {
   const [isPending, startTransition] = useTransition();
-  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: movies } = useSuspenseQuery({
-    queryKey: ["tanstack-movies", searchQuery, movieLimit],
-    queryFn: () => searchMovies(searchQuery, movieLimit),
+    queryKey: ["movies", searchQuery, movieLimit],
+    queryFn: () => api.searchMovies(searchQuery, movieLimit),
     structuralSharing: false,
+    gcTime: gcTimeout,
   });
 
   const handleSearchChange = (value: string) => {
     startTransition(() => {
-      setSearchQuery(value);
+      onSearchQueryChange(value);
     });
   };
 
@@ -67,19 +82,40 @@ function LocalTanStackQueryTabContent({
     });
   };
 
+  const handleGcTimeoutChange = (value: number) => {
+    startTransition(() => {
+      onGcTimeoutChange(value);
+    });
+  };
+  const handleShowDevtoolsChange = (value: boolean) => {
+    startTransition(() => {
+      onShowDevtoolsChange(value);
+    });
+  };
+
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
       <SearchBox
+        gcTimeout={gcTimeout}
+        onGcTimeoutChange={handleGcTimeoutChange}
         movieLimit={movieLimit}
         onMovieLimitChange={handleMovieLimitChange}
-        handleSearchChange={handleSearchChange}
+        onSearchQueryChange={handleSearchChange}
+        searchQuery={searchQuery}
         isPending={isPending}
+        showDevtools={showDevtools}
+        onShowDevtoolsChange={handleShowDevtoolsChange}
       />
       {/* Results */}
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardLocalTanStack key={movie.id} movie={movie} />
+            <MovieCardLocalTanStack
+              key={movie.id}
+              movie={movie}
+              api={api}
+              gcTimeout={gcTimeout}
+            />
           ))}
         </MovieList>
       </div>
@@ -90,7 +126,15 @@ function LocalTanStackQueryTabContent({
 /**
  * Movie card component using local TanStack Query
  */
-function MovieCardLocalTanStack({ movie }: { movie: Movie }) {
+function MovieCardLocalTanStack({
+  movie,
+  api,
+  gcTimeout,
+}: {
+  movie: Movie;
+  api: Api;
+  gcTimeout: number;
+}) {
   const [isPending, startTransition] = useTransition();
 
   const movieId = movie.id;
@@ -99,18 +143,20 @@ function MovieCardLocalTanStack({ movie }: { movie: Movie }) {
 
   const { mutateAsync: updateRating } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
-      updateMovieRating(movieId, rating),
+      api.updateMovieRating(movieId, rating),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["movies"] });
       void queryClient.invalidateQueries({
         queryKey: ["movie", movieId],
       });
     },
+    gcTime: gcTimeout,
   });
 
   useQuery({
     queryKey: ["movie", movieId],
-    queryFn: () => getMovieById(movieId),
+    queryFn: () => api.getMovieById(movieId),
+    gcTime: gcTimeout,
   });
 
   const handleStarClick = (starIndex: number) => {

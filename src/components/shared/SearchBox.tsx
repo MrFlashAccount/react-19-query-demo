@@ -1,20 +1,43 @@
 import { Settings } from "./Settings";
 
-export function SearchBox({
-  movieLimit,
-  onMovieLimitChange,
-  handleSearchChange,
-  isPending,
-}: {
+export interface SearchBoxProps {
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  gcTimeout: number;
+  onGcTimeoutChange: (timeout: number) => void;
   movieLimit: number;
   onMovieLimitChange: (limit: number) => void;
-  handleSearchChange: (value: string) => void;
   isPending: boolean;
-}) {
+  showDevtools: boolean;
+  onShowDevtoolsChange: (show: boolean) => void;
+}
+
+export function SearchBox({
+  gcTimeout,
+  onGcTimeoutChange,
+  movieLimit,
+  onMovieLimitChange,
+  searchQuery,
+  onSearchQueryChange,
+  isPending,
+  showDevtools,
+  onShowDevtoolsChange,
+}: SearchBoxProps) {
+  const gcTimeoutReadable = () => {
+    if (gcTimeout === Infinity) return "forever";
+    if (gcTimeout === 0) return "0 seconds";
+    if (gcTimeout < 60_000) return "less than a minute";
+    return `${gcTimeout / 60_000} minutes`;
+  };
+
   return (
     <div className="w-full max-w-6xl mb-6 md:mb-8">
       <div className="relative max-w-3xl mx-auto flex items-center gap-3">
         <Settings
+          gcTimeout={gcTimeout}
+          showDevtools={showDevtools}
+          onShowDevtoolsChange={onShowDevtoolsChange}
+          onGcTimeoutChange={onGcTimeoutChange}
           movieLimit={movieLimit}
           onMovieLimitChange={onMovieLimitChange}
         />
@@ -36,8 +59,9 @@ export function SearchBox({
           </div>
           <input
             type="text"
+            defaultValue={searchQuery}
             onChange={(e) => {
-              handleSearchChange(e.target.value);
+              onSearchQueryChange(e.target.value);
             }}
             placeholder="Search by title, director, genre, or tags..."
             className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-sm md:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
@@ -50,7 +74,7 @@ export function SearchBox({
         </div>
       </div>
       <div className="mt-2 text-center text-xs text-gray-400">
-        Cached for 1 minute after last view
+        Cached for {gcTimeoutReadable()} after last view
       </div>
     </div>
   );

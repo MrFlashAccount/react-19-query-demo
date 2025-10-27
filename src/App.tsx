@@ -1,5 +1,7 @@
 import { useState, Suspense, lazy } from "react";
 import { TabSelector } from "./components/shared/TabSelector";
+import type { Api } from "./types/api";
+import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
 
 const LazyTanStackQueryTab = lazy(
   () => import("./components/TanStackQueryTab")
@@ -12,6 +14,12 @@ const LazyLocalTanStackQueryTab = lazy(
   () => import("../lib/local-tanstack-query.js")
 );
 
+const ReactQueryDevtoolsProduction = lazy(() =>
+  import("@tanstack/react-query-devtools/build/modern/production.js").then(
+    (d) => ({ default: d.ReactQueryDevtools })
+  )
+);
+
 /**
  * Main application component with tabbed interface
  * Compares custom query library implementation with TanStack Query
@@ -19,8 +27,17 @@ const LazyLocalTanStackQueryTab = lazy(
 export default function App() {
   const [activeTab, setActiveTab] = useState<
     "custom" | "tanstack" | "local-tanstack" | "unset"
-  >("custom");
+  >("local-tanstack");
   const [movieLimit, setMovieLimit] = useState(1000);
+  const [gcTimeout, setGcTimeout] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showDevtools, setShowDevtools] = useState(false);
+
+  const api = {
+    getMovieById,
+    searchMovies,
+    updateMovieRating,
+  } satisfies Api;
 
   return (
     <Suspense fallback={<Loading />}>
@@ -42,22 +59,46 @@ export default function App() {
             case "custom":
               return (
                 <LazyCustomLibraryTab
+                  devtools={null}
                   movieLimit={movieLimit}
                   onMovieLimitChange={setMovieLimit}
+                  api={api}
+                  gcTimeout={gcTimeout}
+                  onGcTimeoutChange={setGcTimeout}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={setSearchQuery}
+                  showDevtools={showDevtools}
+                  onShowDevtoolsChange={setShowDevtools}
                 />
               );
             case "tanstack":
               return (
                 <LazyTanStackQueryTab
+                  devtools={showDevtools ? ReactQueryDevtoolsProduction : null}
                   movieLimit={movieLimit}
                   onMovieLimitChange={setMovieLimit}
+                  api={api}
+                  gcTimeout={gcTimeout}
+                  onGcTimeoutChange={setGcTimeout}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={setSearchQuery}
+                  showDevtools={showDevtools}
+                  onShowDevtoolsChange={setShowDevtools}
                 />
               );
             case "local-tanstack":
               return (
                 <LazyLocalTanStackQueryTab
+                  devtools={showDevtools ? ReactQueryDevtoolsProduction : null}
                   movieLimit={movieLimit}
                   onMovieLimitChange={setMovieLimit}
+                  api={api}
+                  gcTimeout={gcTimeout}
+                  onGcTimeoutChange={setGcTimeout}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={setSearchQuery}
+                  showDevtools={showDevtools}
+                  onShowDevtoolsChange={setShowDevtools}
                 />
               );
             default:

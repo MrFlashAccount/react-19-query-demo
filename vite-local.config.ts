@@ -18,8 +18,7 @@ export default defineConfig({
     },
     minify: false,
     rollupOptions: {
-      external: ["react", "react/jsx-runtime", "react-compiler-runtime"],
-
+      external: ["react", "react/jsx-runtime", "./src/components/shared"],
       output: {
         esModule: true,
         format: "esm",
