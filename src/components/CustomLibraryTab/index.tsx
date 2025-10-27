@@ -12,7 +12,7 @@ import type { Movie } from "../../types/movie";
 
 const queryCache = new QueryCache();
 
-export function CustomLibraryTab({
+export default function CustomLibraryTab({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -32,7 +32,7 @@ export function CustomLibraryTab({
 /**
  * Custom library tab component - demonstrates the custom query library implementation
  */
-export function CustomLibraryTabContent({
+function CustomLibraryTabContent({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -74,7 +74,7 @@ export function CustomLibraryTabContent({
 /**
  * Movie card component using custom query library
  */
-export function MovieCardCustom({ movie }: { movie: Movie }) {
+function MovieCardCustom({ movie }: { movie: Movie }) {
   const movieId = movie.id;
 
   const { mutate: updateRating, isPending } = useMutation({

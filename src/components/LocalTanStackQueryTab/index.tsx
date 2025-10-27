@@ -19,7 +19,7 @@ import { MovieCard } from "../shared/MovieCard";
 
 const queryClient = new QueryClient();
 
-export function LocalTanStackQueryTab({
+export default function LocalTanStackQueryTab({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -39,7 +39,7 @@ export function LocalTanStackQueryTab({
 /**
  * Local TanStack Query tab component - demonstrates the local TanStack Query implementation
  */
-export function LocalTanStackQueryTabContent({
+function LocalTanStackQueryTabContent({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -52,6 +52,7 @@ export function LocalTanStackQueryTabContent({
   const { data: movies } = useSuspenseQuery({
     queryKey: ["tanstack-movies", searchQuery, movieLimit],
     queryFn: () => searchMovies(searchQuery, movieLimit),
+    structuralSharing: false,
   });
 
   const handleSearchChange = (value: string) => {
@@ -89,7 +90,7 @@ export function LocalTanStackQueryTabContent({
 /**
  * Movie card component using local TanStack Query
  */
-export function MovieCardLocalTanStack({ movie }: { movie: Movie }) {
+function MovieCardLocalTanStack({ movie }: { movie: Movie }) {
   const [isPending, startTransition] = useTransition();
 
   const movieId = movie.id;

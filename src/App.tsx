@@ -1,23 +1,15 @@
 import { useState, Suspense, lazy } from "react";
 import { TabSelector } from "./components/shared/TabSelector";
 
-const LazyGitHubCorner = lazy(() => import("react-github-corner"));
-const LazyLagRadar = lazy(() => import("react-lag-radar"));
-
-const LazyTanStackQueryTab = lazy(() =>
-  import("./components/TanStackQueryTab").then((mod) => ({
-    default: mod.TanStackQueryTab,
-  }))
+const LazyTanStackQueryTab = lazy(
+  () => import("./components/TanStackQueryTab")
 );
-const LazyCustomLibraryTab = lazy(() =>
-  import("./components/CustomLibraryTab").then((mod) => ({
-    default: mod.CustomLibraryTab,
-  }))
+const LazyCustomLibraryTab = lazy(
+  () => import("./components/CustomLibraryTab")
 );
-const LazyLocalTanStackQueryTab = lazy(() =>
-  import("./components/LocalTanStackQueryTab").then((mod) => ({
-    default: mod.LocalTanStackQueryTab,
-  }))
+const LazyLocalTanStackQueryTab = lazy(
+  // @ts-expect-error - no declaration file supposed
+  () => import("../lib/local-tanstack-query.js")
 );
 
 /**
@@ -32,18 +24,6 @@ export default function App() {
 
   return (
     <Suspense fallback={<Loading />}>
-      <LazyGitHubCorner
-        href="https://github.com/MrFlashAccount/react-19-query-demo"
-        bannerColor="#000"
-        octoColor="#fff"
-        size={100}
-        direction="left"
-      />
-
-      <div className="fixed bottom-4 left-4 z-50 bg-gray-900 rounded-full shadow-lg p-2 border-2 border-gray-700">
-        <LazyLagRadar size={120} />
-      </div>
-
       <div className="min-h-screen bg-white">
         {/* Header */}
         <div className="text-center pt-12 mb-12 md:pt-16 md:mb-12">

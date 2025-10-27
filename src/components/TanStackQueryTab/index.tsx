@@ -19,7 +19,7 @@ import { MovieCard } from "../shared/MovieCard";
 
 const queryClient = new QueryClient();
 
-export function TanStackQueryTab({
+export default function TanStackQueryTab({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -36,7 +36,7 @@ export function TanStackQueryTab({
   );
 }
 
-export function TanStackQueryTabContent({
+function TanStackQueryTabContent({
   movieLimit,
   onMovieLimitChange,
 }: {
@@ -86,7 +86,7 @@ export function TanStackQueryTabContent({
 /**
  * Movie card component using TanStack Query
  */
-export function MovieCardTanStack({ movie }: { movie: Movie }) {
+function MovieCardTanStack({ movie }: { movie: Movie }) {
   const [isPending, startTransition] = useTransition();
 
   const movieId = movie.id;
