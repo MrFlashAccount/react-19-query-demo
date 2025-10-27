@@ -42,7 +42,7 @@ export async function searchMovies(
   const delay = 300 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
 
-  const MOVIE_DATABASE = await getDatabase();
+  const MOVIE_DATABASE = await getCachedDatabase();
 
   if (!query.trim()) {
     return MOVIE_DATABASE.slice(0, limit); // Return first limit movies for empty search
@@ -120,7 +120,7 @@ export async function updateMovieRating(
   const delay = 500 + Math.random() * 500;
   await new Promise((resolve) => setTimeout(resolve, delay));
 
-  const MOVIE_DATABASE = await getDatabase();
+  const MOVIE_DATABASE = await getCachedDatabase();
 
   const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
   if (movie == null) {
