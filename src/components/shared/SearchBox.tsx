@@ -66,11 +66,14 @@ export function SearchBox({
             placeholder="Search by title, director, genre, or tags..."
             className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-sm md:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
           />
-          {isPending && (
-            <div className="absolute inset-y-0 right-0 pr-3 md:pr-5 flex items-center">
-              <div className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-gray-300 border-t-black rounded-full" />
-            </div>
-          )}
+
+          <div
+            className={`absolute inset-y-0 right-0 pr-3 md:pr-5 flex items-center ${
+              isPending ? "" : "hidden"
+            } transition-opacity duration-300`}
+          >
+            <div className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-gray-300 border-t-black rounded-full" />
+          </div>
         </div>
       </div>
       <div className="mt-2 text-center text-xs text-gray-400">

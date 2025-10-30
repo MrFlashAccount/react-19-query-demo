@@ -27,6 +27,7 @@ export function MovieList({
           Found {moviesAmount} {moviesAmount === 1 ? "movie" : "movies"}
         </p>
       </div>
+
       <div className="flex flex-col gap-3 md:gap-4">{children}</div>
     </div>
   );

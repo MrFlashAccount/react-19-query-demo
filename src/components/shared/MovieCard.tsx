@@ -56,12 +56,14 @@ export function MovieCard({
             {movie.titleText.text}
           </h3>
 
-          {isPending && (
-            <div className="flex items-center gap-1 text-xs text-gray-500 flex-shrink-0">
-              <div className="animate-spin h-3 w-3 border-2 border-gray-300 border-t-black rounded-full" />
-              <span className="hidden sm:inline">Saving...</span>
-            </div>
-          )}
+          <div
+            className={`flex items-center gap-1 text-xs text-gray-500 flex-shrink-0 ${
+              isPending ? "" : "hidden"
+            }`}
+          >
+            <div className="animate-spin h-3 w-3 border-2 border-gray-300 border-t-black rounded-full" />
+            <span className="hidden sm:inline">Saving...</span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs text-gray-600">
