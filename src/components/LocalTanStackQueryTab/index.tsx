@@ -13,7 +13,7 @@ import type { Api } from "../../types/api";
 import type { TabProps } from "../shared/types";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { gcTime: 0 } },
+  defaultOptions: { queries: { gcTime: 0, structuralSharing: false } },
 });
 
 export default function LocalTanStackQueryTab({
