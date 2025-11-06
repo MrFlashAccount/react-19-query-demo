@@ -1,56 +1,111 @@
 import type { Movie } from "../types/movie";
 
 const DEFAULT_LIMIT = 500;
+let movieDatabaseCache: Movie[] | null = null;
+
+async function getDatabase(): Promise<Movie[]> {
+  const database = await Promise.all([
+    fetch("/movies/1.json").then((res) => res.json()),
+    fetch("/movies/2.json").then((res) => res.json()),
+  ]).then(([movies1, movies2]) => [
+    ...(movies1 as Movie[]),
+    ...(movies2 as Movie[]),
+  ]);
+
+  movieDatabaseCache = database;
+
+  return database;
+}
+
+async function getCachedDatabase(): Promise<Movie[]> {
+  if (movieDatabaseCache != null) {
+    return Promise.resolve(movieDatabaseCache);
+  }
+
+  return getDatabase();
+}
 
 /**
  * Search for movies by query string.
- * Uses MSW to mock API calls in development.
+ * Searches in title, genres, director, and plot.
+ * Simulates API call with realistic network delay (300-800ms).
  *
  * @param query - Search query string
- * @param limit - Maximum number of results to return
  * @returns Promise that resolves to an array of matching movies
  */
 export async function searchMovies(
   query: string,
   limit: number = DEFAULT_LIMIT
 ): Promise<Movie[]> {
-  const searchParams = new URLSearchParams({
-    query,
-    limit: limit.toString(),
-  });
+  await Promise.resolve();
+  // Simulate network delay (300-800ms)
+  const delay = 300 + Math.random() * 500;
+  await new Promise((resolve) => setTimeout(resolve, delay));
 
-  const response = await fetch(`/api/movies/search?${searchParams.toString()}`);
+  const MOVIE_DATABASE = await getDatabase();
 
-  if (!response.ok) {
-    throw new Error(`Failed to search movies: ${response.statusText}`);
+  if (!query.trim()) {
+    return MOVIE_DATABASE.slice(0, limit); // Return first limit movies for empty search
   }
 
-  return response.json() as Promise<Movie[]>;
+  // Search in title, genres, director, and plot
+  const searchTerm = query.toLowerCase();
+  return MOVIE_DATABASE.filter((movie) => {
+    // Search in title
+    if (movie.titleText.text.toLowerCase().includes(searchTerm)) {
+      return true;
+    }
+
+    // Search in genres
+    if (
+      movie.genres.genres.some((genre) =>
+        genre.text.toLowerCase().includes(searchTerm)
+      )
+    ) {
+      return true;
+    }
+
+    // Search in plot
+    if (movie.plot?.plotText.plainText.toLowerCase().includes(searchTerm)) {
+      return true;
+    }
+
+    // Search in director
+    const directorCredit = movie.principalCredits?.find(
+      (credit) => credit.category.id === "director"
+    );
+    if (
+      directorCredit?.credits.some((credit) =>
+        credit.name.nameText.text.toLowerCase().includes(searchTerm)
+      )
+    ) {
+      return true;
+    }
+
+    return false;
+  }).slice(0, limit); // Limit results to limit movies
 }
 
-/**
- * Get a movie by its ID.
- * Uses MSW to mock API calls in development.
- *
- * @param movieId - ID of the movie to fetch
- * @returns Promise that resolves to the movie
- */
 export async function getMovieById(movieId: string): Promise<Movie> {
-  const response = await fetch(`/api/movies/${movieId}`);
+  await Promise.resolve();
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error(`Movie with id ${movieId} not found`);
-    }
-    throw new Error(`Failed to get movie: ${response.statusText}`);
+  const delay = 100 + Math.random() * 100;
+  await new Promise((resolve) => setTimeout(resolve, delay));
+
+  const MOVIE_DATABASE = await getCachedDatabase();
+
+  const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
+
+  if (movie == null) {
+    throw new Error(`Movie with id ${movieId} not found`);
   }
 
-  return response.json() as Promise<Movie>;
+  return movie;
 }
 
 /**
  * Update a movie's rating.
- * Uses MSW to mock API calls in development.
+ * Simulates API call with realistic network delay (500-1000ms).
  *
  * @param movieId - ID of the movie to update
  * @param newRating - New rating value
@@ -60,20 +115,26 @@ export async function updateMovieRating(
   movieId: string,
   newRating: number
 ): Promise<Movie> {
-  const response = await fetch(`/api/movies/${movieId}/rating`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ rating: newRating }),
-  });
+  await Promise.resolve();
+  // Simulate network delay (500-1000ms)
+  const delay = 500 + Math.random() * 500;
+  await new Promise((resolve) => setTimeout(resolve, delay));
 
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error(`Movie with id ${movieId} not found`);
-    }
-    throw new Error(`Failed to update movie rating: ${response.statusText}`);
+  const MOVIE_DATABASE = await getDatabase();
+
+  const movie = MOVIE_DATABASE.find((m) => m.id === movieId);
+  if (movie == null) {
+    throw new Error(`Movie with id ${movieId} not found`);
   }
 
-  return response.json() as Promise<Movie>;
+  const randomDecimal = Math.random() * 1.9;
+
+  movie.ratingsSummary.aggregateRating = Math.min(
+    10,
+    parseFloat((newRating + randomDecimal).toFixed(1))
+  );
+
+  // In a real app, this would update the database
+  // For this mock, we'll return a copy with the updated rating
+  return movie;
 }
