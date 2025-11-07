@@ -171,4 +171,8 @@ export class BackgroundRefetch {
       this.refetchQuery(key);
     }
   }
+
+  updateQueryCache(queryCache: QueryCache): void {
+    this.queryCache = queryCache;
+  }
 }

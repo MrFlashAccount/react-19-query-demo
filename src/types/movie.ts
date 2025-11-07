@@ -1,7 +1,7 @@
 /**
  * Movie entity interface based on IMDb data structure
  */
-export interface Movie {
+export interface RawMovie {
   id: string;
   titleText: {
     text: string;
@@ -65,4 +65,15 @@ export interface Movie {
       };
     }>;
   }>;
+}
+
+export interface Movie {
+  id: string;
+  titleText: string;
+  releaseYear: number;
+  rating: number;
+  genres: string[];
+  plot: string;
+  directors: string[];
+  image: string;
 }

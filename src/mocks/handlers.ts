@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import type { Movie } from "../types/movie";
+import type { Movie, RawMovie } from "../types/movie";
 
 let movieDatabaseCache: Movie[] | null = null;
 
@@ -12,12 +12,25 @@ async function getDatabase(): Promise<Movie[]> {
   }
 
   const [movies1, movies2] = await Promise.all([
-    fetch("/movies/1.json").then((res) => res.json()),
-    fetch("/movies/2.json").then((res) => res.json()),
+    fetch("/movies/1.json").then((res) => res.json() as Promise<RawMovie[]>),
+    fetch("/movies/2.json").then((res) => res.json() as Promise<RawMovie[]>),
   ]);
 
-  movieDatabaseCache = [...movies1, ...movies2] as Movie[];
-  return movieDatabaseCache;
+  movieDatabaseCache = [...movies1, ...movies2].map((movie) => ({
+    id: movie.id,
+    titleText: movie.titleText.text,
+    releaseYear: movie.releaseYear?.year ?? 0,
+    rating: movie.ratingsSummary.aggregateRating ?? 0,
+    genres: movie.genres.genres.map((genre) => genre.text),
+    plot: movie.plot?.plotText.plainText ?? "",
+    directors:
+      movie.principalCredits
+        ?.find((credit) => credit.category.id === "director")
+        ?.credits.map((credit) => credit.name.nameText.text) ?? [],
+    image: movie.primaryImage?.url ?? "",
+  }));
+
+  return movieDatabaseCache ?? [];
 }
 
 /**
@@ -38,31 +51,26 @@ async function searchMovies(
   return database
     .filter((movie) => {
       // Search in title
-      if (movie.titleText.text.toLowerCase().includes(searchTerm)) {
+      if (movie.titleText.toLowerCase().includes(searchTerm)) {
         return true;
       }
 
       // Search in genres
       if (
-        movie.genres.genres.some((genre) =>
-          genre.text.toLowerCase().includes(searchTerm)
-        )
+        movie.genres.some((genre) => genre.toLowerCase().includes(searchTerm))
       ) {
         return true;
       }
 
       // Search in plot
-      if (movie.plot?.plotText.plainText.toLowerCase().includes(searchTerm)) {
+      if (movie.plot.toLowerCase().includes(searchTerm)) {
         return true;
       }
 
       // Search in director
-      const directorCredit = movie.principalCredits?.find(
-        (credit) => credit.category.id === "director"
-      );
       if (
-        directorCredit?.credits.some((credit) =>
-          credit.name.nameText.text.toLowerCase().includes(searchTerm)
+        movie.directors.some((director) =>
+          director.toLowerCase().includes(searchTerm)
         )
       ) {
         return true;
@@ -131,17 +139,12 @@ export const handlers = [
 
     // Update rating
     const randomDecimal = Math.random() * 1.9;
-    const updatedMovie: Movie = {
-      ...movie,
-      ratingsSummary: {
-        ...movie.ratingsSummary,
-        aggregateRating: Math.min(
-          10,
-          parseFloat((body.rating + randomDecimal).toFixed(1))
-        ),
-      },
-    };
+    const newRating = Math.min(
+      10,
+      parseFloat((body.rating + randomDecimal).toFixed(1))
+    );
+    movie.rating = newRating;
 
-    return HttpResponse.json(updatedMovie);
+    return HttpResponse.json(movie);
   }),
 ];

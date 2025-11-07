@@ -8,6 +8,9 @@ export default defineConfig({
     tailwindcss(),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }),
   ],
+  worker: {
+    format: "es",
+  },
   build: {
     sourcemap: true,
   },

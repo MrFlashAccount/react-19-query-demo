@@ -27,14 +27,12 @@ export default function App() {
   );
   const [movieLimit, setMovieLimit] = useState(1000);
 
-  const queryCache = new QueryCache({ debug: { enabled: false } });
-
   const tanStackQueryClient = new QueryClient({
     defaultOptions: { queries: { gcTime: 60_000 } },
   });
 
   return (
-    <QueryProvider queryCache={queryCache}>
+    <QueryProvider queryCacheOptions={{ debug: { enabled: false } }}>
       <QueryClientProvider client={tanStackQueryClient}>
         <Suspense fallback={<Loading />}>
           <LazyGitHubCorner

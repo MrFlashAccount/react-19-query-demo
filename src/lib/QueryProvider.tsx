@@ -3,21 +3,23 @@ import {
   type PropsWithChildren,
   useState,
   use,
-  useEffect,
   useTransition,
   useDeferredValue,
 } from "react";
-import { useEvent } from "../useEvent";
-import { QueryCache, type PromiseEntry } from "./QueryCache";
-import { BackgroundRefetch } from "./BackgroundRefetch";
+import {
+  QueryCache,
+  type PromiseEntry,
+  type QueryCacheOptions,
+} from "./QueryCache";
 import type { RetryConfig } from "./Retrier";
+import { useEvent } from "../useEvent";
 
 /**
  * Context value for the query provider
  */
 export interface QueryContextValue {
   queryCache: QueryCache;
-  backgroundRefetch: BackgroundRefetch;
+  isQueryCachePending: boolean;
 }
 
 /**
@@ -27,14 +29,14 @@ export interface QueryContextValue {
 const defaultQueryCache = new QueryCache();
 export const QueryContext = createContext<QueryContextValue>({
   queryCache: defaultQueryCache,
-  backgroundRefetch: new BackgroundRefetch({ queryCache: defaultQueryCache }),
+  isQueryCachePending: false,
 });
 
 /**
  * Props for {@link QueryProvider}
  */
 export interface QueryProviderProps extends PropsWithChildren {
-  queryCache: QueryCache;
+  queryCacheOptions: QueryCacheOptions;
 }
 
 /**
@@ -54,21 +56,24 @@ export interface QueryProviderProps extends PropsWithChildren {
  * </QueryProvider>
  * ```
  */
-export function QueryProvider({ children, queryCache }: QueryProviderProps) {
-  const [backgroundRefetch] = useState(() => {
-    const bgRefetch = new BackgroundRefetch({ queryCache });
-    queryCache.setBackgroundRefetch(bgRefetch);
-    return bgRefetch;
+export function QueryProvider({
+  children,
+  queryCacheOptions,
+}: QueryProviderProps) {
+  const [isPending, startTransition] = useTransition();
+  const [queryCache, setQueryCache] = useState(() => {
+    return new QueryCache({
+      ...queryCacheOptions,
+      onChange: (newInstance) => {
+        startTransition(() => {
+          setQueryCache(newInstance);
+        });
+      },
+    });
   });
 
-  useEffect(() => {
-    return () => {
-      backgroundRefetch.stop();
-    };
-  }, [backgroundRefetch]);
-
   return (
-    <QueryContext value={{ queryCache, backgroundRefetch }}>
+    <QueryContext value={{ queryCache, isQueryCachePending: isPending }}>
       {children}
     </QueryContext>
   );
@@ -146,32 +151,22 @@ export function useQuery<
   isPending: boolean;
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
-  const queryFnCallback = useEvent(queryFn);
   const deferredKey = useDeferredValue(key);
   const isPending = key !== deferredKey;
 
-  const { queryCache } = use(QueryContext);
+  const { queryCache, isQueryCachePending } = use(QueryContext);
 
   // Add or get promise from cache (staleness check happens inside addPromise)
   const promiseEntry = queryCache.addPromise<Key, PromiseValue>({
     key: deferredKey,
-    queryFn: queryFnCallback,
+    queryFn: queryFn,
     gcTime,
     staleTime,
     retry,
     retryDelay,
   });
 
-  // Track subscription lifecycle (also handles background refetch registration)
-  useEffect(() => {
-    queryCache.subscribe(deferredKey);
-
-    return () => {
-      queryCache.unsubscribe(deferredKey);
-    };
-  }, [JSON.stringify(deferredKey)]);
-
-  return { promise: promiseEntry, isPending };
+  return { promise: promiseEntry, isPending: isQueryCachePending || isPending };
 }
 
 /**
@@ -241,7 +236,6 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
   options: UseMutationOptions<Variables, Data>
 ): UseMutationResult<Variables, Data> {
   const { mutationFn, invalidateQueries = [] } = options;
-  const mutationFnCallback = useEvent(mutationFn);
 
   const { queryCache } = use(QueryContext);
 
@@ -253,7 +247,7 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
       startTransition(async () => {
         setError(null);
 
-        await mutationFnCallback(variables)
+        await mutationFn(variables)
           .then((result) => {
             // Invalidate queries after successful mutation
             if (invalidateQueries.length > 0) {

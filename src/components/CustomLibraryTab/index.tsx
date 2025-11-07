@@ -44,7 +44,12 @@ export function CustomLibraryTab({
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardCustom key={movie.id} movie={movie} />
+            <MovieCardCustom
+              key={movie.id}
+              movie={movie}
+              movieLimit={movieLimit}
+              searchQuery={searchQuery}
+            />
           ))}
         </MovieList>
       </div>
@@ -55,13 +60,20 @@ export function CustomLibraryTab({
 /**
  * Movie card component using custom query library
  */
-export function MovieCardCustom({ movie }: { movie: Movie }) {
+export function MovieCardCustom({
+  movie,
+  movieLimit,
+  searchQuery,
+}: {
+  movie: Movie;
+  movieLimit: number;
+  searchQuery: string;
+}) {
   const movieId = movie.id;
 
   const { mutate: updateRating, isPending } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
       updateMovieRating(movieId, rating),
-    // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
     invalidateQueries: [["movies"], ["movie", movieId]],
   });
 
@@ -71,10 +83,18 @@ export function MovieCardCustom({ movie }: { movie: Movie }) {
     gcTime: 60_000,
   });
 
+  useQuery({
+    key: ["movies", searchQuery, movieLimit],
+    queryFn: ([, query]) => searchMovies(query, movieLimit),
+    gcTime: 60_000,
+  });
+
   return (
     <MovieCard
       movie={movie}
-      onUpdateRating={(rating) => void updateRating({ rating })}
+      onUpdateRating={(rating) => {
+        updateRating({ rating });
+      }}
       isPending={isPending}
     />
   );
