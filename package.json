@@ -9,7 +9,8 @@
     "type-check": "tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "msw:init": "msw init public/ --save"
   },
   "dependencies": {
     "@tanstack/react-query": "5.90.5",
@@ -30,6 +31,12 @@
     "@tailwindcss/vite": "^4.1.16",
     "typescript": "^5.9.3",
     "vite": "7.1.12",
-    "vitest": "4.0.3"
+    "vitest": "4.0.3",
+    "msw": "^2.0.0"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
