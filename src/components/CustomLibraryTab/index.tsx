@@ -28,7 +28,7 @@ export function CustomLibraryTab({
     gcTime: 60_000,
   });
 
-  const movies = use(promise());
+  const movies = use(promise);
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">

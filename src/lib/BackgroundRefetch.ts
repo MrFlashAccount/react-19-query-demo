@@ -10,6 +10,15 @@ export interface BackgroundRefetchOptions {
   enabled?: boolean;
 }
 
+export interface BackgroundRefetchable {
+  isStale(): boolean;
+  refetch(): void;
+  key: string;
+  getState(): {
+    status: "pending" | "success" | "error";
+  };
+}
+
 /**
  * BackgroundRefetch manages automatic refetching of stale queries
  * when certain browser events occur (focus, online).
@@ -35,21 +44,7 @@ export interface BackgroundRefetchOptions {
 export class BackgroundRefetch {
   private queryCache: QueryCache;
   private enabled: boolean;
-  private activeQueries: Map<
-    string,
-    {
-      key: Array<unknown>;
-      queryFn: (key: Array<unknown>) => Promise<unknown>;
-      options: {
-        gcTime?: number;
-        staleTime?: number | "static";
-        retry?: any;
-        retryDelay?:
-          | number
-          | ((failureCount: number, error: unknown) => number);
-      };
-    }
-  >;
+  private activeQueries: Map<string, BackgroundRefetchable>;
 
   constructor(options: BackgroundRefetchOptions) {
     this.queryCache = options.queryCache;
@@ -93,22 +88,8 @@ export class BackgroundRefetch {
    * @param queryFn - Function to fetch data
    * @param options - Query options (gcTime, staleTime, retry, retryDelay)
    */
-  register<Key extends Array<unknown>, PromiseValue extends unknown>(
-    key: Key,
-    queryFn: (key: Key) => Promise<PromiseValue>,
-    options: {
-      gcTime?: number;
-      staleTime?: number | "static";
-      retry?: any;
-      retryDelay?: number | ((failureCount: number, error: unknown) => number);
-    }
-  ): void {
-    const keySerialized = JSON.stringify(key);
-    this.activeQueries.set(keySerialized, {
-      key,
-      queryFn: queryFn as (key: Array<unknown>) => Promise<unknown>,
-      options,
-    });
+  register(entry: BackgroundRefetchable): void {
+    this.activeQueries.set(entry.key, entry);
   }
 
   /**
@@ -116,9 +97,8 @@ export class BackgroundRefetch {
    *
    * @param key - The query key
    */
-  unregister<Key extends Array<unknown>>(key: Key): void {
-    const keySerialized = JSON.stringify(key);
-    this.activeQueries.delete(keySerialized);
+  unregister(entry: BackgroundRefetchable): void {
+    this.activeQueries.delete(entry.key);
   }
 
   /**
@@ -140,39 +120,24 @@ export class BackgroundRefetch {
    *
    * @param key - The query key to refetch
    */
-  refetchQuery<Key extends Array<unknown>>(key: Key): void {
-    const keySerialized = JSON.stringify(key);
-    const queryInfo = this.activeQueries.get(keySerialized);
-
-    if (queryInfo == null) {
+  refetchQuery(entry: BackgroundRefetchable): void {
+    if (!entry.isStale()) {
       return;
     }
 
-    const { queryFn, options } = queryInfo;
-
-    // Check if query is stale
-    if (this.queryCache.has(key) && this.queryCache.isStale(key)) {
-      const entry = this.queryCache.getPromise(key);
-
-      // Only refetch if data has been successfully fetched before
-      if (entry != null && entry.isFulfilled) {
-        // Trigger background refetch
-        this.queryCache.refetchInBackground(key, queryFn, options);
-      }
+    if (entry.getState().status !== "success") {
+      return;
     }
+
+    entry.refetch();
   }
 
   /**
    * Refetch all stale queries
    */
   private refetchStaleQueries(): void {
-    for (const [, queryInfo] of this.activeQueries.entries()) {
-      const { key } = queryInfo;
-      this.refetchQuery(key);
+    for (const entry of this.activeQueries.values()) {
+      this.refetchQuery(entry);
     }
-  }
-
-  updateQueryCache(queryCache: QueryCache): void {
-    this.queryCache = queryCache;
   }
 }

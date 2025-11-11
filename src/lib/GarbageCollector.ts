@@ -1,4 +1,13 @@
 import type { PromiseEntry } from "./PromiseEntry";
+import { timerWheel } from "./TimerWheel";
+
+export interface IGarbageCollectable {
+  gcTime?: number;
+  isEligibleForGC(): boolean;
+  markEligibleForGC(): void;
+  canBeCollected(): boolean;
+  remove(): boolean;
+}
 
 /**
  * Cache entry with promise and garbage collection metadata
@@ -21,10 +30,9 @@ export interface CacheEntry {
  * Options for GarbageCollector
  */
 export interface GarbageCollectorOptions {
-  /** Interval in milliseconds to check for expired entries. Default: 100ms */
-  checkInterval?: number;
   /** Callback when an entry is garbage collected */
-  onCollect?: (key: string) => void;
+  onCollect?: (entry: IGarbageCollectable) => void;
+  onCollectBatch?: (entries: IGarbageCollectable[]) => void;
 }
 
 /**
@@ -50,101 +58,68 @@ export interface GarbageCollectorOptions {
  */
 export class GarbageCollector {
   private options: Required<GarbageCollectorOptions>;
-  private schedulerIntervalId?: ReturnType<typeof setInterval>;
-  private schedulerRunning: boolean = false;
-  private cache?: Map<string, CacheEntry>;
+  private timerIdPerEntry = new Map<IGarbageCollectable, number>();
+  private collectableEntries = new Set<IGarbageCollectable>();
 
   constructor(options: GarbageCollectorOptions = {}) {
     this.options = {
-      checkInterval: options.checkInterval ?? 100,
       onCollect: options.onCollect ?? (() => {}),
+      onCollectBatch: options.onCollectBatch ?? (() => {}),
     };
   }
 
-  /**
-   * Start the garbage collection scheduler
-   *
-   * @param cache - The cache map to monitor
-   */
-  start(cache: Map<string, CacheEntry>): void {
-    if (this.schedulerIntervalId != null) {
-      return;
-    }
+  add(entry: IGarbageCollectable): void {
+    const timerId = timerWheel.schedule(() => {
+      const isCollected = this.tryCollect(entry);
 
-    this.cache = cache;
-
-    this.schedulerIntervalId = setInterval(() => {
-      this.scheduleGarbageCollection();
-    }, this.options.checkInterval);
-  }
-
-  /**
-   * Stop the garbage collection scheduler
-   */
-  stop(): void {
-    if (this.schedulerIntervalId != null) {
-      clearInterval(this.schedulerIntervalId);
-      this.schedulerIntervalId = undefined;
-    }
-    this.cache = undefined;
-  }
-
-  /**
-   * Check if the scheduler is running
-   */
-  isRunning(): boolean {
-    return this.schedulerIntervalId != null;
-  }
-
-  /**
-   * Schedule garbage collection to run during idle time
-   */
-  private scheduleGarbageCollection(): void {
-    if (this.schedulerRunning || this.cache == null) {
-      return;
-    }
-
-    this.schedulerRunning = true;
-
-    if (
-      typeof requestIdleCallback !== "undefined" &&
-      typeof window !== "undefined"
-    ) {
-      requestIdleCallback(() => {
-        this.runGarbageCollection();
-        this.schedulerRunning = false;
-      });
-    } else {
-      // Fallback for environments without requestIdleCallback (like tests)
-      setTimeout(() => {
-        this.runGarbageCollection();
-        this.schedulerRunning = false;
-      }, 0);
-    }
-  }
-
-  /**
-   * Run garbage collection by checking all cache entries
-   * and removing those that have expired
-   */
-  private runGarbageCollection(): void {
-    if (this.cache == null) {
-      return;
-    }
-
-    const now = Date.now();
-    const keysToDelete: string[] = [];
-
-    for (const [key, entry] of this.cache.entries()) {
-      if (this.shouldGarbageCollect(entry, now)) {
-        keysToDelete.push(key);
+      if (isCollected) {
+        this.options.onCollect(entry);
       }
+
+      this.timerIdPerEntry.delete(entry);
+    }, entry.gcTime ?? Infinity);
+
+    if (timerId == null) {
+      return;
     }
 
-    for (const key of keysToDelete) {
-      this.options.onCollect(key);
-      this.cache.delete(key);
+    this.timerIdPerEntry.set(entry, timerId);
+    this.collectableEntries.add(entry);
+  }
+
+  remove(entry: IGarbageCollectable): void {
+    const timerId = this.timerIdPerEntry.get(entry);
+
+    if (timerId == null) {
+      return;
     }
+    if (!timerWheel.cancel(timerId)) {
+      return;
+    }
+
+    this.timerIdPerEntry.delete(entry);
+    this.collectableEntries.delete(entry);
+  }
+
+  forceCollect(): void {
+    for (const entry of this.collectableEntries.values()) {
+      this.tryCollect(entry);
+    }
+  }
+
+  private tryCollect(entry: IGarbageCollectable): boolean {
+    if (!this.shouldGarbageCollect(entry)) {
+      return false;
+    }
+
+    const isCollected = entry.remove();
+
+    if (isCollected) {
+      this.collectableEntries.delete(entry);
+      this.timerIdPerEntry.delete(entry);
+    }
+
+    return isCollected;
   }
 
   /**
@@ -154,61 +129,11 @@ export class GarbageCollector {
    * @param now - Current timestamp
    * @returns True if the entry should be removed
    */
-  private shouldGarbageCollect(entry: CacheEntry, now: number): boolean {
-    if (entry.subscriptions > 0) {
+  private shouldGarbageCollect(entry: IGarbageCollectable): boolean {
+    if (!entry.isEligibleForGC()) {
       return false;
     }
 
-    if (entry.gcTime == null || entry.gcTime === Infinity) {
-      return false;
-    }
-
-    if (entry.gcEligibleAt == null) {
-      return false;
-    }
-
-    return now >= entry.gcEligibleAt + entry.gcTime;
-  }
-
-  /**
-   * Manually trigger garbage collection (useful for testing)
-   * This bypasses the scheduler and immediately runs GC
-   */
-  triggerCollection(): void {
-    if (this.cache != null) {
-      this.runGarbageCollection();
-    }
-  }
-
-  /**
-   * Mark an entry as eligible for garbage collection
-   *
-   * @param key - The cache key
-   */
-  markEligible(key: string): void {
-    if (this.cache == null) {
-      return;
-    }
-
-    const entry = this.cache.get(key);
-    if (entry != null && entry.subscriptions === 0) {
-      entry.gcEligibleAt = Date.now();
-    }
-  }
-
-  /**
-   * Clear the eligibility timestamp for an entry
-   *
-   * @param key - The cache key
-   */
-  clearEligibility(key: string): void {
-    if (this.cache == null) {
-      return;
-    }
-
-    const entry = this.cache.get(key);
-    if (entry != null) {
-      entry.gcEligibleAt = undefined;
-    }
+    return entry.canBeCollected();
   }
 }

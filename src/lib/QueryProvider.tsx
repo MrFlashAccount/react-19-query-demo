@@ -147,7 +147,7 @@ export function useQuery<
 >(
   options: UseQueryOptions<Key, PromiseValue>
 ): {
-  promise: PromiseEntry<PromiseValue>;
+  promise: Promise<PromiseValue> | null;
   isPending: boolean;
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
@@ -156,8 +156,8 @@ export function useQuery<
 
   const { queryCache, isQueryCachePending } = use(QueryContext);
 
-  // Add or get promise from cache (staleness check happens inside addPromise)
-  const promiseEntry = queryCache.addPromise<Key, PromiseValue>({
+  // Add or get query from cache (staleness check happens inside addQuery)
+  const query = queryCache.addQuery<Key, PromiseValue>({
     key: deferredKey,
     queryFn: queryFn,
     gcTime,
@@ -166,7 +166,10 @@ export function useQuery<
     retryDelay,
   });
 
-  return { promise: promiseEntry, isPending: isQueryCachePending || isPending };
+  return {
+    promise: query.promise,
+    isPending: isQueryCachePending || isPending,
+  };
 }
 
 /**

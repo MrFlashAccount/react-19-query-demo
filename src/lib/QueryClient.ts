@@ -10,6 +10,12 @@ import {
 } from "./GarbageCollector";
 import { Retrier, type RetryConfig } from "./Retrier";
 import type { BackgroundRefetch } from "./BackgroundRefetch";
+import {
+  Query,
+  stableKeySerialize,
+  type AnyKey,
+  type QueryOptions,
+} from "./Query";
 
 // Re-export PromiseEntry for convenience
 export type { PromiseEntry } from "./PromiseEntry";
@@ -24,7 +30,7 @@ export interface AddPromiseOptions<
   /** The cache key */
   key: Key;
   /** Function that returns a promise to fetch data (preferred) */
-  queryFn?: (key: Key) => Promise<PromiseValue>;
+  queryFn: (key: Key) => Promise<PromiseValue>;
   /** The promise to cache (deprecated, use queryFn instead) */
   promise?: Promise<PromiseValue>;
   /** Time in milliseconds after which the cache entry will be removed. Default: Infinity */
@@ -47,20 +53,23 @@ export interface QueryClientOptions {
   /** Garbage collector configuration */
   gc?: GarbageCollectorOptions;
   /** Cache implementation */
-  cache?: ICache;
+  cache?: Map<string, Query<AnyKey, unknown>>;
   /** Callback invoked when a new instance is created after cache mutation */
   onChange?: (newInstance: QueryClient) => void;
 }
 
 export interface ICache {
-  has(key: string): boolean;
-  get(key: string): CacheEntry | undefined;
-  set(key: string, value: CacheEntry): void;
-  delete(key: string): boolean;
+  has<Key extends AnyKey>(key: Key): boolean;
+  get<Key extends AnyKey>(key: Key): Query<Key, unknown> | undefined;
+  set<Key extends AnyKey, TData = unknown>(
+    key: Key,
+    value: Query<Key, TData>
+  ): void;
+  delete<Key extends AnyKey>(key: Key): boolean;
   clear(): void;
-  keys(): IterableIterator<string>;
-  values(): IterableIterator<CacheEntry>;
-  entries(): IterableIterator<[string, CacheEntry]>;
+  keys(): IterableIterator<AnyKey>;
+  values(): IterableIterator<Query<AnyKey, unknown>>;
+  entries(): IterableIterator<[AnyKey, Query<AnyKey, unknown>]>;
 }
 
 /**
@@ -97,11 +106,7 @@ export interface ICache {
  * ```
  */
 export class QueryClient {
-  private _cache: ICache;
-  public set cache(cache: ICache) {
-    this._cache = cache;
-    this.garbageCollector.start(this._cache as Map<string, CacheEntry>);
-  }
+  private _cache: Map<string, Query<AnyKey, unknown>>;
   private debugger: QueryCacheDebugger;
   private garbageCollector: GarbageCollector;
   private backgroundRefetch?: BackgroundRefetch;
@@ -128,18 +133,11 @@ export class QueryClient {
     this.debugOptions = options.debug;
     this.gcOptions = options.gc;
 
-    this._cache = options.cache || new Map<string, CacheEntry>();
+    this._cache = options.cache || new Map<string, Query<AnyKey, unknown>>();
     this.debugger = new QueryCacheDebugger(options.debug);
 
     // Create garbage collector with callback to log deletions
-    this.garbageCollector = new GarbageCollector({
-      ...options.gc,
-      onCollect: (key) => {
-        const parsedKey = JSON.parse(key) as Array<unknown>;
-        this.debugger.logDelete(parsedKey, "garbage collected");
-        options.gc?.onCollect?.(key);
-      },
-    });
+    this.garbageCollector = new GarbageCollector(options.gc);
 
     this.queryRegistry = new Map();
     this.onChange = options.onChange;
@@ -202,25 +200,9 @@ export class QueryClient {
   }
 
   /**
-   * Stop the garbage collection scheduler
-   * Used for cleanup when the cache is no longer needed
-   */
-  destroy(): void {
-    this.garbageCollector.stop();
-  }
-
-  /**
-   * Manually trigger garbage collection (useful for testing)
-   * This bypasses the scheduler and immediately runs GC
-   */
-  triggerGarbageCollection(): void {
-    this.garbageCollector.triggerCollection();
-  }
-
-  /**
    * Get the underlying cache map (exposed for testing)
    */
-  getCache(): ICache {
+  getCache() {
     return this._cache;
   }
 
@@ -231,81 +213,16 @@ export class QueryClient {
    * @param options - Options containing key, queryFn (or promise for backwards compat), and optional gcTime/staleTime/retry
    * @returns The cached promise entry
    */
-  addPromise<const Key extends Array<unknown>, PromiseValue extends unknown>(
-    options: AddPromiseOptions<Key, PromiseValue>
-  ): PromiseEntry<PromiseValue> {
-    const {
-      key,
-      queryFn,
-      promise: rawPromise,
-      gcTime,
-      staleTime,
-      retry,
-      retryDelay,
-    } = options;
-    const keySerialized = stableKeySerialize(key);
-    const existingEntry = this._cache.get(keySerialized);
-
-    // For backwards compatibility: if only promise is provided, use it directly
-    if (queryFn == null && rawPromise != null) {
-      if (existingEntry != null) {
-        this.debugger.logUpdate(key, existingEntry.promise);
-        return existingEntry.promise as PromiseEntry<PromiseValue>;
-      }
-
-      const promiseEntry = PromiseEntryFactory.create(rawPromise, {
-        gcTime,
-        key,
-        onStatusChange: (oldStatus, newStatus, entry) => {
-          this.debugger.logStatusChange(key, entry, oldStatus, newStatus);
-        },
-      });
-
-      const entry: CacheEntry = {
-        promise: promiseEntry,
-        subscriptions: 0,
-        gcTime,
-        staleTime,
-        dataUpdatedAt: undefined,
-      };
-
-      this._cache.set(keySerialized, entry);
-      this.debugger.logAdd(key, promiseEntry);
-
-      // Create new instance after cache modification
-      const newInstance = this.clone();
-
-      rawPromise
-        .then(() => {
-          entry.dataUpdatedAt = Date.now();
-        })
-        .catch(() => {});
-
-      this.notifyChange(newInstance);
-
-      return promiseEntry as PromiseEntry<PromiseValue>;
-    }
-
-    if (queryFn == null) {
-      throw new Error("Either queryFn or promise must be provided");
-    }
+  addQuery<const Key extends Array<unknown>, PromiseValue extends unknown>(
+    options: QueryOptions<Key, PromiseValue>
+  ): Query<Key, PromiseValue> {
+    const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
+    const keySerialized = Query.getSerializedKey(key);
+    const existingQuery = this._cache.get(keySerialized);
 
     // If entry exists, return it in most cases (don't create new promises unnecessarily)
-    if (existingEntry != null) {
-      // Always return pending promises
-      if (existingEntry.promise.isPending) {
-        this.debugger.logUpdate(key, existingEntry.promise);
-        return existingEntry.promise as PromiseEntry<PromiseValue>;
-      }
-
-      // If stale and fulfilled, return existing data immediately
-      // (background refetch will happen through BackgroundRefetch system, not here)
-      if (existingEntry.promise.isFulfilled) {
-        this.debugger.logUpdate(key, existingEntry.promise);
-        return existingEntry.promise as PromiseEntry<PromiseValue>;
-      }
-
-      // If rejected, create a new promise to retry
+    if (existingQuery != null) {
+      return existingQuery;
     }
 
     // Store query info in registry for background refetching
@@ -315,43 +232,20 @@ export class QueryClient {
       options: { gcTime, staleTime, retry, retryDelay },
     });
 
-    // Create new entry
-    const retrier = new Retrier({ retry, retryDelay });
-    const promise = new Promise<PromiseValue>((res, rej) =>
-      retrier
-        .execute(() => queryFn(key))
-        .then(res)
-        .catch(rej)
-    );
-
-    // Create a PromiseEntry using the factory
-    const promiseEntry = PromiseEntryFactory.create(promise, {
-      gcTime,
+    const entry = new Query<Key, PromiseValue>({
       key,
-      onStatusChange: (oldStatus, newStatus, entry) => {
-        this.debugger.logStatusChange(key, entry, oldStatus, newStatus);
-      },
-    });
-
-    const entry: CacheEntry = {
-      promise: promiseEntry,
-      subscriptions: 0,
+      queryFn,
       gcTime,
       staleTime,
-      dataUpdatedAt: undefined,
-    };
+      retry,
+      retryDelay,
+    });
 
     this._cache.set(keySerialized, entry);
-    this.debugger.logAdd(key, promiseEntry);
 
-    // Set dataUpdatedAt when promise fulfills
-    promise
-      .then(() => {
-        entry.dataUpdatedAt = Date.now();
-      })
-      .catch(() => {});
+    entry.fetchQuery();
 
-    return promiseEntry as PromiseEntry<PromiseValue>;
+    return entry;
   }
 
   /**
@@ -381,7 +275,10 @@ export class QueryClient {
     const existingEntry = this._cache.get(keySerialized);
 
     // Only refetch if there's an existing fulfilled entry
-    if (existingEntry == null || !existingEntry.promise.isFulfilled) {
+    if (
+      existingEntry == null ||
+      existingEntry.getState().status !== "success"
+    ) {
       return;
     }
 
@@ -400,43 +297,24 @@ export class QueryClient {
         .catch(rej)
     );
 
-    // Create a PromiseEntry using the factory
-    const promiseEntry = PromiseEntryFactory.create(promise, {
-      gcTime,
-      key,
-      onStatusChange: (oldStatus, newStatus, entry) => {
-        this.debugger.logStatusChange(key, entry, oldStatus, newStatus);
-      },
-    });
-
     // Preserve subscriptions from the old entry
-    const entry: CacheEntry = {
-      promise: promiseEntry,
-      subscriptions: existingEntry.subscriptions,
+    const entry = new Query<Key, PromiseValue>({
+      key,
+      queryFn,
       gcTime,
       staleTime,
-      dataUpdatedAt: undefined,
-    };
+      retry,
+      retryDelay,
+    });
 
     // Update the cache with the new promise
     this._cache.set(keySerialized, entry);
-    this.debugger.logAdd(key, promiseEntry);
 
     // Create new instance after cache modification
     const newInstance = this.clone();
     this.notifyChange(newInstance);
 
-    // Set dataUpdatedAt when promise fulfills
-    promise
-      .then(() => {
-        const cachedEntry = this._cache.get(keySerialized);
-        if (cachedEntry != null) {
-          cachedEntry.dataUpdatedAt = Date.now();
-        }
-      })
-      .catch(() => {
-        // Ignore errors - they're handled elsewhere
-      });
+    entry.fetchQuery();
   }
 
   /**
@@ -447,11 +325,15 @@ export class QueryClient {
    */
   getPromise<const Key extends Array<unknown>, PromiseValue extends unknown>(
     key: Key
-  ): PromiseEntry<PromiseValue> | null {
+  ): Promise<PromiseValue> | null {
     const keySerialized = stableKeySerialize(key);
     const entry = this._cache.get(keySerialized);
 
-    return (entry?.promise as PromiseEntry<PromiseValue>) ?? null;
+    if (entry == null) {
+      return null;
+    }
+
+    return entry.promise as Promise<PromiseValue> | null;
   }
 
   /**
@@ -479,30 +361,7 @@ export class QueryClient {
       return true;
     }
 
-    // If staleTime is 'static', data is never stale
-    if (entry.staleTime === "static") {
-      return false;
-    }
-
-    // If staleTime is Infinity, data is never stale
-    if (entry.staleTime === Infinity) {
-      return false;
-    }
-
-    // If data hasn't been fetched yet, it's stale
-    if (entry.dataUpdatedAt == null) {
-      return true;
-    }
-
-    // If staleTime is 0 or undefined (default), data is always stale
-    const staleTime = entry.staleTime ?? 0;
-    if (staleTime === 0) {
-      return true;
-    }
-
-    // Check if staleTime has elapsed since last update
-    const now = Date.now();
-    return now >= entry.dataUpdatedAt + staleTime;
+    return entry.isStale();
   }
 
   /**
@@ -608,7 +467,7 @@ export class QueryClient {
         const entry = this._cache.get(cacheKey);
 
         // Skip entries with staleTime='static'
-        if (entry != null && entry.staleTime === "static") {
+        if (entry != null && entry.getOptions().staleTime === "static") {
           continue;
         }
 
@@ -656,8 +515,4 @@ export class QueryClient {
 
     return true;
   }
-}
-
-function stableKeySerialize<Key extends Array<unknown>>(key: Key): string {
-  return JSON.stringify(key);
 }

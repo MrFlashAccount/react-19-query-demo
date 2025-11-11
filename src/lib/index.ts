@@ -48,3 +48,11 @@ export {
   BackgroundRefetch,
   type BackgroundRefetchOptions,
 } from "./BackgroundRefetch";
+
+export {
+  TimerWheel,
+  timerWheel,
+  type TimerWheelOptions,
+} from "./TimerWheel";
+
+export { Query, type QueryOptions, type QueryState } from "./Query";
