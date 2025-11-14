@@ -1,28 +1,9 @@
-import type { PromiseEntry } from "./PromiseEntry";
 import { timerWheel } from "./TimerWheel";
 
 export interface IGarbageCollectable {
   gcTime?: number;
   canBeCollected(): boolean;
-  canBeCollected(): boolean;
   remove(): boolean;
-}
-
-/**
- * Cache entry with promise and garbage collection metadata
- */
-export interface CacheEntry {
-  promise: PromiseEntry<unknown>;
-  /** Number of active subscriptions to this cache entry */
-  subscriptions: number;
-  /** GC time in milliseconds */
-  gcTime?: number;
-  /** Timestamp when entry became eligible for GC (when subscriptions reached 0) */
-  gcEligibleAt?: number;
-  /** Stale time in milliseconds, 'static', or Infinity */
-  staleTime?: number | "static";
-  /** Timestamp when the data was last fetched successfully */
-  dataUpdatedAt?: number;
 }
 
 /**
@@ -129,10 +110,6 @@ export class GarbageCollector {
    * @returns True if the entry should be removed
    */
   private shouldGarbageCollect(entry: IGarbageCollectable): boolean {
-    if (!entry.canBeCollected()) {
-      return false;
-    }
-
     return entry.canBeCollected();
   }
 }

@@ -1,8 +1,4 @@
 import {
-  QueryCacheDebugger,
-  type QueryCacheDebuggerOptions,
-} from "./QueryCacheDebugger";
-import {
   GarbageCollector,
   type GarbageCollectorOptions,
 } from "./GarbageCollector";
@@ -13,9 +9,6 @@ import {
   type AnyKey,
   type QueryOptions,
 } from "./Query";
-
-// Re-export PromiseEntry for convenience
-export type { PromiseEntry } from "./PromiseEntry";
 
 /**
  * Options for adding a promise to the cache
@@ -45,8 +38,6 @@ export interface AddPromiseOptions<
  *  constructor
  */
 export interface QueryClientOptions {
-  /** Debugger configuration */
-  debug?: QueryCacheDebuggerOptions;
   /** Garbage collector configuration */
   gc?: GarbageCollectorOptions;
   /** Cache implementation */
@@ -104,19 +95,15 @@ export interface ICache {
  */
 export class QueryClient {
   private _cache: Map<string, Query<AnyKey, unknown>>;
-  private debugger: QueryCacheDebugger;
   private garbageCollector: GarbageCollector;
   private onChange?: (newInstance: QueryClient) => void;
-  private debugOptions?: QueryCacheDebuggerOptions;
   private gcOptions?: GarbageCollectorOptions;
 
   constructor(options: QueryClientOptions = {}) {
     // Store options for cloning
-    this.debugOptions = options.debug;
     this.gcOptions = options.gc;
 
     this._cache = options.cache || new Map<string, Query<AnyKey, unknown>>();
-    this.debugger = new QueryCacheDebugger(options.debug);
 
     // Create garbage collector with callback to log deletions
     this.garbageCollector = new GarbageCollector(options.gc);
@@ -136,7 +123,6 @@ export class QueryClient {
    */
   private clone(): QueryClient {
     const newInstance = new QueryClient({
-      debug: this.debugOptions,
       gc: this.gcOptions,
       cache: this._cache, // Reuse same cache reference
       onChange: this.onChange,
@@ -160,13 +146,6 @@ export class QueryClient {
 
   /**
    * Get the debugger instance
-   */
-  getDebugger(): QueryCacheDebugger {
-    return this.debugger;
-  }
-
-  /**
-   * Get the garbage collector instance
    */
   getGarbageCollector(): GarbageCollector {
     return this.garbageCollector;
@@ -281,7 +260,6 @@ export class QueryClient {
       query.destroy();
     }
     this._cache.clear();
-    this.debugger.logDelete([], "cache cleared");
 
     // Create new instance after cache modification
     const newInstance = this.clone();
@@ -321,7 +299,7 @@ export class QueryClient {
     if (keysToDelete.length > 0) {
       let removed = false;
       for (const keyToDelete of keysToDelete) {
-        removed = this.deleteQuery(keyToDelete, "invalidated") || removed;
+        removed = this.deleteQuery(keyToDelete) || removed;
       }
 
       if (!removed) {
@@ -335,16 +313,13 @@ export class QueryClient {
   }
 
   private handleQueryGarbageCollect(serializedKey: string): void {
-    if (this.deleteQuery(serializedKey, "gc collected")) {
+    if (this.deleteQuery(serializedKey)) {
       const newInstance = this.clone();
       this.notifyChange(newInstance);
     }
   }
 
-  private deleteQuery(
-    serializedKey: string,
-    reason: "gc collected" | "invalidated"
-  ): boolean {
+  private deleteQuery(serializedKey: string): boolean {
     const query = this._cache.get(serializedKey);
     if (query == null) {
       return false;
@@ -353,9 +328,6 @@ export class QueryClient {
     query.setGarbageCollectCallback(undefined);
     query.destroy();
     this._cache.delete(serializedKey);
-
-    const parsedKey = JSON.parse(serializedKey) as Array<unknown>;
-    this.debugger.logDelete(parsedKey, reason);
 
     return true;
   }

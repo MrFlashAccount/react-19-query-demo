@@ -29,18 +29,10 @@ export {
   type AddPromiseOptions,
 } from "./QueryCache";
 
-export { PromiseEntryFactory, type PromiseEntry } from "./PromiseEntry";
-
 export {
   GarbageCollector,
-  type CacheEntry,
   type GarbageCollectorOptions,
 } from "./GarbageCollector";
-
-export {
-  QueryCacheDebugger,
-  type QueryCacheDebuggerOptions,
-} from "./QueryCacheDebugger";
 
 export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 

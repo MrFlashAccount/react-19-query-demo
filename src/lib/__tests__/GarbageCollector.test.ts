@@ -7,24 +7,21 @@ import { timerWheel } from "../TimerWheel";
 
 interface CollectableOptions {
   gcTime?: number;
-  eligible?: boolean;
   canCollect?: boolean;
   removeReturns?: boolean;
 }
 
 const createCollectable = ({
   gcTime = 1000,
-  eligible = true,
+  canCollect = true,
   removeReturns = true,
 }: CollectableOptions = {}): IGarbageCollectable & {
   remove: ReturnType<typeof vi.fn>;
   canBeCollected: ReturnType<typeof vi.fn>;
-  isEligibleForGC: ReturnType<typeof vi.fn>;
 } => {
   return {
     gcTime,
-    isEligibleForGC: vi.fn().mockReturnValue(eligible),
-    canBeCollected: vi.fn().mockReturnValue(eligible),
+    canBeCollected: vi.fn().mockReturnValue(canCollect),
     remove: vi.fn().mockReturnValue(removeReturns),
   };
 };
@@ -62,20 +59,8 @@ describe("GarbageCollector", () => {
       await flushTimerWheel(1000);
 
       expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
-      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).toHaveBeenCalledTimes(1);
       expect(onCollect).toHaveBeenCalledWith(entry);
-    });
-
-    it("should not collect when entry is not eligible", async () => {
-      const entry = createCollectable({ eligible: false });
-      gc.add(entry);
-
-      await flushTimerWheel(1000);
-
-      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
-      expect(entry.canBeCollected).not.toHaveBeenCalled();
-      expect(entry.remove).not.toHaveBeenCalled();
     });
 
     it("should not collect when entry cannot be collected", async () => {
@@ -84,7 +69,6 @@ describe("GarbageCollector", () => {
 
       await flushTimerWheel(1000);
 
-      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).not.toHaveBeenCalled();
     });
@@ -121,7 +105,6 @@ describe("GarbageCollector", () => {
       gc.forceCollect();
 
       expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
-      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).toHaveBeenCalledTimes(1);
     });
 
@@ -137,8 +120,8 @@ describe("GarbageCollector", () => {
       expect(entry.remove).not.toHaveBeenCalled();
     });
 
-    it("should skip entries that are not eligible", () => {
-      const entry = createCollectable({ eligible: false });
+    it("should skip entries that cannot be collected", () => {
+      const entry = createCollectable({ canCollect: false });
       gc.add(entry);
 
       gc.forceCollect();

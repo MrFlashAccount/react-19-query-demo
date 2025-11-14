@@ -5,6 +5,4 @@ export {
   QueryClient as QueryCache,
   type QueryClientOptions as QueryCacheOptions,
   type AddPromiseOptions,
-  type PromiseEntry,
 } from "./QueryClient";
-
