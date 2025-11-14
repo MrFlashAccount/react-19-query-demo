@@ -34,7 +34,7 @@ export const QueryContext = createContext<QueryContextValue>({
  * Props for {@link QueryProvider}
  */
 export interface QueryProviderProps extends PropsWithChildren {
-  queryCacheOptions: QueryCacheOptions;
+  queryCacheOptions?: QueryCacheOptions;
 }
 
 /**
@@ -56,7 +56,7 @@ export interface QueryProviderProps extends PropsWithChildren {
  */
 export function QueryProvider({
   children,
-  queryCacheOptions,
+  queryCacheOptions = {},
 }: QueryProviderProps) {
   const [isPending, startTransition] = useTransition();
   const [queryCache, setQueryCache] = useState(() => {

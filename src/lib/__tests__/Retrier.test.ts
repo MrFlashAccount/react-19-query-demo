@@ -243,7 +243,6 @@ describe("Retrier", () => {
 
     it("should use custom delay function", async () => {
       const delayFn = vi.fn((_failureCount: number) => {
-        console.log("delayFn", _failureCount);
         return (_failureCount + 1) * 500;
       });
       const retrier = new Retrier({ retry: 3, retryDelay: delayFn });

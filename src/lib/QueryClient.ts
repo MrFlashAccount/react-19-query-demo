@@ -169,10 +169,13 @@ export class QueryClient {
     options: QueryOptions<Key, PromiseValue>
   ): Query<Key, PromiseValue> {
     const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
+
     const keySerialized = Query.getSerializedKey(key);
     const existingQuery = this._cache.get(keySerialized) as
       | Query<Key, PromiseValue>
       | undefined;
+
+    console.log("existingQuery", existingQuery);
 
     if (existingQuery != null) {
       return existingQuery;
@@ -196,6 +199,8 @@ export class QueryClient {
     entry.setGarbageCollectCallback(() =>
       this.handleQueryGarbageCollect(keySerialized)
     );
+
+    console.log("entry", entry);
 
     this._cache.set(keySerialized, entry as unknown as Query<AnyKey, unknown>);
 

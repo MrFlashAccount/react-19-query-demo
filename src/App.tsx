@@ -32,7 +32,7 @@ export default function App() {
   });
 
   return (
-    <QueryProvider queryCacheOptions={{ debug: { enabled: false } }}>
+    <QueryProvider>
       <QueryClientProvider client={tanStackQueryClient}>
         <Suspense fallback={<Loading />}>
           <LazyGitHubCorner
@@ -44,7 +44,7 @@ export default function App() {
           />
 
           <div className="fixed bottom-4 left-4 z-50 bg-gray-900 rounded-full shadow-lg p-2 border-2 border-gray-700">
-            <LazyLagRadar size={120} />
+            {/* <LazyLagRadar size={120} /> */}
           </div>
 
           <div className="min-h-screen bg-white">
