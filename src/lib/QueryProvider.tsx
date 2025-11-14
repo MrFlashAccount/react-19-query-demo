@@ -8,7 +8,7 @@ import {
   useEffect,
 } from "react";
 import { noop } from "./utils";
-import { QueryCache, type QueryCacheOptions } from "./QueryCache";
+import { QueryClient, type QueryClientOptions } from "./QueryClient";
 import type { RetryConfig } from "./Retrier";
 import { useEvent } from "../useEvent";
 
@@ -16,25 +16,25 @@ import { useEvent } from "../useEvent";
  * Context value for the query provider
  */
 export interface QueryContextValue {
-  queryCache: QueryCache;
-  isQueryCachePending: boolean;
+  queryClient: QueryClient;
+  isQueryClientPending: boolean;
 }
 
 /**
  * Query Context - exposed for testing purposes.
  * In production code, use the useQuery hook instead of accessing this directly.
  */
-const defaultQueryCache = new QueryCache();
+const defaultQueryClient = new QueryClient();
 export const QueryContext = createContext<QueryContextValue>({
-  queryCache: defaultQueryCache,
-  isQueryCachePending: false,
+  queryClient: defaultQueryClient,
+  isQueryClientPending: false,
 });
 
 /**
  * Props for {@link QueryProvider}
  */
 export interface QueryProviderProps extends PropsWithChildren {
-  queryCacheOptions?: QueryCacheOptions;
+  queryCacheOptions?: QueryClientOptions;
 }
 
 /**
@@ -49,7 +49,7 @@ export interface QueryProviderProps extends PropsWithChildren {
  *
  * @example
  * ```tsx
- * <QueryProvider queryCache={new QueryCache()}>
+ * <QueryProvider queryCacheOptions={{}}>
  *   <App />
  * </QueryProvider>
  * ```
@@ -59,19 +59,19 @@ export function QueryProvider({
   queryCacheOptions = {},
 }: QueryProviderProps) {
   const [isPending, startTransition] = useTransition();
-  const [queryCache, setQueryCache] = useState(() => {
-    return new QueryCache({
+  const [queryClient, setQueryClient] = useState(() => {
+    return new QueryClient({
       ...queryCacheOptions,
       onChange: (newInstance) => {
         startTransition(() => {
-          setQueryCache(newInstance);
+          setQueryClient(newInstance);
         });
       },
     });
   });
 
   return (
-    <QueryContext value={{ queryCache, isQueryCachePending: isPending }}>
+    <QueryContext value={{ queryClient, isQueryClientPending: isPending }}>
       {children}
     </QueryContext>
   );
@@ -98,8 +98,8 @@ export interface UseQueryOptions<
   retryDelay?: number | ((failureCount: number, error: unknown) => number);
 }
 
-export function useQueryCache(): QueryCache {
-  return use(QueryContext).queryCache;
+export function useQueryClient(): QueryClient {
+  return use(QueryContext).queryClient;
 }
 
 export function useQueryContext(): QueryContextValue {
@@ -121,7 +121,7 @@ export function useQueryContext(): QueryContextValue {
  *
  * Stale behavior:
  * - Stale queries are refetched automatically in the background when:
- *   - New instances of the query mount (handled by QueryCache.addPromise)
+ *   - New instances of the query mount (handled by QueryClient.addQuery)
  *   - The window is refocused (handled by BackgroundRefetch)
  *   - The network is reconnected (handled by BackgroundRefetch)
  *
@@ -152,10 +152,10 @@ export function useQuery<
   const deferredKey = useDeferredValue(key);
   const isPending = key !== deferredKey;
 
-  const { queryCache, isQueryCachePending } = use(QueryContext);
+  const { queryClient, isQueryClientPending } = use(QueryContext);
 
   // Add or get query from cache (staleness check happens inside addQuery)
-  const query = queryCache.addQuery<Key, PromiseValue>({
+  const query = queryClient.addQuery<Key, PromiseValue>({
     key: deferredKey,
     queryFn: queryFn,
     gcTime,
@@ -171,7 +171,7 @@ export function useQuery<
 
   return {
     promise: query.promise,
-    isPending: isQueryCachePending || isPending,
+    isPending: isQueryClientPending || isPending,
   };
 }
 
@@ -243,7 +243,7 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
 ): UseMutationResult<Variables, Data> {
   const { mutationFn, invalidateQueries = [] } = options;
 
-  const { queryCache } = use(QueryContext);
+  const { queryClient } = use(QueryContext);
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
@@ -258,7 +258,7 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
             // Invalidate queries after successful mutation
             if (invalidateQueries.length > 0) {
               for (const queryKey of invalidateQueries) {
-                queryCache.invalidate(queryKey);
+                queryClient.invalidate(queryKey);
               }
             }
 

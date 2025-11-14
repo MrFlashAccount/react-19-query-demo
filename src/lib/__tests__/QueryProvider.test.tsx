@@ -6,7 +6,7 @@ import {
   useQuery,
   QueryContext,
   type QueryContextValue,
-  type QueryCacheOptions,
+  type QueryClientOptions,
 } from "..";
 import { timerWheel } from "../TimerWheel";
 
@@ -28,7 +28,7 @@ async function flushPromises() {
 
 function renderWithProvider(
   element: ReactElement,
-  options: QueryCacheOptions = {}
+  options: QueryClientOptions = {}
 ) {
   return render(
     <QueryProvider queryCacheOptions={options}>{element}</QueryProvider>
@@ -59,13 +59,13 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn1 = vi.fn().mockResolvedValue("data");
-      const result1 = contextValue!.queryCache.addQuery({
+      const result1 = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn: queryFn1,
       });
 
       const queryFn2 = vi.fn().mockResolvedValue("other data");
-      const result2 = contextValue!.queryCache.addQuery({
+      const result2 = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn: queryFn2,
       });
@@ -86,12 +86,12 @@ describe("QueryProvider", () => {
 
       renderWithProvider(<TestComponent />);
 
-      const result1 = contextValue!.queryCache.addQuery({
+      const result1 = contextValue!.queryClient.addQuery({
         key: ["test", 1],
         queryFn: vi.fn().mockResolvedValue("data1"),
       });
 
-      const result2 = contextValue!.queryCache.addQuery({
+      const result2 = contextValue!.queryClient.addQuery({
         key: ["test", 2],
         queryFn: vi.fn().mockResolvedValue("data2"),
       });
@@ -110,12 +110,12 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
-      const retrieved = contextValue!.queryCache.getPromise(["test"]);
+      const retrieved = contextValue!.queryClient.getPromise(["test"]);
       expect(retrieved).toBe(query.promise);
       await expect(retrieved).resolves.toBe("data");
       expect(queryFn).toHaveBeenCalledTimes(1);
@@ -131,7 +131,7 @@ describe("QueryProvider", () => {
 
       renderWithProvider(<TestComponent />);
 
-      const retrieved = contextValue!.queryCache.getPromise(["non-existent"]);
+      const retrieved = contextValue!.queryClient.getPromise(["non-existent"]);
       expect(retrieved).toBeNull();
     });
   });
@@ -148,7 +148,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
@@ -176,12 +176,12 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
@@ -209,7 +209,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
@@ -234,7 +234,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue.queryCache.addQuery({
+      const query = contextValue.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 5000,
@@ -242,7 +242,7 @@ describe("QueryProvider", () => {
 
       // Entry should exist
       expect(
-        contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Unsubscribe to mark entry as GC eligible (simulating no active subscriptions)
@@ -253,7 +253,7 @@ describe("QueryProvider", () => {
         await vi.advanceTimersByTimeAsync(4999);
       });
       expect(
-        contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Advance past gcTime and trigger scheduler (100ms intervals + setTimeout(0))
@@ -262,7 +262,7 @@ describe("QueryProvider", () => {
         await vi.runAllTimersAsync();
       });
       expect(
-        contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(false);
     });
 
@@ -277,19 +277,19 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Fast-forward a lot of time
       vi.advanceTimersByTime(100000);
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
     });
 
@@ -304,19 +304,19 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: Infinity,
       });
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       vi.advanceTimersByTime(100000);
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
     });
   });
@@ -333,7 +333,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 5000,
@@ -342,7 +342,7 @@ describe("QueryProvider", () => {
       query.subscribe(() => {});
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Fast-forward past gcTime
@@ -350,7 +350,7 @@ describe("QueryProvider", () => {
 
       // Should still exist because there's an active subscription
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
     });
 
@@ -365,7 +365,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 5000,
@@ -379,7 +379,7 @@ describe("QueryProvider", () => {
         await vi.advanceTimersByTimeAsync(10000);
       });
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Remove first subscription
@@ -388,7 +388,7 @@ describe("QueryProvider", () => {
         await vi.advanceTimersByTimeAsync(10000);
       });
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Remove last subscription - should mark as GC eligible
@@ -403,7 +403,7 @@ describe("QueryProvider", () => {
         await vi.runAllTimersAsync();
       });
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(false);
     });
 
@@ -418,7 +418,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 5000,
@@ -442,7 +442,7 @@ describe("QueryProvider", () => {
 
       // Should still exist
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
     });
   });
@@ -484,7 +484,7 @@ describe("QueryProvider", () => {
         expect(screen.queryByText("data")).toBeDefined();
       });
 
-      const entry = contextValue!.queryCache
+      const entry = contextValue!.queryClient
         .getCache()
         .get(JSON.stringify(["test"]));
 
@@ -535,7 +535,7 @@ describe("QueryProvider", () => {
       expect(screen.queryByText("data")).toBeDefined();
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Unmount component
@@ -544,7 +544,7 @@ describe("QueryProvider", () => {
       await vi.advanceTimersByTimeAsync(20);
       await vi.runAllTimersAsync();
 
-      const hasEntry = contextValue!.queryCache
+      const hasEntry = contextValue!.queryClient
         .getCache()
         .has(JSON.stringify(["test"]));
       expect(hasEntry).toBe(false);
@@ -586,7 +586,7 @@ describe("QueryProvider", () => {
       });
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Switch to fake timers
@@ -597,7 +597,7 @@ describe("QueryProvider", () => {
 
       // Cache should still exist
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
     });
 
@@ -668,21 +668,21 @@ describe("QueryProvider", () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["test", { id: 1, name: "foo" }],
         queryFn: queryFn1,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["test", { id: 2, name: "bar" }],
         queryFn: queryFn2,
       });
 
-      const retrieved1 = contextValue!.queryCache.getPromise([
+      const retrieved1 = contextValue!.queryClient.getPromise([
         "test",
         { id: 1, name: "foo" },
       ]);
-      const retrieved2 = contextValue!.queryCache.getPromise([
+      const retrieved2 = contextValue!.queryClient.getPromise([
         "test",
         { id: 2, name: "bar" },
       ]);
@@ -706,7 +706,7 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 5000,
@@ -735,14 +735,14 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 0,
       });
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Trigger GC by subscribing once and then releasing
@@ -756,7 +756,7 @@ describe("QueryProvider", () => {
       });
 
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
       ).toBe(false);
     });
   });
@@ -773,22 +773,22 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       const queryFn = vi.fn().mockResolvedValue("data");
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "action"],
         queryFn,
         gcTime: 5000,
       });
 
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
       ).toBe(true);
 
-      contextValue!.queryCache.invalidate(["movies", "action"]);
+      contextValue!.queryClient.invalidate(["movies", "action"]);
 
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
       ).toBe(false);
@@ -805,31 +805,31 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       // Add multiple cache entries with different keys
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies"],
         queryFn: vi.fn().mockResolvedValue("all movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "action"],
         queryFn: vi.fn().mockResolvedValue("action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "comedy"],
         queryFn: vi.fn().mockResolvedValue("comedy movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "action", "popular"],
         queryFn: vi.fn().mockResolvedValue("popular action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["users"],
         queryFn: vi.fn().mockResolvedValue("users"),
         gcTime: 5000,
@@ -837,53 +837,53 @@ describe("QueryProvider", () => {
 
       // Verify all entries exist
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["movies"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
       ).toBe(true);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
       ).toBe(true);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "comedy"]))
       ).toBe(true);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "popular"]))
       ).toBe(true);
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["users"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["users"]))
       ).toBe(true);
 
       // Invalidate all queries starting with ["movies"]
-      contextValue!.queryCache.invalidate(["movies"]);
+      contextValue!.queryClient.invalidate(["movies"]);
 
       // All movie queries should be removed
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["movies"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
       ).toBe(false);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
       ).toBe(false);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "comedy"]))
       ).toBe(false);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "popular"]))
       ).toBe(false);
 
       // Users query should still exist
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["users"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["users"]))
       ).toBe(true);
     });
 
@@ -897,53 +897,53 @@ describe("QueryProvider", () => {
 
       renderWithProvider(<TestComponent />);
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "action"],
         queryFn: vi.fn().mockResolvedValue("action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "action", "popular"],
         queryFn: vi.fn().mockResolvedValue("popular action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "action", "recent"],
         queryFn: vi.fn().mockResolvedValue("recent action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["movies", "comedy"],
         queryFn: vi.fn().mockResolvedValue("comedy movies"),
         gcTime: 5000,
       });
 
       // Invalidate all queries starting with ["movies", "action"]
-      contextValue!.queryCache.invalidate(["movies", "action"]);
+      contextValue!.queryClient.invalidate(["movies", "action"]);
 
       // All action movie queries should be removed
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
       ).toBe(false);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "popular"]))
       ).toBe(false);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "recent"]))
       ).toBe(false);
 
       // Comedy query should still exist
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "comedy"]))
       ).toBe(true);
@@ -959,7 +959,7 @@ describe("QueryProvider", () => {
 
       renderWithProvider(<TestComponent />);
 
-      const query = contextValue!.queryCache.addQuery({
+      const query = contextValue!.queryClient.addQuery({
         key: ["movies"],
         queryFn: vi.fn().mockResolvedValue("data"),
         gcTime: 5000,
@@ -970,11 +970,11 @@ describe("QueryProvider", () => {
       unsubscribe();
 
       // Invalidate should remove the entry
-      contextValue!.queryCache.invalidate(["movies"]);
+      contextValue!.queryClient.invalidate(["movies"]);
 
       // Entry should be removed
       expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["movies"]))
+        contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
       ).toBe(false);
     });
 
@@ -990,7 +990,7 @@ describe("QueryProvider", () => {
 
       // Should not throw when invalidating non-existent key
       expect(() => {
-        contextValue!.queryCache.invalidate(["non-existent"]);
+        contextValue!.queryClient.invalidate(["non-existent"]);
       }).not.toThrow();
     });
 
@@ -1005,41 +1005,41 @@ describe("QueryProvider", () => {
       renderWithProvider(<TestComponent />);
 
       // Add entries with complex key types
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["user", 123, { active: true }],
         queryFn: vi.fn().mockResolvedValue("user data"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["user", 123, { active: false }],
         queryFn: vi.fn().mockResolvedValue("inactive user data"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addQuery({
+      contextValue!.queryClient.addQuery({
         key: ["user", 456, { active: true }],
         queryFn: vi.fn().mockResolvedValue("other user data"),
         gcTime: 5000,
       });
 
       // Invalidate all queries for user 123
-      contextValue!.queryCache.invalidate(["user", 123]);
+      contextValue!.queryClient.invalidate(["user", 123]);
 
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["user", 123, { active: true }]))
       ).toBe(false);
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["user", 123, { active: false }]))
       ).toBe(false);
 
       // User 456 should still exist
       expect(
-        contextValue!.queryCache
+        contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["user", 456, { active: true }]))
       ).toBe(true);

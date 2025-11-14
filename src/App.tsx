@@ -1,5 +1,5 @@
 import { useState, Suspense, lazy } from "react";
-import { QueryProvider, QueryCache } from "./lib";
+import { QueryProvider } from "./lib";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TabSelector } from "./components/shared/TabSelector";
 

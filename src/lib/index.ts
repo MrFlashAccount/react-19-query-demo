@@ -14,7 +14,7 @@ export {
   QueryProvider,
   useQuery,
   useMutation,
-  useQueryCache,
+  useQueryClient,
   useQueryContext,
   QueryContext,
   type QueryProviderProps,
@@ -23,11 +23,7 @@ export {
   type QueryContextValue,
 } from "./QueryProvider";
 
-export {
-  QueryCache,
-  type QueryCacheOptions,
-  type AddPromiseOptions,
-} from "./QueryCache";
+export { QueryClient, type QueryClientOptions } from "./QueryClient";
 
 export {
   GarbageCollector,

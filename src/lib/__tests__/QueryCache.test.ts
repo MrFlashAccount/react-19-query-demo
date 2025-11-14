@@ -1,48 +1,46 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { QueryCache } from "../QueryCache";
+import { QueryClient } from "../QueryClient";
 
-describe("QueryCache", () => {
-  let queryCache: QueryCache;
+describe("QueryClient", () => {
+  let queryClient: QueryClient;
 
   beforeEach(() => {
     vi.useFakeTimers();
   });
 
   afterEach(() => {
-    queryCache?.clear();
+    queryClient?.clear();
     vi.useRealTimers();
   });
 
   describe("initialization", () => {
     it("should create cache with default options", () => {
-      queryCache = new QueryCache();
-      expect(queryCache).toBeDefined();
+      queryClient = new QueryClient();
+      expect(queryClient).toBeDefined();
     });
 
     it("should create cache with debug options", () => {
-      queryCache = new QueryCache({
-        debug: { enabled: true, prefix: "TEST" },
-      });
-      expect(queryCache).toBeDefined();
+      queryClient = new QueryClient({});
+      expect(queryClient).toBeDefined();
     });
 
     it("should create cache with gc options", () => {
       const onCollect = vi.fn();
-      queryCache = new QueryCache({
+      queryClient = new QueryClient({
         gc: { onCollect },
       });
-      expect(queryCache).toBeDefined();
+      expect(queryClient).toBeDefined();
     });
   });
 
   describe("addQuery", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should add a query to the cache", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
@@ -58,12 +56,12 @@ describe("QueryCache", () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      const entry1 = queryCache.addQuery({
+      const entry1 = queryClient.addQuery({
         key: ["test"],
         queryFn: queryFn1,
       });
 
-      const entry2 = queryCache.addQuery({
+      const entry2 = queryClient.addQuery({
         key: ["test"],
         queryFn: queryFn2,
       });
@@ -77,12 +75,12 @@ describe("QueryCache", () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      const entry1 = queryCache.addQuery({
+      const entry1 = queryClient.addQuery({
         key: ["test", 1],
         queryFn: queryFn1,
       });
 
-      const entry2 = queryCache.addQuery({
+      const entry2 = queryClient.addQuery({
         key: ["test", 2],
         queryFn: queryFn2,
       });
@@ -96,7 +94,7 @@ describe("QueryCache", () => {
 
     it("should use custom gcTime if provided", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         gcTime: 5000,
@@ -109,12 +107,12 @@ describe("QueryCache", () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      const entry1 = queryCache.addQuery({
+      const entry1 = queryClient.addQuery({
         key: ["users", { id: 1, type: "admin" }],
         queryFn: queryFn1,
       });
 
-      const entry2 = queryCache.addQuery({
+      const entry2 = queryClient.addQuery({
         key: ["users", { id: 1, type: "admin" }],
         queryFn: queryFn2,
       });
@@ -126,12 +124,12 @@ describe("QueryCache", () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      const entry1 = queryCache.addQuery({
+      const entry1 = queryClient.addQuery({
         key: ["test", null],
         queryFn: queryFn1,
       });
 
-      const entry2 = queryCache.addQuery({
+      const entry2 = queryClient.addQuery({
         key: ["test", undefined],
         queryFn: queryFn2,
       });
@@ -143,20 +141,20 @@ describe("QueryCache", () => {
 
   describe("invalidate", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should remove query from cache", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
-      queryCache.invalidate(["test"]);
+      queryClient.invalidate(["test"]);
 
       const newQueryFn = vi.fn().mockResolvedValue("new data");
-      const newEntry = queryCache.addQuery({
+      const newEntry = queryClient.addQuery({
         key: ["test"],
         queryFn: newQueryFn,
       });
@@ -169,98 +167,98 @@ describe("QueryCache", () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      const entry1 = queryCache.addQuery({
+      const entry1 = queryClient.addQuery({
         key: ["test", 1],
         queryFn: queryFn1,
       });
 
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test", 2],
         queryFn: queryFn2,
       });
 
-      queryCache.invalidate(["test", 1]);
+      queryClient.invalidate(["test", 1]);
 
       const newQueryFn = vi.fn().mockResolvedValue("new data");
-      const newEntry = queryCache.addQuery({
+      const newEntry = queryClient.addQuery({
         key: ["test", 1],
         queryFn: newQueryFn,
       });
 
       expect(newEntry).not.toBe(entry1);
       expect(newQueryFn).toHaveBeenCalled();
-      expect(queryCache.has(["test", 2])).toBe(true);
+      expect(queryClient.has(["test", 2])).toBe(true);
     });
 
     it("should handle invalidating non-existent key", () => {
-      expect(() => queryCache.invalidate(["non-existent"])).not.toThrow();
+      expect(() => queryClient.invalidate(["non-existent"])).not.toThrow();
     });
   });
 
   describe("has", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should return true for existing key", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
-      expect(queryCache.has(["test"])).toBe(true);
+      expect(queryClient.has(["test"])).toBe(true);
     });
 
     it("should return false for non-existent key", () => {
-      expect(queryCache.has(["non-existent"])).toBe(false);
+      expect(queryClient.has(["non-existent"])).toBe(false);
     });
 
     it("should return false after invalidation", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
-      queryCache.invalidate(["test"]);
+      queryClient.invalidate(["test"]);
 
-      expect(queryCache.has(["test"])).toBe(false);
+      expect(queryClient.has(["test"])).toBe(false);
     });
   });
 
   describe("clear", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should remove all entries from cache", () => {
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test", 1],
         queryFn: vi.fn().mockResolvedValue("data1"),
       });
 
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test", 2],
         queryFn: vi.fn().mockResolvedValue("data2"),
       });
 
-      queryCache.clear();
+      queryClient.clear();
 
-      expect(queryCache.has(["test", 1])).toBe(false);
-      expect(queryCache.has(["test", 2])).toBe(false);
+      expect(queryClient.has(["test", 1])).toBe(false);
+      expect(queryClient.has(["test", 2])).toBe(false);
     });
 
     it("should allow adding new entries after clear", () => {
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test"],
         queryFn: vi.fn().mockResolvedValue("data"),
       });
 
-      queryCache.clear();
+      queryClient.clear();
 
       const newQueryFn = vi.fn().mockResolvedValue("new data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn: newQueryFn,
       });
@@ -272,12 +270,12 @@ describe("QueryCache", () => {
 
   describe("query status tracking", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should track query fulfillment", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
@@ -297,7 +295,7 @@ describe("QueryCache", () => {
     it("should track query rejection", async () => {
       const error = new Error("test error");
       const queryFn = vi.fn().mockRejectedValue(error);
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         retry: false,
@@ -313,14 +311,14 @@ describe("QueryCache", () => {
 
     it("should preserve status across multiple retrievals", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry1 = queryCache.addQuery({
+      const entry1 = queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
       await entry1.fetchQuery();
 
-      const entry2 = queryCache.addQuery({
+      const entry2 = queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
@@ -334,12 +332,12 @@ describe("QueryCache", () => {
 
   describe("staleTime", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should mark data as stale when staleTime is 0 (default)", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: 0,
@@ -348,12 +346,12 @@ describe("QueryCache", () => {
       await entry.fetchQuery();
 
       // Data should be stale immediately
-      expect(queryCache.isStale(["test"])).toBe(true);
+      expect(queryClient.isStale(["test"])).toBe(true);
     });
 
     it("should mark data as fresh within staleTime window", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: 5000, // 5 seconds
@@ -369,7 +367,7 @@ describe("QueryCache", () => {
 
     it("should mark data as stale after staleTime elapses", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: 1000, // 1 second
@@ -391,7 +389,7 @@ describe("QueryCache", () => {
 
     it("should never mark data as stale when staleTime is Infinity", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: Infinity,
@@ -401,18 +399,18 @@ describe("QueryCache", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // Fresh initially
-      expect(queryCache.isStale(["test"])).toBe(false);
+      expect(queryClient.isStale(["test"])).toBe(false);
 
       // Advance time significantly
       vi.advanceTimersByTime(1000000);
 
       // Should still be fresh
-      expect(queryCache.isStale(["test"])).toBe(false);
+      expect(queryClient.isStale(["test"])).toBe(false);
     });
 
     it("should never mark data as stale when staleTime is 'static'", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: "static",
@@ -422,18 +420,18 @@ describe("QueryCache", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       // Fresh initially
-      expect(queryCache.isStale(["test"])).toBe(false);
+      expect(queryClient.isStale(["test"])).toBe(false);
 
       // Advance time significantly
       vi.advanceTimersByTime(1000000);
 
       // Should still be fresh
-      expect(queryCache.isStale(["test"])).toBe(false);
+      expect(queryClient.isStale(["test"])).toBe(false);
     });
 
     it("should not invalidate entries with staleTime='static'", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: "static",
@@ -442,15 +440,15 @@ describe("QueryCache", () => {
       await entry.fetchQuery();
 
       // Try to invalidate
-      queryCache.invalidate(["test"]);
+      queryClient.invalidate(["test"]);
 
       // Should still exist in cache
-      expect(queryCache.has(["test"])).toBe(true);
+      expect(queryClient.has(["test"])).toBe(true);
     });
 
     it("should invalidate entries with numeric staleTime", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: 5000,
@@ -459,15 +457,15 @@ describe("QueryCache", () => {
       await entry.fetchQuery();
 
       // Should be able to invalidate
-      queryCache.invalidate(["test"]);
+      queryClient.invalidate(["test"]);
 
       // Should not exist in cache
-      expect(queryCache.has(["test"])).toBe(false);
+      expect(queryClient.has(["test"])).toBe(false);
     });
 
     it("should invalidate entries with staleTime=Infinity", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: Infinity,
@@ -476,31 +474,31 @@ describe("QueryCache", () => {
       await entry.fetchQuery();
 
       // Should be able to invalidate
-      queryCache.invalidate(["test"]);
+      queryClient.invalidate(["test"]);
 
       // Should not exist in cache
-      expect(queryCache.has(["test"])).toBe(false);
+      expect(queryClient.has(["test"])).toBe(false);
     });
 
     it("should return true for isStale when key doesn't exist", () => {
-      expect(queryCache.isStale(["non-existent"])).toBe(true);
+      expect(queryClient.isStale(["non-existent"])).toBe(true);
     });
 
     it("should return true for isStale when query hasn't resolved yet", () => {
       const queryFn = vi.fn(() => new Promise(() => {})); // Never resolves
-      queryCache.addQuery({
+      queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: 5000,
       });
 
       // Should be stale since dataUpdatedAt is undefined
-      expect(queryCache.isStale(["test"])).toBe(true);
+      expect(queryClient.isStale(["test"])).toBe(true);
     });
 
     it("should update dataUpdatedAt when query resolves", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
         staleTime: 5000,
@@ -519,42 +517,42 @@ describe("QueryCache", () => {
 
   describe("edge cases", () => {
     beforeEach(() => {
-      queryCache = new QueryCache();
+      queryClient = new QueryClient();
     });
 
     it("should handle empty keys", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: [],
         queryFn,
       });
 
       expect(entry).toBeDefined();
-      expect(queryCache.has([])).toBe(true);
+      expect(queryClient.has([])).toBe(true);
     });
 
     it("should handle very large keys", () => {
       const largeKey = new Array(1000).fill(0).map((_, i) => i);
       const queryFn = vi.fn().mockResolvedValue("data");
 
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: largeKey,
         queryFn,
       });
 
       expect(entry).toBeDefined();
-      expect(queryCache.has(largeKey)).toBe(true);
+      expect(queryClient.has(largeKey)).toBe(true);
     });
 
     it("should handle keys with special characters", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const entry = queryCache.addQuery({
+      const entry = queryClient.addQuery({
         key: ["test", "key with spaces & special!@#$%"],
         queryFn,
       });
 
       expect(entry).toBeDefined();
-      expect(queryCache.has(["test", "key with spaces & special!@#$%"])).toBe(
+      expect(queryClient.has(["test", "key with spaces & special!@#$%"])).toBe(
         true
       );
     });
