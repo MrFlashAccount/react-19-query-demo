@@ -5,12 +5,10 @@ import {
   use,
   useTransition,
   useDeferredValue,
+  useEffect,
 } from "react";
-import {
-  QueryCache,
-  type PromiseEntry,
-  type QueryCacheOptions,
-} from "./QueryCache";
+import { noop } from "./utils";
+import { QueryCache, type QueryCacheOptions } from "./QueryCache";
 import type { RetryConfig } from "./Retrier";
 import { useEvent } from "../useEvent";
 
@@ -165,6 +163,11 @@ export function useQuery<
     retry,
     retryDelay,
   });
+
+  // Add the listener to the query, just for gc/stale time management
+  useEffect(() => {
+    return query.subscribe(noop);
+  }, [query]);
 
   return {
     promise: query.promise,

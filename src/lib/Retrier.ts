@@ -75,6 +75,7 @@ export class Retrier {
 
         // Get delay before next retry
         const delay = this.getRetryDelay(failureCount, error);
+
         if (delay > 0) {
           await this.sleep(delay);
         }

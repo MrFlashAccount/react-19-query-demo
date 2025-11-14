@@ -431,12 +431,12 @@ describe("Query", () => {
 
       const unsubscribe = query.subscribe(vi.fn());
 
-      expect(query.isEligibleForGC()).toBe(false);
+      expect(query.canBeCollected()).toBe(false);
 
       unsubscribe();
 
       // Timer is scheduled, not eligible yet
-      expect(query.isEligibleForGC()).toBe(false);
+      expect(query.canBeCollected()).toBe(false);
       expect(timerWheel.hasActiveTimers()).toBe(true);
 
       // Advance time to trigger the timer
@@ -444,7 +444,7 @@ describe("Query", () => {
 
       // Now eligible after timer fired
       expect(timerWheel.hasActiveTimers()).toBe(false);
-      expect(query.isEligibleForGC()).toBe(true);
+      expect(query.canBeCollected()).toBe(true);
     });
 
     it("should not be eligible for GC with active subscribers", () => {
@@ -453,11 +453,11 @@ describe("Query", () => {
 
       query.subscribe(vi.fn());
 
-      expect(query.isEligibleForGC()).toBe(false);
+      expect(query.canBeCollected()).toBe(false);
 
       vi.advanceTimersByTime(10000);
 
-      expect(query.isEligibleForGC()).toBe(false);
+      expect(query.canBeCollected()).toBe(false);
     });
   });
 

@@ -1,5 +1,7 @@
+import type { IGarbageCollectable } from "./GarbageCollector";
 import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
+import { noop } from "./utils";
 
 /**
  * Query state tracking
@@ -69,11 +71,19 @@ export interface QueryOptions<Key extends Array<unknown>, TData> {
  * unsubscribe();
  * ```
  */
-export class Query<Key extends AnyKey, TData = unknown> {
-  private key: Key;
+interface QueryEnvironment {
+  onGarbageCollect?: () => void;
+  onRemove?: () => void;
+}
+
+export class Query<Key extends AnyKey, TData = unknown>
+  implements IGarbageCollectable
+{
+  private queryKey: Key;
   private state: QueryState<TData>;
   private options: QueryOptions<Key, TData>;
   private defaultOptions: Partial<QueryOptions<Key, TData>>;
+  private readonly serializedKeyValue: string;
 
   // Subscribers
   private subscribers: Set<() => void> = new Set();
@@ -84,9 +94,11 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
   // Retrier
   private retrier: Retrier;
+  private onRemove: () => void;
 
   // Promise tracking
   private currentPromise: Promise<TData> | null = null;
+  private onGarbageCollect?: () => void;
 
   static getSerializedKey(key: AnyKey): string {
     return stableKeySerialize(key);
@@ -96,15 +108,27 @@ export class Query<Key extends AnyKey, TData = unknown> {
     return this.currentPromise;
   }
 
+  get subscriptions(): number {
+    return this.subscribers.size;
+  }
+
+  get key(): string {
+    return this.serializedKeyValue;
+  }
+
   constructor(
     options: QueryOptions<Key, TData>,
-    defaultOptions: Partial<QueryOptions<Key, TData>> = {}
+    defaultOptions: Partial<QueryOptions<Key, TData>> = {},
+    environment: QueryEnvironment = {}
   ) {
-    this.key = options.key;
+    this.queryKey = options.key;
     this.defaultOptions = defaultOptions;
     this.options = this.mergeOptions(options);
     this.timerWheel = timerWheel;
+    this.serializedKeyValue = Query.getSerializedKey(this.queryKey);
+    this.onGarbageCollect = environment.onGarbageCollect;
 
+    this.onRemove = environment.onRemove ?? noop;
     // Initialize state
     this.state = {
       status: "pending",
@@ -129,11 +153,11 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * Get the query key
    */
   getKey(): Key {
-    return this.key;
+    return this.queryKey;
   }
 
   get serializedKey(): string {
-    return Query.getSerializedKey(this.key);
+    return this.serializedKeyValue;
   }
 
   /**
@@ -204,7 +228,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
     // Create new promise with retrier (before notifying to ensure deduplication)
     this.currentPromise = this.retrier
-      .execute(() => this.options.queryFn(this.key))
+      .execute(() => this.options.queryFn(this.queryKey))
       .then((data) => {
         // Update state on success
         this.state.status = "success";
@@ -246,27 +270,24 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
     this.subscribers.add(callback);
 
-    // Cancel GC when we have subscribers
     if (wasFirstSubscription) {
       this.cancelGC();
 
-      // If data is stale and we have successful data, refetch in background
       if (this.isStale() && this.state.status === "success") {
-        // Use void to ignore the promise (fire and forget)
         void this.fetchQuery().catch(() => {
           // Ignore errors - subscribers will be notified via state changes
         });
-      } else if (this.state.status === "pending") {
-        // Notify on initial subscribe for pending queries
-        try {
-          callback();
-        } catch (error) {
-          console.error("Query subscriber error:", error);
-        }
       }
     }
 
-    // Return unsubscribe function
+    if (this.state.status === "pending") {
+      try {
+        callback();
+      } catch (error) {
+        console.error("Query subscriber error:", error);
+      }
+    }
+
     return () => {
       this.unsubscribe(callback);
     };
@@ -279,9 +300,12 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * @param callback - The callback to remove
    */
   private unsubscribe(callback: () => void): void {
-    this.subscribers.delete(callback);
+    const wasRemoved = this.subscribers.delete(callback);
 
-    // Schedule GC when no subscribers remain
+    if (!wasRemoved) {
+      return;
+    }
+
     if (this.subscribers.size === 0) {
       this.scheduleGC();
     }
@@ -307,6 +331,17 @@ export class Query<Key extends AnyKey, TData = unknown> {
     return this.subscribers.size;
   }
 
+  remove(): boolean {
+    const canBeCollected = this.canBeCollected();
+
+    if (!canBeCollected) {
+      return false;
+    }
+
+    this.onRemove?.();
+    return true;
+  }
+
   /**
    * Schedule garbage collection using the timer wheel
    */
@@ -317,7 +352,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
     const gcTime = this.options.gcTime ?? Infinity;
 
     // Don't schedule GC if gcTime is Infinity
-    if (gcTime === Infinity) {
+    if (gcTime === Infinity || this.subscribers.size > 0) {
       return;
     }
 
@@ -344,15 +379,15 @@ export class Query<Key extends AnyKey, TData = unknown> {
   private handleGC(): void {
     // Clear the timer ID since it has fired
     this.gcTimerId = undefined;
-    // The actual removal should be handled by the query cache or manager
-    // This just marks that GC time has elapsed and the query is eligible for collection
+    this.onGarbageCollect?.();
+    this.remove();
   }
 
   /**
    * Check if the query is eligible for garbage collection
    * (no subscribers and GC timer has elapsed or not scheduled)
    */
-  isEligibleForGC(): boolean {
+  canBeCollected(): boolean {
     // Has subscribers, not eligible
     if (this.subscribers.size > 0) {
       return false;
@@ -405,9 +440,21 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * Destroy the query, cleaning up resources
    */
   destroy(): void {
+    this.reset();
     this.cancelGC();
+    this.onGarbageCollect = undefined;
     this.subscribers.clear();
     this.currentPromise = null;
+  }
+
+  setGarbageCollectCallback(callback: (() => void) | undefined): void {
+    this.onGarbageCollect = callback;
+  }
+
+  refetch(): void {
+    void this.fetchQuery().catch(() => {
+      // Ignore errors - subscribers will be notified via state changes
+    });
   }
 
   private mergeOptions(

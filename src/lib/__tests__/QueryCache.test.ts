@@ -197,31 +197,6 @@ describe("QueryCache", () => {
     });
   });
 
-  describe("subscribe and unsubscribe", () => {
-    beforeEach(() => {
-      queryCache = new QueryCache();
-    });
-
-    it("should handle subscribing to non-existent key", () => {
-      expect(() => queryCache.subscribe(["non-existent"])).not.toThrow();
-    });
-
-    it("should handle unsubscribing from non-existent key", () => {
-      expect(() => queryCache.unsubscribe(["non-existent"])).not.toThrow();
-    });
-
-    it("should handle unsubscribing when count is already zero", () => {
-      const queryFn = vi.fn().mockResolvedValue("data");
-      queryCache.addQuery({
-        key: ["test"],
-        queryFn,
-      });
-
-      // Unsubscribe without subscribing first (count is 0)
-      expect(() => queryCache.unsubscribe(["test"])).not.toThrow();
-    });
-  });
-
   describe("has", () => {
     beforeEach(() => {
       queryCache = new QueryCache();

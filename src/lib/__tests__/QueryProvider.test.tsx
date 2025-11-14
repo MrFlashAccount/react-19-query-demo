@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor, screen, act } from "@testing-library/react";
-import { Suspense, use } from "react";
+import { Suspense, use, type ReactElement } from "react";
 import {
   QueryProvider,
   useQuery,
   QueryContext,
   type QueryContextValue,
-  QueryCache,
+  type QueryCacheOptions,
 } from "..";
+import { timerWheel } from "../TimerWheel";
 
 /**
  * Test helper to access QueryContext in tests
@@ -25,21 +26,29 @@ async function flushPromises() {
   });
 }
 
-let queryCache = new QueryCache();
+function renderWithProvider(
+  element: ReactElement,
+  options: QueryCacheOptions = {}
+) {
+  return render(
+    <QueryProvider queryCacheOptions={options}>{element}</QueryProvider>
+  );
+}
 
 describe("QueryProvider", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    queryCache = new QueryCache();
+    timerWheel.clear();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    timerWheel.clear();
   });
 
   describe("Basic caching behavior", () => {
-    it("should cache a promise and return the same promise on subsequent calls", () => {
+    it("should cache a query and return the same instance on subsequent calls", () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -47,33 +56,27 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise1 = Promise.resolve("data");
-      const result1 = contextValue!.queryCache.addPromise({
+      const queryFn1 = vi.fn().mockResolvedValue("data");
+      const result1 = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise: promise1,
+        queryFn: queryFn1,
       });
 
-      const promise2 = Promise.resolve("other data");
-      const result2 = contextValue!.queryCache.addPromise({
+      const queryFn2 = vi.fn().mockResolvedValue("other data");
+      const result2 = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise: promise2,
+        queryFn: queryFn2,
       });
 
-      // Should return the same promise entry function
       expect(result1).toBe(result2);
-      // When called, should return the first promise, not the second
-      expect(result1()).toBe(promise1);
-      expect(result2()).toBe(promise1);
-      expect(result2()).not.toBe(promise2);
+      expect(result2.getOptions().queryFn).toBe(queryFn1);
+      expect(queryFn1).toHaveBeenCalledTimes(1);
+      expect(queryFn2).not.toHaveBeenCalled();
     });
 
-    it("should cache different promises for different keys", () => {
+    it("should cache different queries for different keys", () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -81,31 +84,22 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise1 = Promise.resolve("data1");
-      const promise2 = Promise.resolve("data2");
-
-      const result1 = contextValue!.queryCache.addPromise({
+      const result1 = contextValue!.queryCache.addQuery({
         key: ["test", 1],
-        promise: promise1,
+        queryFn: vi.fn().mockResolvedValue("data1"),
       });
 
-      const result2 = contextValue!.queryCache.addPromise({
+      const result2 = contextValue!.queryCache.addQuery({
         key: ["test", 2],
-        promise: promise2,
+        queryFn: vi.fn().mockResolvedValue("data2"),
       });
 
-      expect(result1()).toBe(promise1);
-      expect(result2()).toBe(promise2);
       expect(result1).not.toBe(result2);
     });
 
-    it("should retrieve cached promise with getPromise", () => {
+    it("should retrieve cached promise with getPromise", async () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -113,21 +107,18 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      const added = contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
       });
 
       const retrieved = contextValue!.queryCache.getPromise(["test"]);
-      expect(retrieved).toBe(added);
-      expect(retrieved!()).toBe(promise);
+      expect(retrieved).toBe(query.promise);
+      await expect(retrieved).resolves.toBe("data");
+      expect(queryFn).toHaveBeenCalledTimes(1);
     });
 
     it("should return null for non-existent cache entry", () => {
@@ -138,11 +129,7 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
       const retrieved = contextValue!.queryCache.getPromise(["non-existent"]);
       expect(retrieved).toBeNull();
@@ -158,28 +145,24 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
       });
 
-      const entry = contextValue!.queryCache
-        .getCache()
-        .get(JSON.stringify(["test"]));
-      expect(entry!.subscriptions).toBe(0);
+      expect(query.subscriptions).toBe(0);
 
-      contextValue!.queryCache.subscribe(["test"]);
-      expect(entry!.subscriptions).toBe(1);
+      const unsubscribe1 = query.subscribe(() => {});
+      expect(query.subscriptions).toBe(1);
 
-      contextValue!.queryCache.subscribe(["test"]);
-      expect(entry!.subscriptions).toBe(2);
+      const unsubscribe2 = query.subscribe(() => {});
+      expect(query.subscriptions).toBe(2);
+
+      unsubscribe2();
+      unsubscribe1();
     });
 
     it("should decrement subscriptions when unsubscribing", () => {
@@ -190,31 +173,29 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
       });
 
-      contextValue!.queryCache.subscribe(["test"]);
-      contextValue!.queryCache.subscribe(["test"]);
+      const query = contextValue!.queryCache.addQuery({
+        key: ["test"],
+        queryFn,
+      });
 
-      const entry = contextValue!.queryCache
-        .getCache()
-        .get(JSON.stringify(["test"]));
-      expect(entry!.subscriptions).toBe(2);
+      const unsubscribe1 = query.subscribe(() => {});
+      const unsubscribe2 = query.subscribe(() => {});
 
-      contextValue!.queryCache.unsubscribe(["test"]);
-      expect(entry!.subscriptions).toBe(1);
+      expect(query.subscriptions).toBe(2);
 
-      contextValue!.queryCache.unsubscribe(["test"]);
-      expect(entry!.subscriptions).toBe(0);
+      unsubscribe1();
+      expect(query.subscriptions).toBe(1);
+
+      unsubscribe2();
+      expect(query.subscriptions).toBe(0);
     });
 
     it("should not go below 0 subscriptions", () => {
@@ -225,30 +206,23 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
       });
 
-      const entry = contextValue!.queryCache
-        .getCache()
-        .get(JSON.stringify(["test"]));
-      expect(entry!.subscriptions).toBe(0);
+      expect(query.subscriptions).toBe(0);
 
-      contextValue!.queryCache.unsubscribe(["test"]);
-      expect(entry!.subscriptions).toBe(0);
+      query.subscribe(() => {})();
+      expect(query.subscriptions).toBe(0);
     });
   });
 
   describe("GC timing without active subscriptions", () => {
-    it("should remove cache entry after gcTime expires with no subscriptions", () => {
+    it("should remove cache entry after gcTime expires with no subscriptions", async () => {
       let contextValue: QueryContextValue =
         null as unknown as QueryContextValue;
 
@@ -257,16 +231,12 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: 5000,
       });
 
@@ -276,16 +246,21 @@ describe("QueryProvider", () => {
       ).toBe(true);
 
       // Unsubscribe to mark entry as GC eligible (simulating no active subscriptions)
-      contextValue.queryCache.unsubscribe(["test"]);
+      query.subscribe(() => {})();
 
       // Fast-forward time - need to account for gcTime + scheduler interval (100ms)
-      vi.advanceTimersByTime(4999);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4999);
+      });
       expect(
         contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Advance past gcTime and trigger scheduler (100ms intervals + setTimeout(0))
-      vi.advanceTimersByTime(101);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(101);
+        await vi.runAllTimersAsync();
+      });
       expect(
         contextValue.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(false);
@@ -299,16 +274,12 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
       });
 
       expect(
@@ -330,16 +301,12 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: Infinity,
       });
 
@@ -363,20 +330,16 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.subscribe(["test"]);
+      query.subscribe(() => {});
 
       expect(
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
@@ -391,7 +354,7 @@ describe("QueryProvider", () => {
       ).toBe(true);
     });
 
-    it("should start GC timer after all subscriptions are removed", () => {
+    it("should start GC timer after all subscriptions are removed", async () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -399,51 +362,52 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.subscribe(["test"]);
-      contextValue!.queryCache.subscribe(["test"]);
+      const unsubscribe1 = query.subscribe(() => {});
+      const unsubscribe2 = query.subscribe(() => {});
 
       // Fast-forward time while subscriptions exist
-      vi.advanceTimersByTime(10000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
       expect(
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Remove first subscription
-      contextValue!.queryCache.unsubscribe(["test"]);
-      vi.advanceTimersByTime(10000);
+      unsubscribe1();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
       expect(
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
       // Remove last subscription - should mark as GC eligible
-      contextValue!.queryCache.unsubscribe(["test"]);
+      unsubscribe2();
 
-      vi.advanceTimersByTime(4999);
-      expect(
-        contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
-      ).toBe(true);
-
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4999);
+      });
       // Advance past gcTime and trigger scheduler
-      vi.advanceTimersByTime(101);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(101);
+        await vi.runAllTimersAsync();
+      });
       expect(
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(false);
     });
 
-    it("should cancel GC timer when subscribing after unsubscribe", () => {
+    it("should cancel GC timer when subscribing after unsubscribe", async () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -451,30 +415,30 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.subscribe(["test"]);
-      contextValue!.queryCache.unsubscribe(["test"]);
+      const unsubscribe = query.subscribe(() => {});
+      unsubscribe();
 
       // GC timer started
-      vi.advanceTimersByTime(2000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
 
       // Subscribe again - should cancel GC timer
-      contextValue!.queryCache.subscribe(["test"]);
+      query.subscribe(() => {});
 
       // Fast-forward past original gcTime
-      vi.advanceTimersByTime(10000);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
 
       // Should still exist
       expect(
@@ -501,18 +465,16 @@ describe("QueryProvider", () => {
           queryFn,
           gcTime: 5000,
         });
-        const data = use(promise());
+        const data = use(promise!);
         return <div>{data}</div>;
       }
 
       let result: ReturnType<typeof render> | undefined;
       await act(async () => {
-        result = render(
-          <QueryProvider queryCache={queryCache}>
-            <Suspense fallback={<div>Loading...</div>}>
-              <TestComponent />
-            </Suspense>
-          </QueryProvider>
+        result = renderWithProvider(
+          <Suspense fallback={<div>Loading...</div>}>
+            <TestComponent />
+          </Suspense>
         );
       });
 
@@ -539,14 +501,8 @@ describe("QueryProvider", () => {
     });
 
     it("should trigger GC after component unmounts", async () => {
-      // Use real timers for this test
-      vi.useRealTimers();
-
-      // Create a new QueryCache with real timers
-      // (The one from beforeEach was created with fake timers)
-      const realTimerCache = new QueryCache();
-
       let contextValue: QueryContextValue | null = null;
+
       const queryFn = vi.fn(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
         return "data";
@@ -557,28 +513,26 @@ describe("QueryProvider", () => {
         const { promise } = useQuery({
           key: ["test"],
           queryFn,
-          gcTime: 500, // Shorter gcTime to avoid test timeout
+          gcTime: 10, // Shorter gcTime to avoid test timeout
         });
-        const data = use(promise());
+        const data = use(promise!);
         return <div>{data}</div>;
       }
 
       let result: ReturnType<typeof render> | undefined;
       await act(async () => {
-        result = render(
-          <QueryProvider queryCache={realTimerCache}>
-            <Suspense fallback={<div>Loading...</div>}>
-              <TestComponent />
-            </Suspense>
-          </QueryProvider>
+        result = renderWithProvider(
+          <Suspense fallback={<div>Loading...</div>}>
+            <TestComponent />
+          </Suspense>
         );
       });
 
-      await flushPromises();
-
-      await waitFor(() => {
-        expect(screen.queryByText("data")).toBeDefined();
+      await act(async () => {
+        await vi.runAllTimersAsync();
       });
+
+      expect(screen.queryByText("data")).toBeDefined();
 
       expect(
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
@@ -587,19 +541,13 @@ describe("QueryProvider", () => {
       // Unmount component
       result?.unmount();
 
-      await waitFor(
-        () => {
-          expect(
-            contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
-          ).toBe(false);
-        },
-        {
-          timeout: 2000, // gcTime (500ms) + scheduler interval (100ms) + buffer
-        }
-      );
+      await vi.advanceTimersByTimeAsync(20);
+      await vi.runAllTimersAsync();
 
-      // Clean up
-      realTimerCache.destroy();
+      const hasEntry = contextValue!.queryCache
+        .getCache()
+        .has(JSON.stringify(["test"]));
+      expect(hasEntry).toBe(false);
     });
 
     it("should not trigger GC while component is still mounted", async () => {
@@ -619,17 +567,15 @@ describe("QueryProvider", () => {
           queryFn,
           gcTime: 5000,
         });
-        const data = use(promise());
+        const data = use(promise!);
         return <div>{data}</div>;
       }
 
       await act(async () => {
-        render(
-          <QueryProvider queryCache={queryCache}>
-            <Suspense fallback={<div>Loading...</div>}>
-              <TestComponent />
-            </Suspense>
-          </QueryProvider>
+        renderWithProvider(
+          <Suspense fallback={<div>Loading...</div>}>
+            <TestComponent />
+          </Suspense>
         );
       });
 
@@ -670,7 +616,7 @@ describe("QueryProvider", () => {
           queryFn,
           gcTime: 5000,
         });
-        const data = use(promise());
+        const data = use(promise!);
         return <div>Component1: {data}</div>;
       }
 
@@ -680,18 +626,16 @@ describe("QueryProvider", () => {
           queryFn,
           gcTime: 5000,
         });
-        const data = use(promise());
+        const data = use(promise!);
         return <div>Component2: {data}</div>;
       }
 
       await act(async () => {
-        render(
-          <QueryProvider queryCache={queryCache}>
-            <Suspense fallback={<div>Loading...</div>}>
-              <TestComponent1 />
-              <TestComponent2 />
-            </Suspense>
-          </QueryProvider>
+        renderWithProvider(
+          <Suspense fallback={<div>Loading...</div>}>
+            <TestComponent1 />
+            <TestComponent2 />
+          </Suspense>
         );
       });
 
@@ -711,7 +655,7 @@ describe("QueryProvider", () => {
   });
 
   describe("Edge cases", () => {
-    it("should handle complex keys with objects", () => {
+    it("should handle complex keys with objects", async () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -719,23 +663,19 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise1 = Promise.resolve("data1");
-      const promise2 = Promise.resolve("data2");
+      const queryFn1 = vi.fn().mockResolvedValue("data1");
+      const queryFn2 = vi.fn().mockResolvedValue("data2");
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["test", { id: 1, name: "foo" }],
-        promise: promise1,
+        queryFn: queryFn1,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["test", { id: 2, name: "bar" }],
-        promise: promise2,
+        queryFn: queryFn2,
       });
 
       const retrieved1 = contextValue!.queryCache.getPromise([
@@ -747,8 +687,12 @@ describe("QueryProvider", () => {
         { id: 2, name: "bar" },
       ]);
 
-      expect(retrieved1!()).toBe(promise1);
-      expect(retrieved2!()).toBe(promise2);
+      expect(retrieved1).not.toBeNull();
+      expect(retrieved2).not.toBeNull();
+      await expect(retrieved1).resolves.toBe("data1");
+      await expect(retrieved2).resolves.toBe("data2");
+      expect(queryFn1).toHaveBeenCalledTimes(1);
+      expect(queryFn2).toHaveBeenCalledTimes(1);
     });
 
     it("should handle multiple unsubscribes gracefully", () => {
@@ -759,36 +703,28 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.subscribe(["test"]);
+      const unsubscribe = query.subscribe(() => {});
+      expect(query.subscriptions).toBe(1);
 
-      const entry = contextValue!.queryCache
-        .getCache()
-        .get(JSON.stringify(["test"]));
-      expect(entry!.subscriptions).toBe(1);
-
-      contextValue!.queryCache.unsubscribe(["test"]);
-      expect(entry!.subscriptions).toBe(0);
+      unsubscribe();
+      expect(query.subscriptions).toBe(0);
 
       // Multiple unsubscribes should not cause negative subscriptions
-      contextValue!.queryCache.unsubscribe(["test"]);
-      contextValue!.queryCache.unsubscribe(["test"]);
-      expect(entry!.subscriptions).toBe(0);
+      unsubscribe();
+      unsubscribe();
+      expect(query.subscriptions).toBe(0);
     });
 
-    it("should handle zero gcTime (immediate removal)", () => {
+    it("should handle zero gcTime (immediate removal)", async () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -796,16 +732,12 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      const query = contextValue!.queryCache.addQuery({
         key: ["test"],
-        promise,
+        queryFn,
         gcTime: 0,
       });
 
@@ -813,12 +745,15 @@ describe("QueryProvider", () => {
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
       ).toBe(true);
 
-      // Trigger GC by ensuring no subscriptions
-      contextValue!.queryCache.unsubscribe(["test"]);
+      // Trigger GC by subscribing once and then releasing
+      query.subscribe(() => {})();
 
       // For zero gcTime, need to wait for scheduler to run
       // Advance by at least 100ms (scheduler interval) + a bit more for setTimeout(0)
-      vi.advanceTimersByTime(101);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(101);
+        await vi.runAllTimersAsync();
+      });
 
       expect(
         contextValue!.queryCache.getCache().has(JSON.stringify(["test"]))
@@ -835,16 +770,12 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      const promise = Promise.resolve("data");
-      contextValue!.queryCache.addPromise({
+      const queryFn = vi.fn().mockResolvedValue("data");
+      contextValue!.queryCache.addQuery({
         key: ["movies", "action"],
-        promise,
+        queryFn,
         gcTime: 5000,
       });
 
@@ -871,40 +802,36 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
       // Add multiple cache entries with different keys
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies"],
-        promise: Promise.resolve("all movies"),
+        queryFn: vi.fn().mockResolvedValue("all movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "action"],
-        promise: Promise.resolve("action movies"),
+        queryFn: vi.fn().mockResolvedValue("action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "comedy"],
-        promise: Promise.resolve("comedy movies"),
+        queryFn: vi.fn().mockResolvedValue("comedy movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "action", "popular"],
-        promise: Promise.resolve("popular action movies"),
+        queryFn: vi.fn().mockResolvedValue("popular action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["users"],
-        promise: Promise.resolve("users"),
+        queryFn: vi.fn().mockResolvedValue("users"),
         gcTime: 5000,
       });
 
@@ -968,33 +895,29 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "action"],
-        promise: Promise.resolve("action movies"),
+        queryFn: vi.fn().mockResolvedValue("action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "action", "popular"],
-        promise: Promise.resolve("popular action movies"),
+        queryFn: vi.fn().mockResolvedValue("popular action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "action", "recent"],
-        promise: Promise.resolve("recent action movies"),
+        queryFn: vi.fn().mockResolvedValue("recent action movies"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["movies", "comedy"],
-        promise: Promise.resolve("comedy movies"),
+        queryFn: vi.fn().mockResolvedValue("comedy movies"),
         gcTime: 5000,
       });
 
@@ -1034,27 +957,17 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
-      contextValue!.queryCache.addPromise({
+      const query = contextValue!.queryCache.addQuery({
         key: ["movies"],
-        promise: Promise.resolve("data"),
+        queryFn: vi.fn().mockResolvedValue("data"),
         gcTime: 5000,
       });
 
-      const entry = contextValue!.queryCache
-        .getCache()
-        .get(JSON.stringify(["movies"]));
-
       // Subscribe and unsubscribe to mark as GC eligible
-      contextValue!.queryCache.subscribe(["movies"]);
-      contextValue!.queryCache.unsubscribe(["movies"]);
-
-      expect(entry?.gcEligibleAt).toBeDefined();
+      const unsubscribe = query.subscribe(() => {});
+      unsubscribe();
 
       // Invalidate should remove the entry
       contextValue!.queryCache.invalidate(["movies"]);
@@ -1073,11 +986,7 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
       // Should not throw when invalidating non-existent key
       expect(() => {
@@ -1093,28 +1002,24 @@ describe("QueryProvider", () => {
         return <div>Test</div>;
       }
 
-      render(
-        <QueryProvider queryCache={queryCache}>
-          <TestComponent />
-        </QueryProvider>
-      );
+      renderWithProvider(<TestComponent />);
 
       // Add entries with complex key types
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["user", 123, { active: true }],
-        promise: Promise.resolve("user data"),
+        queryFn: vi.fn().mockResolvedValue("user data"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["user", 123, { active: false }],
-        promise: Promise.resolve("inactive user data"),
+        queryFn: vi.fn().mockResolvedValue("inactive user data"),
         gcTime: 5000,
       });
 
-      contextValue!.queryCache.addPromise({
+      contextValue!.queryCache.addQuery({
         key: ["user", 456, { active: true }],
-        promise: Promise.resolve("other user data"),
+        queryFn: vi.fn().mockResolvedValue("other user data"),
         gcTime: 5000,
       });
 

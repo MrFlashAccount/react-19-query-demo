@@ -44,15 +44,6 @@ export {
 
 export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 
-export {
-  BackgroundRefetch,
-  type BackgroundRefetchOptions,
-} from "./BackgroundRefetch";
-
-export {
-  TimerWheel,
-  timerWheel,
-  type TimerWheelOptions,
-} from "./TimerWheel";
+export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";
 
 export { Query, type QueryOptions, type QueryState } from "./Query";

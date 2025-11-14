@@ -3,8 +3,7 @@ import { timerWheel } from "./TimerWheel";
 
 export interface IGarbageCollectable {
   gcTime?: number;
-  isEligibleForGC(): boolean;
-  markEligibleForGC(): void;
+  canBeCollected(): boolean;
   canBeCollected(): boolean;
   remove(): boolean;
 }
@@ -130,7 +129,7 @@ export class GarbageCollector {
    * @returns True if the entry should be removed
    */
   private shouldGarbageCollect(entry: IGarbageCollectable): boolean {
-    if (!entry.isEligibleForGC()) {
+    if (!entry.canBeCollected()) {
       return false;
     }
 

@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Retrier } from "../Retrier";
+import { timerWheel } from "../TimerWheel";
 
 describe("Retrier", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    timerWheel.clear();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    timerWheel.clear();
   });
 
   describe("initialization", () => {
@@ -239,9 +242,10 @@ describe("Retrier", () => {
     });
 
     it("should use custom delay function", async () => {
-      const delayFn = vi.fn(
-        (_failureCount: number) => (_failureCount + 1) * 500
-      );
+      const delayFn = vi.fn((_failureCount: number) => {
+        console.log("delayFn", _failureCount);
+        return (_failureCount + 1) * 500;
+      });
       const retrier = new Retrier({ retry: 3, retryDelay: delayFn });
       const fn = vi
         .fn()

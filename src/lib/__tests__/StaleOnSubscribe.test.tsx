@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor, screen, act } from "@testing-library/react";
-import { Suspense, use } from "react";
-import { QueryProvider, useQuery, QueryCache, useQueryCache } from "..";
+import { Suspense, use, type ReactElement } from "react";
+import {
+  QueryProvider,
+  useQuery,
+  QueryCache,
+  useQueryCache,
+  type QueryCacheOptions,
+} from "..";
+import { timerWheel } from "../TimerWheel";
 
 /**
  * Helper to flush all pending promises
@@ -27,6 +34,18 @@ describe("Stale data detection on subscribe", () => {
     return queryCache;
   }
 
+  function renderWithProvider(
+    element: ReactElement,
+    options: QueryCacheOptions = {}
+  ) {
+    return render(
+      <QueryProvider queryCacheOptions={options}>
+        <QueryCacheCapture />
+        {element}
+      </QueryProvider>
+    );
+  }
+
   beforeEach(() => {
     vi.useRealTimers();
     queryCache = undefined;
@@ -34,6 +53,7 @@ describe("Stale data detection on subscribe", () => {
 
   afterEach(() => {
     queryCache?.clear();
+    timerWheel.clear();
   });
 
   it("should trigger background refetch when subscribing to stale data", async () => {
@@ -51,19 +71,16 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 50, // Very short stale time
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Data: {data}</div>;
     }
 
     // First render - should fetch data
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>
       );
       return result;
     });
@@ -81,17 +98,17 @@ describe("Stale data detection on subscribe", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Verify data is stale
-    expect(queryCache.isStale(["test"])).toBe(true);
+    expect(getQueryCache().isStale(["test"])).toBe(true);
 
     // Second render - should use stale data but trigger background refetch
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 
@@ -127,19 +144,16 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 10000, // Long stale time - data stays fresh
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Data: {data}</div>;
     }
 
     // First render - should fetch data
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>
       );
       return result;
     });
@@ -157,17 +171,17 @@ describe("Stale data detection on subscribe", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Verify data is still fresh
-    expect(queryCache.isStale(["test"])).toBe(false);
+    expect(getQueryCache().isStale(["test"])).toBe(false);
 
     // Second render - should use fresh data and NOT trigger background refetch
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 
@@ -198,7 +212,7 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 10000,
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Component1: {data}</div>;
     }
 
@@ -209,20 +223,17 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 10000,
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Component2: {data}</div>;
     }
 
     // Render both components at the same time - they should share the pending promise
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent1 />
-            <TestComponent2 />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent1 />
+          <TestComponent2 />
+        </Suspense>
       );
     });
 
@@ -252,19 +263,16 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         // staleTime defaults to 0, meaning data is immediately stale
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Data: {data}</div>;
     }
 
     // First render - should fetch data
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>
       );
       return result;
     });
@@ -279,17 +287,17 @@ describe("Stale data detection on subscribe", () => {
     expect(callCount).toBe(1);
 
     // With staleTime=0 (default), data is immediately stale after fetching
-    expect(queryCache.isStale(["test"])).toBe(true);
+    expect(getQueryCache().isStale(["test"])).toBe(true);
 
     // Second render - should use stale data but trigger background refetch
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 
@@ -325,19 +333,16 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: Infinity, // Never stale
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Data: {data}</div>;
     }
 
     // First render - should fetch data
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>
       );
       return result;
     });
@@ -355,17 +360,17 @@ describe("Stale data detection on subscribe", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Data should never be stale
-    expect(queryCache.isStale(["test"])).toBe(false);
+    expect(getQueryCache().isStale(["test"])).toBe(false);
 
     // Second render - should use fresh data and NOT trigger background refetch
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 
@@ -396,19 +401,16 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: "static", // Never stale, never refetch
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Data: {data}</div>;
     }
 
     // First render - should fetch data
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>
       );
       return result;
     });
@@ -423,17 +425,19 @@ describe("Stale data detection on subscribe", () => {
     expect(callCount).toBe(1);
 
     // Data with staleTime='static' is never stale
-    expect(queryCache.isStale(["test"])).toBe(false);
+    await waitFor(() => {
+      expect(getQueryCache().isStale(["test"])).toBe(false);
+    });
 
     // Second render - should use cached data and NOT trigger background refetch
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 
@@ -464,7 +468,7 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 50,
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Component1: {data}</div>;
     }
 
@@ -475,20 +479,17 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 50,
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Component2: {data}</div>;
     }
 
     // First render - should fetch data once
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent1 />
-            <TestComponent2 />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent1 />
+          <TestComponent2 />
+        </Suspense>
       );
       return result;
     });
@@ -505,18 +506,18 @@ describe("Stale data detection on subscribe", () => {
 
     // Wait for data to become stale
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(queryCache.isStale(["shared"])).toBe(true);
+    expect(getQueryCache().isStale(["shared"])).toBe(true);
 
     // Second render with both components - should trigger background refetch only once
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent1 />
-            <TestComponent2 />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent1 />
+          <TestComponent2 />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 
@@ -553,19 +554,16 @@ describe("Stale data detection on subscribe", () => {
         gcTime: 10000,
         staleTime: 50,
       });
-      const data = use(promise);
+      const data = use(promise!);
       return <div>Data: {data}</div>;
     }
 
     // First render
     const { unmount } = await act(async () => {
-      const result = render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      const result = renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>
       );
       return result;
     });
@@ -581,14 +579,14 @@ describe("Stale data detection on subscribe", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Second render - triggers background refetch
+    const existingCache = new Map(getQueryCache().getCache());
+
     await act(async () => {
-      render(
-        <QueryProvider>
-          <QueryCacheCapture />
-          <Suspense fallback={<div>Loading...</div>}>
-            <TestComponent />
-          </Suspense>
-        </QueryProvider>
+      renderWithProvider(
+        <Suspense fallback={<div>Loading...</div>}>
+          <TestComponent />
+        </Suspense>,
+        { cache: existingCache }
       );
     });
 

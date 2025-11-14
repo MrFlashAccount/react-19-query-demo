@@ -15,7 +15,6 @@ interface CollectableOptions {
 const createCollectable = ({
   gcTime = 1000,
   eligible = true,
-  canCollect = true,
   removeReturns = true,
 }: CollectableOptions = {}): IGarbageCollectable & {
   remove: ReturnType<typeof vi.fn>;
@@ -25,8 +24,7 @@ const createCollectable = ({
   return {
     gcTime,
     isEligibleForGC: vi.fn().mockReturnValue(eligible),
-    markEligibleForGC: vi.fn(),
-    canBeCollected: vi.fn().mockReturnValue(canCollect),
+    canBeCollected: vi.fn().mockReturnValue(eligible),
     remove: vi.fn().mockReturnValue(removeReturns),
   };
 };
@@ -63,7 +61,7 @@ describe("GarbageCollector", () => {
 
       await flushTimerWheel(1000);
 
-      expect(entry.isEligibleForGC).toHaveBeenCalledTimes(1);
+      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).toHaveBeenCalledTimes(1);
       expect(onCollect).toHaveBeenCalledWith(entry);
@@ -75,7 +73,7 @@ describe("GarbageCollector", () => {
 
       await flushTimerWheel(1000);
 
-      expect(entry.isEligibleForGC).toHaveBeenCalledTimes(1);
+      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.canBeCollected).not.toHaveBeenCalled();
       expect(entry.remove).not.toHaveBeenCalled();
     });
@@ -86,7 +84,7 @@ describe("GarbageCollector", () => {
 
       await flushTimerWheel(1000);
 
-      expect(entry.isEligibleForGC).toHaveBeenCalledTimes(1);
+      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).not.toHaveBeenCalled();
     });
@@ -122,7 +120,7 @@ describe("GarbageCollector", () => {
 
       gc.forceCollect();
 
-      expect(entry.isEligibleForGC).toHaveBeenCalledTimes(1);
+      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).toHaveBeenCalledTimes(1);
     });
@@ -145,7 +143,7 @@ describe("GarbageCollector", () => {
 
       gc.forceCollect();
 
-      expect(entry.isEligibleForGC).toHaveBeenCalledTimes(1);
+      expect(entry.canBeCollected).toHaveBeenCalledTimes(1);
       expect(entry.remove).not.toHaveBeenCalled();
     });
   });
