@@ -314,13 +314,6 @@ export class TimerWheel {
   }
 
   /**
-   * Cancel the current timeout (batched via queueMicrotask)
-   */
-  private cancelTimeout(): void {
-    this.queueReschedule();
-  }
-
-  /**
    * Process timers in the slot that expires at targetTime
    *
    * @param targetTime - The target time we're processing

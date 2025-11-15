@@ -144,26 +144,31 @@ describe("QueryClient", () => {
       queryClient = new QueryClient();
     });
 
-    it("should remove query from cache", () => {
+    it("should mark query as stale but keep it in cache", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
       const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
       });
 
+      await entry.fetchQuery();
+
       queryClient.invalidate(["test"]);
 
-      const newQueryFn = vi.fn().mockResolvedValue("new data");
+      // Query should still exist in cache
+      expect(queryClient.has(["test"])).toBe(true);
+      // Query should be stale
+      expect(entry.isStale()).toBe(true);
+      // Same instance should be reused
       const newEntry = queryClient.addQuery({
         key: ["test"],
-        queryFn: newQueryFn,
+        queryFn: vi.fn().mockResolvedValue("new data"),
       });
 
-      expect(newEntry).not.toBe(entry);
-      expect(newQueryFn).toHaveBeenCalled();
+      expect(newEntry).toBe(entry);
     });
 
-    it("should not affect other keys", () => {
+    it("should not affect other keys", async () => {
       const queryFn1 = vi.fn().mockResolvedValue("data1");
       const queryFn2 = vi.fn().mockResolvedValue("data2");
 
@@ -172,6 +177,8 @@ describe("QueryClient", () => {
         queryFn: queryFn1,
       });
 
+      await entry1.fetchQuery();
+
       queryClient.addQuery({
         key: ["test", 2],
         queryFn: queryFn2,
@@ -179,14 +186,16 @@ describe("QueryClient", () => {
 
       queryClient.invalidate(["test", 1]);
 
-      const newQueryFn = vi.fn().mockResolvedValue("new data");
+      // Entry1 should still exist but be stale
+      expect(queryClient.has(["test", 1])).toBe(true);
+      expect(entry1.isStale()).toBe(true);
+      // Same instance should be reused
       const newEntry = queryClient.addQuery({
         key: ["test", 1],
-        queryFn: newQueryFn,
+        queryFn: vi.fn().mockResolvedValue("new data"),
       });
 
-      expect(newEntry).not.toBe(entry1);
-      expect(newQueryFn).toHaveBeenCalled();
+      expect(newEntry).toBe(entry1);
       expect(queryClient.has(["test", 2])).toBe(true);
     });
 
@@ -214,7 +223,7 @@ describe("QueryClient", () => {
       expect(queryClient.has(["non-existent"])).toBe(false);
     });
 
-    it("should return false after invalidation", () => {
+    it("should return true after invalidation", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
       queryClient.addQuery({
         key: ["test"],
@@ -223,7 +232,7 @@ describe("QueryClient", () => {
 
       queryClient.invalidate(["test"]);
 
-      expect(queryClient.has(["test"])).toBe(false);
+      expect(queryClient.has(["test"])).toBe(true);
     });
   });
 
@@ -459,8 +468,9 @@ describe("QueryClient", () => {
       // Should be able to invalidate
       queryClient.invalidate(["test"]);
 
-      // Should not exist in cache
-      expect(queryClient.has(["test"])).toBe(false);
+      // Should still exist in cache but be stale
+      expect(queryClient.has(["test"])).toBe(true);
+      expect(entry.isStale()).toBe(true);
     });
 
     it("should invalidate entries with staleTime=Infinity", async () => {
@@ -477,7 +487,8 @@ describe("QueryClient", () => {
       queryClient.invalidate(["test"]);
 
       // Should not exist in cache
-      expect(queryClient.has(["test"])).toBe(false);
+      expect(queryClient.has(["test"])).toBe(true);
+      expect(entry.isStale()).toBe(true);
     });
 
     it("should return true for isStale when key doesn't exist", () => {

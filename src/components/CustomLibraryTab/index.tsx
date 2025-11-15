@@ -47,8 +47,8 @@ export function CustomLibraryTab({
             <MovieCardCustom
               key={movie.id}
               movie={movie}
-              movieLimit={movieLimit}
               searchQuery={searchQuery}
+              movieLimit={movieLimit}
             />
           ))}
         </MovieList>
@@ -62,12 +62,12 @@ export function CustomLibraryTab({
  */
 export function MovieCardCustom({
   movie,
-  movieLimit,
   searchQuery,
+  movieLimit,
 }: {
   movie: Movie;
-  movieLimit: number;
   searchQuery: string;
+  movieLimit: number;
 }) {
   const movieId = movie.id;
 
@@ -76,12 +76,6 @@ export function MovieCardCustom({
       updateMovieRating(movieId, rating),
     invalidateQueries: [["movies"], ["movie", movieId]],
   });
-
-  // useQuery({
-  //   key: ["movie", movieId],
-  //   queryFn: () => getMovieById(movieId),
-  //   gcTime: 60_000,
-  // });
 
   // useQuery({
   //   key: ["movies", searchQuery, movieLimit],

@@ -6,11 +6,14 @@ import {
   useTransition,
   useDeferredValue,
   useEffect,
+  useId,
+  useRef,
 } from "react";
 import { noop } from "./utils";
 import { QueryClient, type QueryClientOptions } from "./QueryClient";
 import type { RetryConfig } from "./Retrier";
 import { useEvent } from "../useEvent";
+import { AnyKey, Query } from "./Query";
 
 /**
  * Context value for the query provider
@@ -18,6 +21,14 @@ import { useEvent } from "../useEvent";
 export interface QueryContextValue {
   queryClient: QueryClient;
   isQueryClientPending: boolean;
+  subscribe: <Key extends AnyKey, TData = unknown>(
+    query: Query<Key, TData>,
+    id: string
+  ) => () => void;
+  unsubscribe: <Key extends AnyKey, TData = unknown>(
+    query: Query<Key, TData>,
+    id: string
+  ) => void;
 }
 
 /**
@@ -28,6 +39,8 @@ const defaultQueryClient = new QueryClient();
 export const QueryContext = createContext<QueryContextValue>({
   queryClient: defaultQueryClient,
   isQueryClientPending: false,
+  subscribe: () => noop,
+  unsubscribe: noop,
 });
 
 /**
@@ -59,6 +72,7 @@ export function QueryProvider({
   queryCacheOptions = {},
 }: QueryProviderProps) {
   const [isPending, startTransition] = useTransition();
+  const subscriptions = useRef<Map<string, () => void>>(new Map());
   const [queryClient, setQueryClient] = useState(() => {
     return new QueryClient({
       ...queryCacheOptions,
@@ -70,8 +84,43 @@ export function QueryProvider({
     });
   });
 
+  const subscribe = useEvent(
+    <Key extends AnyKey, TData = unknown>(query: Query<Key, TData>) => {
+      if (typeof query.serializedKey !== "string") {
+        throw new Error("Query key mismatch");
+      }
+      const maybeSubscription = subscriptions.current.get(query.serializedKey);
+      if (maybeSubscription !== undefined) {
+        return maybeSubscription;
+      }
+
+      const unsubscribe = query.subscribe(noop);
+      subscriptions.current.set(query.serializedKey, unsubscribe);
+      return unsubscribe;
+    }
+  );
+
+  const unsubscribe = useEvent(
+    <Key extends AnyKey, TData = unknown>(query: Query<Key, TData>) => {
+      const maybeUnsubscribe = subscriptions.current.get(query.serializedKey);
+      if (maybeUnsubscribe === undefined) {
+        return;
+      }
+
+      maybeUnsubscribe();
+      subscriptions.current.delete(query.serializedKey);
+    }
+  );
+
   return (
-    <QueryContext value={{ queryClient, isQueryClientPending: isPending }}>
+    <QueryContext
+      value={{
+        queryClient,
+        isQueryClientPending: isPending,
+        subscribe,
+        unsubscribe,
+      }}
+    >
       {children}
     </QueryContext>
   );
@@ -149,28 +198,28 @@ export function useQuery<
   isPending: boolean;
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
-  const deferredKey = useDeferredValue(key);
-  const isPending = key !== deferredKey;
-
-  const { queryClient, isQueryClientPending } = use(QueryContext);
+  const subscriptionId = useId();
+  const { queryClient, isQueryClientPending, subscribe } = useQueryContext();
 
   // Add or get query from cache (staleness check happens inside addQuery)
   const query = queryClient.addQuery<Key, PromiseValue>({
-    key: deferredKey,
-    queryFn: queryFn,
+    key,
+    queryFn,
     gcTime,
     staleTime,
     retry,
     retryDelay,
   });
 
-  // Add the listener to the query, just for gc/stale time management
-  useEffect(() => {
-    return query.subscribe(noop);
-  }, [query]);
+  // Subscribe to query changes
+  const unsubscribeQuery = subscribe(query, subscriptionId);
+  useEffect(() => () => unsubscribeQuery(), [unsubscribeQuery]);
+
+  const deferredPromise = useDeferredValue(query.promise);
+  const isPending = deferredPromise !== query.promise;
 
   return {
-    promise: query.promise,
+    promise: deferredPromise,
     isPending: isQueryClientPending || isPending,
   };
 }

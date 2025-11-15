@@ -9,6 +9,7 @@ import {
   type AnyKey,
   type QueryOptions,
 } from "./Query";
+import { noop } from "./utils";
 
 /**
  * Options for adding a promise to the cache
@@ -96,7 +97,7 @@ export interface ICache {
 export class QueryClient {
   private _cache: Map<string, Query<AnyKey, unknown>>;
   private garbageCollector: GarbageCollector;
-  private onChange?: (newInstance: QueryClient) => void;
+  private onChange: (newInstance: QueryClient) => void;
   private gcOptions?: GarbageCollectorOptions;
 
   constructor(options: QueryClientOptions = {}) {
@@ -108,13 +109,7 @@ export class QueryClient {
     // Create garbage collector with callback to log deletions
     this.garbageCollector = new GarbageCollector(options.gc);
 
-    this.onChange = options.onChange;
-
-    for (const [serializedKey, query] of this._cache.entries()) {
-      query.setGarbageCollectCallback(() =>
-        this.handleQueryGarbageCollect(serializedKey)
-      );
-    }
+    this.onChange = options.onChange ?? noop;
   }
 
   /**
@@ -133,15 +128,9 @@ export class QueryClient {
 
   /**
    * Notify onChange callback if set
-   * Uses setTimeout to defer notification until after render
    */
   private notifyChange(newInstance: QueryClient): void {
-    if (this.onChange) {
-      // Defer notification to avoid state updates during render
-      setTimeout(() => {
-        this.onChange!(newInstance);
-      }, 0);
-    }
+    this.onChange(newInstance);
   }
 
   /**
@@ -175,8 +164,6 @@ export class QueryClient {
       | Query<Key, PromiseValue>
       | undefined;
 
-    console.log("existingQuery", existingQuery);
-
     if (existingQuery != null) {
       return existingQuery;
     }
@@ -193,14 +180,11 @@ export class QueryClient {
       {},
       {
         onGarbageCollect: () => this.handleQueryGarbageCollect(keySerialized),
-        onRemove: () => this._cache.delete(keySerialized),
+        onRemove: () => {
+          this._cache.delete(keySerialized);
+        },
       }
     );
-    entry.setGarbageCollectCallback(() =>
-      this.handleQueryGarbageCollect(keySerialized)
-    );
-
-    console.log("entry", entry);
 
     this._cache.set(keySerialized, entry as unknown as Query<AnyKey, unknown>);
 
@@ -261,7 +245,6 @@ export class QueryClient {
    */
   clear(): void {
     for (const query of this._cache.values()) {
-      query.setGarbageCollectCallback(undefined);
       query.destroy();
     }
     this._cache.clear();
@@ -284,37 +267,21 @@ export class QueryClient {
    * @param key - The cache key prefix to invalidate
    */
   invalidate<const Key extends Array<unknown>>(key: Key): void {
-    const keysToDelete: string[] = [];
-
     // Find all cache keys that start with the specified key prefix
     for (const cacheKey of this._cache.keys()) {
       if (this.keyStartsWith(cacheKey, key)) {
         const entry = this._cache.get(cacheKey);
 
-        // Skip entries with staleTime='static'
-        if (entry != null && entry.getOptions().staleTime === "static") {
+        if (entry == null) {
           continue;
         }
 
-        keysToDelete.push(cacheKey);
+        entry.invalidate();
       }
     }
 
-    // Delete all matching entries
-    if (keysToDelete.length > 0) {
-      let removed = false;
-      for (const keyToDelete of keysToDelete) {
-        removed = this.deleteQuery(keyToDelete) || removed;
-      }
-
-      if (!removed) {
-        return;
-      }
-
-      // Create new instance after cache modification
-      const newInstance = this.clone();
-      this.notifyChange(newInstance);
-    }
+    const newInstance = this.clone();
+    this.notifyChange(newInstance);
   }
 
   private handleQueryGarbageCollect(serializedKey: string): void {
@@ -330,7 +297,6 @@ export class QueryClient {
       return false;
     }
 
-    query.setGarbageCollectCallback(undefined);
     query.destroy();
     this._cache.delete(serializedKey);
 

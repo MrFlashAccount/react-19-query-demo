@@ -724,6 +724,43 @@ describe("QueryProvider", () => {
       expect(query.subscriptions).toBe(0);
     });
 
+    it("Should not trigger Suspense fallback when invalidating", async () => {
+      vi.useRealTimers();
+      let contextValue: QueryContextValue | null = null;
+
+      function TestComponent() {
+        contextValue = useQueryContext();
+        const { promise } = useQuery({
+          key: ["test"],
+          queryFn: () =>
+            new Promise((resolve) => setTimeout(resolve, 0)).then(() => "data"),
+          gcTime: 5000,
+        });
+
+        const data = use(promise!);
+        return <div>{data}</div>;
+      }
+
+      renderWithProvider(
+        <Suspense fallback={<div>Loading</div>}>
+          <TestComponent />
+        </Suspense>
+      );
+
+      await waitFor(() => {
+        expect(screen.queryByText("data")).toBeDefined();
+      });
+
+      contextValue!.queryClient.invalidate(["test"]);
+
+      expect(screen.queryByText("Loading")).toBeNull();
+
+      await act(async () => {
+        await flushPromises();
+      });
+      expect(screen.queryByText("data")).toBeDefined();
+    });
+
     it("should handle zero gcTime (immediate removal)", async () => {
       let contextValue: QueryContextValue | null = null;
 
@@ -791,7 +828,7 @@ describe("QueryProvider", () => {
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it("should invalidate all queries with matching prefix", () => {
@@ -861,30 +898,51 @@ describe("QueryProvider", () => {
       // Invalidate all queries starting with ["movies"]
       contextValue!.queryClient.invalidate(["movies"]);
 
-      // All movie queries should be removed
+      // All movie queries should still exist but be stale
+      const moviesQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies"]));
+      const actionQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "action"]));
+      const comedyQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "comedy"]));
+      const popularQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "action", "popular"]));
+
       expect(
         contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(moviesQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(actionQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "comedy"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(comedyQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "popular"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(popularQuery?.isStale()).toBe(true);
 
-      // Users query should still exist
+      // Users query should still exist and not be stale
+      const usersQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["users"]));
       expect(
         contextValue!.queryClient.getCache().has(JSON.stringify(["users"]))
       ).toBe(true);
+      expect(usersQuery?.isStale()).toBe(false);
     });
 
     it("should invalidate with partial prefix match", () => {
@@ -924,29 +982,46 @@ describe("QueryProvider", () => {
       // Invalidate all queries starting with ["movies", "action"]
       contextValue!.queryClient.invalidate(["movies", "action"]);
 
-      // All action movie queries should be removed
+      // All action movie queries should still exist but be stale
+      const actionQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "action"]));
+      const popularQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "action", "popular"]));
+      const recentQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "action", "recent"]));
+
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(actionQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "popular"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(popularQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "action", "recent"]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(recentQuery?.isStale()).toBe(true);
 
-      // Comedy query should still exist
+      // Comedy query should still exist and not be stale
+      const comedyQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies", "comedy"]));
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["movies", "comedy"]))
       ).toBe(true);
+      expect(comedyQuery?.isStale()).toBe(false);
     });
 
     it("should clear pending GC timers when invalidating", () => {
@@ -969,13 +1044,17 @@ describe("QueryProvider", () => {
       const unsubscribe = query.subscribe(() => {});
       unsubscribe();
 
-      // Invalidate should remove the entry
+      // Invalidate should mark as stale but keep entry
       contextValue!.queryClient.invalidate(["movies"]);
 
-      // Entry should be removed
+      // Entry should still exist but be stale
       expect(
         contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
-      ).toBe(false);
+      ).toBe(true);
+      const cachedQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["movies"]));
+      expect(cachedQuery?.isStale()).toBe(true);
     });
 
     it("should handle invalidating non-existent keys gracefully", () => {
@@ -1026,23 +1105,37 @@ describe("QueryProvider", () => {
       // Invalidate all queries for user 123
       contextValue!.queryClient.invalidate(["user", 123]);
 
+      // User 123 queries should still exist but be stale
+      const user123ActiveQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["user", 123, { active: true }]));
+      const user123InactiveQuery = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["user", 123, { active: false }]));
+
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["user", 123, { active: true }]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(user123ActiveQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["user", 123, { active: false }]))
-      ).toBe(false);
+      ).toBe(true);
+      expect(user123InactiveQuery?.isStale()).toBe(true);
 
-      // User 456 should still exist
+      // User 456 should still exist and not be stale
+      const user456Query = contextValue!.queryClient
+        .getCache()
+        .get(JSON.stringify(["user", 456, { active: true }]));
       expect(
         contextValue!.queryClient
           .getCache()
           .has(JSON.stringify(["user", 456, { active: true }]))
       ).toBe(true);
+      expect(user456Query?.isStale()).toBe(false);
     });
   });
 });

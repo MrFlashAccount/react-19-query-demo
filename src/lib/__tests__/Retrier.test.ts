@@ -399,32 +399,350 @@ describe("Retrier", () => {
     });
   });
 
-  describe("concurrent executions", () => {
-    it("should handle multiple concurrent executions", async () => {
-      const retrier = new Retrier({ retry: 2 });
-
-      const fn1 = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("fail"))
-        .mockResolvedValue("result1");
+  describe("execution override", () => {
+    it("should cancel previous execution when execute is called again", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 1000 });
+      const fn1 = vi.fn().mockRejectedValue(new Error("fail1"));
       const fn2 = vi.fn().mockResolvedValue("result2");
-      const fn3 = vi
+
+      // Start first execution
+      const promise1 = retrier.execute(fn1);
+
+      // Wait for first call
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn1).toHaveBeenCalledTimes(1);
+
+      // Start second execution - should cancel the first
+      const promise2 = retrier.execute(fn2);
+
+      // Advance time to let the first execution detect cancellation
+      await vi.advanceTimersByTimeAsync(0);
+
+      // First execution should be cancelled
+      await expect(promise1).rejects.toThrow("Retrier cancelled");
+
+      // Second execution should complete successfully
+      const result = await promise2;
+      expect(result).toBe("result2");
+      expect(fn2).toHaveBeenCalledOnce();
+    });
+
+    it("should cancel previous execution even during delay", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 1000 });
+      const fn1 = vi.fn().mockRejectedValue(new Error("fail1"));
+      const fn2 = vi.fn().mockResolvedValue("result2");
+
+      // Start first execution
+      const promise1 = retrier.execute(fn1);
+
+      // Wait for first call and start of delay
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn1).toHaveBeenCalledTimes(1);
+
+      // Advance partway through the delay
+      await vi.advanceTimersByTimeAsync(500);
+
+      // Start second execution during the delay
+      const promise2 = retrier.execute(fn2);
+
+      // Advance to let cancellation be detected
+      await vi.advanceTimersByTimeAsync(500);
+
+      // First execution should be cancelled
+      await expect(promise1).rejects.toThrow("Retrier cancelled");
+
+      // Second execution should complete
+      const result = await promise2;
+      expect(result).toBe("result2");
+      expect(fn2).toHaveBeenCalledOnce();
+    });
+
+    it("should only have one active execution at a time", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 100 });
+      const fn1 = vi.fn().mockRejectedValue(new Error("fail1"));
+      const fn2 = vi.fn().mockRejectedValue(new Error("fail2"));
+      const fn3 = vi.fn().mockResolvedValue("result3");
+
+      // Start first execution
+      const promise1 = retrier.execute(fn1);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Start second execution (cancels first)
+      const promise2 = retrier.execute(fn2);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Start third execution (cancels second)
+      const promise3 = retrier.execute(fn3);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // First two should be cancelled
+      await expect(promise1).rejects.toThrow("Retrier cancelled");
+      await expect(promise2).rejects.toThrow("Retrier cancelled");
+
+      // Third should succeed
+      const result = await promise3;
+      expect(result).toBe("result3");
+
+      // Only the first attempts of fn1 and fn2, then fn3
+      expect(fn1).toHaveBeenCalledTimes(1);
+      expect(fn2).toHaveBeenCalledTimes(1);
+      expect(fn3).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("cancel", () => {
+    it("should cancel retry process and reject with CancelledError", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 1000 });
+      const fn = vi.fn().mockRejectedValue(new Error("fail"));
+
+      const promise = retrier.execute(fn);
+
+      // Initial call happens
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // Cancel during the delay before first retry
+      retrier.cancel();
+
+      // Advance time to complete the delay
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(promise).rejects.toThrow("Retrier cancelled");
+
+      // Should not have retried after cancel
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("should cancel immediately even without delay", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 0 });
+      let firstCallResolve: (() => void) | null = null;
+      let callCount = 0;
+
+      const fn = vi.fn().mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          // Block on first call to give us time to call cancel
+          await new Promise<void>((resolve) => {
+            firstCallResolve = resolve;
+          });
+        }
+        throw new Error("fail");
+      });
+
+      const promise = retrier.execute(fn);
+
+      // Wait a tick to ensure execute has started
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Cancel now
+      retrier.cancel();
+
+      // Now let the first call complete
+      firstCallResolve!();
+      await vi.advanceTimersByTimeAsync(0);
+
+      await expect(promise).rejects.toThrow("Retrier cancelled");
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not affect already completed execution", async () => {
+      const retrier = new Retrier({ retry: 3 });
+      const fn = vi.fn().mockResolvedValue("success");
+
+      const result = await retrier.execute(fn);
+
+      // Cancel after completion should have no effect
+      retrier.cancel();
+
+      expect(result).toBe("success");
+      expect(fn).toHaveBeenCalledOnce();
+    });
+
+    it("should cancel multiple concurrent executions", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 1000 });
+      const fn1 = vi.fn().mockRejectedValue(new Error("fail1"));
+      const fn2 = vi.fn().mockRejectedValue(new Error("fail2"));
+
+      const promise1 = retrier.execute(fn1);
+      const promise2 = retrier.execute(fn2);
+
+      await vi.advanceTimersByTimeAsync(0);
+
+      retrier.cancel();
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(promise1).rejects.toThrow("Retrier cancelled");
+      await expect(promise2).rejects.toThrow("Retrier cancelled");
+    });
+
+    it("should be able to execute again after cancel", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 1000 });
+      const fn1 = vi.fn().mockRejectedValue(new Error("fail"));
+      const fn2 = vi.fn().mockResolvedValue("success");
+
+      // First execution - will be cancelled
+      const promise1 = retrier.execute(fn1);
+      await vi.advanceTimersByTimeAsync(0);
+      retrier.cancel();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(promise1).rejects.toThrow("Retrier cancelled");
+
+      // Reset the retrier state
+      retrier.reset();
+
+      // Second execution - should work normally
+      const result = await retrier.execute(fn2);
+      expect(result).toBe("success");
+      expect(fn2).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("pause and resume", () => {
+    it("should pause retry process and resume it", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 100 });
+      const fn = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("fail 1"))
+        .mockResolvedValue("success");
+
+      const promise = retrier.execute(fn);
+
+      // Initial call happens
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // Pause immediately after first failure
+      retrier.pause();
+
+      // Advance time while paused - should not trigger retry
+      await vi.advanceTimersByTimeAsync(500);
+      expect(fn).toHaveBeenCalledTimes(1); // Still only 1 call
+
+      // Resume
+      retrier.resume();
+
+      // Allow some time for retry to happen
+      await vi.advanceTimersByTimeAsync(200);
+
+      // Should have retried by now
+      expect(fn).toHaveBeenCalledTimes(2);
+
+      const result = await promise;
+      expect(result).toBe("success");
+    });
+
+    it("should handle pause without active execution", () => {
+      const retrier = new Retrier({ retry: 3 });
+
+      // Pause without any execution should not throw
+      expect(() => retrier.pause()).not.toThrow();
+    });
+
+    it("should handle resume without being paused", () => {
+      const retrier = new Retrier({ retry: 3 });
+
+      // Resume without pause should not throw
+      expect(() => retrier.resume()).not.toThrow();
+    });
+
+    it("should handle multiple pause/resume cycles", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 100 });
+      const fn = vi.fn().mockRejectedValue(new Error("fail"));
+
+      const promise = retrier.execute(fn);
+
+      // Initial call
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // First pause/resume cycle
+      retrier.pause();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(fn).toHaveBeenCalledTimes(1);
+      retrier.resume();
+      await vi.advanceTimersByTimeAsync(200);
+      // Should have retried by now
+      expect(fn).toHaveBeenCalled();
+
+      // Let it exhaust retries
+      await vi.advanceTimersByTimeAsync(1000);
+      await expect(promise).rejects.toThrow("fail");
+    });
+
+    it("should allow cancel while paused", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 1000 });
+      const fn = vi.fn().mockRejectedValue(new Error("fail"));
+
+      const promise = retrier.execute(fn);
+
+      // Initial call
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      // Pause
+      await vi.advanceTimersByTimeAsync(500);
+      retrier.pause();
+
+      // Cancel while paused
+      retrier.cancel();
+
+      // Resume should have no effect after cancel
+      retrier.resume();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(promise).rejects.toThrow("Retrier cancelled");
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it("should handle pause with no delay", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 0 });
+      const fn = vi
         .fn()
         .mockRejectedValueOnce(new Error("fail"))
-        .mockResolvedValue("result3");
+        .mockResolvedValue("success");
 
-      const [result1, result2, result3] = await Promise.all([
-        retrier.execute(fn1),
-        retrier.execute(fn2),
-        retrier.execute(fn3),
-      ]);
+      const promise = retrier.execute(fn);
 
-      expect(result1).toBe("result1");
-      expect(result2).toBe("result2");
-      expect(result3).toBe("result3");
-      expect(fn1).toHaveBeenCalledTimes(2);
-      expect(fn2).toHaveBeenCalledOnce();
-      expect(fn3).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Pause and resume should not affect no-delay retries much
+      retrier.pause();
+      await vi.advanceTimersByTimeAsync(100);
+      retrier.resume();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const result = await promise;
+      expect(result).toBe("success");
+    });
+
+    it("should not execute callback when retrier is already paused, but execute after resume", async () => {
+      const retrier = new Retrier({ retry: 3, retryDelay: 100 });
+      const fn = vi.fn().mockResolvedValue("success");
+
+      // Pause BEFORE calling execute
+      retrier.pause();
+
+      // Now call execute while paused
+      const promise = retrier.execute(fn);
+
+      // Advance time - callback should NOT be executed yet
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fn).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(fn).not.toHaveBeenCalled(); // Still not called
+
+      // Now resume
+      retrier.resume();
+
+      // After resume, the callback should execute
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fn).toHaveBeenCalledTimes(1);
+
+      const result = await promise;
+      expect(result).toBe("success");
     });
   });
 });

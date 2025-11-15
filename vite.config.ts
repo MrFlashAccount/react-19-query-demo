@@ -13,5 +13,14 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ["react", "react-dom"],
+          "react-query": ["@tanstack/react-query"],
+          lib: ["src/lib"],
+        },
+      },
+    },
   },
 });
