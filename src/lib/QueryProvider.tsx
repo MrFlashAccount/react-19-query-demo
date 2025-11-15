@@ -22,12 +22,10 @@ export interface QueryContextValue {
   queryClient: QueryClient;
   isQueryClientPending: boolean;
   subscribe: <Key extends AnyKey, TData = unknown>(
-    query: Query<Key, TData>,
-    id: string
+    query: Query<Key, TData>
   ) => () => void;
   unsubscribe: <Key extends AnyKey, TData = unknown>(
-    query: Query<Key, TData>,
-    id: string
+    query: Query<Key, TData>
   ) => void;
 }
 
@@ -94,8 +92,13 @@ export function QueryProvider({
         return maybeSubscription;
       }
 
-      const unsubscribe = query.subscribe(noop);
+      const queryUnsubscribe = query.subscribe(noop);
+      const unsubscribe = () => {
+        queryUnsubscribe();
+        subscriptions.current.delete(query.serializedKey);
+      };
       subscriptions.current.set(query.serializedKey, unsubscribe);
+
       return unsubscribe;
     }
   );
@@ -103,12 +106,12 @@ export function QueryProvider({
   const unsubscribe = useEvent(
     <Key extends AnyKey, TData = unknown>(query: Query<Key, TData>) => {
       const maybeUnsubscribe = subscriptions.current.get(query.serializedKey);
+
       if (maybeUnsubscribe === undefined) {
         return;
       }
 
       maybeUnsubscribe();
-      subscriptions.current.delete(query.serializedKey);
     }
   );
 
@@ -198,13 +201,13 @@ export function useQuery<
   isPending: boolean;
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
-  const subscriptionId = useId();
   const { queryClient, isQueryClientPending, subscribe } = useQueryContext();
+  const queryFnStable = useEvent(queryFn);
 
   // Add or get query from cache (staleness check happens inside addQuery)
   const query = queryClient.addQuery<Key, PromiseValue>({
     key,
-    queryFn,
+    queryFn: queryFnStable,
     gcTime,
     staleTime,
     retry,
@@ -212,8 +215,8 @@ export function useQuery<
   });
 
   // Subscribe to query changes
-  const unsubscribeQuery = subscribe(query, subscriptionId);
-  useEffect(() => () => unsubscribeQuery(), [unsubscribeQuery]);
+  const unsubscribeQuery = subscribe(query);
+  useEffect(() => unsubscribeQuery, [unsubscribeQuery]);
 
   const deferredPromise = useDeferredValue(query.promise);
   const isPending = deferredPromise !== query.promise;

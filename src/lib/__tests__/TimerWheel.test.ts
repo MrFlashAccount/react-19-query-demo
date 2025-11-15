@@ -15,7 +15,7 @@ describe("TimerWheel", () => {
 
   describe("Basic Scheduling and Execution", () => {
     it("should execute a timer after the specified delay", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       wheel.schedule(callback, 100);
@@ -33,7 +33,7 @@ describe("TimerWheel", () => {
     });
 
     it("should execute multiple timers in order of expiration", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const results: number[] = [];
 
       wheel.schedule(() => results.push(3), 300);
@@ -51,7 +51,7 @@ describe("TimerWheel", () => {
     });
 
     it("should execute timers scheduled with 0 delay immediately", async () => {
-      wheel = new TimerWheel({ tickInterval: 1 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       wheel.schedule(callback, 0);
@@ -62,7 +62,7 @@ describe("TimerWheel", () => {
     });
 
     it("should execute multiple timers scheduled at the same time", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback1 = vi.fn();
       const callback2 = vi.fn();
       const callback3 = vi.fn();
@@ -79,24 +79,21 @@ describe("TimerWheel", () => {
     });
 
     it("should handle very short delays (< tickInterval)", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       wheel.schedule(callback, 5);
 
-      // Should round up to next tick interval
-      await vi.advanceTimersByTimeAsync(5);
-      expect(callback).not.toHaveBeenCalled();
-
+      // Should execute at exact expiration time (no rounding)
       await vi.advanceTimersByTimeAsync(5);
       expect(callback).toHaveBeenCalledTimes(1);
     });
 
-    it("should handle long delays that span multiple wheel levels", async () => {
-      wheel = new TimerWheel({ tickInterval: 10, slotsPerLevel: 16 });
+    it("should handle long delays", async () => {
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
-      // Schedule a timer that exceeds level 0 capacity (16 slots * 10ms = 160ms)
+      // Schedule a timer with long delay
       wheel.schedule(callback, 500);
 
       await vi.advanceTimersByTimeAsync(499);
@@ -109,7 +106,7 @@ describe("TimerWheel", () => {
 
   describe("Timer Cancellation", () => {
     it("should not execute a cancelled timer", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       const timerId = wheel.schedule(callback, 100);
@@ -120,7 +117,7 @@ describe("TimerWheel", () => {
     });
 
     it("should return true when cancelling an existing timer", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       const timerId = wheel.schedule(callback, 100);
@@ -130,14 +127,14 @@ describe("TimerWheel", () => {
     });
 
     it("should return false when cancelling a non-existent timer", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       const result = wheel.cancel(999);
       expect(result).toBe(false);
     });
 
     it("should cancel the correct timer when multiple are scheduled", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback1 = vi.fn();
       const callback2 = vi.fn();
       const callback3 = vi.fn();
@@ -156,7 +153,7 @@ describe("TimerWheel", () => {
     });
 
     it("should handle cancelling all timers", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback1 = vi.fn();
       const callback2 = vi.fn();
 
@@ -174,7 +171,7 @@ describe("TimerWheel", () => {
     });
 
     it("should not allow cancelling the same timer twice", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       const timerId = wheel.schedule(callback, 100);
@@ -188,7 +185,7 @@ describe("TimerWheel", () => {
 
   describe("Batching with queueMicrotask", () => {
     it("should batch multiple schedule calls into a single reschedule", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callbacks = Array.from({ length: 100 }, () => vi.fn());
 
       // Schedule many timers in quick succession
@@ -205,7 +202,7 @@ describe("TimerWheel", () => {
     });
 
     it("should batch multiple cancel calls", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callbacks = Array.from({ length: 10 }, () => vi.fn());
 
       // Schedule timers
@@ -230,7 +227,7 @@ describe("TimerWheel", () => {
     });
 
     it("should batch mixed schedule and cancel operations", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback1 = vi.fn();
       const callback2 = vi.fn();
       const callback3 = vi.fn();
@@ -253,7 +250,7 @@ describe("TimerWheel", () => {
 
   describe("Timer Count and State", () => {
     it("should track active timer count correctly", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       expect(wheel.getActiveTimerCount()).toBe(0);
 
@@ -268,7 +265,7 @@ describe("TimerWheel", () => {
     });
 
     it("should decrease timer count after execution", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       wheel.schedule(() => {}, 100);
       wheel.schedule(() => {}, 200);
@@ -287,7 +284,7 @@ describe("TimerWheel", () => {
     });
 
     it("should decrease timer count after cancellation", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       const timer1 = wheel.schedule(() => {}, 100);
       const timer2 = wheel.schedule(() => {}, 200);
@@ -302,7 +299,7 @@ describe("TimerWheel", () => {
     });
 
     it("should report hasActiveTimers correctly", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       expect(wheel.hasActiveTimers()).toBe(false);
 
@@ -316,7 +313,7 @@ describe("TimerWheel", () => {
 
   describe("Error Handling", () => {
     it("should throw error for negative delay", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       expect(() => {
         wheel.schedule(() => {}, -100);
@@ -324,7 +321,7 @@ describe("TimerWheel", () => {
     });
 
     it("should not crash if callback throws an error", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const errorCallback = vi.fn(() => {
         throw new Error("Test error");
       });
@@ -352,7 +349,7 @@ describe("TimerWheel", () => {
 
   describe("Clear Functionality", () => {
     it("should clear all timers", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback1 = vi.fn();
       const callback2 = vi.fn();
       const callback3 = vi.fn();
@@ -375,7 +372,7 @@ describe("TimerWheel", () => {
     });
 
     it("should allow scheduling new timers after clear", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       wheel.schedule(() => {}, 100);
       wheel.clear();
@@ -390,7 +387,7 @@ describe("TimerWheel", () => {
 
   describe("Timer Rescheduling During Execution", () => {
     it("should allow scheduling new timers during callback execution", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback2 = vi.fn();
       let callback1Called = false;
 
@@ -412,7 +409,7 @@ describe("TimerWheel", () => {
     });
 
     it("should handle recursive timer scheduling", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       let count = 0;
       const maxCount = 5;
 
@@ -433,28 +430,29 @@ describe("TimerWheel", () => {
   });
 
   describe("Configuration Options", () => {
-    it("should respect custom tickInterval", async () => {
-      wheel = new TimerWheel({ tickInterval: 50 });
+    it("should respect custom minDelay", async () => {
+      wheel = new TimerWheel({ minDelay: 50 });
       const callback = vi.fn();
 
-      wheel.schedule(callback, 100);
+      wheel.schedule(callback, 0);
 
-      // Should round up to nearest tick (2 ticks * 50ms = 100ms)
-      await vi.advanceTimersByTimeAsync(99);
+      // Should respect minimum delay of 50ms
+      await vi.advanceTimersByTimeAsync(49);
       expect(callback).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(1);
       expect(callback).toHaveBeenCalledTimes(1);
     });
 
-    it("should throw error if slotsPerLevel is not a power of 2", () => {
+    it("should accept any minDelay configuration", () => {
+      // Simplified implementation doesn't require power-of-2 validation
       expect(() => {
-        new TimerWheel({ slotsPerLevel: 100 });
-      }).toThrow("slotsPerLevel must be a power of 2");
+        new TimerWheel({ minDelay: 5 });
+      }).not.toThrow();
     });
 
-    it("should work with different slotsPerLevel configurations", async () => {
-      wheel = new TimerWheel({ tickInterval: 10, slotsPerLevel: 16 });
+    it("should work with different configurations", async () => {
+      wheel = new TimerWheel({ minDelay: 0 });
       const callback = vi.fn();
 
       wheel.schedule(callback, 100);
@@ -466,7 +464,7 @@ describe("TimerWheel", () => {
 
   describe("Edge Cases", () => {
     it("should handle scheduling many timers with the same delay", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callbacks = Array.from({ length: 100 }, () => vi.fn());
 
       callbacks.forEach((cb) => wheel.schedule(cb, 100));
@@ -479,7 +477,7 @@ describe("TimerWheel", () => {
     });
 
     it("should handle scheduling with delay of exactly one tick", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       wheel.schedule(callback, 10);
@@ -489,7 +487,7 @@ describe("TimerWheel", () => {
     });
 
     it("should handle rapid schedule and cancel operations", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback = vi.fn();
 
       // Schedule and cancel rapidly
@@ -507,7 +505,7 @@ describe("TimerWheel", () => {
     });
 
     it("should execute all timers scheduled within the same tick", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const results: number[] = [];
 
       // Schedule timers very close together (all round to same tick)
@@ -525,7 +523,7 @@ describe("TimerWheel", () => {
     });
 
     it("should handle getCurrentTime correctly", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       // Before any scheduling, should return current time
       const beforeTime = wheel.getCurrentTime();
@@ -540,7 +538,7 @@ describe("TimerWheel", () => {
 
   describe("No Active Timers Behavior", () => {
     it("should not schedule timeout when no timers are active", () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
 
       // Initially no timers
       expect(wheel.hasActiveTimers()).toBe(false);
@@ -554,7 +552,7 @@ describe("TimerWheel", () => {
     });
 
     it("should reschedule to nearest timer after one expires", async () => {
-      wheel = new TimerWheel({ tickInterval: 10 });
+      wheel = new TimerWheel();
       const callback1 = vi.fn();
       const callback2 = vi.fn();
 
@@ -567,6 +565,28 @@ describe("TimerWheel", () => {
 
       await vi.advanceTimersByTimeAsync(200);
       expect(callback2).toHaveBeenCalledTimes(1);
+    });
+
+    it("should handle re-insertion without creating circular references", async () => {
+      wheel = new TimerWheel();
+      const callbacks = Array.from({ length: 10 }, () => vi.fn());
+
+      // Schedule multiple timers that will land in the same slot
+      // and might need re-insertion during processing
+      callbacks.forEach((cb, i) => {
+        wheel.schedule(cb, 100 + i); // All within same tick
+      });
+
+      // Advance time partially - this might trigger re-insertion
+      await vi.advanceTimersByTimeAsync(50);
+
+      // Should not crash with infinite loop
+      await vi.advanceTimersByTimeAsync(60);
+
+      // All callbacks should have been called exactly once
+      callbacks.forEach((cb) => {
+        expect(cb).toHaveBeenCalledTimes(1);
+      });
     });
   });
 });

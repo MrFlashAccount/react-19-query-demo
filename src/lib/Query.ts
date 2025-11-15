@@ -10,13 +10,13 @@ export interface QueryState<TData> {
   /** Current status of the query */
   status: "pending" | "success" | "error";
   /** The resolved data when query is successful */
-  data?: TData;
+  data: TData | undefined;
   /** The error when query fails */
-  error?: unknown;
+  error: unknown;
   /** Timestamp when the data was last fetched successfully */
-  dataUpdatedAt?: number;
+  dataUpdatedAt: number | undefined;
   /** Timestamp when the error occurred */
-  errorUpdatedAt?: number;
+  errorUpdatedAt: number | undefined;
   /** Current fetch status */
   fetchStatus: "idle" | "fetching";
 }
@@ -248,6 +248,7 @@ export class Query<Key extends AnyKey, TData = unknown>
         this.state.fetchStatus = "idle";
 
         this.notifySubscribers();
+
         return data;
       })
       .catch((error) => {
@@ -259,6 +260,9 @@ export class Query<Key extends AnyKey, TData = unknown>
 
         this.notifySubscribers();
         throw error;
+      })
+      .finally(() => {
+        this.scheduleGC();
       });
 
     return promise;
@@ -472,7 +476,12 @@ export class Query<Key extends AnyKey, TData = unknown>
     this.state = {
       status: "pending",
       fetchStatus: "idle",
+      data: undefined,
+      error: undefined,
+      dataUpdatedAt: undefined,
+      errorUpdatedAt: undefined,
     };
+    this.cancelGC();
     this.currentPromise = this.createFetcher();
     this.notifySubscribers();
   }
@@ -481,11 +490,8 @@ export class Query<Key extends AnyKey, TData = unknown>
    * Destroy the query, cleaning up resources
    */
   destroy(): void {
-    this.reset();
     this.cancelGC();
-    this.onGarbageCollect = noop;
     this.subscribers.clear();
-    this.currentPromise = this.createFetcher();
   }
 
   refetch(): void {
