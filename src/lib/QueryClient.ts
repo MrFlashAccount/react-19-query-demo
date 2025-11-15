@@ -1,7 +1,3 @@
-import {
-  GarbageCollector,
-  type GarbageCollectorOptions,
-} from "./GarbageCollector";
 import type { RetryConfig } from "./Retrier";
 import {
   Query,
@@ -39,8 +35,6 @@ export interface AddPromiseOptions<
  *  constructor
  */
 export interface QueryClientOptions {
-  /** Garbage collector configuration */
-  gc?: GarbageCollectorOptions;
   /** Cache implementation */
   cache?: Map<string, Query<AnyKey, unknown>>;
   /** Callback invoked when a new instance is created after cache mutation */
@@ -96,19 +90,10 @@ export interface ICache {
  */
 export class QueryClient {
   private _cache: Map<string, Query<AnyKey, unknown>>;
-  private garbageCollector: GarbageCollector;
   private onChange: (newInstance: QueryClient) => void;
-  private gcOptions?: GarbageCollectorOptions;
 
   constructor(options: QueryClientOptions = {}) {
-    // Store options for cloning
-    this.gcOptions = options.gc;
-
     this._cache = options.cache || new Map<string, Query<AnyKey, unknown>>();
-
-    // Create garbage collector with callback to log deletions
-    this.garbageCollector = new GarbageCollector(options.gc);
-
     this.onChange = options.onChange ?? noop;
   }
 
@@ -118,7 +103,6 @@ export class QueryClient {
    */
   private clone(): QueryClient {
     const newInstance = new QueryClient({
-      gc: this.gcOptions,
       cache: this._cache, // Reuse same cache reference
       onChange: this.onChange,
     });
@@ -131,13 +115,6 @@ export class QueryClient {
    */
   private notifyChange(newInstance: QueryClient): void {
     this.onChange(newInstance);
-  }
-
-  /**
-   * Get the debugger instance
-   */
-  getGarbageCollector(): GarbageCollector {
-    return this.garbageCollector;
   }
 
   /**

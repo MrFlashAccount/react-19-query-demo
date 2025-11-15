@@ -25,11 +25,6 @@ export {
 
 export { QueryClient, type QueryClientOptions } from "./QueryClient";
 
-export {
-  GarbageCollector,
-  type GarbageCollectorOptions,
-} from "./GarbageCollector";
-
 export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 
 export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";

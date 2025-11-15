@@ -1,4 +1,3 @@
-import type { IGarbageCollectable } from "./GarbageCollector";
 import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
 import { createBatcher, noop, type Batch } from "./utils";
@@ -76,9 +75,7 @@ interface QueryEnvironment {
   onRemove?: () => void;
 }
 
-export class Query<Key extends AnyKey, TData = unknown>
-  implements IGarbageCollectable
-{
+export class Query<Key extends AnyKey, TData = unknown> {
   private queryKey: Key;
   private state: QueryState<TData>;
   private options: QueryOptions<Key, TData>;

@@ -23,14 +23,6 @@ describe("QueryClient", () => {
       queryClient = new QueryClient({});
       expect(queryClient).toBeDefined();
     });
-
-    it("should create cache with gc options", () => {
-      const onCollect = vi.fn();
-      queryClient = new QueryClient({
-        gc: { onCollect },
-      });
-      expect(queryClient).toBeDefined();
-    });
   });
 
   describe("addQuery", () => {
