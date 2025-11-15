@@ -31,6 +31,7 @@ export function TanStackQueryTab({
   const { data: movies } = useSuspenseQuery({
     queryKey: ["movies", searchQuery, movieLimit],
     queryFn: () => searchMovies(searchQuery, movieLimit),
+    gcTime: 60_000,
   });
 
   const handleSearchChange = (value: string) => {
@@ -57,12 +58,7 @@ export function TanStackQueryTab({
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardTanStack
-              key={movie.id}
-              movie={movie}
-              searchQuery={searchQuery}
-              movieLimit={movieLimit}
-            />
+            <MovieCardTanStack key={movie.id} movie={movie} />
           ))}
         </MovieList>
       </div>
@@ -73,15 +69,7 @@ export function TanStackQueryTab({
 /**
  * Movie card component using TanStack Query
  */
-export function MovieCardTanStack({
-  movie,
-  searchQuery,
-  movieLimit,
-}: {
-  movie: Movie;
-  searchQuery: string;
-  movieLimit: number;
-}) {
+export function MovieCardTanStack({ movie }: { movie: Movie }) {
   const [isPending, startTransition] = useTransition();
 
   const movieId = movie.id;
@@ -100,13 +88,9 @@ export function MovieCardTanStack({
   });
 
   useQuery({
-    queryKey: ["movie", movieId],
-    queryFn: () => getMovieById(movieId),
-  });
-
-  useQuery({
-    queryKey: ["movies", searchQuery, movieLimit],
-    queryFn: () => searchMovies(searchQuery, movieLimit),
+    queryKey: ["movie", movieId] as const,
+    queryFn: ({ queryKey: [, movieId] }) => getMovieById(movieId),
+    gcTime: 60_000,
   });
 
   const handleStarClick = (starIndex: number) => {
