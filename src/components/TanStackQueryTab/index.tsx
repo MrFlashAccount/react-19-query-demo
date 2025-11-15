@@ -70,19 +70,17 @@ export function TanStackQueryTab({
  * Movie card component using TanStack Query
  */
 export function MovieCardTanStack({ movie }: { movie: Movie }) {
-  const [isPending, startTransition] = useTransition();
-
   const movieId = movie.id;
 
   const queryClient = useQueryClient();
 
-  const { mutateAsync: updateRating } = useMutation({
+  const { mutate: updateRating, isPending } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
       updateMovieRating(movieId, rating),
-    onSuccess: () => {
+    onSuccess: ({ id }) => {
       void queryClient.invalidateQueries({ queryKey: ["movies"] });
       void queryClient.invalidateQueries({
-        queryKey: ["movie", movieId],
+        queryKey: ["movie", id],
       });
     },
   });
@@ -94,9 +92,7 @@ export function MovieCardTanStack({ movie }: { movie: Movie }) {
   });
 
   const handleStarClick = (starIndex: number) => {
-    startTransition(async () => {
-      await updateRating({ rating: starIndex * 2 });
-    });
+    updateRating({ rating: starIndex * 2 });
   };
 
   return (
