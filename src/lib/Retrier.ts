@@ -76,6 +76,13 @@ export class Retrier {
     };
   }
 
+  setOptions(options: RetrierOptions): void {
+    this.options = {
+      retry: options.retry ?? true,
+      retryDelay: options.retryDelay ?? 0,
+    };
+  }
+
   /**
    * Execute a function with retry logic
    * Each new call to execute() will cancel any previous ongoing execution

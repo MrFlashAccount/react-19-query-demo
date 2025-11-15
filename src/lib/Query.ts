@@ -98,7 +98,7 @@ export class Query<Key extends AnyKey, TData = unknown>
   private batch: Batch;
 
   // Promise tracking
-  private currentPromise: Promise<TData> | null = null;
+  private currentPromise: Promise<TData>;
   private onGarbageCollect: () => void;
 
   static getSerializedKey(key: AnyKey): string {
@@ -148,7 +148,7 @@ export class Query<Key extends AnyKey, TData = unknown>
     });
 
     this.retrier.pause();
-    this.fetchQuery();
+    this.currentPromise = this.createFetcher();
   }
 
   /**
@@ -184,9 +184,9 @@ export class Query<Key extends AnyKey, TData = unknown>
 
     // Update retrier if retry options changed
     if (options.retry !== undefined || options.retryDelay !== undefined) {
-      this.retrier = new Retrier({
-        retry: this.options.retry,
-        retryDelay: this.options.retryDelay,
+      this.retrier.setOptions({
+        retry: options.retry,
+        retryDelay: options.retryDelay,
       });
     }
   }
@@ -211,7 +211,7 @@ export class Query<Key extends AnyKey, TData = unknown>
     }
 
     // staleTime can't be less than 1, so we set it to 1 if it's undefined or 0.
-    const staleTime = this.options.staleTime || 1;
+    const staleTime = this.options.staleTime ?? 0;
     const now = Date.now();
 
     return now >= this.state.dataUpdatedAt + staleTime;
@@ -222,18 +222,15 @@ export class Query<Key extends AnyKey, TData = unknown>
    *
    * @returns Promise that resolves with the query data
    */
-  fetchQuery(): Promise<TData> {
+  private createFetcher(): Promise<TData> {
     // If already fetching, return the current promise
     if (this.state.fetchStatus === "fetching" && this.currentPromise != null) {
       return this.currentPromise;
     }
 
-    this.retrier.reset();
-
     // Create new promise with retrier (before notifying to ensure deduplication)
-    this.currentPromise = this.retrier
+    const promise = this.retrier
       .execute(() => {
-        console.log("fetchQuery", this.queryKey);
         // Update fetch status
         this.state.fetchStatus = "fetching";
         // Notify after promise is created to ensure deduplication works
@@ -264,9 +261,36 @@ export class Query<Key extends AnyKey, TData = unknown>
         throw error;
       });
 
-    return this.currentPromise;
+    return promise;
   }
 
+  /**
+   * Execute the query
+   * @returns Promise that resolves with the query data
+   */
+  async fetch(): Promise<TData> {
+    this.retrier.resume();
+    const data = await this.currentPromise;
+    this.retrier.pause();
+
+    return data;
+  }
+
+  async enshureData(): Promise<TData> {
+    if (this.state.data != null) {
+      if (this.isStale()) {
+        return this.fetch();
+      }
+
+      return this.state.data;
+    }
+
+    if (this.state.status === "pending") {
+      return await this.currentPromise;
+    }
+
+    return this.fetch();
+  }
   /**
    * Subscribe to query changes. Increments subscriber count and triggers
    * a refetch if this is the first subscription and data is stale.
@@ -277,7 +301,8 @@ export class Query<Key extends AnyKey, TData = unknown>
   subscribe(callback: () => void): () => void {
     const wasFirstSubscription = this.subscribers.size === 0;
 
-    this.subscribers.add(() => callback());
+    const wrappedCallback = () => callback();
+    this.subscribers.add(wrappedCallback);
 
     if (wasFirstSubscription) {
       this.retrier.resume();
@@ -300,15 +325,13 @@ export class Query<Key extends AnyKey, TData = unknown>
     // this makes multiple calls of subscribe keep the same value of `isStale`.
     // So we don't refetch the query if it wasn't stale when the first call of subscribe was made.
     this.batch(() => {
-      console.log("executing batch", { isStale, status: this.state.status });
       if (isStale && this.state.status === "success") {
-        console.log("fetching query", this.queryKey);
-        void this.fetchQuery();
+        void this.createFetcher();
       }
     });
 
     return () => {
-      this.unsubscribe(callback);
+      this.unsubscribe(wrappedCallback);
     };
   }
 
@@ -390,9 +413,11 @@ export class Query<Key extends AnyKey, TData = unknown>
    * This method is called when the GC timer fires
    */
   private handleGC(): void {
+    // Clear the timer ID since it has fired
+    this.gcTimerId = undefined;
+
+    // Check if eligible after clearing timer
     if (this.canBeCollected()) {
-      // Clear the timer ID since it has fired
-      this.gcTimerId = undefined;
       this.onGarbageCollect();
       this.remove();
     }
@@ -427,12 +452,16 @@ export class Query<Key extends AnyKey, TData = unknown>
    */
   invalidate(): void {
     // Only invalidate if not static
-    this.state.dataUpdatedAt = undefined;
+    if (this.options.staleTime !== "static") {
+      this.state.dataUpdatedAt = undefined;
 
-    // If there are subscribers, trigger a refetch
-    if (this.subscribers.size > 0) {
-      this.retrier.cancel();
-      void this.fetchQuery();
+      // If there are subscribers, trigger a refetch
+      if (this.subscribers.size > 0) {
+        // Reset retrier to allow new execution (cancel sets cancelled=true)
+        this.retrier.reset();
+        this.retrier.resume();
+        this.currentPromise = this.createFetcher();
+      }
     }
   }
 
@@ -444,7 +473,7 @@ export class Query<Key extends AnyKey, TData = unknown>
       status: "pending",
       fetchStatus: "idle",
     };
-    this.currentPromise = null;
+    this.currentPromise = this.createFetcher();
     this.notifySubscribers();
   }
 
@@ -456,11 +485,11 @@ export class Query<Key extends AnyKey, TData = unknown>
     this.cancelGC();
     this.onGarbageCollect = noop;
     this.subscribers.clear();
-    this.currentPromise = null;
+    this.currentPromise = this.createFetcher();
   }
 
   refetch(): void {
-    void this.fetchQuery();
+    void this.fetch();
   }
 
   private mergeOptions(

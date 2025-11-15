@@ -48,7 +48,7 @@ describe("QueryClient", () => {
       expect(entry).toBeDefined();
       expect(entry.getState().status).toBe("pending");
 
-      await entry.fetchQuery();
+      await entry.fetch();
       expect(queryFn).toHaveBeenCalledWith(["test"]);
     });
 
@@ -60,6 +60,10 @@ describe("QueryClient", () => {
         key: ["test"],
         queryFn: queryFn1,
       });
+
+      // Subscribe to trigger fetch
+      entry1.subscribe(vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
 
       const entry2 = queryClient.addQuery({
         key: ["test"],
@@ -86,8 +90,8 @@ describe("QueryClient", () => {
       });
 
       expect(entry1).not.toBe(entry2);
-      await entry1.fetchQuery();
-      await entry2.fetchQuery();
+      await entry1.fetch();
+      await entry2.fetch();
       expect(queryFn1).toHaveBeenCalledWith(["test", 1]);
       expect(queryFn2).toHaveBeenCalledWith(["test", 2]);
     });
@@ -151,7 +155,7 @@ describe("QueryClient", () => {
         queryFn,
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
 
       queryClient.invalidate(["test"]);
 
@@ -177,7 +181,7 @@ describe("QueryClient", () => {
         queryFn: queryFn1,
       });
 
-      await entry1.fetchQuery();
+      await entry1.fetch();
 
       queryClient.addQuery({
         key: ["test", 2],
@@ -258,7 +262,7 @@ describe("QueryClient", () => {
       expect(queryClient.has(["test", 2])).toBe(false);
     });
 
-    it("should allow adding new entries after clear", () => {
+    it("should allow adding new entries after clear", async () => {
       queryClient.addQuery({
         key: ["test"],
         queryFn: vi.fn().mockResolvedValue("data"),
@@ -272,6 +276,10 @@ describe("QueryClient", () => {
         queryFn: newQueryFn,
       });
 
+      // Subscribe to trigger fetch
+      entry.subscribe(vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
+
       expect(entry).toBeDefined();
       expect(newQueryFn).toHaveBeenCalled();
     });
@@ -283,7 +291,12 @@ describe("QueryClient", () => {
     });
 
     it("should track query fulfillment", async () => {
-      const queryFn = vi.fn().mockResolvedValue("data");
+      const queryFn = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => resolve("data"), 100);
+          })
+      );
       const entry = queryClient.addQuery({
         key: ["test"],
         queryFn,
@@ -291,10 +304,15 @@ describe("QueryClient", () => {
 
       expect(entry.getState().status).toBe("pending");
 
-      const fetchPromise = entry.fetchQuery();
+      // Subscribe to trigger fetch
+      entry.subscribe(vi.fn());
+
+      // Wait for fetch to start
+      await vi.advanceTimersByTimeAsync(0);
       expect(entry.getState().fetchStatus).toBe("fetching");
 
-      await fetchPromise;
+      // Wait for fetch to complete
+      await vi.advanceTimersByTimeAsync(100);
 
       expect(entry.getState().status).toBe("success");
       expect(entry.getState().data).toBe("data");
@@ -312,7 +330,7 @@ describe("QueryClient", () => {
 
       expect(entry.getState().status).toBe("pending");
 
-      await expect(entry.fetchQuery()).rejects.toThrow("test error");
+      await expect(entry.fetch()).rejects.toThrow("test error");
 
       expect(entry.getState().status).toBe("error");
       expect(entry.getState().error).toBe(error);
@@ -325,7 +343,7 @@ describe("QueryClient", () => {
         queryFn,
       });
 
-      await entry1.fetchQuery();
+      await entry1.fetch();
 
       const entry2 = queryClient.addQuery({
         key: ["test"],
@@ -352,7 +370,7 @@ describe("QueryClient", () => {
         staleTime: 0,
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
 
       // Data should be stale immediately
       expect(queryClient.isStale(["test"])).toBe(true);
@@ -366,7 +384,7 @@ describe("QueryClient", () => {
         staleTime: 5000, // 5 seconds
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
       await vi.advanceTimersByTimeAsync(0);
 
       // Data should be fresh immediately after fetch
@@ -382,7 +400,7 @@ describe("QueryClient", () => {
         staleTime: 1000, // 1 second
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
       await vi.advanceTimersByTimeAsync(0);
 
       // Fresh initially
@@ -404,7 +422,7 @@ describe("QueryClient", () => {
         staleTime: Infinity,
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
       await vi.advanceTimersByTimeAsync(0);
 
       // Fresh initially
@@ -425,7 +443,7 @@ describe("QueryClient", () => {
         staleTime: "static",
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
       await vi.advanceTimersByTimeAsync(0);
 
       // Fresh initially
@@ -446,7 +464,7 @@ describe("QueryClient", () => {
         staleTime: "static",
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
 
       // Try to invalidate
       queryClient.invalidate(["test"]);
@@ -463,7 +481,7 @@ describe("QueryClient", () => {
         staleTime: 5000,
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
 
       // Should be able to invalidate
       queryClient.invalidate(["test"]);
@@ -481,7 +499,7 @@ describe("QueryClient", () => {
         staleTime: Infinity,
       });
 
-      await entry.fetchQuery();
+      await entry.fetch();
 
       // Should be able to invalidate
       queryClient.invalidate(["test"]);
@@ -518,7 +536,7 @@ describe("QueryClient", () => {
       // dataUpdatedAt should be undefined initially
       expect(entry.getState().dataUpdatedAt).toBeUndefined();
 
-      await entry.fetchQuery();
+      await entry.fetch();
 
       // After resolution, dataUpdatedAt should be set
       expect(entry.getState().dataUpdatedAt).toBeDefined();

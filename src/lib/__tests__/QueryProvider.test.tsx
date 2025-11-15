@@ -48,7 +48,7 @@ describe("QueryProvider", () => {
   });
 
   describe("Basic caching behavior", () => {
-    it("should cache a query and return the same instance on subsequent calls", () => {
+    it("should cache a query and return the same instance on subsequent calls", async () => {
       let contextValue: QueryContextValue | null = null;
 
       function TestComponent() {
@@ -63,6 +63,10 @@ describe("QueryProvider", () => {
         key: ["test"],
         queryFn: queryFn1,
       });
+
+      // Subscribe to trigger fetch
+      result1.subscribe(vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
 
       const queryFn2 = vi.fn().mockResolvedValue("other data");
       const result2 = contextValue!.queryClient.addQuery({
@@ -104,7 +108,7 @@ describe("QueryProvider", () => {
 
       function TestComponent() {
         contextValue = useQueryContext();
-        return <div>Test</div>;
+        return null;
       }
 
       renderWithProvider(<TestComponent />);
@@ -117,7 +121,8 @@ describe("QueryProvider", () => {
 
       const retrieved = contextValue!.queryClient.getPromise(["test"]);
       expect(retrieved).toBe(query.promise);
-      await expect(retrieved).resolves.toBe("data");
+      const data = await retrieved!;
+      expect(data).toBe("data");
       expect(queryFn).toHaveBeenCalledTimes(1);
     });
 

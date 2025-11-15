@@ -25,7 +25,7 @@ export function CustomLibraryTab({
   const { promise, isPending } = useQuery({
     key: ["movies", searchQuery, movieLimit],
     queryFn: ([, query]) => searchMovies(query, movieLimit),
-    gcTime: 60_000,
+    gcTime: 0,
   });
 
   const movies = use(promise!);
@@ -77,11 +77,11 @@ export function MovieCardCustom({
     invalidateQueries: [["movies"], ["movie", movieId]],
   });
 
-  // useQuery({
-  //   key: ["movies", searchQuery, movieLimit],
-  //   queryFn: ([, query]) => searchMovies(query, movieLimit),
-  //   gcTime: 60_000,
-  // });
+  useQuery({
+    key: ["movie", movieId],
+    queryFn: ([, movieId]) => getMovieById(movieId),
+    gcTime: 0,
+  });
 
   return (
     <MovieCard

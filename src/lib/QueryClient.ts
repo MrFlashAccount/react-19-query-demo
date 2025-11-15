@@ -188,8 +188,6 @@ export class QueryClient {
 
     this._cache.set(keySerialized, entry as unknown as Query<AnyKey, unknown>);
 
-    entry.fetchQuery();
-
     return entry;
   }
 
