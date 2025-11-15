@@ -58,7 +58,12 @@ export function TanStackQueryTab({
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardTanStack key={movie.id} movie={movie} />
+            <MovieCardTanStack
+              key={movie.id}
+              movie={movie}
+              searchQuery={searchQuery}
+              movieLimit={movieLimit}
+            />
           ))}
         </MovieList>
       </div>
@@ -69,7 +74,15 @@ export function TanStackQueryTab({
 /**
  * Movie card component using TanStack Query
  */
-export function MovieCardTanStack({ movie }: { movie: Movie }) {
+export function MovieCardTanStack({
+  movie,
+  searchQuery,
+  movieLimit,
+}: {
+  movie: Movie;
+  searchQuery: string;
+  movieLimit: number;
+}) {
   const movieId = movie.id;
 
   const queryClient = useQueryClient();
@@ -86,8 +99,8 @@ export function MovieCardTanStack({ movie }: { movie: Movie }) {
   });
 
   useQuery({
-    queryKey: ["movie", movieId] as const,
-    queryFn: ({ queryKey: [, movieId] }) => getMovieById(movieId),
+    queryKey: ["movies", searchQuery, movieLimit],
+    queryFn: () => searchMovies(searchQuery, movieLimit),
     gcTime: 60_000,
   });
 
