@@ -2,9 +2,9 @@ import { useState, Suspense, lazy } from "react";
 import { QueryProvider } from "./lib";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TabSelector } from "./components/shared/TabSelector";
+import { LagRadar } from "./components/shared/LagRadar";
 
 const LazyGitHubCorner = lazy(() => import("react-github-corner"));
-const LazyLagRadar = lazy(() => import("react-lag-radar"));
 
 const LazyTanStackQueryTab = lazy(() =>
   import("./components/TanStackQueryTab").then((mod) => ({
@@ -43,9 +43,7 @@ export default function App() {
             direction="left"
           />
 
-          <div className="fixed bottom-4 left-4 z-50 bg-gray-900 rounded-full shadow-lg p-2 border-2 border-gray-700">
-            <LazyLagRadar size={120} />
-          </div>
+          <LagRadar />
 
           <div className="min-h-screen bg-white">
             {/* Header */}
