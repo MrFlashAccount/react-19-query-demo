@@ -55,7 +55,14 @@ function CustomLibraryTabContent({
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardCustom key={movie.id} movie={movie} api={api} />
+            <MovieCardCustom
+              key={movie.id}
+              movie={movie}
+              api={api}
+              gcTimeout={gcTimeout}
+              searchQuery={searchQuery}
+              movieLimit={movieLimit}
+            />
           ))}
         </MovieList>
       </div>
@@ -69,9 +76,15 @@ function CustomLibraryTabContent({
 function MovieCardCustom({
   movie,
   api,
+  gcTimeout,
+  searchQuery,
+  movieLimit,
 }: {
   movie: Movie;
   api: TabProps["api"];
+  gcTimeout: number;
+  searchQuery: string;
+  movieLimit: number;
 }) {
   const movieId = movie.id;
 
@@ -85,7 +98,13 @@ function MovieCardCustom({
   useQuery({
     key: ["movie", movieId],
     queryFn: ([, movieId]) => api.getMovieById(movieId),
-    gcTime: 60_000,
+    gcTime: gcTimeout,
+  });
+
+  useQuery({
+    key: ["movies", searchQuery, movieLimit],
+    queryFn: ([, query]) => api.searchMovies(query, movieLimit),
+    gcTime: gcTimeout,
   });
 
   return (

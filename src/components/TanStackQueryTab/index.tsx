@@ -60,6 +60,8 @@ function TanStackQueryTabContent({
               movie={movie}
               api={api}
               gcTimeout={gcTimeout}
+              searchQuery={searchQuery}
+              movieLimit={movieLimit}
             />
           ))}
         </MovieList>
@@ -77,10 +79,14 @@ function MovieCardTanStack({
   movie,
   api,
   gcTimeout,
+  searchQuery,
+  movieLimit,
 }: {
   movie: Movie;
   api: MovieApi;
   gcTimeout: number;
+  searchQuery: string;
+  movieLimit: number;
 }) {
   const movieId = movie.id;
 
@@ -99,6 +105,12 @@ function MovieCardTanStack({
   useQuery({
     queryKey: ["movie", movieId],
     queryFn: () => api.getMovieById(movieId),
+    gcTime: gcTimeout,
+  });
+
+  useQuery({
+    queryKey: ["movies", searchQuery, movieLimit],
+    queryFn: () => api.searchMovies(searchQuery, movieLimit),
     gcTime: gcTimeout,
   });
 
