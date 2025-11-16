@@ -12,6 +12,7 @@ let movieDatabaseCache: Movie[] | null = null;
  * Load the movie database from JSON files
  */
 async function getDatabase(): Promise<Movie[]> {
+  await new Promise((res) => setTimeout(res), 500);
   if (movieDatabaseCache != null) {
     return movieDatabaseCache;
   }
