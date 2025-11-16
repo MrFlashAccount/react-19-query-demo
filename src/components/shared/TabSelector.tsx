@@ -37,7 +37,7 @@ export function TabSelector({
               : "text-gray-600 hover:text-black"
           } ${isPending && "opacity-50 pointer-events-none"}`}
         >
-          Optimized TanStack Query
+          Custom Library
         </button>
 
         <button
