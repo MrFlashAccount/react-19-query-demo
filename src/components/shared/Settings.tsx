@@ -10,26 +10,21 @@ const GC_OPTIONS_LABELS = ["0s", "5m", "∞"];
 /**
  * Settings component for configuring movie display preferences
  */
-export function Settings({
-  gcTimeout,
-  onGcTimeoutChange,
-  movieLimit,
-  onMovieLimitChange,
-  showDevtools,
-  onShowDevtoolsChange,
-}: SettingsProps) {
+export function Settings({ formState, onFormStateChange }: SettingsProps) {
+  const movieLimit = Number(formState.get("movieLimit") ?? 0);
+  const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
+  const showDevtools = formState.get("showDevtools") === "true";
+
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleLimitChange = (value: string) => {
-    const numValue = parseInt(value, 10);
-    if (numValue >= MIN_LIMIT && numValue <= MAX_LIMIT) {
-      onMovieLimitChange(numValue);
-    }
-  };
+  const cloneFormData = (formData: FormData) => {
+    const newFormData = new FormData();
 
-  const handleGcTimeoutChange = (value: number) => {
-    if (value < 0) return;
-    onGcTimeoutChange(isNaN(value) ? 0 : value);
+    formData.forEach((value, key) => {
+      newFormData.set(key, value);
+    });
+
+    return newFormData;
   };
 
   return (
@@ -37,7 +32,7 @@ export function Settings({
       {/* Tooltip */}
       <div className="absolute -top-10 left-[20%] z-50 pointer-events-none">
         <div className="relative">
-          <div className="bg-black text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-lg">
+          <div className="bg-black text-white text-xs px-3 py-2 rounded-2xl [corner-shape:squircle] whitespace-nowrap shadow-lg">
             Try playing with settings!
           </div>
           {/* Arrow pointing down to the button */}
@@ -46,6 +41,7 @@ export function Settings({
       </div>
 
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-2 border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
         aria-label="Settings"
@@ -72,10 +68,11 @@ export function Settings({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-xl border-2 border-gray-200 p-4 w-[400px] z-50">
+        <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl [corner-shape:squircle] shadow-xl border-2 border-gray-200 p-4 w-[400px] z-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Settings</h3>
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
               className="text-gray-500 hover:text-gray-700"
               aria-label="Close settings"
@@ -107,20 +104,20 @@ export function Settings({
               <div className="flex items-center gap-3">
                 <input
                   id="movie-limit"
+                  name="movieLimit"
                   type="range"
                   min={MIN_LIMIT}
                   max={MAX_LIMIT}
-                  value={movieLimit}
-                  onChange={(e) => handleLimitChange(e.target.value)}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-black"
+                  defaultValue={movieLimit}
+                  className="flex-1 h-2 bg-gray-200 rounded-2xl [corner-shape:squircle] appearance-none cursor-pointer accent-black"
                 />
                 <input
+                  name="movieLimit"
                   type="number"
                   min={MIN_LIMIT}
                   max={MAX_LIMIT}
-                  value={movieLimit}
-                  onChange={(e) => handleLimitChange(e.target.value)}
-                  className="w-20 px-2 py-1 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
+                  defaultValue={movieLimit}
+                  className="w-20 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
                 />
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -134,8 +131,13 @@ export function Settings({
                 {LIMIT_OPTIONS.map((limit) => (
                   <button
                     key={limit}
-                    onClick={() => onMovieLimitChange(limit)}
-                    className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
+                    type="button"
+                    onClick={() => {
+                      const newFormData = cloneFormData(formState);
+                      newFormData.set("movieLimit", limit.toString());
+                      onFormStateChange(newFormData);
+                    }}
+                    className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors ${
                       movieLimit === limit
                         ? "bg-black text-white"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -156,11 +158,9 @@ export function Settings({
                     inputMode="decimal"
                     min={0}
                     max={Infinity}
-                    value={gcTimeout}
-                    onChange={(e) =>
-                      handleGcTimeoutChange(e.target.valueAsNumber)
-                    }
-                    className="w-full mt-2 px-2 py-1 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
+                    defaultValue={gcTimeout}
+                    name="gcTimeout"
+                    className="w-full mt-2 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
                   />
                 </label>
 
@@ -168,8 +168,13 @@ export function Settings({
                   {GC_OPTIONS.map((option, index) => (
                     <button
                       key={option}
-                      onClick={() => onGcTimeoutChange(option)}
-                      className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors min-w-18 ${
+                      type="button"
+                      onClick={() => {
+                        const newFormData = cloneFormData(formState);
+                        newFormData.set("gcTimeout", option.toString());
+                        onFormStateChange(newFormData);
+                      }}
+                      className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors min-w-18 ${
                         gcTimeout === option
                           ? "bg-black text-white"
                           : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -189,8 +194,16 @@ export function Settings({
                 </label>
               </div>
               <button
-                onClick={() => onShowDevtoolsChange(!showDevtools)}
-                className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
+                type="button"
+                onClick={() => {
+                  const newFormData = cloneFormData(formState);
+                  newFormData.set(
+                    "showDevtools",
+                    !showDevtools ? "true" : "false"
+                  );
+                  onFormStateChange(newFormData);
+                }}
+                className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors ${
                   showDevtools
                     ? "bg-black text-white"
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"

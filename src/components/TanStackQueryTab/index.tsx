@@ -17,29 +17,17 @@ const queryClient = new QueryClient({
 });
 
 export default function TanStackQueryTab({
-  gcTimeout,
-  onGcTimeoutChange,
-  movieLimit,
-  onMovieLimitChange,
-  searchQuery,
-  onSearchQueryChange,
-  showDevtools,
-  onShowDevtoolsChange,
+  formState,
+  onFormStateChange,
   devtools: Devtools,
   api,
 }: TabProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <TanStackQueryTabContent
-        gcTimeout={gcTimeout}
-        onGcTimeoutChange={onGcTimeoutChange}
-        movieLimit={movieLimit}
-        onMovieLimitChange={onMovieLimitChange}
+        formState={formState}
+        onFormStateChange={onFormStateChange}
         api={api}
-        searchQuery={searchQuery}
-        onSearchQueryChange={onSearchQueryChange}
-        showDevtools={showDevtools}
-        onShowDevtoolsChange={onShowDevtoolsChange}
         devtools={Devtools}
       />
 
@@ -49,17 +37,14 @@ export default function TanStackQueryTab({
 }
 
 function TanStackQueryTabContent({
-  movieLimit,
-  onMovieLimitChange,
+  formState,
+  onFormStateChange,
   api,
-  gcTimeout,
-  onGcTimeoutChange,
-  searchQuery,
-  onSearchQueryChange,
-  showDevtools,
-  onShowDevtoolsChange,
 }: TabProps) {
   const [isPending, startTransition] = useTransition();
+  const searchQuery = String(formState.get("searchQuery") ?? "");
+  const movieLimit = Number(formState.get("movieLimit") ?? 0);
+  const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
 
   const { data: movies } = useSuspenseQuery({
     queryKey: ["movies", searchQuery, movieLimit],
@@ -67,42 +52,18 @@ function TanStackQueryTabContent({
     gcTime: gcTimeout,
   });
 
-  const handleSearchChange = (value: string) => {
+  const handleFormStateChange = (formData: FormData) => {
     startTransition(() => {
-      onSearchQueryChange(value);
-    });
-  };
-
-  const handleMovieLimitChange = (value: number) => {
-    startTransition(() => {
-      onMovieLimitChange(value);
-    });
-  };
-
-  const handleGcTimeoutChange = (value: number) => {
-    startTransition(() => {
-      onGcTimeoutChange(value);
-    });
-  };
-
-  const handleShowDevtoolsChange = (value: boolean) => {
-    startTransition(() => {
-      onShowDevtoolsChange(value);
+      onFormStateChange(formData);
     });
   };
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
       <SearchBox
-        gcTimeout={gcTimeout}
-        onGcTimeoutChange={handleGcTimeoutChange}
-        movieLimit={movieLimit}
-        onMovieLimitChange={handleMovieLimitChange}
+        formState={formState}
+        onFormStateChange={handleFormStateChange}
         isPending={isPending}
-        searchQuery={searchQuery}
-        onSearchQueryChange={handleSearchChange}
-        showDevtools={showDevtools}
-        onShowDevtoolsChange={handleShowDevtoolsChange}
       />
       {/* Results */}
       <div className="w-full max-w-6xl">
@@ -140,7 +101,7 @@ function MovieCardTanStack({
   const { mutate: updateRating, isPending } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
       api.updateMovieRating(movieId, rating),
-    onSuccess: ({id}) => {
+    onSuccess: ({ id }) => {
       void queryClient.invalidateQueries({ queryKey: ["movies"] });
       void queryClient.invalidateQueries({
         queryKey: ["movie", id],

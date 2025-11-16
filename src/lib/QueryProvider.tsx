@@ -4,15 +4,11 @@ import {
   useState,
   use,
   useTransition,
-  useDeferredValue,
   useEffect,
-  useRef,
 } from "react";
-import { noop } from "./utils";
 import { QueryClient, type QueryClientOptions } from "./QueryClient";
 import type { RetryConfig } from "./Retrier";
 import { useEvent } from "../useEvent";
-import { AnyKey, Query } from "./Query";
 
 /**
  * Context value for the query provider
@@ -20,12 +16,6 @@ import { AnyKey, Query } from "./Query";
 export interface QueryContextValue {
   queryClient: QueryClient;
   isQueryClientPending: boolean;
-  subscribe: <Key extends AnyKey, TData = unknown>(
-    query: Query<Key, TData>
-  ) => () => void;
-  unsubscribe: <Key extends AnyKey, TData = unknown>(
-    query: Query<Key, TData>
-  ) => void;
 }
 
 /**
@@ -36,8 +26,6 @@ const defaultQueryClient = new QueryClient();
 export const QueryContext = createContext<QueryContextValue>({
   queryClient: defaultQueryClient,
   isQueryClientPending: false,
-  subscribe: () => noop,
-  unsubscribe: noop,
 });
 
 /**
@@ -45,6 +33,7 @@ export const QueryContext = createContext<QueryContextValue>({
  */
 export interface QueryProviderProps extends PropsWithChildren {
   queryCacheOptions?: QueryClientOptions;
+  queryClient?: QueryClient;
 }
 
 /**
@@ -66,61 +55,30 @@ export interface QueryProviderProps extends PropsWithChildren {
  */
 export function QueryProvider({
   children,
+  queryClient: initialQueryClient,
   queryCacheOptions = {},
 }: QueryProviderProps) {
   const [isPending, startTransition] = useTransition();
-  const subscriptions = useRef<Map<string, () => void>>(new Map());
   const [queryClient, setQueryClient] = useState(() => {
-    return new QueryClient({
-      ...queryCacheOptions,
-      onChange: (newInstance) => {
-        startTransition(() => {
-          setQueryClient(newInstance);
-        });
-      },
-    });
+    const onChange = (newInstance: QueryClient) => {
+      startTransition(() => {
+        setQueryClient(newInstance);
+      });
+    };
+
+    if (initialQueryClient !== undefined) {
+      initialQueryClient.setOptions({ onChange });
+      return initialQueryClient;
+    }
+
+    return new QueryClient({ ...queryCacheOptions, onChange });
   });
-
-  const subscribe = useEvent(
-    <Key extends AnyKey, TData = unknown>(query: Query<Key, TData>) => {
-      if (typeof query.serializedKey !== "string") {
-        throw new Error("Query key mismatch");
-      }
-      const maybeSubscription = subscriptions.current.get(query.serializedKey);
-      if (maybeSubscription !== undefined) {
-        return maybeSubscription;
-      }
-
-      const queryUnsubscribe = query.subscribe(noop);
-      const unsubscribe = () => {
-        queryUnsubscribe();
-        subscriptions.current.delete(query.serializedKey);
-      };
-      subscriptions.current.set(query.serializedKey, unsubscribe);
-
-      return unsubscribe;
-    }
-  );
-
-  const unsubscribe = useEvent(
-    <Key extends AnyKey, TData = unknown>(query: Query<Key, TData>) => {
-      const maybeUnsubscribe = subscriptions.current.get(query.serializedKey);
-
-      if (maybeUnsubscribe === undefined) {
-        return;
-      }
-
-      maybeUnsubscribe();
-    }
-  );
 
   return (
     <QueryContext
       value={{
         queryClient,
         isQueryClientPending: isPending,
-        subscribe,
-        unsubscribe,
       }}
     >
       {children}
@@ -196,11 +154,11 @@ export function useQuery<
 >(
   options: UseQueryOptions<Key, PromiseValue>
 ): {
-  promise: Promise<PromiseValue> | null;
+  promise: Promise<PromiseValue>;
   isPending: boolean;
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
-  const { queryClient, isQueryClientPending, subscribe } = useQueryContext();
+  const { queryClient, isQueryClientPending } = useQueryContext();
   const queryFnStable = useEvent(queryFn);
 
   // Add or get query from cache (staleness check happens inside addQuery)
@@ -211,19 +169,15 @@ export function useQuery<
     staleTime,
     retry,
     retryDelay,
+    prefetch: true,
   });
 
   // Subscribe to query changes
-  const unsubscribeQuery = subscribe(query);
-  useEffect(() => unsubscribeQuery, [unsubscribeQuery]);
+  useEffect(() => {
+    return query.subscribe(() => {});
+  }, [query]);
 
-  const deferredPromise = useDeferredValue(query.promise);
-  const isPending = deferredPromise !== query.promise;
-
-  return {
-    promise: deferredPromise,
-    isPending: isQueryClientPending || isPending,
-  };
+  return { promise: query.promise, isPending: isQueryClientPending };
 }
 
 /**

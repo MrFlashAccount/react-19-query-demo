@@ -97,6 +97,16 @@ export class QueryClient {
     this.onChange = options.onChange ?? noop;
   }
 
+  setOptions(options: QueryClientOptions): void {
+    if (options.cache !== undefined) {
+      this._cache = options.cache;
+    }
+
+    if (options.onChange !== undefined) {
+      this.onChange = options.onChange;
+    }
+  }
+
   /**
    * Create a new QueryClient instance with the same cache and state.
    * Used internally when cache mutations occur.
@@ -132,9 +142,11 @@ export class QueryClient {
    * @returns The cached promise entry
    */
   addQuery<const Key extends Array<unknown>, PromiseValue extends unknown>(
-    options: QueryOptions<Key, PromiseValue>
+    options: QueryOptions<Key, PromiseValue> & {
+      prefetch?: boolean;
+    }
   ): Query<Key, PromiseValue> {
-    const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
+    const { key, queryFn, gcTime, staleTime, retry, retryDelay, prefetch } = options;
 
     const keySerialized = Query.getSerializedKey(key);
     const existingQuery = this._cache.get(keySerialized) as
@@ -146,14 +158,7 @@ export class QueryClient {
     }
 
     const entry = new Query<Key, PromiseValue>(
-      {
-        key,
-        queryFn,
-        gcTime,
-        staleTime,
-        retry,
-        retryDelay,
-      },
+      { key, queryFn, gcTime, staleTime, retry, retryDelay },
       {},
       {
         onGarbageCollect: () => this.handleQueryGarbageCollect(keySerialized),
@@ -164,6 +169,10 @@ export class QueryClient {
     );
 
     this._cache.set(keySerialized, entry as unknown as Query<AnyKey, unknown>);
+
+    if (prefetch) {
+      void entry.enshureData();
+    }
 
     return entry;
   }

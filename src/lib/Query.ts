@@ -278,15 +278,17 @@ export class Query<Key extends AnyKey, TData = unknown> {
   }
 
   async enshureData(): Promise<TData> {
+    console.log("enshureData", this.state);
     if (this.state.data != null) {
       if (this.isStale()) {
+        console.log("isStale", this.state);
         return this.fetch();
       }
 
       return this.state.data;
     }
 
-    if (this.state.status === "pending") {
+    if (this.state.fetchStatus === "fetching") {
       return await this.currentPromise;
     }
 

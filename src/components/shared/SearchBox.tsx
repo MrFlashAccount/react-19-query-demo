@@ -1,28 +1,32 @@
+import { useTransition } from "react";
 import { Settings } from "./Settings";
 
 export interface SearchBoxProps {
-  searchQuery: string;
-  onSearchQueryChange: (query: string) => void;
-  gcTimeout: number;
-  onGcTimeoutChange: (timeout: number) => void;
-  movieLimit: number;
-  onMovieLimitChange: (limit: number) => void;
-  isPending: boolean;
-  showDevtools: boolean;
-  onShowDevtoolsChange: (show: boolean) => void;
+  formState: FormData;
+  onFormStateChange: (formData: FormData) => void;
 }
 
-export function SearchBox({
-  gcTimeout,
-  onGcTimeoutChange,
-  movieLimit,
-  onMovieLimitChange,
-  searchQuery,
-  onSearchQueryChange,
-  isPending,
-  showDevtools,
-  onShowDevtoolsChange,
-}: SearchBoxProps) {
+export function SearchBox({ formState, onFormStateChange }: SearchBoxProps) {
+  const [isPending, startTransition] = useTransition();
+  const searchQuery = String(formState.get("searchQuery") ?? "");
+  const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
+
+  const setFormState = (newFormData: FormData) => {
+    startTransition(() => {
+      const clonedFormData = new FormData();
+
+      formState.forEach((value, key) => {
+        clonedFormData.set(key, value);
+      });
+
+      newFormData.forEach((value, key) => {
+        clonedFormData.set(key, value);
+      });
+
+      onFormStateChange(clonedFormData);
+    });
+  };
+
   const gcTimeoutReadable = () => {
     if (gcTimeout === Infinity) return "forever";
     if (gcTimeout === 0) return "0 seconds";
@@ -32,15 +36,14 @@ export function SearchBox({
 
   return (
     <div className="w-full max-w-6xl mb-6 md:mb-8">
-      <div className="relative max-w-3xl mx-auto flex items-center gap-3">
-        <Settings
-          gcTimeout={gcTimeout}
-          showDevtools={showDevtools}
-          onShowDevtoolsChange={onShowDevtoolsChange}
-          onGcTimeoutChange={onGcTimeoutChange}
-          movieLimit={movieLimit}
-          onMovieLimitChange={onMovieLimitChange}
-        />
+      <form
+        onChange={(e) => {
+          setFormState(new FormData(e.currentTarget));
+        }}
+        className="relative max-w-3xl mx-auto flex items-center gap-3"
+      >
+        <Settings formState={formState} onFormStateChange={setFormState} />
+
         <div className="relative flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 md:pl-5 flex items-center pointer-events-none">
             <svg
@@ -57,12 +60,11 @@ export function SearchBox({
               />
             </svg>
           </div>
+
           <input
             type="text"
             defaultValue={searchQuery}
-            onChange={(e) => {
-              onSearchQueryChange(e.target.value);
-            }}
+            name="searchQuery"
             placeholder="Search by title, director, genre, or tags..."
             className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-base md:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
           />
@@ -75,7 +77,8 @@ export function SearchBox({
             <div className="animate-spin h-4 w-4 md:h-5 md:w-5 border-2 border-gray-300 border-t-black rounded-full" />
           </div>
         </div>
-      </div>
+      </form>
+
       <div className="mt-2 text-center text-xs text-gray-400">
         Cached for {gcTimeoutReadable()} after last view
       </div>

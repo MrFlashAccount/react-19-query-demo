@@ -1,5 +1,5 @@
-import { use } from "react";
-import { QueryCache, QueryProvider, useMutation, useQuery } from "../../lib";
+import { Suspense, use } from "react";
+import { QueryClient, QueryProvider, useMutation, useQuery } from "../../lib";
 import { MovieList } from "../shared/MovieList";
 import { SearchBox } from "../shared/SearchBox";
 import { MovieCard } from "../shared/MovieCard";
@@ -7,33 +7,24 @@ import type { Movie } from "../../types/movie";
 import type { Api } from "../../types/api";
 import type { TabProps } from "../shared/types";
 
-const queryCache = new QueryCache();
+const queryClient = new QueryClient();
 
 export default function CustomLibraryTab({
-  gcTimeout,
-  onGcTimeoutChange,
-  movieLimit,
-  onMovieLimitChange,
+  formState,
+  onFormStateChange,
   api,
-  searchQuery,
-  onSearchQueryChange,
-  showDevtools,
-  onShowDevtoolsChange,
+  devtools,
 }: TabProps) {
   return (
-    <QueryProvider queryCache={queryCache}>
-      <CustomLibraryTabContent
-        devtools={null}
-        gcTimeout={gcTimeout}
-        onGcTimeoutChange={onGcTimeoutChange}
-        movieLimit={movieLimit}
-        onMovieLimitChange={onMovieLimitChange}
-        api={api}
-        searchQuery={searchQuery}
-        onSearchQueryChange={onSearchQueryChange}
-        showDevtools={showDevtools}
-        onShowDevtoolsChange={onShowDevtoolsChange}
-      />
+    <QueryProvider queryClient={queryClient}>
+      <Suspense fallback={<div>Loading...</div>}>
+        <CustomLibraryTabContent
+          formState={formState}
+          onFormStateChange={onFormStateChange}
+          api={api}
+          devtools={devtools}
+        />
+      </Suspense>
     </QueryProvider>
   );
 }
@@ -42,40 +33,30 @@ export default function CustomLibraryTab({
  * Custom library tab component - demonstrates the custom query library implementation
  */
 function CustomLibraryTabContent({
-  gcTimeout,
-  onGcTimeoutChange,
-  movieLimit,
-  onMovieLimitChange,
+  formState,
+  onFormStateChange,
   api,
-  searchQuery,
-  onSearchQueryChange,
-  showDevtools,
-  onShowDevtoolsChange,
 }: TabProps) {
+  const searchQuery = String(formState.get("searchQuery") ?? "");
+  const movieLimit = Number(formState.get("movieLimit") ?? 0);
+  const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
+
   const { promise, isPending } = useQuery({
     key: ["movies", searchQuery, movieLimit],
     queryFn: ([, query]) => api.searchMovies(query, movieLimit),
     gcTime: gcTimeout,
   });
 
-  const movies = use(promise!);
+  const movies = use(promise);
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
-      {/* Search Box */}
       <SearchBox
-        gcTimeout={gcTimeout}
-        onGcTimeoutChange={onGcTimeoutChange}
-        movieLimit={movieLimit}
-        onMovieLimitChange={onMovieLimitChange}
-        onSearchQueryChange={onSearchQueryChange}
-        searchQuery={searchQuery}
+        formState={formState}
+        onFormStateChange={onFormStateChange}
         isPending={isPending}
-        showDevtools={showDevtools}
-        onShowDevtoolsChange={onShowDevtoolsChange}
       />
 
-      {/* Results */}
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
@@ -102,7 +83,7 @@ function MovieCardCustom({ movie, api }: { movie: Movie; api: Api }) {
 
   useQuery({
     key: ["movie", movieId],
-    queryFn: () => api.getMovieById(movieId),
+    queryFn: ([, movieId]) => api.getMovieById(movieId),
     gcTime: 60_000,
   });
 

@@ -7,17 +7,13 @@ export function TabSelector({
   activeTab,
   onTabChange,
 }: {
-  activeTab: "custom" | "tanstack" | "local-tanstack" | "unset";
-  onTabChange: (
-    tab: "custom" | "tanstack" | "local-tanstack" | "unset"
-  ) => void;
+  activeTab: "custom" | "tanstack" | "unset";
+  onTabChange: (tab: "custom" | "tanstack" | "unset") => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const tabChangeRef = useRef<"custom" | "tanstack" | "local-tanstack" | null>(
-    null
-  );
+  const tabChangeRef = useRef<"custom" | "tanstack" | null>(null);
 
-  const handleTabChange = (tab: "custom" | "tanstack" | "local-tanstack") => {
+  const handleTabChange = (tab: "custom" | "tanstack") => {
     tabChangeRef.current = tab;
 
     onTabChange("unset");
@@ -34,9 +30,9 @@ export function TabSelector({
       <div className="inline-flex rounded-xl border-2 border-gray-200 p-1 bg-gray-50">
         <button
           disabled={activeTab === "unset"}
-          onClick={() => handleTabChange("local-tanstack")}
-          className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-            activeTab === "local-tanstack"
+          onClick={() => handleTabChange("custom")}
+          className={`px-6 py-2 rounded-2xl [corner-shape:squircle] text-sm font-medium transition-all duration-200 ${
+            activeTab === "custom"
               ? "bg-black text-white shadow-md"
               : "text-gray-600 hover:text-black"
           } ${isPending && "opacity-50 pointer-events-none"}`}
@@ -47,7 +43,7 @@ export function TabSelector({
         <button
           disabled={activeTab === "unset"}
           onClick={() => handleTabChange("tanstack")}
-          className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+          className={`px-6 py-2 rounded-2xl [corner-shape:squircle] text-sm font-medium transition-all duration-200 ${
             activeTab === "tanstack"
               ? "bg-black text-white shadow-md"
               : "text-gray-600 hover:text-black"
