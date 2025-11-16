@@ -44,7 +44,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-[0.5px] border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
+        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-2 border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
         aria-label="Settings"
       >
         <svg
@@ -69,7 +69,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl [corner-shape:squircle] shadow-xl border-[0.5px] border-gray-200 p-4 w-[400px] z-50">
+        <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl [corner-shape:squircle] shadow-xl border-2 border-gray-200 p-4 w-[400px] z-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Settings</h3>
             <button
@@ -118,7 +118,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                   min={MIN_LIMIT}
                   max={MAX_LIMIT}
                   defaultValue={movieLimit}
-                  className="w-20 px-2 py-1 text-sm border-[0.5px] border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
+                  className="w-20 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
                 />
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -161,7 +161,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                     max={Infinity}
                     defaultValue={gcTimeout}
                     name="gcTimeout"
-                    className="w-full mt-2 px-2 py-1 text-sm border-[0.5px] border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
+                    className="w-full mt-2 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
                   />
                 </label>
 

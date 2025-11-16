@@ -106,12 +106,6 @@ function MovieCardTanStack({
   });
 
   useQuery({
-    queryKey: ["movie", movieId],
-    queryFn: () => api.getMovieById(movieId),
-    gcTime: gcTimeout,
-  });
-
-  useQuery({
     queryKey: ["movies", searchQuery, movieLimit],
     queryFn: () => api.searchMovies(searchQuery, movieLimit),
     gcTime: gcTimeout,

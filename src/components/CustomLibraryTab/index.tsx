@@ -94,12 +94,6 @@ function MovieCardCustom({
   });
 
   useQuery({
-    key: ["movie", movieId],
-    queryFn: ([, movieId]) => api.getMovieById(movieId),
-    gcTime: gcTimeout,
-  });
-
-  useQuery({
     key: ["movies", searchQuery, movieLimit],
     queryFn: ([, query]) => api.searchMovies(query, movieLimit),
     gcTime: gcTimeout,
