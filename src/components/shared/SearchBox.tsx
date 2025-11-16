@@ -67,7 +67,7 @@ export function SearchBox({ formState, onFormStateChange }: SearchBoxProps) {
             defaultValue={searchQuery}
             name="searchQuery"
             placeholder="Search by title, director, genre, or tags..."
-            className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-base md:text-base border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
+            className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-base md:text-base border border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
           />
 
           <div
