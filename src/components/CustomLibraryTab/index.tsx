@@ -41,7 +41,7 @@ function CustomLibraryTabContent({
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
 
-  const { promise, isPending } = useQuery({
+  const { promise } = useQuery({
     key: ["movies", searchQuery, movieLimit],
     queryFn: ([, query]) => api.searchMovies(query, movieLimit),
     gcTime: gcTimeout,
@@ -51,11 +51,7 @@ function CustomLibraryTabContent({
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
-      <SearchBox
-        formState={formState}
-        onFormStateChange={onFormStateChange}
-        isPending={isPending}
-      />
+      <SearchBox formState={formState} onFormStateChange={onFormStateChange} />
 
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>

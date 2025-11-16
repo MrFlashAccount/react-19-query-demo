@@ -1,4 +1,3 @@
-import { useTransition } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -41,7 +40,6 @@ function TanStackQueryTabContent({
   onFormStateChange,
   api,
 }: TabProps) {
-  const [isPending, startTransition] = useTransition();
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
@@ -52,19 +50,9 @@ function TanStackQueryTabContent({
     gcTime: gcTimeout,
   });
 
-  const handleFormStateChange = (formData: FormData) => {
-    startTransition(() => {
-      onFormStateChange(formData);
-    });
-  };
-
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
-      <SearchBox
-        formState={formState}
-        onFormStateChange={handleFormStateChange}
-        isPending={isPending}
-      />
+      <SearchBox formState={formState} onFormStateChange={onFormStateChange} />
       {/* Results */}
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
@@ -101,11 +89,9 @@ function MovieCardTanStack({
   const { mutate: updateRating, isPending } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
       api.updateMovieRating(movieId, rating),
-    onSuccess: ({ id }) => {
-      void queryClient.invalidateQueries({ queryKey: ["movies"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["movie", id],
-      });
+    onSuccess: async ({ id }) => {
+      await queryClient.invalidateQueries({ queryKey: ["movies"] });
+      await queryClient.invalidateQueries({ queryKey: ["movie", id] });
     },
     gcTime: gcTimeout,
   });
