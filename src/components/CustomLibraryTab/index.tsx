@@ -1,8 +1,6 @@
 import { Suspense, use } from "react";
 import { QueryClient, QueryProvider, useMutation, useQuery } from "../../lib";
-import { MovieList } from "../shared/MovieList";
-import { SearchBox } from "../shared/SearchBox";
-import { MovieCard } from "../shared/MovieCard";
+import { MovieList, Loader, MovieCard, SearchBox } from "../shared";
 import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
 
@@ -16,7 +14,7 @@ export default function CustomLibraryTab({
 }: TabProps) {
   return (
     <QueryProvider queryClient={queryClient}>
-      <Suspense fallback={<div>Loading...</div>}>
+      <Suspense fallback={<Loader />}>
         <CustomLibraryTabContent
           formState={formState}
           onFormStateChange={onFormStateChange}

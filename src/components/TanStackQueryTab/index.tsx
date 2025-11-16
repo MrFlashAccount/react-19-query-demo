@@ -6,9 +6,10 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { MovieList, SearchBox, MovieCard } from "../shared";
+import { MovieList, SearchBox, MovieCard, Loader } from "../shared";
 import type { Movie, MovieApi } from "../../api/types";
 import type { TabProps } from "../shared/types";
+import { Suspense } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { gcTime: 0 } },
@@ -22,12 +23,14 @@ export default function TanStackQueryTab({
 }: TabProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <TanStackQueryTabContent
-        formState={formState}
-        onFormStateChange={onFormStateChange}
-        api={api}
-        devtools={devtools}
-      />
+      <Suspense fallback={<Loader />}>
+        <TanStackQueryTabContent
+          formState={formState}
+          onFormStateChange={onFormStateChange}
+          api={api}
+          devtools={devtools}
+        />
+      </Suspense>
     </QueryClientProvider>
   );
 }

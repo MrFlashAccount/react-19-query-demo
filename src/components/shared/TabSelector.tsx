@@ -27,7 +27,7 @@ export function TabSelector({
 
   return (
     <div className="flex justify-center mb-8">
-      <div className="inline-flex rounded-xl border-2 border-gray-200 p-1 bg-gray-50">
+      <div className="inline-flex rounded-xl border-[0.5px] border-gray-200 p-1">
         <button
           disabled={activeTab === "unset"}
           onClick={() => handleTabChange("custom")}

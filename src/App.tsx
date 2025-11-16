@@ -29,12 +29,17 @@ export default function App() {
 
   const [formState, setFormState] = useState(() => {
     const formData = new FormData();
+
     formData.set("movieLimit", "1000");
     formData.set("gcTimeout", "60000");
     formData.set("searchQuery", "");
     formData.set("showDevtools", "false");
+    formData.set("showLagRadar", "true");
+
     return formData;
   });
+
+  const showLagRadar = formState.get("showLagRadar") === "true";
 
   const updateFormState = (formData: FormData) => {
     setFormState(formData);
@@ -97,7 +102,7 @@ export default function App() {
           }
         })()}
       </div>
-      <LagRadar />
+      {showLagRadar && <LagRadar />}
       <LazyGitHubCorner />
     </Suspense>
   );

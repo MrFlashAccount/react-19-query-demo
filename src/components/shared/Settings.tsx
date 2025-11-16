@@ -14,6 +14,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
   const showDevtools = formState.get("showDevtools") === "true";
+  const showLagRadar = formState.get("showLagRadar") === "true";
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -43,7 +44,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-2 border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
+        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-[0.5px] border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
         aria-label="Settings"
       >
         <svg
@@ -68,7 +69,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl [corner-shape:squircle] shadow-xl border-2 border-gray-200 p-4 w-[400px] z-50">
+        <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl [corner-shape:squircle] shadow-xl border-[0.5px] border-gray-200 p-4 w-[400px] z-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-900">Settings</h3>
             <button
@@ -117,7 +118,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                   min={MIN_LIMIT}
                   max={MAX_LIMIT}
                   defaultValue={movieLimit}
-                  className="w-20 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
+                  className="w-20 px-2 py-1 text-sm border-[0.5px] border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
                 />
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -160,7 +161,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                     max={Infinity}
                     defaultValue={gcTimeout}
                     name="gcTimeout"
-                    className="w-full mt-2 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
+                    className="w-full mt-2 px-2 py-1 text-sm border-[0.5px] border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
                   />
                 </label>
 
@@ -186,7 +187,6 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                 </div>
               </div>
             </div>
-
             <div className="flex flex-col gap-3 pt-3 border-t border-gray-200">
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
@@ -210,6 +210,31 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                 }`}
               >
                 {showDevtools ? "Hide" : "Show"} Devtools
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 pt-3 border-t border-gray-200">
+              <div className="flex flex-col gap-3">
+                <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
+                  Lag Radar visibility
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newFormData = cloneFormData(formState);
+                  newFormData.set(
+                    "showLagRadar",
+                    !showLagRadar ? "true" : "false"
+                  );
+                  onFormStateChange(newFormData);
+                }}
+                className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors ${
+                  showLagRadar
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {showLagRadar ? "Hide" : "Show"} Lag Radar
               </button>
             </div>
           </div>
