@@ -1,19 +1,23 @@
 import { useState } from "react";
+import type { SettingsProps } from "./types";
 
-const MIN_LIMIT = 1;
+const MIN_LIMIT = 0;
 const MAX_LIMIT = 2000;
 const LIMIT_OPTIONS = [100, 250, 500, 1000, 1500, 2000];
+const GC_OPTIONS = [0, 5 * 60 * 1000, Infinity];
+const GC_OPTIONS_LABELS = ["0s", "5m", "∞"];
 
 /**
  * Settings component for configuring movie display preferences
  */
 export function Settings({
+  gcTimeout,
+  onGcTimeoutChange,
   movieLimit,
   onMovieLimitChange,
-}: {
-  movieLimit: number;
-  onMovieLimitChange: (limit: number) => void;
-}) {
+  showDevtools,
+  onShowDevtoolsChange,
+}: SettingsProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleLimitChange = (value: string) => {
@@ -21,6 +25,11 @@ export function Settings({
     if (numValue >= MIN_LIMIT && numValue <= MAX_LIMIT) {
       onMovieLimitChange(numValue);
     }
+  };
+
+  const handleGcTimeoutChange = (value: number) => {
+    if (value < 0) return;
+    onGcTimeoutChange(isNaN(value) ? 0 : value);
   };
 
   return (
@@ -120,7 +129,7 @@ export function Settings({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-gray-200">
+            <div className="pt-3">
               <div className="flex gap-2">
                 {LIMIT_OPTIONS.map((limit) => (
                   <button
@@ -136,6 +145,59 @@ export function Settings({
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="pt-3 border-t border-gray-200">
+              <div className="flex flex-col gap-3">
+                <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
+                  GC Timeout
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={Infinity}
+                    value={gcTimeout}
+                    onChange={(e) =>
+                      handleGcTimeoutChange(e.target.valueAsNumber)
+                    }
+                    className="w-full mt-2 px-2 py-1 text-sm border-2 border-gray-200 rounded-lg focus:outline-none focus:border-black"
+                  />
+                </label>
+
+                <div className="flex justify-between text-xs gap-2 text-gray-500 self-start">
+                  {GC_OPTIONS.map((option, index) => (
+                    <button
+                      key={option}
+                      onClick={() => onGcTimeoutChange(option)}
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors min-w-18 ${
+                        gcTimeout === option
+                          ? "bg-black text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {GC_OPTIONS_LABELS[index]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 pt-3 border-t border-gray-200">
+              <div className="flex flex-col gap-3">
+                <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
+                  Devtools visibility
+                </label>
+              </div>
+              <button
+                onClick={() => onShowDevtoolsChange(!showDevtools)}
+                className={`flex-1 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  showDevtools
+                    ? "bg-black text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {showDevtools ? "Hide" : "Show"} Devtools
+              </button>
             </div>
           </div>
         </div>

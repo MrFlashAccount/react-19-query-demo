@@ -1,31 +1,61 @@
-import { use, useState } from "react";
-import { useMutation, useQuery } from "../../lib";
-import {
-  getMovieById,
-  searchMovies,
-  updateMovieRating,
-} from "../../api/movieApi";
+import { use } from "react";
+import { QueryCache, QueryProvider, useMutation, useQuery } from "../../lib";
 import { MovieList } from "../shared/MovieList";
 import { SearchBox } from "../shared/SearchBox";
 import { MovieCard } from "../shared/MovieCard";
 import type { Movie } from "../../types/movie";
+import type { Api } from "../../types/api";
+import type { TabProps } from "../shared/types";
+
+const queryCache = new QueryCache();
+
+export default function CustomLibraryTab({
+  gcTimeout,
+  onGcTimeoutChange,
+  movieLimit,
+  onMovieLimitChange,
+  api,
+  searchQuery,
+  onSearchQueryChange,
+  showDevtools,
+  onShowDevtoolsChange,
+}: TabProps) {
+  return (
+    <QueryProvider queryCache={queryCache}>
+      <CustomLibraryTabContent
+        devtools={null}
+        gcTimeout={gcTimeout}
+        onGcTimeoutChange={onGcTimeoutChange}
+        movieLimit={movieLimit}
+        onMovieLimitChange={onMovieLimitChange}
+        api={api}
+        searchQuery={searchQuery}
+        onSearchQueryChange={onSearchQueryChange}
+        showDevtools={showDevtools}
+        onShowDevtoolsChange={onShowDevtoolsChange}
+      />
+    </QueryProvider>
+  );
+}
 
 /**
  * Custom library tab component - demonstrates the custom query library implementation
  */
-export function CustomLibraryTab({
+function CustomLibraryTabContent({
+  gcTimeout,
+  onGcTimeoutChange,
   movieLimit,
   onMovieLimitChange,
-}: {
-  movieLimit: number;
-  onMovieLimitChange: (limit: number) => void;
-}) {
-  const [searchQuery, setSearchQuery] = useState("");
-
+  api,
+  searchQuery,
+  onSearchQueryChange,
+  showDevtools,
+  onShowDevtoolsChange,
+}: TabProps) {
   const { promise, isPending } = useQuery({
     key: ["movies", searchQuery, movieLimit],
-    queryFn: ([, query]) => searchMovies(query, movieLimit),
-    gcTime: 60_000,
+    queryFn: ([, query]) => api.searchMovies(query, movieLimit),
+    gcTime: gcTimeout,
   });
 
   const movies = use(promise!);
@@ -34,22 +64,22 @@ export function CustomLibraryTab({
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
       {/* Search Box */}
       <SearchBox
+        gcTimeout={gcTimeout}
+        onGcTimeoutChange={onGcTimeoutChange}
         movieLimit={movieLimit}
         onMovieLimitChange={onMovieLimitChange}
-        handleSearchChange={setSearchQuery}
+        onSearchQueryChange={onSearchQueryChange}
+        searchQuery={searchQuery}
         isPending={isPending}
+        showDevtools={showDevtools}
+        onShowDevtoolsChange={onShowDevtoolsChange}
       />
 
       {/* Results */}
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardCustom
-              key={movie.id}
-              movie={movie}
-              searchQuery={searchQuery}
-              movieLimit={movieLimit}
-            />
+            <MovieCardCustom key={movie.id} movie={movie} api={api} />
           ))}
         </MovieList>
       </div>
@@ -60,26 +90,19 @@ export function CustomLibraryTab({
 /**
  * Movie card component using custom query library
  */
-export function MovieCardCustom({
-  movie,
-  searchQuery,
-  movieLimit,
-}: {
-  movie: Movie;
-  searchQuery: string;
-  movieLimit: number;
-}) {
+function MovieCardCustom({ movie, api }: { movie: Movie; api: Api }) {
   const movieId = movie.id;
 
   const { mutate: updateRating, isPending } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
-      updateMovieRating(movieId, rating),
+      api.updateMovieRating(movieId, rating),
+    // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
     invalidateQueries: [["movies"], ["movie", movieId]],
   });
 
   useQuery({
-    key: ["movies", searchQuery, movieLimit],
-    queryFn: ([, query]) => searchMovies(query, movieLimit),
+    key: ["movie", movieId],
+    queryFn: () => api.getMovieById(movieId),
     gcTime: 60_000,
   });
 

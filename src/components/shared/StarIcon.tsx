@@ -11,6 +11,7 @@ export function StarIcon({
   if (filled) {
     return (
       <svg
+        key="star"
         className={className}
         fill="currentColor"
         viewBox="0 0 20 20"
@@ -22,6 +23,7 @@ export function StarIcon({
   } else {
     return (
       <svg
+        key="star"
         className={className}
         fill="none"
         stroke="currentColor"

@@ -6,64 +6,67 @@ import {
   useQuery,
   useQueryClient,
   useSuspenseQuery,
-} from "@tanstack/react-query";
-import { MovieList, SearchBox, MovieCard } from "../shared";
+} from "@tanstack/react-query-local";
+import { MovieCard, MovieList, SearchBox } from "../shared";
 import type { Movie } from "../../types/movie";
 import type { Api } from "../../types/api";
 import type { TabProps } from "../shared/types";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { gcTime: 0 } },
+  defaultOptions: { queries: { gcTime: 0, structuralSharing: false } },
 });
 
-export default function TanStackQueryTab({
+export default function LocalTanStackQueryTab({
   gcTimeout,
   onGcTimeoutChange,
   movieLimit,
   onMovieLimitChange,
+  devtools: Devtools,
+  api,
   searchQuery,
   onSearchQueryChange,
   showDevtools,
   onShowDevtoolsChange,
-  devtools: Devtools,
-  api,
 }: TabProps) {
   return (
     <QueryClientProvider client={queryClient}>
-      <TanStackQueryTabContent
+      <LocalTanStackQueryTabContent
+        api={api}
         gcTimeout={gcTimeout}
         onGcTimeoutChange={onGcTimeoutChange}
         movieLimit={movieLimit}
         onMovieLimitChange={onMovieLimitChange}
-        api={api}
         searchQuery={searchQuery}
         onSearchQueryChange={onSearchQueryChange}
         showDevtools={showDevtools}
         onShowDevtoolsChange={onShowDevtoolsChange}
         devtools={Devtools}
       />
-
       {Devtools && <Devtools client={queryClient} />}
     </QueryClientProvider>
   );
 }
 
-function TanStackQueryTabContent({
-  movieLimit,
-  onMovieLimitChange,
-  api,
+/**
+ * Local TanStack Query tab component - demonstrates the local TanStack Query implementation
+ */
+function LocalTanStackQueryTabContent({
   gcTimeout,
   onGcTimeoutChange,
-  searchQuery,
-  onSearchQueryChange,
+  movieLimit,
+  onMovieLimitChange,
   showDevtools,
   onShowDevtoolsChange,
+  searchQuery,
+  onSearchQueryChange,
+  api,
 }: TabProps) {
   const [isPending, startTransition] = useTransition();
 
   const { data: movies } = useSuspenseQuery({
     queryKey: ["movies", searchQuery, movieLimit],
     queryFn: () => api.searchMovies(searchQuery, movieLimit),
+    structuralSharing: false,
     gcTime: gcTimeout,
   });
 
@@ -84,7 +87,6 @@ function TanStackQueryTabContent({
       onGcTimeoutChange(value);
     });
   };
-
   const handleShowDevtoolsChange = (value: boolean) => {
     startTransition(() => {
       onShowDevtoolsChange(value);
@@ -98,9 +100,9 @@ function TanStackQueryTabContent({
         onGcTimeoutChange={handleGcTimeoutChange}
         movieLimit={movieLimit}
         onMovieLimitChange={handleMovieLimitChange}
-        isPending={isPending}
-        searchQuery={searchQuery}
         onSearchQueryChange={handleSearchChange}
+        searchQuery={searchQuery}
+        isPending={isPending}
         showDevtools={showDevtools}
         onShowDevtoolsChange={handleShowDevtoolsChange}
       />
@@ -108,7 +110,7 @@ function TanStackQueryTabContent({
       <div className="w-full max-w-6xl">
         <MovieList moviesAmount={movies.length}>
           {movies.map((movie) => (
-            <MovieCardTanStack
+            <MovieCardLocalTanStack
               key={movie.id}
               movie={movie}
               api={api}
@@ -122,9 +124,9 @@ function TanStackQueryTabContent({
 }
 
 /**
- * Movie card component using TanStack Query
+ * Movie card component using local TanStack Query
  */
-function MovieCardTanStack({
+function MovieCardLocalTanStack({
   movie,
   api,
   gcTimeout,
@@ -133,17 +135,19 @@ function MovieCardTanStack({
   api: Api;
   gcTimeout: number;
 }) {
+  const [isPending, startTransition] = useTransition();
+
   const movieId = movie.id;
 
   const queryClient = useQueryClient();
 
-  const { mutate: updateRating, isPending } = useMutation({
+  const { mutateAsync: updateRating } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
       api.updateMovieRating(movieId, rating),
-    onSuccess: ({id}) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["movies"] });
       void queryClient.invalidateQueries({
-        queryKey: ["movie", id],
+        queryKey: ["movie", movieId],
       });
     },
     gcTime: gcTimeout,
@@ -156,7 +160,9 @@ function MovieCardTanStack({
   });
 
   const handleStarClick = (starIndex: number) => {
-    updateRating({ rating: starIndex * 2 });
+    startTransition(async () => {
+      await updateRating({ rating: starIndex * 2 });
+    });
   };
 
   return (
