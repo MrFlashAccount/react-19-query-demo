@@ -3,7 +3,7 @@
 // TypeScript declarations for Service Worker context
 declare const self: ServiceWorkerGlobalScope;
 
-import type { Movie } from "../types/movie";
+import type { Movie } from "./types";
 
 // Movie database cache
 let movieDatabaseCache: Movie[] | null = null;

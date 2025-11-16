@@ -3,8 +3,7 @@ import { QueryClient, QueryProvider, useMutation, useQuery } from "../../lib";
 import { MovieList } from "../shared/MovieList";
 import { SearchBox } from "../shared/SearchBox";
 import { MovieCard } from "../shared/MovieCard";
-import type { Movie } from "../../types/movie";
-import type { Api } from "../../types/api";
+import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
 
 const queryClient = new QueryClient();
@@ -67,7 +66,13 @@ function CustomLibraryTabContent({
 /**
  * Movie card component using custom query library
  */
-function MovieCardCustom({ movie, api }: { movie: Movie; api: Api }) {
+function MovieCardCustom({
+  movie,
+  api,
+}: {
+  movie: Movie;
+  api: TabProps["api"];
+}) {
   const movieId = movie.id;
 
   const { mutate: updateRating, isPending } = useMutation({

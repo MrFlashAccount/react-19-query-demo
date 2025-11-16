@@ -4,3 +4,5 @@ export * from "./MovieList";
 export * from "./MovieCard";
 export * from "./SearchBox";
 export * from "./StarIcon";
+export * from "./Loader";
+export * from "./LagRadar";

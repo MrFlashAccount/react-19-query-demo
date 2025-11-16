@@ -7,8 +7,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { MovieList, SearchBox, MovieCard } from "../shared";
-import type { Movie } from "../../types/movie";
-import type { Api } from "../../types/api";
+import type { Movie, MovieApi } from "../../api/types";
 import type { TabProps } from "../shared/types";
 
 const queryClient = new QueryClient({
@@ -18,7 +17,7 @@ const queryClient = new QueryClient({
 export default function TanStackQueryTab({
   formState,
   onFormStateChange,
-  devtools: Devtools,
+  devtools,
   api,
 }: TabProps) {
   return (
@@ -27,10 +26,8 @@ export default function TanStackQueryTab({
         formState={formState}
         onFormStateChange={onFormStateChange}
         api={api}
-        devtools={Devtools}
+        devtools={devtools}
       />
-
-      {Devtools && <Devtools client={queryClient} />}
     </QueryClientProvider>
   );
 }
@@ -39,6 +36,7 @@ function TanStackQueryTabContent({
   formState,
   onFormStateChange,
   api,
+  devtools: Devtools,
 }: TabProps) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
@@ -66,6 +64,8 @@ function TanStackQueryTabContent({
           ))}
         </MovieList>
       </div>
+
+      {Devtools && <Devtools client={queryClient} />}
     </div>
   );
 }
@@ -79,7 +79,7 @@ function MovieCardTanStack({
   gcTimeout,
 }: {
   movie: Movie;
-  api: Api;
+  api: MovieApi;
   gcTimeout: number;
 }) {
   const movieId = movie.id;

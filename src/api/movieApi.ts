@@ -1,4 +1,4 @@
-import type { Movie } from "../types/movie";
+import type { Movie } from "./types";
 
 const DEFAULT_LIMIT = 500;
 const decoder = new TextDecoder();

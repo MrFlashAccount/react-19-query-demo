@@ -77,3 +77,9 @@ export interface Movie {
   directors: string[];
   image: string;
 }
+
+export interface MovieApi {
+  searchMovies: (query: string, limit: number) => Promise<Movie[]>;
+  getMovieById: (movieId: string) => Promise<Movie>;
+  updateMovieRating: (movieId: string, newRating: number) => Promise<Movie>;
+}
