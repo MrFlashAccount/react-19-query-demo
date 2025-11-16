@@ -26,7 +26,7 @@ export function MovieCard({
   const genres = movie.genres.join(", ") || "Unknown";
 
   return (
-    <div className="[content-visibility:auto] [contain-intrinsic-size:160px] group bg-white border-2 border-gray-100 rounded-2xl [corner-shape:squircle] overflow-hidden hover:border-black hover:shadow-lg flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
+    <div className="[content-visibility:auto] [contain-intrinsic-size:160px] group bg-white border border-gray-100 rounded-2xl [corner-shape:squircle] overflow-hidden hover:border-black hover:shadow-lg flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
       {/* Movie Info */}
       <div className="p-3 sm:p-4 flex-1 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
