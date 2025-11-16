@@ -44,7 +44,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-xl border-2 border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
+        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-2xl [corner-shape:squircle] border border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
         aria-label="Settings"
       >
         <svg
