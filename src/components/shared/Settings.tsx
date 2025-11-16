@@ -31,13 +31,13 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
   return (
     <div className="flex flex-none relative">
       {/* Tooltip */}
-      <div className="absolute -top-10 left-[10%] z-50 pointer-events-none">
+      <div className="absolute -top-10 left-[20%] z-50 pointer-events-none">
         <div className="relative">
           <div className="bg-black text-white text-xs px-3 py-2 rounded-2xl [corner-shape:squircle] whitespace-nowrap shadow-lg">
             Try playing with settings!
           </div>
           {/* Arrow pointing down to the button */}
-          <div className="absolute left-2 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-black"></div>
+          <div className="absolute left-4 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-black"></div>
         </div>
       </div>
 
