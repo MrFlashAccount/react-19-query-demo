@@ -146,7 +146,8 @@ export class QueryClient {
       prefetch?: boolean;
     }
   ): Query<Key, PromiseValue> {
-    const { key, queryFn, gcTime, staleTime, retry, retryDelay, prefetch } = options;
+    const { key, queryFn, gcTime, staleTime, retry, retryDelay, prefetch } =
+      options;
 
     const keySerialized = Query.getSerializedKey(key);
     const existingQuery = this._cache.get(keySerialized) as
@@ -171,7 +172,7 @@ export class QueryClient {
     this._cache.set(keySerialized, entry as unknown as Query<AnyKey, unknown>);
 
     if (prefetch) {
-      void entry.enshureData();
+      entry.prefetch();
     }
 
     return entry;

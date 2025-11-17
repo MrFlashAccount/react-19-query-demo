@@ -173,9 +173,7 @@ export function useQuery<
   });
 
   // Subscribe to query changes
-  useEffect(() => {
-    return query.subscribe(() => {});
-  }, [query]);
+  useEffect(() => query.subscribe(() => {}), [query]);
 
   return { promise: query.promise, isPending: isQueryClientPending };
 }

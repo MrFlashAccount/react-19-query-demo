@@ -1,6 +1,6 @@
 import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
-import { createBatcher, noop, type Batch } from "./utils";
+import { createBatcher, exponentialBackoff, noop, type Batch } from "./utils";
 
 /**
  * Query state tracking
@@ -18,6 +18,8 @@ export interface QueryState<TData> {
   errorUpdatedAt: number | undefined;
   /** Current fetch status */
   fetchStatus: "idle" | "fetching";
+  /** Whether the query is prefetched */
+  prefetchedAt: number | undefined;
 }
 
 export type Key<T extends unknown> = Array<T>;
@@ -75,10 +77,13 @@ interface QueryEnvironment {
   onRemove?: () => void;
 }
 
+const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
+const DEFAULT_GC_TIME = 1000 * 60 * 60; // 60 minutes
+
 export class Query<Key extends AnyKey, TData = unknown> {
   private queryKey: Key;
   private state: QueryState<TData>;
-  private options: QueryOptions<Key, TData>;
+  private options: Required<QueryOptions<Key, TData>>;
   private defaultOptions: Partial<QueryOptions<Key, TData>>;
   private readonly serializedKeyValue: string;
 
@@ -120,6 +125,24 @@ export class Query<Key extends AnyKey, TData = unknown> {
     environment: QueryEnvironment = {}
   ) {
     this.queryKey = options.key;
+
+    if (defaultOptions.gcTime == null) {
+      defaultOptions.gcTime = DEFAULT_GC_TIME;
+    }
+
+    if (defaultOptions.staleTime == null) {
+      defaultOptions.staleTime = 0;
+    }
+
+    if (defaultOptions.retry == null) {
+      defaultOptions.retry = 3;
+    }
+
+    if (defaultOptions.retryDelay == null) {
+      defaultOptions.retryDelay = (failureCount) =>
+        exponentialBackoff(1000, failureCount, 10000);
+    }
+
     this.defaultOptions = defaultOptions;
     this.options = this.mergeOptions(options);
     this.timerWheel = timerWheel;
@@ -136,6 +159,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
       error: undefined,
       dataUpdatedAt: undefined,
       errorUpdatedAt: undefined,
+      prefetchedAt: undefined,
     };
 
     // Create retrier with merged options
@@ -192,6 +216,12 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * Check if the query data is stale
    */
   isStale(): boolean {
+    // If the query is prefetched, it's not stale for some time after the prefetch
+    // this is to avoid double fetching the query after it was prefetched but not used yet.
+    if (this.state.prefetchedAt != null) {
+      return false;
+    }
+
     // If no data has been fetched yet, it's stale
     if (this.state.dataUpdatedAt == null) {
       return true;
@@ -275,6 +305,27 @@ export class Query<Key extends AnyKey, TData = unknown> {
     this.retrier.pause();
 
     return data;
+  }
+
+  prefetch(): void {
+    const now = Date.now();
+    this.state.prefetchedAt = now;
+
+    void this.fetch().then(() => {
+      this.timerWheel.schedule(() => {
+        this.state.prefetchedAt = undefined;
+
+        if (this.subscribers.size > 0) {
+          return;
+        }
+
+        if (import.meta.env.DEV) {
+          console.warn(`Query with key ${this.serializedKey} was prefetched but not used 
+            within a few seconds.
+            Please make sure the key is in use and it is preloaded intentionally`);
+        }
+      }, PREFETCH_FRESHNESS_TIME);
+    });
   }
 
   async enshureData(): Promise<TData> {
@@ -386,7 +437,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
     // Cancel any existing GC timer
     this.cancelGC();
 
-    const gcTime = this.options.gcTime ?? Infinity;
+    const gcTime = this.options.gcTime ?? DEFAULT_GC_TIME;
 
     // Don't schedule GC if gcTime is Infinity
     if (gcTime === Infinity || this.subscribers.size > 0) {
@@ -429,6 +480,12 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * (no subscribers and GC timer has elapsed or not scheduled)
    */
   canBeCollected(): boolean {
+    // If the query is prefetched, it's not eligible for garbage collection
+    // this is to avoid double fetching the query after it was prefetched but not used yet.
+    if (this.state.prefetchedAt != null) {
+      return false;
+    }
+
     // Has subscribers, not eligible
     if (this.subscribers.size > 0) {
       return false;
@@ -443,8 +500,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
     // 1. GC time is Infinity (never collect)
     // 2. GC timer already fired
     // We consider it eligible only if gcTime is not Infinity
-    const gcTime = this.options.gcTime ?? Infinity;
-    return gcTime !== Infinity;
+    return this.options.gcTime !== Infinity;
   }
 
   /**
@@ -477,6 +533,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
       error: undefined,
       dataUpdatedAt: undefined,
       errorUpdatedAt: undefined,
+      prefetchedAt: undefined,
     };
     this.cancelGC();
     this.currentPromise = this.createFetcher();
