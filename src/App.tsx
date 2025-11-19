@@ -34,7 +34,7 @@ export default function App() {
     formData.set("gcTimeout", "60000");
     formData.set("searchQuery", "");
     formData.set("showDevtools", "false");
-    formData.set("showLagRadar", "true");
+    formData.set("showLagRadar", "false");
 
     return formData;
   });

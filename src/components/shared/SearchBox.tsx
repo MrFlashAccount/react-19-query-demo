@@ -41,6 +41,10 @@ export function SearchBox({ formState, onFormStateChange }: SearchBoxProps) {
         onChange={(e) => {
           setFormState(new FormData(e.currentTarget));
         }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setFormState(new FormData(e.currentTarget));
+        }}
         className="relative max-w-3xl mx-auto flex items-center gap-3"
       >
         <Settings formState={formState} onFormStateChange={setFormState} />

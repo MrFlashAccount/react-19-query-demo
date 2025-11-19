@@ -5,17 +5,20 @@ import {
   use,
   useTransition,
   useEffect,
+  startTransition,
 } from "react";
 import { QueryClient, type QueryClientOptions } from "./QueryClient";
 import type { RetryConfig } from "./Retrier";
 import { useEvent } from "../useEvent";
+import { createMeasurer, noop } from "./utils";
+import type { QueryState } from "./Query";
 
 /**
  * Context value for the query provider
  */
 export interface QueryContextValue {
   queryClient: QueryClient;
-  isQueryClientPending: boolean;
+  withMeasure: ReturnType<typeof createMeasurer>;
 }
 
 /**
@@ -25,7 +28,7 @@ export interface QueryContextValue {
 const defaultQueryClient = new QueryClient();
 export const QueryContext = createContext<QueryContextValue>({
   queryClient: defaultQueryClient,
-  isQueryClientPending: false,
+  withMeasure: noop as ReturnType<typeof createMeasurer>,
 });
 
 /**
@@ -58,31 +61,45 @@ export function QueryProvider({
   queryClient: initialQueryClient,
   queryCacheOptions = {},
 }: QueryProviderProps) {
-  const [isPending, startTransition] = useTransition();
+  const withMeasure = createMeasurer({
+    trackGroup: "Custom Library 🐐",
+    properties: [["QueryClient", JSON.stringify(queryCacheOptions)]],
+    color: "primary",
+  });
+
   const [queryClient, setQueryClient] = useState(() => {
-    const onChange = (newInstance: QueryClient) => {
-      startTransition(() => {
-        setQueryClient(newInstance);
-      });
-    };
+    const onChange = withMeasure(
+      (newInstance: QueryClient) => {
+        startTransition(() => {
+          setQueryClient(newInstance);
+        });
+      },
+      {
+        name: "QueryClient: OnChange",
+        detail: {
+          track: `QueryClient: Apply new instance`,
+          color: "tertiary",
+        },
+      }
+    );
 
     if (initialQueryClient !== undefined) {
-      initialQueryClient.setOptions({ onChange });
+      initialQueryClient.setOptions({
+        onChange,
+        context: { measurer: withMeasure },
+      });
       return initialQueryClient;
     }
 
-    return new QueryClient({ ...queryCacheOptions, onChange });
+    return new QueryClient({
+      ...queryCacheOptions,
+      onChange,
+      context: { measurer: withMeasure },
+    });
   });
 
   return (
-    <QueryContext
-      value={{
-        queryClient,
-        isQueryClientPending: isPending,
-      }}
-    >
-      {children}
-    </QueryContext>
+    <QueryContext value={{ queryClient, withMeasure }}>{children}</QueryContext>
   );
 }
 
@@ -156,9 +173,13 @@ export function useQuery<
 ): {
   promise: Promise<PromiseValue>;
   isPending: boolean;
+  isFetching: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  state: Readonly<QueryState<PromiseValue>>;
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
-  const { queryClient, isQueryClientPending } = useQueryContext();
+  const { queryClient } = useQueryContext();
   const queryFnStable = useEvent(queryFn);
 
   // Add or get query from cache (staleness check happens inside addQuery)
@@ -172,10 +193,28 @@ export function useQuery<
     prefetch: true,
   });
 
+  // TODO: This is a workaround to avoid suspending the tree when new promise(query) is created.
+  // We should find a better way to handle this.
+  // Because the transion should be controlled in other places.
+  // And useDeferredValue triggers a rerender at least twice
+  // const deferredPromise = useDeferredValue(query.promise, query.promise);
+  const queryState = query.getState();
+  const isPending = queryState.status === "pending";
+  const isFetching = queryState.fetchStatus === "fetching";
+  const isSuccess = queryState.status === "success";
+  const isError = queryState.status === "error";
+
   // Subscribe to query changes
   useEffect(() => query.subscribe(() => {}), [query]);
 
-  return { promise: query.promise, isPending: isQueryClientPending };
+  return {
+    isPending,
+    isFetching,
+    isSuccess,
+    isError,
+    state: queryState,
+    promise: query.promise,
+  };
 }
 
 /**
@@ -252,18 +291,52 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
   const [error, setError] = useState<Error | null>(null);
 
   const mutate = useEvent(async (variables: Variables): Promise<Data> => {
+    const defaultDetail = {
+      track: `Mutation`,
+      trackGroup: "Custom Library 🐐",
+      properties: [["Variables", JSON.stringify(variables)]],
+      color: "primary",
+    };
+
     return new Promise<Data>((resolve, reject) => {
       startTransition(async () => {
+        const transitionStart = performance.now();
         setError(null);
 
         await mutationFn(variables)
-          .then((result) => {
+          .then(async (result) => {
+            const responseStart = performance.now();
             // Invalidate queries after successful mutation
             if (invalidateQueries.length > 0) {
-              for (const queryKey of invalidateQueries) {
-                queryClient.invalidate(queryKey);
-              }
+              startTransition(async () => {
+                await Promise.all(
+                  invalidateQueries.map((queryKey) =>
+                    queryClient.invalidate(queryKey)
+                  )
+                );
+              });
             }
+            const responseEnd = performance.now();
+
+            performance.measure(`Mutation: Query Invalidation`, {
+              start: responseStart,
+              end: responseEnd,
+              detail: {
+                devtools: {
+                  ...defaultDetail,
+                  color: "primary",
+                  properties: [
+                    ...defaultDetail.properties,
+                    [
+                      "Query Keys",
+                      invalidateQueries
+                        .map((key) => JSON.stringify(key))
+                        .join(", "),
+                    ],
+                  ],
+                },
+              },
+            });
 
             resolve(result);
           })
@@ -272,7 +345,22 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
               err instanceof Error ? err : new Error(String(err));
             setError(errorObj);
             reject(errorObj);
+          })
+          .finally(() => {
+            queryClient.notifyChange(queryClient.clone());
           });
+
+        const transitionEnd = performance.now();
+        performance.measure(`Mutation ${JSON.stringify(variables)}`, {
+          start: transitionStart,
+          end: transitionEnd,
+          detail: {
+            devtools: {
+              ...defaultDetail,
+              color: "primary",
+            },
+          },
+        });
       });
     });
   });

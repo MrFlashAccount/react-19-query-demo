@@ -1,11 +1,6 @@
 import type { RetryConfig } from "./Retrier";
-import {
-  Query,
-  stableKeySerialize,
-  type AnyKey,
-  type QueryOptions,
-} from "./Query";
-import { noop } from "./utils";
+import { Query, type AnyKey, type QueryOptions } from "./Query";
+import { createMeasurer, noop } from "./utils";
 
 /**
  * Options for adding a promise to the cache
@@ -39,20 +34,11 @@ export interface QueryClientOptions {
   cache?: Map<string, Query<AnyKey, unknown>>;
   /** Callback invoked when a new instance is created after cache mutation */
   onChange?: (newInstance: QueryClient) => void;
+  context?: QueryContext;
 }
 
-export interface ICache {
-  has<Key extends AnyKey>(key: Key): boolean;
-  get<Key extends AnyKey>(key: Key): Query<Key, unknown> | undefined;
-  set<Key extends AnyKey, TData = unknown>(
-    key: Key,
-    value: Query<Key, TData>
-  ): void;
-  delete<Key extends AnyKey>(key: Key): boolean;
-  clear(): void;
-  keys(): IterableIterator<AnyKey>;
-  values(): IterableIterator<Query<AnyKey, unknown>>;
-  entries(): IterableIterator<[AnyKey, Query<AnyKey, unknown>]>;
+export interface QueryContext extends Record<string, unknown> {
+  measure?: ReturnType<typeof createMeasurer>;
 }
 
 /**
@@ -91,10 +77,16 @@ export interface ICache {
 export class QueryClient {
   private _cache: Map<string, Query<AnyKey, unknown>>;
   private onChange: (newInstance: QueryClient) => void;
+  private context: Required<QueryContext>;
 
   constructor(options: QueryClientOptions = {}) {
     this._cache = options.cache || new Map<string, Query<AnyKey, unknown>>();
     this.onChange = options.onChange ?? noop;
+    this.context = {
+      measure:
+        options.context?.measure ??
+        createMeasurer({ trackGroup: "QueryClient" }),
+    };
   }
 
   setOptions(options: QueryClientOptions): void {
@@ -105,16 +97,21 @@ export class QueryClient {
     if (options.onChange !== undefined) {
       this.onChange = options.onChange;
     }
+
+    if (options.context?.measure !== undefined) {
+      this.context.measure = options.context.measure;
+    }
   }
 
   /**
    * Create a new QueryClient instance with the same cache and state.
    * Used internally when cache mutations occur.
    */
-  private clone(): QueryClient {
+  public clone(): QueryClient {
     const newInstance = new QueryClient({
       cache: this._cache, // Reuse same cache reference
       onChange: this.onChange,
+      context: this.context,
     });
 
     return newInstance;
@@ -123,7 +120,7 @@ export class QueryClient {
   /**
    * Notify onChange callback if set
    */
-  private notifyChange(newInstance: QueryClient): void {
+  public notifyChange(newInstance: QueryClient): void {
     this.onChange(newInstance);
   }
 
@@ -162,10 +159,10 @@ export class QueryClient {
       { key, queryFn, gcTime, staleTime, retry, retryDelay },
       {},
       {
-        onGarbageCollect: () => this.handleQueryGarbageCollect(keySerialized),
         onRemove: () => {
-          this._cache.delete(keySerialized);
+          this.handleQueryGarbageCollect(keySerialized);
         },
+        measure: this.context.measure,
       }
     );
 
@@ -187,7 +184,7 @@ export class QueryClient {
   getPromise<const Key extends Array<unknown>, PromiseValue extends unknown>(
     key: Key
   ): Promise<PromiseValue> | null {
-    const keySerialized = stableKeySerialize(key);
+    const keySerialized = Query.getSerializedKey(key);
     const entry = this._cache.get(keySerialized);
 
     if (entry == null) {
@@ -204,7 +201,7 @@ export class QueryClient {
    * @returns True if the key exists in the cache
    */
   has<const Key extends Array<unknown>>(key: Key): boolean {
-    const keySerialized = stableKeySerialize(key);
+    const keySerialized = Query.getSerializedKey(key);
     return this._cache.has(keySerialized);
   }
 
@@ -215,7 +212,7 @@ export class QueryClient {
    * @returns True if the data is stale and should be refetched
    */
   isStale<const Key extends Array<unknown>>(key: Key): boolean {
-    const keySerialized = stableKeySerialize(key);
+    const keySerialized = Query.getSerializedKey(key);
     const entry = this._cache.get(keySerialized);
 
     if (entry == null) {
@@ -251,7 +248,7 @@ export class QueryClient {
    *
    * @param key - The cache key prefix to invalidate
    */
-  invalidate<const Key extends Array<unknown>>(key: Key): void {
+  async invalidate<const Key extends Array<unknown>>(key: Key): Promise<void> {
     // Find all cache keys that start with the specified key prefix
     for (const cacheKey of this._cache.keys()) {
       if (this.keyStartsWith(cacheKey, key)) {
@@ -261,12 +258,12 @@ export class QueryClient {
           continue;
         }
 
-        entry.invalidate();
+        await entry.invalidate();
       }
     }
 
-    const newInstance = this.clone();
-    this.notifyChange(newInstance);
+    // const newInstance = this.clone();
+    // this.notifyChange(newInstance);
   }
 
   private handleQueryGarbageCollect(serializedKey: string): void {

@@ -103,7 +103,7 @@ function MovieCardCustom({
     <MovieCard
       movie={movie}
       onUpdateRating={(rating) => {
-        updateRating({ rating });
+        void updateRating({ rating });
       }}
       isPending={isPending}
     />

@@ -73,17 +73,41 @@ function sendWorkerMessage<T>(
         let start = performance.now();
         const jsonString = decoder.decode(event.data.data);
         let end = performance.now();
-        performance.measure(`${type}-response-${id}-decode`, {
+        performance.measure(`${type} Response Decoding`, {
           start,
           end,
+          detail: {
+            devtools: {
+              track: `${type} Response Decoding`,
+              trackGroup: "API Calls",
+              properties: [
+                ["ID", id],
+                ["Type", type],
+                ["Payload", JSON.stringify(payload)],
+              ],
+              color: "primary",
+            },
+          },
         });
 
         start = performance.now();
         const parsed = JSON.parse(jsonString);
         end = performance.now();
-        performance.measure(`${type}-response-${id}-parse`, {
+        performance.measure(`${type} Response Parsing`, {
           start,
           end,
+          detail: {
+            devtools: {
+              track: `${type} Response Parsing`,
+              trackGroup: "API Calls",
+              properties: [
+                ["ID", id],
+                ["Type", type],
+                ["Payload", JSON.stringify(payload)],
+              ],
+              color: "primary",
+            },
+          },
         });
 
         resolve(parsed as T);

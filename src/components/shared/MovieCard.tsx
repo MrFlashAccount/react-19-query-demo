@@ -14,12 +14,6 @@ export function MovieCard({
   onUpdateRating: (rating: number) => void;
   isPending: boolean;
 }) {
-  const [hoveredStar, setHoveredStar] = useState<number | null>(null);
-
-  const handleStarClick = (starIndex: number) => {
-    onUpdateRating(starIndex * 2);
-  };
-
   const rating = movie.rating;
   const currentStars = Math.ceil((rating ?? 0) / 2); // Convert 0-10 rating to 0-5 stars
   const director = movie.directors.join(", ") || "Unknown";
@@ -39,7 +33,7 @@ export function MovieCard({
               isPending ? "" : "hidden"
             }`}
           >
-            <div className="animate-spin h-3 w-3 border-3 border-2 border-gray-300 border-t-black rounded-full" />
+            <div className="animate-spin h-3 w-3 border-2 border-gray-300 border-t-black rounded-full" />
             <span className="hidden sm:inline">Saving...</span>
           </div>
         </div>
@@ -73,46 +67,11 @@ export function MovieCard({
 
         {/* Star Rating */}
         <div className="flex items-center gap-2">
-          <div
-            className={`flex gap-0.5 ${
-              isPending ? "opacity-75 cursor-not-allowed" : ""
-            }`}
-            onMouseLeave={() => setHoveredStar(null)}
-          >
-            {[1, 2, 3, 4, 5].map((star) => {
-              const displayStar =
-                hoveredStar != null
-                  ? star <= hoveredStar
-                  : star <= currentStars;
-
-              return (
-                <button
-                  key={star}
-                  onClick={() => {
-                    handleStarClick(star);
-                  }}
-                  onMouseEnter={() => setHoveredStar(star)}
-                  disabled={isPending}
-                  className={`transition-all duration-150 ${
-                    displayStar ? "text-yellow-400" : "text-gray-300"
-                  } hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  <StarIcon
-                    filled={displayStar}
-                    className="w-4 h-4 sm:w-5 sm:h-5"
-                  />
-                </button>
-              );
-            })}
-          </div>
-          <span className="text-xs text-gray-500 hidden sm:inline">
-            {hoveredStar != null
-              ? `Rate ${hoveredStar} star${hoveredStar > 1 ? "s" : ""}`
-              : "Click to rate"}
-          </span>
-          <span className="text-xs text-gray-500 sm:hidden">
-            {hoveredStar != null ? `${hoveredStar}★` : "Tap to rate"}
-          </span>
+          <RatingStars
+            onUpdateRating={onUpdateRating}
+            isPending={isPending}
+            currentStars={currentStars}
+          />
         </div>
 
         {/* Plot */}
@@ -121,5 +80,64 @@ export function MovieCard({
         )}
       </div>
     </div>
+  );
+}
+
+function RatingStars({
+  onUpdateRating,
+  isPending,
+  currentStars,
+}: {
+  onUpdateRating: (rating: number) => void;
+  isPending: boolean;
+  currentStars: number;
+}) {
+  const [hoveredStar, setHoveredStar] = useState<number | null>(null);
+
+  const handleStarClick = (starIndex: number) => {
+    onUpdateRating(starIndex * 2);
+  };
+
+  return (
+    <>
+      <div
+        className={`flex gap-0.5 ${
+          isPending ? "opacity-75 cursor-not-allowed" : ""
+        }`}
+        onMouseLeave={() => setHoveredStar(null)}
+      >
+        {[1, 2, 3, 4, 5].map((star) => {
+          const displayStar =
+            hoveredStar != null ? star <= hoveredStar : star <= currentStars;
+
+          return (
+            <button
+              key={star}
+              onClick={() => {
+                handleStarClick(star);
+              }}
+              onMouseEnter={() => setHoveredStar(star)}
+              disabled={isPending}
+              className={`transition-all duration-150 ${
+                displayStar ? "text-yellow-400" : "text-gray-300"
+              } hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              <StarIcon
+                filled={displayStar}
+                className="w-4 h-4 sm:w-5 sm:h-5"
+              />
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-xs text-gray-500 hidden sm:inline">
+        {hoveredStar != null
+          ? `Rate ${hoveredStar} star${hoveredStar > 1 ? "s" : ""}`
+          : "Click to rate"}
+      </span>
+      <span className="text-xs text-gray-500 sm:hidden">
+        {hoveredStar != null ? `${hoveredStar}★` : "Tap to rate"}
+      </span>
+    </>
   );
 }

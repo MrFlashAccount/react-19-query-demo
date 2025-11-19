@@ -1,6 +1,12 @@
 import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
-import { createBatcher, exponentialBackoff, noop, type Batch } from "./utils";
+import {
+  createBatcher,
+  exponentialBackoff,
+  stableKeySerialize,
+  type Batch,
+  type createMeasurer,
+} from "./utils";
 
 /**
  * Query state tracking
@@ -73,8 +79,8 @@ export interface QueryOptions<Key extends Array<unknown>, TData> {
  * ```
  */
 interface QueryEnvironment {
-  onGarbageCollect?: () => void;
-  onRemove?: () => void;
+  onRemove: () => void;
+  measure: ReturnType<typeof createMeasurer>;
 }
 
 const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
@@ -96,12 +102,11 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
   // Retrier
   private retrier: Retrier;
-  private onRemove: () => void;
   private batch: Batch;
 
   // Promise tracking
   private currentPromise: Promise<TData>;
-  private onGarbageCollect: () => void;
+  private environment: QueryEnvironment;
 
   static getSerializedKey(key: AnyKey): string {
     return stableKeySerialize(key);
@@ -122,7 +127,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
   constructor(
     options: QueryOptions<Key, TData>,
     defaultOptions: Partial<QueryOptions<Key, TData>> = {},
-    environment: QueryEnvironment = {}
+    environment: QueryEnvironment
   ) {
     this.queryKey = options.key;
 
@@ -147,9 +152,8 @@ export class Query<Key extends AnyKey, TData = unknown> {
     this.options = this.mergeOptions(options);
     this.timerWheel = timerWheel;
     this.serializedKeyValue = Query.getSerializedKey(this.queryKey);
-    this.onGarbageCollect = environment.onGarbageCollect ?? noop;
 
-    this.onRemove = environment.onRemove ?? noop;
+    this.environment = environment;
     this.batch = createBatcher();
     // Initialize state
     this.state = {
@@ -300,32 +304,59 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * @returns Promise that resolves with the query data
    */
   async fetch(): Promise<TData> {
-    this.retrier.resume();
-    const data = await this.currentPromise;
-    this.retrier.pause();
+    return this.environment.measure(
+      async () => {
+        this.retrier.resume();
+        const data = await this.currentPromise;
+        this.retrier.pause();
 
-    return data;
+        return data;
+      },
+      {
+        name: `Query: Fetch ${this.serializedKey}`,
+        detail: {
+          track: `Queries`,
+          properties: [["Key", this.serializedKey]],
+          color: "secondary",
+        },
+      }
+    )();
   }
 
   prefetch(): void {
-    const now = Date.now();
-    this.state.prefetchedAt = now;
+    this.environment.measure(
+      () => {
+        const now = Date.now();
+        this.state.prefetchedAt = now;
 
-    void this.fetch().then(() => {
-      this.timerWheel.schedule(() => {
-        this.state.prefetchedAt = undefined;
-
-        if (this.subscribers.size > 0) {
+        if (this.state.data != null) {
           return;
         }
 
-        if (import.meta.env.DEV) {
-          console.warn(`Query with key ${this.serializedKey} was prefetched but not used 
+        void this.fetch().then(() => {
+          this.timerWheel.schedule(() => {
+            this.state.prefetchedAt = undefined;
+
+            if (this.subscribers.size > 0) {
+              return;
+            }
+
+            if (import.meta.env.DEV) {
+              console.warn(`Query with key ${this.serializedKey} was prefetched but not used 
             within a few seconds.
             Please make sure the key is in use and it is preloaded intentionally`);
-        }
-      }, PREFETCH_FRESHNESS_TIME);
-    });
+            }
+          }, PREFETCH_FRESHNESS_TIME);
+        });
+      },
+      {
+        name: `Query: Prefetch ${this.serializedKey}`,
+        detail: {
+          properties: [["Key", this.serializedKey]],
+          color: "secondary",
+        },
+      }
+    )();
   }
 
   async enshureData(): Promise<TData> {
@@ -423,7 +454,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
   }
 
   remove(): boolean {
-    this.onRemove();
+    this.environment.onRemove();
     this.retrier.reset();
     this.cancelGC();
 
@@ -470,7 +501,6 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
     // Check if eligible after clearing timer
     if (this.canBeCollected()) {
-      this.onGarbageCollect();
       this.remove();
     }
   }
@@ -507,7 +537,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * Invalidate the query by resetting its state to pending
    * This forces a refetch on next access
    */
-  invalidate(): void {
+  invalidate(): Promise<TData> {
     // Only invalidate if not static
     if (this.options.staleTime !== "static") {
       this.state.dataUpdatedAt = undefined;
@@ -518,8 +548,12 @@ export class Query<Key extends AnyKey, TData = unknown> {
         this.retrier.reset();
         this.retrier.resume();
         this.currentPromise = this.createFetcher();
+
+        return this.fetch();
       }
     }
+
+    return this.currentPromise;
   }
 
   /**
@@ -566,11 +600,4 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
     return options as Required<QueryOptions<Key, TData>>;
   }
-}
-
-export function stableKeySerialize<Key extends Array<unknown>>(
-  key: Key
-): string {
-  // TODO: make this stable
-  return JSON.stringify(key);
 }
