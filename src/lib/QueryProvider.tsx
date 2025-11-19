@@ -16,6 +16,7 @@ import {
   type EventsMap,
   eventEmitter,
 } from "./EventEmitter";
+import { useEvent } from "../useEvent";
 
 /**
  * Context value for the query provider
@@ -281,7 +282,7 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
 
-  const mutate = async (variables: Variables): Promise<Data> => {
+  const mutate = useEvent(async (variables: Variables): Promise<Data> => {
     const start = performance.now();
     const scope = eventEmitter.createScope();
     scope.emit("mutation:start", { variables });
@@ -377,7 +378,7 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
           });
       });
     });
-  };
+  });
 
   return { mutate, isPending, error };
 }
