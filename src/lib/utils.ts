@@ -3,6 +3,10 @@ import { LRUCache } from "./LRUCache";
 export function noop(..._args: any[]): void {}
 export async function noopAsync(..._args: any[]): Promise<void> {}
 
+export function generateScopeId(): string {
+  return `${Math.random().toString(36)}-${Date.now().toString(36)}`;
+}
+
 export interface Batch {
   (callback: () => void): void;
 }

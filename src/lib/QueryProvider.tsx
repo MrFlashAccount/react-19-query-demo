@@ -9,9 +9,13 @@ import {
 } from "react";
 import { QueryClient, type QueryClientOptions } from "./QueryClient";
 import type { RetryConfig } from "./Retrier";
-import { useEvent } from "../useEvent";
 import { createMeasurer, noop } from "./utils";
 import type { QueryState } from "./Query";
+import {
+  type EventEmitter,
+  type EventsMap,
+  eventEmitter,
+} from "./EventEmitter";
 
 /**
  * Context value for the query provider
@@ -37,6 +41,7 @@ export const QueryContext = createContext<QueryContextValue>({
 export interface QueryProviderProps extends PropsWithChildren {
   queryCacheOptions?: QueryClientOptions;
   queryClient?: QueryClient;
+  eventEmitter?: EventEmitter<EventsMap>;
 }
 
 /**
@@ -68,20 +73,12 @@ export function QueryProvider({
   });
 
   const [queryClient, setQueryClient] = useState(() => {
-    const onChange = withMeasure(
-      (newInstance: QueryClient) => {
-        startTransition(() => {
-          setQueryClient(newInstance);
-        });
-      },
-      {
-        name: "QueryClient: OnChange",
-        detail: {
-          track: `QueryClient: Apply new instance`,
-          color: "tertiary",
-        },
-      }
-    );
+    const onChange = (newInstance: QueryClient) => {
+      eventEmitter.emit("client:change", { client: newInstance });
+      startTransition(() => {
+        setQueryClient(newInstance);
+      });
+    };
 
     if (initialQueryClient !== undefined) {
       initialQueryClient.setOptions({
@@ -180,12 +177,11 @@ export function useQuery<
 } {
   const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
   const { queryClient } = useQueryContext();
-  const queryFnStable = useEvent(queryFn);
 
   // Add or get query from cache (staleness check happens inside addQuery)
   const query = queryClient.addQuery<Key, PromiseValue>({
     key,
-    queryFn: queryFnStable,
+    queryFn,
     gcTime,
     staleTime,
     retry,
@@ -193,11 +189,6 @@ export function useQuery<
     prefetch: true,
   });
 
-  // TODO: This is a workaround to avoid suspending the tree when new promise(query) is created.
-  // We should find a better way to handle this.
-  // Because the transion should be controlled in other places.
-  // And useDeferredValue triggers a rerender at least twice
-  // const deferredPromise = useDeferredValue(query.promise, query.promise);
   const queryState = query.getState();
   const isPending = queryState.status === "pending";
   const isFetching = queryState.fetchStatus === "fetching";
@@ -290,52 +281,77 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
 
-  const mutate = useEvent(async (variables: Variables): Promise<Data> => {
-    const defaultDetail = {
-      track: `Mutation`,
-      trackGroup: "Custom Library 🐐",
-      properties: [["Variables", JSON.stringify(variables)]],
-      color: "primary",
-    };
+  const mutate = async (variables: Variables): Promise<Data> => {
+    const start = performance.now();
+    const scope = eventEmitter.createScope();
+    scope.emit("mutation:start", { variables });
+    const executionScope = scope.createChildScope();
+    const executionStart = performance.now();
+    executionScope.emit("mutation:execution:start", { variables });
 
     return new Promise<Data>((resolve, reject) => {
       startTransition(async () => {
-        const transitionStart = performance.now();
         setError(null);
 
         await mutationFn(variables)
           .then(async (result) => {
-            const responseStart = performance.now();
+            executionScope.emit("mutation:execution:success", {
+              variables,
+              duration: performance.now() - executionStart,
+              data: result,
+            });
             // Invalidate queries after successful mutation
             if (invalidateQueries.length > 0) {
-              startTransition(async () => {
-                await Promise.all(
-                  invalidateQueries.map((queryKey) =>
-                    queryClient.invalidate(queryKey)
-                  )
-                );
+              const queries = invalidateQueries.map((k) => JSON.stringify(k));
+              const invalidationScope = scope.createChildScope();
+              invalidationScope.emit("mutation:invalidation:start", {
+                variables,
+                queries,
               });
-            }
-            const responseEnd = performance.now();
 
-            performance.measure(`Mutation: Query Invalidation`, {
-              start: responseStart,
-              end: responseEnd,
-              detail: {
-                devtools: {
-                  ...defaultDetail,
-                  color: "primary",
-                  properties: [
-                    ...defaultDetail.properties,
-                    [
-                      "Query Keys",
-                      invalidateQueries
-                        .map((key) => JSON.stringify(key))
-                        .join(", "),
-                    ],
-                  ],
-                },
-              },
+              const invalidationStart = performance.now();
+
+              const invalidationPromise = new Promise<void>(
+                (resolve, reject) => {
+                  startTransition(async () => {
+                    try {
+                      await Promise.all(
+                        invalidateQueries.map((queryKey) =>
+                          queryClient.invalidate(queryKey, {
+                            parentScopeId: invalidationScope.scopeId,
+                          })
+                        )
+                      );
+                      resolve();
+                    } catch (error) {
+                      reject(error);
+                    }
+                  });
+                }
+              );
+
+              try {
+                await invalidationPromise;
+                invalidationScope.emit("mutation:invalidation:success", {
+                  variables,
+                  queries,
+                  duration: performance.now() - invalidationStart,
+                });
+              } catch (invError) {
+                invalidationScope.emit("mutation:invalidation:error", {
+                  variables,
+                  queries,
+                  duration: performance.now() - invalidationStart,
+                  error: invError,
+                });
+                throw invError;
+              }
+            }
+
+            scope.emit("mutation:success", {
+              variables,
+              duration: performance.now() - start,
+              data: result,
             });
 
             resolve(result);
@@ -344,26 +360,24 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
             const errorObj =
               err instanceof Error ? err : new Error(String(err));
             setError(errorObj);
-            reject(errorObj);
-          })
-          .finally(() => {
-            queryClient.notifyChange(queryClient.clone());
-          });
 
-        const transitionEnd = performance.now();
-        performance.measure(`Mutation ${JSON.stringify(variables)}`, {
-          start: transitionStart,
-          end: transitionEnd,
-          detail: {
-            devtools: {
-              ...defaultDetail,
-              color: "primary",
-            },
-          },
-        });
+            executionScope.emit("mutation:execution:error", {
+              variables,
+              duration: performance.now() - executionStart,
+              error: errorObj,
+            });
+
+            scope.emit("mutation:error", {
+              variables,
+              duration: performance.now() - start,
+              error: errorObj,
+            });
+
+            reject(errorObj);
+          });
       });
     });
-  });
+  };
 
   return { mutate, isPending, error };
 }

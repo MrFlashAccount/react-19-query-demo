@@ -20,7 +20,7 @@ export default function TanStackQueryTab({
   onFormStateChange,
   devtools,
   api,
-}: TabProps) {
+}: TabProps<{ client: QueryClient }>) {
   return (
     <QueryClientProvider client={queryClient}>
       <Suspense fallback={<Loader />}>
@@ -40,7 +40,7 @@ function TanStackQueryTabContent({
   onFormStateChange,
   api,
   devtools: Devtools,
-}: TabProps) {
+}: TabProps<{ client: QueryClient }>) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);

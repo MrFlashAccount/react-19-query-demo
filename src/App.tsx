@@ -18,6 +18,12 @@ const ReactQueryDevtoolsProduction = lazy(() =>
   )
 );
 
+const CustomLibraryDevtools = lazy(() =>
+  import("./lib/Devtools").then((d) => ({
+    default: d.QueryDevtools,
+  }))
+);
+
 /**
  * Main application component with tabbed interface
  * Compares custom query library implementation with TanStack Query
@@ -71,7 +77,11 @@ export default function App() {
             case "custom":
               return (
                 <LazyCustomLibraryTab
-                  devtools={null}
+                  devtools={
+                    formState.get("showDevtools") === "true"
+                      ? CustomLibraryDevtools
+                      : null
+                  }
                   formState={formState}
                   onFormStateChange={updateFormState}
                   api={api}

@@ -11,7 +11,7 @@ export default function CustomLibraryTab({
   onFormStateChange,
   api,
   devtools,
-}: TabProps) {
+}: TabProps<{}>) {
   return (
     <QueryProvider queryClient={queryClient}>
       <Suspense fallback={<Loader />}>
@@ -33,7 +33,8 @@ function CustomLibraryTabContent({
   formState,
   onFormStateChange,
   api,
-}: TabProps) {
+  devtools: Devtools,
+}: TabProps<{}>) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
@@ -64,6 +65,8 @@ function CustomLibraryTabContent({
           ))}
         </MovieList>
       </div>
+
+      {Devtools && <Devtools />}
     </div>
   );
 }

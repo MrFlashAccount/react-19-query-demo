@@ -5,8 +5,8 @@ import {
   exponentialBackoff,
   stableKeySerialize,
   type Batch,
-  type createMeasurer,
 } from "./utils";
+import { eventEmitter } from "./EventEmitter";
 
 /**
  * Query state tracking
@@ -80,7 +80,6 @@ export interface QueryOptions<Key extends Array<unknown>, TData> {
  */
 interface QueryEnvironment {
   onRemove: () => void;
-  measure: ReturnType<typeof createMeasurer>;
 }
 
 const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
@@ -303,60 +302,82 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * Execute the query
    * @returns Promise that resolves with the query data
    */
-  async fetch(): Promise<TData> {
-    return this.environment.measure(
-      async () => {
-        this.retrier.resume();
-        const data = await this.currentPromise;
-        this.retrier.pause();
+  async fetch(parentScopeId?: string): Promise<TData> {
+    const start = performance.now();
+    const scope = eventEmitter.createScope({ parentScopeId });
 
-        return data;
-      },
-      {
-        name: `Query: Fetch ${this.serializedKey}`,
-        detail: {
-          track: `Queries`,
-          properties: [["Key", this.serializedKey]],
-          color: "secondary",
-        },
-      }
-    )();
+    scope.emit("query:fetch:start", {
+      key: this.serializedKey,
+    });
+
+    try {
+      this.retrier.resume();
+      const data = await this.currentPromise;
+      this.retrier.pause();
+
+      scope.emit("query:fetch:success", {
+        key: this.serializedKey,
+        duration: performance.now() - start,
+      });
+
+      return data;
+    } catch (error) {
+      scope.emit("query:fetch:error", {
+        key: this.serializedKey,
+        duration: performance.now() - start,
+        error,
+      });
+      throw error;
+    }
   }
 
   prefetch(): void {
-    this.environment.measure(
-      () => {
-        const now = Date.now();
-        this.state.prefetchedAt = now;
+    const start = performance.now();
+    const scope = eventEmitter.createScope();
 
-        if (this.state.data != null) {
-          return;
-        }
+    if (this.state.data != null || this.state.fetchStatus === "fetching") {
+      scope.emit("query:prefetch:success", {
+        key: this.serializedKey,
+        duration: performance.now() - start,
+      });
+      return;
+    }
 
-        void this.fetch().then(() => {
-          this.timerWheel.schedule(() => {
-            this.state.prefetchedAt = undefined;
+    const now = Date.now();
+    this.state.prefetchedAt = now;
 
-            if (this.subscribers.size > 0) {
-              return;
-            }
+    scope.emit("query:prefetch:start", {
+      key: this.serializedKey,
+    });
 
-            if (import.meta.env.DEV) {
-              console.warn(`Query with key ${this.serializedKey} was prefetched but not used 
+    void this.fetch(scope.scopeId)
+      .then(() => {
+        scope.emit("query:prefetch:success", {
+          key: this.serializedKey,
+          duration: performance.now() - start,
+        });
+
+        this.timerWheel.schedule(() => {
+          this.state.prefetchedAt = undefined;
+
+          if (this.subscribers.size > 0) {
+            return;
+          }
+
+          if (import.meta.env.DEV) {
+            console.warn(`Query with key ${this.serializedKey} was prefetched but not used 
             within a few seconds.
             Please make sure the key is in use and it is preloaded intentionally`);
-            }
-          }, PREFETCH_FRESHNESS_TIME);
+          }
+        }, PREFETCH_FRESHNESS_TIME);
+      })
+      .catch((error) => {
+        scope.emit("query:prefetch:error", {
+          key: this.serializedKey,
+          duration: performance.now() - start,
+          error,
         });
-      },
-      {
-        name: `Query: Prefetch ${this.serializedKey}`,
-        detail: {
-          properties: [["Key", this.serializedKey]],
-          color: "secondary",
-        },
-      }
-    )();
+      });
   }
 
   async enshureData(): Promise<TData> {
@@ -537,7 +558,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * Invalidate the query by resetting its state to pending
    * This forces a refetch on next access
    */
-  invalidate(): Promise<TData> {
+  invalidate(parentScopeId?: string): Promise<TData> {
     // Only invalidate if not static
     if (this.options.staleTime !== "static") {
       this.state.dataUpdatedAt = undefined;
@@ -549,7 +570,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
         this.retrier.resume();
         this.currentPromise = this.createFetcher();
 
-        return this.fetch();
+        return this.fetch(parentScopeId);
       }
     }
 

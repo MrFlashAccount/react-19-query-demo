@@ -30,3 +30,12 @@ export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";
 
 export { Query, type QueryOptions, type QueryState } from "./Query";
+
+// Event system
+export {
+  EventEmitter,
+  eventEmitter,
+  type EventsMap,
+  type ScopedEmitter,
+  type ScopeEvent,
+} from "./EventEmitter";

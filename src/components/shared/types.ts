@@ -1,10 +1,11 @@
-import type { QueryClient } from "@tanstack/react-query";
 import type { MovieApi } from "../../api/types";
 
-export interface TabProps {
+export interface TabProps<
+  DevtoolsProps extends Record<string, unknown> = Record<string, unknown>
+> {
   formState: FormData;
   onFormStateChange: (formData: FormData) => void;
-  devtools: React.ComponentType<{ client: QueryClient }> | null;
+  devtools: React.ComponentType<DevtoolsProps> | null;
   api: MovieApi;
 }
 

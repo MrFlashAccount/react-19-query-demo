@@ -1,6 +1,7 @@
 import type { RetryConfig } from "./Retrier";
 import { Query, type AnyKey, type QueryOptions } from "./Query";
-import { createMeasurer, noop } from "./utils";
+import { noop } from "./utils";
+import { eventEmitter } from "./EventEmitter";
 
 /**
  * Options for adding a promise to the cache
@@ -34,11 +35,13 @@ export interface QueryClientOptions {
   cache?: Map<string, Query<AnyKey, unknown>>;
   /** Callback invoked when a new instance is created after cache mutation */
   onChange?: (newInstance: QueryClient) => void;
-  context?: QueryContext;
+  context?: QueryClientContext;
 }
 
-export interface QueryContext extends Record<string, unknown> {
-  measure?: ReturnType<typeof createMeasurer>;
+export interface QueryClientContext extends Record<string, unknown> {}
+
+export interface InvalidateOptions {
+  parentScopeId?: string;
 }
 
 /**
@@ -77,16 +80,12 @@ export interface QueryContext extends Record<string, unknown> {
 export class QueryClient {
   private _cache: Map<string, Query<AnyKey, unknown>>;
   private onChange: (newInstance: QueryClient) => void;
-  private context: Required<QueryContext>;
+  private context: QueryClientContext;
 
   constructor(options: QueryClientOptions = {}) {
     this._cache = options.cache || new Map<string, Query<AnyKey, unknown>>();
     this.onChange = options.onChange ?? noop;
-    this.context = {
-      measure:
-        options.context?.measure ??
-        createMeasurer({ trackGroup: "QueryClient" }),
-    };
+    this.context = options.context ?? {};
   }
 
   setOptions(options: QueryClientOptions): void {
@@ -160,9 +159,11 @@ export class QueryClient {
       {},
       {
         onRemove: () => {
+          eventEmitter.emit("query:garbage-collect", {
+            key: keySerialized,
+          });
           this.handleQueryGarbageCollect(keySerialized);
         },
-        measure: this.context.measure,
       }
     );
 
@@ -248,7 +249,10 @@ export class QueryClient {
    *
    * @param key - The cache key prefix to invalidate
    */
-  async invalidate<const Key extends Array<unknown>>(key: Key): Promise<void> {
+  async invalidate<const Key extends Array<unknown>>(
+    key: Key,
+    options: InvalidateOptions = {}
+  ): Promise<void> {
     // Find all cache keys that start with the specified key prefix
     for (const cacheKey of this._cache.keys()) {
       if (this.keyStartsWith(cacheKey, key)) {
@@ -258,12 +262,12 @@ export class QueryClient {
           continue;
         }
 
-        await entry.invalidate();
+        await entry.invalidate(options.parentScopeId);
       }
     }
 
-    // const newInstance = this.clone();
-    // this.notifyChange(newInstance);
+    const newInstance = this.clone();
+    this.notifyChange(newInstance);
   }
 
   private handleQueryGarbageCollect(serializedKey: string): void {

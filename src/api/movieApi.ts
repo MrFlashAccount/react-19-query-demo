@@ -78,7 +78,7 @@ function sendWorkerMessage<T>(
           end,
           detail: {
             devtools: {
-              track: `${type} Response Decoding`,
+              track: `${type}`,
               trackGroup: "API Calls",
               properties: [
                 ["ID", id],
@@ -98,7 +98,7 @@ function sendWorkerMessage<T>(
           end,
           detail: {
             devtools: {
-              track: `${type} Response Parsing`,
+              track: `${type}`,
               trackGroup: "API Calls",
               properties: [
                 ["ID", id],
