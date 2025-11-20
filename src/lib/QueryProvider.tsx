@@ -283,11 +283,9 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
   const [error, setError] = useState<Error | null>(null);
 
   const mutate = useEvent(async (variables: Variables): Promise<Data> => {
-    const start = performance.now();
     const scope = eventEmitter.createScope();
     scope.emit("mutation:start", { variables });
     const executionScope = scope.createChildScope();
-    const executionStart = performance.now();
     executionScope.emit("mutation:execution:start", { variables });
 
     return new Promise<Data>((resolve, reject) => {
@@ -298,7 +296,6 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
           .then(async (result) => {
             executionScope.emit("mutation:execution:success", {
               variables,
-              duration: performance.now() - executionStart,
               data: result,
             });
             // Invalidate queries after successful mutation
@@ -309,8 +306,6 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
                 variables,
                 queries,
               });
-
-              const invalidationStart = performance.now();
 
               const invalidationPromise = new Promise<void>(
                 (resolve, reject) => {
@@ -336,13 +331,11 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
                 invalidationScope.emit("mutation:invalidation:success", {
                   variables,
                   queries,
-                  duration: performance.now() - invalidationStart,
                 });
               } catch (invError) {
                 invalidationScope.emit("mutation:invalidation:error", {
                   variables,
                   queries,
-                  duration: performance.now() - invalidationStart,
                   error: invError,
                 });
                 throw invError;
@@ -351,7 +344,6 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
 
             scope.emit("mutation:success", {
               variables,
-              duration: performance.now() - start,
               data: result,
             });
 
@@ -364,13 +356,11 @@ export function useMutation<Variables extends unknown, Data extends unknown>(
 
             executionScope.emit("mutation:execution:error", {
               variables,
-              duration: performance.now() - executionStart,
               error: errorObj,
             });
 
             scope.emit("mutation:error", {
               variables,
-              duration: performance.now() - start,
               error: errorObj,
             });
 

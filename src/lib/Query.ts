@@ -303,12 +303,9 @@ export class Query<Key extends AnyKey, TData = unknown> {
    * @returns Promise that resolves with the query data
    */
   async fetch(parentScopeId?: string): Promise<TData> {
-    const start = performance.now();
     const scope = eventEmitter.createScope({ parentScopeId });
 
-    scope.emit("query:fetch:start", {
-      key: this.serializedKey,
-    });
+    scope.emit("query:fetch:start", { key: this.serializedKey });
 
     try {
       this.retrier.resume();
@@ -317,14 +314,12 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
       scope.emit("query:fetch:success", {
         key: this.serializedKey,
-        duration: performance.now() - start,
       });
 
       return data;
     } catch (error) {
       scope.emit("query:fetch:error", {
         key: this.serializedKey,
-        duration: performance.now() - start,
         error,
       });
       throw error;
@@ -332,13 +327,11 @@ export class Query<Key extends AnyKey, TData = unknown> {
   }
 
   prefetch(): void {
-    const start = performance.now();
     const scope = eventEmitter.createScope();
 
     if (this.state.data != null || this.state.fetchStatus === "fetching") {
       scope.emit("query:prefetch:success", {
         key: this.serializedKey,
-        duration: performance.now() - start,
       });
       return;
     }
@@ -354,7 +347,6 @@ export class Query<Key extends AnyKey, TData = unknown> {
       .then(() => {
         scope.emit("query:prefetch:success", {
           key: this.serializedKey,
-          duration: performance.now() - start,
         });
 
         this.timerWheel.schedule(() => {
@@ -374,7 +366,6 @@ export class Query<Key extends AnyKey, TData = unknown> {
       .catch((error) => {
         scope.emit("query:prefetch:error", {
           key: this.serializedKey,
-          duration: performance.now() - start,
           error,
         });
       });

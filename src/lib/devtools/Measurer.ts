@@ -1,4 +1,4 @@
-import { eventEmitter, type ScopeEvent } from "./EventEmitter";
+import { eventEmitter, type ScopeEvent } from "../EventEmitter";
 
 interface ScopeMetrics {
   scopeId: string;
@@ -6,9 +6,11 @@ interface ScopeMetrics {
   startMark: string;
   shortId: string;
   track: string;
+  startedAt: number;
   events: Array<{
     eventName: string;
     markName: string;
+    timestamp: number;
   }>;
 }
 
@@ -76,6 +78,7 @@ export class Measurer {
         if (this.options.useUserTiming) {
           performance.mark(startMarkName);
         }
+        const startedAt = performance.now();
 
         const metrics: ScopeMetrics = {
           scopeId,
@@ -83,22 +86,31 @@ export class Measurer {
           startMark: startMarkName,
           shortId: shortScopeId,
           track: this.trackName,
+          startedAt,
           events: [],
         };
         this.scopes.set(scopeId, metrics);
 
         // Handle first event
-        const firstMarkName = this.createEventMark(firstEvent, metrics);
+        const firstElapsed = 0;
+        const firstMarkName = this.createEventMark(
+          firstEvent,
+          metrics,
+          firstElapsed
+        );
         metrics.events.push({
           eventName: firstEvent.eventName,
           markName: firstMarkName,
+          timestamp: firstElapsed,
         });
 
         subscribeToScope((event) => {
-          const markName = this.createEventMark(event, metrics);
+          const elapsed = performance.now() - metrics.startedAt;
+          const markName = this.createEventMark(event, metrics, elapsed);
           metrics.events.push({
             eventName: event.eventName,
             markName,
+            timestamp: elapsed,
           });
 
           // Check if scope is complete
@@ -125,7 +137,11 @@ export class Measurer {
     );
   }
 
-  private createEventMark(event: ScopeEvent, metrics: ScopeMetrics): string {
+  private createEventMark(
+    event: ScopeEvent,
+    metrics: ScopeMetrics,
+    elapsedMs: number
+  ): string {
     const label = this.getDisplayLabel(event.eventName, event.payload);
     const icon = this.getEventIcon(event.eventName);
     const markName = `${icon} ${label} (#${metrics.events.length + 1})`;
@@ -133,7 +149,12 @@ export class Measurer {
     if (this.options.useUserTiming) {
       performance.mark(markName, {
         detail: {
-          devtools: this.buildDevtoolsDetail(event.eventName, event.payload),
+          devtools: this.buildDevtoolsDetail(
+            event.eventName,
+            event.payload,
+            undefined,
+            elapsedMs
+          ),
         },
       });
     }
@@ -173,7 +194,9 @@ export class Measurer {
           devtools: this.buildDevtoolsDetail(
             finalEvent.eventName,
             finalEvent.payload,
-            this.getMeasureColor(finalEvent.eventName)
+            this.getMeasureColor(finalEvent.eventName),
+            undefined,
+            lastEvent.timestamp
           ),
         },
       });
@@ -312,7 +335,9 @@ export class Measurer {
   private buildDevtoolsDetail(
     eventName: string,
     payload: Record<string, unknown> | undefined,
-    fallbackColor?: string
+    fallbackColor?: string,
+    elapsedMs?: number,
+    durationMs?: number
   ): DevtoolsDetail {
     const baseColor = fallbackColor ?? this.getEventColor(eventName);
     const extractedProperties = this.extractProperties(payload);
@@ -323,13 +348,22 @@ export class Measurer {
       track: this.options.defaultDetail.track ?? this.trackName,
     };
 
+    const metricProperties: Array<[string, string]> = [];
+    if (durationMs !== undefined) {
+      metricProperties.push(["Duration", `${durationMs.toFixed(2)}ms`]);
+    } else if (elapsedMs !== undefined) {
+      metricProperties.push(["Elapsed", `${elapsedMs.toFixed(2)}ms`]);
+    }
+
     if (
       this.options.defaultDetail.properties ||
-      extractedProperties.length > 0
+      extractedProperties.length > 0 ||
+      metricProperties.length > 0
     ) {
       detail.properties = [
         ...(this.options.defaultDetail.properties ?? []),
         ...extractedProperties,
+        ...metricProperties,
       ];
     }
 

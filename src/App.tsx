@@ -19,7 +19,7 @@ const ReactQueryDevtoolsProduction = lazy(() =>
 );
 
 const CustomLibraryDevtools = lazy(() =>
-  import("./lib/Devtools").then((d) => ({
+  import("./lib/devtools/Devtools").then((d) => ({
     default: d.QueryDevtools,
   }))
 );

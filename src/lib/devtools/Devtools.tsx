@@ -32,7 +32,6 @@ export function QueryPerformanceTracker({
 }
 
 export interface QueryDevtoolsProps {
-  devtools: React.ComponentType<Record<string, unknown>>;
   disableLogger?: boolean;
   disableMeasurer?: boolean;
 }

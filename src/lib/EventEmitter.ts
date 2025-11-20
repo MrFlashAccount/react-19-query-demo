@@ -208,20 +208,18 @@ export class EventEmitter<EventMap extends Record<string, any>> {
 export interface EventsMap {
   // Query events
   "query:fetch:start": { key: string; scopeId: string };
-  "query:fetch:success": { key: string; duration: number; scopeId: string };
+  "query:fetch:success": { key: string; scopeId: string };
   "query:fetch:error": {
     key: string;
-    duration: number;
     error: unknown;
     scopeId: string;
   };
   "query:stale": { key: string };
 
   "query:prefetch:start": { key: string; scopeId: string };
-  "query:prefetch:success": { key: string; duration: number; scopeId: string };
+  "query:prefetch:success": { key: string; scopeId: string };
   "query:prefetch:error": {
     key: string;
-    duration: number;
     error: unknown;
     scopeId: string;
   };
@@ -232,26 +230,22 @@ export interface EventsMap {
   "mutation:start": { variables: unknown; scopeId: string };
   "mutation:success": {
     variables: unknown;
-    duration: number;
     data: unknown;
     scopeId: string;
   };
   "mutation:error": {
     variables: unknown;
-    duration: number;
     error: unknown;
     scopeId: string;
   };
   "mutation:execution:start": { variables: unknown; scopeId: string };
   "mutation:execution:success": {
     variables: unknown;
-    duration: number;
     data: unknown;
     scopeId: string;
   };
   "mutation:execution:error": {
     variables: unknown;
-    duration: number;
     error: unknown;
     scopeId: string;
   };
@@ -264,18 +258,16 @@ export interface EventsMap {
   "mutation:invalidation:success": {
     variables: unknown;
     queries: string[];
-    duration: number;
     scopeId: string;
   };
   "mutation:invalidation:error": {
     variables: unknown;
     queries: string[];
-    duration: number;
     error: unknown;
     scopeId: string;
   };
   "mutation:notify:start": { scopeId: string };
-  "mutation:notify:success": { duration: number; scopeId: string };
+  "mutation:notify:success": { scopeId: string };
 
   // QueryClient events
   "client:change": { client: any };
@@ -288,14 +280,12 @@ export interface EventsMap {
   };
   "function:success": {
     name: string;
-    duration: number;
     args: any[];
     result: any;
     scopeId: string;
   };
   "function:error": {
     name: string;
-    duration: number;
     args: any[];
     error: unknown;
     scopeId: string;

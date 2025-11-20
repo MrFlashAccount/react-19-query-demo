@@ -1,4 +1,4 @@
-import { eventEmitter, type ScopeEvent } from "./EventEmitter";
+import { eventEmitter, type ScopeEvent } from "../EventEmitter";
 
 interface ScopeTrace {
   scopeId: string;
@@ -119,6 +119,8 @@ export class Logger {
     const icon = this.getEventIcon(event.eventName);
     const category = this.getEventCategory(event.eventName);
     const color = this.getEventColor(event.eventName);
+    const currentEvent = trace.events[trace.events.length - 1];
+    const elapsedMs = currentEvent.timestamp;
 
     if (isFirstEvent) {
       console.group(
@@ -127,9 +129,7 @@ export class Logger {
       );
     }
 
-    const timestamp = `+${trace.events[
-      trace.events.length - 1
-    ].timestamp.toFixed(2)}ms`;
+    const timestamp = `+${elapsedMs.toFixed(2)}ms`;
     console.log(
       `%c${icon} ${event.eventName} %c${timestamp}`,
       `color: ${color}; font-weight: bold;`,
@@ -137,17 +137,26 @@ export class Logger {
     );
 
     // Log payload details based on event type
-    this.logPayloadDetails(event.eventName, event.payload);
+    this.logPayloadDetails(event.eventName, event.payload, elapsedMs);
   }
 
-  private logPayloadDetails(eventName: string, payload: any) {
+  private logPayloadDetails(
+    eventName: string,
+    payload: any,
+    elapsedMs?: number
+  ) {
+    const durationLabel =
+      elapsedMs !== undefined && this.shouldLogDuration(eventName)
+        ? `${elapsedMs.toFixed(2)}ms`
+        : undefined;
+
     if (
       eventName.includes("query:fetch") ||
       eventName.includes("query:prefetch")
     ) {
       console.log("  Key:", payload.key);
-      if (payload.duration !== undefined) {
-        console.log("  Duration:", `${payload.duration.toFixed(2)}ms`);
+      if (durationLabel) {
+        console.log("  Duration:", durationLabel);
       }
       if (payload.error) {
         console.error("  Error:", payload.error);
@@ -155,13 +164,13 @@ export class Logger {
     } else if (eventName.includes("mutation")) {
       if (eventName.includes("invalidation")) {
         console.log("  Queries to invalidate:", payload.queries);
-        if (payload.duration !== undefined) {
-          console.log("  Duration:", `${payload.duration.toFixed(2)}ms`);
+        if (durationLabel) {
+          console.log("  Duration:", durationLabel);
         }
       } else {
         console.log("  Variables:", payload.variables);
-        if (payload.duration !== undefined) {
-          console.log("  Duration:", `${payload.duration.toFixed(2)}ms`);
+        if (durationLabel) {
+          console.log("  Duration:", durationLabel);
         }
         if (payload.data !== undefined) {
           console.log("  Data:", payload.data);
@@ -173,8 +182,8 @@ export class Logger {
     } else if (eventName.includes("function")) {
       console.log("  Function:", payload.name);
       console.log("  Arguments:", payload.args);
-      if (payload.duration !== undefined) {
-        console.log("  Duration:", `${payload.duration.toFixed(2)}ms`);
+      if (durationLabel) {
+        console.log("  Duration:", durationLabel);
       }
       if (payload.result !== undefined) {
         console.log("  Result:", payload.result);
@@ -185,6 +194,10 @@ export class Logger {
     } else if (eventName.includes("garbage-collect")) {
       console.log("  Key:", payload.key);
     }
+  }
+
+  private shouldLogDuration(eventName: string): boolean {
+    return eventName.endsWith(":success") || eventName.endsWith(":error");
   }
 
   private logScopeSummary(trace: ScopeTrace) {

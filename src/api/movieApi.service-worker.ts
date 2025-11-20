@@ -12,7 +12,7 @@ let movieDatabaseCache: Movie[] | null = null;
  * Load the movie database from JSON files
  */
 async function getDatabase(): Promise<Movie[]> {
-  await new Promise((res) => setTimeout(res, Math.random() * 1000 + 500));
+  await new Promise((res) => setTimeout(res, Math.random() * 1000 + 1000));
 
   if (movieDatabaseCache != null) {
     return movieDatabaseCache;
@@ -51,8 +51,9 @@ async function searchMovies(
   limit: number = 500
 ): Promise<Movie[]> {
   const database = await getDatabase();
+  query = query.trim();
 
-  if (!query.trim()) {
+  if (!query) {
     return database.slice(0, limit);
   }
 
