@@ -6,6 +6,7 @@ import {
   useTransition,
   useEffect,
   startTransition,
+  useDebugValue,
 } from "react";
 import { QueryClient, type QueryClientOptions } from "./QueryClient";
 import type { RetryConfig } from "./Retrier";
@@ -198,6 +199,10 @@ export function useQuery<
 
   // Subscribe to query changes
   useEffect(() => query.subscribe(() => {}), [query]);
+
+  useDebugValue(query);
+  useDebugValue(queryState);
+  useDebugValue(query.promise);
 
   return {
     isPending,
