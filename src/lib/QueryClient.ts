@@ -2,6 +2,7 @@ import type { RetryConfig } from "./Retrier";
 import { Query, type AnyKey, type QueryOptions } from "./Query";
 import { noop } from "./utils";
 import { eventEmitter } from "./EventEmitter";
+import { QueryKeyTree } from "./QueryKeyTree";
 
 /**
  * Options for adding a promise to the cache
@@ -32,7 +33,7 @@ export interface AddPromiseOptions<
  */
 export interface QueryClientOptions {
   /** Cache implementation */
-  cache?: Map<string, Query<AnyKey, unknown>>;
+  cache?: QueryKeyTree;
   /** Callback invoked when a new instance is created after cache mutation */
   onChange?: (newInstance: QueryClient) => void;
   context?: QueryClientContext;
@@ -78,12 +79,12 @@ export interface InvalidateOptions {
  * ```
  */
 export class QueryClient {
-  private _cache: Map<string, Query<AnyKey, unknown>>;
+  private _cache: QueryKeyTree;
   private onChange: (newInstance: QueryClient) => void;
   private context: QueryClientContext;
 
   constructor(options: QueryClientOptions = {}) {
-    this._cache = options.cache || new Map<string, Query<AnyKey, unknown>>();
+    this._cache = options.cache || new QueryKeyTree();
     this.onChange = options.onChange ?? noop;
     this.context = options.context ?? {};
   }
@@ -124,9 +125,9 @@ export class QueryClient {
   }
 
   /**
-   * Get the underlying cache map (exposed for testing)
+   * Get the underlying cache tree (exposed for testing)
    */
-  getCache(): ReadonlyMap<string, Query<AnyKey, unknown>> {
+  getCache(): QueryKeyTree {
     return this._cache;
   }
 
@@ -145,8 +146,7 @@ export class QueryClient {
     const { key, queryFn, gcTime, staleTime, retry, retryDelay, prefetch } =
       options;
 
-    const keySerialized = Query.getSerializedKey(key);
-    const existingQuery = this._cache.get(keySerialized) as
+    const existingQuery = this._cache.get(key) as
       | Query<Key, PromiseValue>
       | undefined;
 
@@ -160,14 +160,14 @@ export class QueryClient {
       {
         onRemove: () => {
           eventEmitter.emit("query:garbage-collect", {
-            key: keySerialized,
+            key: entry.serializedKey,
           });
-          this.handleQueryGarbageCollect(keySerialized);
+          this.handleQueryGarbageCollect(key);
         },
       }
     );
 
-    this._cache.set(keySerialized, entry as unknown as Query<AnyKey, unknown>);
+    this._cache.set(key, entry as unknown as Query<AnyKey, unknown>);
 
     if (prefetch) {
       entry.prefetch();
@@ -185,8 +185,7 @@ export class QueryClient {
   getPromise<const Key extends Array<unknown>, PromiseValue extends unknown>(
     key: Key
   ): Promise<PromiseValue> | null {
-    const keySerialized = Query.getSerializedKey(key);
-    const entry = this._cache.get(keySerialized);
+    const entry = this._cache.get(key);
 
     if (entry == null) {
       return null;
@@ -202,8 +201,7 @@ export class QueryClient {
    * @returns True if the key exists in the cache
    */
   has<const Key extends Array<unknown>>(key: Key): boolean {
-    const keySerialized = Query.getSerializedKey(key);
-    return this._cache.has(keySerialized);
+    return this._cache.has(key);
   }
 
   /**
@@ -213,8 +211,7 @@ export class QueryClient {
    * @returns True if the data is stale and should be refetched
    */
   isStale<const Key extends Array<unknown>>(key: Key): boolean {
-    const keySerialized = Query.getSerializedKey(key);
-    const entry = this._cache.get(keySerialized);
+    const entry = this._cache.get(key);
 
     if (entry == null) {
       return true;
@@ -253,65 +250,32 @@ export class QueryClient {
     key: Key,
     options: InvalidateOptions = {}
   ): Promise<void> {
-    // Find all cache keys that start with the specified key prefix
-    for (const cacheKey of this._cache.keys()) {
-      if (this.keyStartsWith(cacheKey, key)) {
-        const entry = this._cache.get(cacheKey);
+    // Use tree's efficient prefix search - no need to iterate all keys!
+    const queries = this._cache.findByPrefix(key);
 
-        if (entry == null) {
-          continue;
-        }
-
-        await entry.invalidate(options.parentScopeId);
-      }
+    for (const query of queries) {
+      await query.invalidate(options.parentScopeId);
     }
 
     const newInstance = this.clone();
     this.notifyChange(newInstance);
   }
 
-  private handleQueryGarbageCollect(serializedKey: string): void {
-    if (this.deleteQuery(serializedKey)) {
+  private handleQueryGarbageCollect<Key extends AnyKey>(key: Key): void {
+    if (this.deleteQuery(key)) {
       const newInstance = this.clone();
       this.notifyChange(newInstance);
     }
   }
 
-  private deleteQuery(serializedKey: string): boolean {
-    const query = this._cache.get(serializedKey);
+  private deleteQuery<Key extends AnyKey>(key: Key): boolean {
+    const query = this._cache.get(key);
     if (query == null) {
       return false;
     }
 
     query.destroy();
-    this._cache.delete(serializedKey);
-
-    return true;
-  }
-
-  /**
-   * Check if a serialized cache key starts with the specified key prefix
-   *
-   * @param serializedKey - The serialized cache key (JSON string)
-   * @param keyPrefix - The key prefix to check against
-   * @returns True if the cache key starts with the prefix
-   */
-  private keyStartsWith<const Key extends Array<unknown>>(
-    serializedKey: string,
-    keyPrefix: Key
-  ): boolean {
-    const parsedKey = JSON.parse(serializedKey) as Array<unknown>;
-
-    // Check if parsedKey starts with all elements of keyPrefix
-    if (parsedKey.length < keyPrefix.length) {
-      return false;
-    }
-
-    for (let i = 0; i < keyPrefix.length; i++) {
-      if (JSON.stringify(parsedKey[i]) !== JSON.stringify(keyPrefix[i])) {
-        return false;
-      }
-    }
+    this._cache.delete(key);
 
     return true;
   }

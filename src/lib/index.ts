@@ -25,6 +25,8 @@ export {
 
 export { QueryClient, type QueryClientOptions } from "./QueryClient";
 
+export { QueryKeyTree } from "./QueryKeyTree";
+
 export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 
 export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";

@@ -225,17 +225,17 @@ export class Query<Key extends AnyKey, TData = unknown> {
       return false;
     }
 
-    // If no data has been fetched yet, it's stale
-    if (this.state.dataUpdatedAt == null) {
-      return true;
-    }
-
-    // If staleTime is 'static', data is never stale
+    // If staleTime is 'static', data is never stale (even if never fetched or invalidated)
     if (this.options.staleTime === "static") {
       return false;
     }
 
-    // If staleTime is Infinity, data is never stale
+    // If no data has been fetched yet (or was invalidated), it's stale
+    if (this.state.dataUpdatedAt == null) {
+      return true;
+    }
+
+    // If staleTime is Infinity, data is never stale (but can be invalidated)
     if (this.options.staleTime === Infinity) {
       return false;
     }

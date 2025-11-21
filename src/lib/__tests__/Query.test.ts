@@ -20,7 +20,11 @@ describe("Query", () => {
   describe("initialization", () => {
     it("should create query with required options", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       expect(query).toBeDefined();
       expect(query.getKey()).toEqual(["user", 1]);
@@ -38,7 +42,8 @@ describe("Query", () => {
 
       const query = new Query(
         { key: ["user", 1], queryFn, staleTime: 2000 },
-        defaultOptions
+        defaultOptions,
+        { onRemove: vi.fn() }
       );
 
       const options = query.getOptions();
@@ -51,7 +56,8 @@ describe("Query", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
       const query = new Query(
         { key: ["user", 1], queryFn, gcTime: 1000, retry: 5 },
-        { gcTime: 5000, retry: 3 }
+        { gcTime: 5000, retry: 3 },
+        { onRemove: vi.fn() }
       );
 
       const options = query.getOptions();
@@ -63,7 +69,11 @@ describe("Query", () => {
   describe("state management", () => {
     it("should update state after successful fetch", async () => {
       const queryFn = vi.fn().mockResolvedValue("success data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -78,7 +88,11 @@ describe("Query", () => {
     it("should update state after failed fetch", async () => {
       const error = new Error("fetch failed");
       const queryFn = vi.fn().mockRejectedValue(error);
-      const query = new Query({ key: ["user", 1], queryFn, retry: false });
+      const query = new Query(
+        { key: ["user", 1], queryFn, retry: false },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await expect(query.fetch()).rejects.toThrow("fetch failed");
 
@@ -96,7 +110,11 @@ describe("Query", () => {
             setTimeout(() => resolve("data"), 1000);
           })
       );
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       // Query must be subscribed for fetch to work
       query.subscribe(vi.fn());
@@ -113,7 +131,11 @@ describe("Query", () => {
   describe("fetch", () => {
     it("should fetch data using queryFn", async () => {
       const queryFn = vi.fn().mockResolvedValue("test data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const result = await query.fetch();
 
@@ -124,11 +146,15 @@ describe("Query", () => {
 
     it("should handle refetch with invalidate", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({
-        key: ["user", 1],
-        queryFn,
-        staleTime: Infinity,
-      });
+      const query = new Query(
+        {
+          key: ["user", 1],
+          queryFn,
+          staleTime: Infinity,
+        },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       // Subscribe to enable fetching
       query.subscribe(vi.fn());
@@ -152,7 +178,11 @@ describe("Query", () => {
         .mockRejectedValueOnce(new Error("fail 2"))
         .mockResolvedValue("success");
 
-      const query = new Query({ key: ["user", 1], queryFn, retry: 3 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, retry: 3 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const result = await query.fetch();
 
@@ -162,7 +192,11 @@ describe("Query", () => {
 
     it("should notify subscribers on fetch completion", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const subscriber = vi.fn();
       query.subscribe(subscriber);
@@ -180,7 +214,11 @@ describe("Query", () => {
     it("should handle fetch errors correctly", async () => {
       const error = new Error("network error");
       const queryFn = vi.fn().mockRejectedValue(error);
-      const query = new Query({ key: ["user", 1], queryFn, retry: false });
+      const query = new Query(
+        { key: ["user", 1], queryFn, retry: false },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await expect(query.fetch()).rejects.toThrow("network error");
 
@@ -193,18 +231,26 @@ describe("Query", () => {
   describe("staleness checking", () => {
     it("should be stale if no data fetched yet", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       expect(query.isStale()).toBe(true);
     });
 
     it("should not be stale with static staleTime", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({
-        key: ["user", 1],
-        queryFn,
-        staleTime: "static",
-      });
+      const query = new Query(
+        {
+          key: ["user", 1],
+          queryFn,
+          staleTime: "static",
+        },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -213,11 +259,15 @@ describe("Query", () => {
 
     it("should not be stale with Infinity staleTime", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({
-        key: ["user", 1],
-        queryFn,
-        staleTime: Infinity,
-      });
+      const query = new Query(
+        {
+          key: ["user", 1],
+          queryFn,
+          staleTime: Infinity,
+        },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -226,7 +276,11 @@ describe("Query", () => {
 
     it("should be stale with staleTime: 0", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 0 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 0 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -235,7 +289,11 @@ describe("Query", () => {
 
     it("should be stale after staleTime elapsed", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -248,7 +306,11 @@ describe("Query", () => {
 
     it("should not be stale before staleTime elapsed", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -265,7 +327,11 @@ describe("Query", () => {
   describe("subscribers", () => {
     it("should add and track subscribers", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const subscriber1 = vi.fn();
       const subscriber2 = vi.fn();
@@ -279,7 +345,11 @@ describe("Query", () => {
 
     it("should remove subscribers via unsubscribe function", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const subscriber = vi.fn();
       const unsubscribe = query.subscribe(subscriber);
@@ -293,7 +363,11 @@ describe("Query", () => {
 
     it("should notify subscribers on state changes", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const subscriber = vi.fn();
       query.subscribe(subscriber);
@@ -309,7 +383,11 @@ describe("Query", () => {
 
     it("should not throw if subscriber throws", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       const badSubscriber = vi.fn(() => {
@@ -325,7 +403,11 @@ describe("Query", () => {
 
     it("should trigger refetch on subscribe if stale and successful", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 1000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 1000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       // Initial fetch
       await query.fetch();
@@ -345,7 +427,11 @@ describe("Query", () => {
 
     it("should not refetch on subscribe if not stale", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
       expect(queryFn).toHaveBeenCalledTimes(1);
@@ -361,7 +447,11 @@ describe("Query", () => {
 
     it("should not refetch on subscribe if query has error", async () => {
       const queryFn = vi.fn().mockRejectedValue(new Error("fail"));
-      const query = new Query({ key: ["user", 1], queryFn, retry: false });
+      const query = new Query(
+        { key: ["user", 1], queryFn, retry: false },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await expect(query.fetch()).rejects.toThrow("fail");
       expect(queryFn).toHaveBeenCalledTimes(1);
@@ -379,7 +469,11 @@ describe("Query", () => {
   describe("garbage collection", () => {
     it("should schedule GC when last subscriber unsubscribes", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe = query.subscribe(vi.fn());
 
@@ -392,11 +486,15 @@ describe("Query", () => {
 
     it("should not schedule GC with Infinity gcTime", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({
-        key: ["user", 1],
-        queryFn,
-        gcTime: Infinity,
-      });
+      const query = new Query(
+        {
+          key: ["user", 1],
+          queryFn,
+          gcTime: Infinity,
+        },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe = query.subscribe(vi.fn());
       unsubscribe();
@@ -406,7 +504,11 @@ describe("Query", () => {
 
     it("should cancel GC when new subscriber added", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe1 = query.subscribe(vi.fn());
       unsubscribe1();
@@ -421,7 +523,11 @@ describe("Query", () => {
 
     it("should be eligible for GC after gcTime elapsed", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe = query.subscribe(vi.fn());
 
@@ -449,7 +555,11 @@ describe("Query", () => {
 
     it("should not be eligible for GC with active subscribers", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       query.subscribe(vi.fn());
 
@@ -464,7 +574,11 @@ describe("Query", () => {
   describe("options management", () => {
     it("should return copy of options", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const options1 = query.getOptions();
       const options2 = query.getOptions();
@@ -474,7 +588,11 @@ describe("Query", () => {
 
     it("should update options", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       query.setOptions({ gcTime: 10000, staleTime: 2000 });
 
@@ -489,7 +607,11 @@ describe("Query", () => {
         .mockRejectedValueOnce(new Error("fail"))
         .mockResolvedValue("success");
 
-      const query = new Query({ key: ["user", 1], queryFn, retry: false });
+      const query = new Query(
+        { key: ["user", 1], queryFn, retry: false },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       // Update to allow retries
       query.setOptions({ retry: 3 });
@@ -508,7 +630,11 @@ describe("Query", () => {
   describe("invalidation", () => {
     it("should reset dataUpdatedAt on invalidate", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -521,7 +647,11 @@ describe("Query", () => {
 
     it("should trigger refetch if subscribers exist", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       // Subscribe first to enable fetching
       query.subscribe(vi.fn());
@@ -541,7 +671,11 @@ describe("Query", () => {
 
     it("should not trigger refetch if no subscribers", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, staleTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, staleTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
       expect(queryFn).toHaveBeenCalledTimes(1);
@@ -555,11 +689,15 @@ describe("Query", () => {
 
     it("should not invalidate queries with static staleTime", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({
-        key: ["user", 1],
-        queryFn,
-        staleTime: "static",
-      });
+      const query = new Query(
+        {
+          key: ["user", 1],
+          queryFn,
+          staleTime: "static",
+        },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -574,7 +712,11 @@ describe("Query", () => {
   describe("reset", () => {
     it("should reset query to initial state", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       await query.fetch();
 
@@ -592,7 +734,11 @@ describe("Query", () => {
 
     it("should notify subscribers on reset", async () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const subscriber = vi.fn();
       query.subscribe(subscriber);
@@ -612,7 +758,11 @@ describe("Query", () => {
   describe("destroy", () => {
     it("should clean up resources", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe = query.subscribe(vi.fn());
       unsubscribe();
@@ -627,7 +777,11 @@ describe("Query", () => {
 
     it("should clear all subscribers", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       query.subscribe(vi.fn());
       query.subscribe(vi.fn());
@@ -648,10 +802,14 @@ describe("Query", () => {
         name: "John",
       });
 
-      const query = new Query<[string, number], User>({
-        key: ["user", 1],
-        queryFn,
-      });
+      const query = new Query<[string, number], User>(
+        {
+          key: ["user", 1],
+          queryFn,
+        },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const result = await query.fetch();
 
@@ -667,7 +825,11 @@ describe("Query", () => {
   describe("edge cases", () => {
     it("should handle multiple rapid subscribes/unsubscribes", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn, gcTime: 5000 });
+      const query = new Query(
+        { key: ["user", 1], queryFn, gcTime: 5000 },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe1 = query.subscribe(vi.fn());
       const unsubscribe2 = query.subscribe(vi.fn());
@@ -688,7 +850,11 @@ describe("Query", () => {
 
     it("should handle calling unsubscribe multiple times", () => {
       const queryFn = vi.fn().mockResolvedValue("data");
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       const unsubscribe = query.subscribe(vi.fn());
 
@@ -708,7 +874,11 @@ describe("Query", () => {
             setTimeout(() => resolve("data"), 1000);
           })
       );
-      const query = new Query({ key: ["user", 1], queryFn });
+      const query = new Query(
+        { key: ["user", 1], queryFn },
+        {},
+        { onRemove: vi.fn() }
+      );
 
       // Multiple subscribers share the same fetch
       const unsub1 = query.subscribe(vi.fn());

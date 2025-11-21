@@ -246,9 +246,7 @@ describe("QueryProvider", () => {
       });
 
       // Entry should exist
-      expect(
-        contextValue.queryClient.getCache().has(JSON.stringify(["test"]))
-      ).toBe(true);
+      expect(contextValue.queryClient.getCache().has(["test"])).toBe(true);
 
       // Unsubscribe to mark entry as GC eligible (simulating no active subscriptions)
       query.subscribe(() => {})();
@@ -257,18 +255,14 @@ describe("QueryProvider", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(4999);
       });
-      expect(
-        contextValue.queryClient.getCache().has(JSON.stringify(["test"]))
-      ).toBe(true);
+      expect(contextValue.queryClient.getCache().has(["test"])).toBe(true);
 
       // Advance past gcTime and trigger scheduler (100ms intervals + setTimeout(0))
       await act(async () => {
         await vi.advanceTimersByTimeAsync(101);
         await vi.runAllTimersAsync();
       });
-      expect(
-        contextValue.queryClient.getCache().has(JSON.stringify(["test"]))
-      ).toBe(false);
+      expect(contextValue.queryClient.getCache().has(["test"])).toBe(false);
     });
 
     it("should not remove cache entry if gcTime is not specified", () => {
@@ -287,15 +281,11 @@ describe("QueryProvider", () => {
         queryFn,
       });
 
-      expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
-      ).toBe(true);
+      expect(contextValue!.queryClient.getCache().has(["test"])).toBe(true);
 
       // Fast-forward a lot of time
       vi.advanceTimersByTime(100000);
-      expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
-      ).toBe(true);
+      expect(contextValue!.queryClient.getCache().has(["test"])).toBe(true);
     });
 
     it("should not remove cache entry if gcTime is Infinity", () => {
@@ -316,12 +306,12 @@ describe("QueryProvider", () => {
       });
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       vi.advanceTimersByTime(100000);
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
     });
   });
@@ -347,7 +337,7 @@ describe("QueryProvider", () => {
       query.subscribe(() => {});
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       // Fast-forward past gcTime
@@ -355,7 +345,7 @@ describe("QueryProvider", () => {
 
       // Should still exist because there's an active subscription
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
     });
 
@@ -384,7 +374,7 @@ describe("QueryProvider", () => {
         await vi.advanceTimersByTimeAsync(10000);
       });
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       // Remove first subscription
@@ -393,7 +383,7 @@ describe("QueryProvider", () => {
         await vi.advanceTimersByTimeAsync(10000);
       });
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       // Remove last subscription - should mark as GC eligible
@@ -408,7 +398,7 @@ describe("QueryProvider", () => {
         await vi.runAllTimersAsync();
       });
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(false);
     });
 
@@ -447,7 +437,7 @@ describe("QueryProvider", () => {
 
       // Should still exist
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
     });
   });
@@ -491,7 +481,7 @@ describe("QueryProvider", () => {
 
       const entry = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["test"]));
+        .get(["test"]);
 
       // Should have 1 subscription while mounted
       expect(entry!.subscriptions).toBe(1);
@@ -540,7 +530,7 @@ describe("QueryProvider", () => {
       expect(screen.queryByText("data")).toBeDefined();
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       // Unmount component
@@ -551,7 +541,7 @@ describe("QueryProvider", () => {
 
       const hasEntry = contextValue!.queryClient
         .getCache()
-        .has(JSON.stringify(["test"]));
+        .has(["test"]);
       expect(hasEntry).toBe(false);
     });
 
@@ -591,7 +581,7 @@ describe("QueryProvider", () => {
       });
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       // Switch to fake timers
@@ -602,7 +592,7 @@ describe("QueryProvider", () => {
 
       // Cache should still exist
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
     });
 
@@ -784,7 +774,7 @@ describe("QueryProvider", () => {
       });
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(true);
 
       // Trigger GC by subscribing once and then releasing
@@ -798,7 +788,7 @@ describe("QueryProvider", () => {
       });
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["test"]))
+        contextValue!.queryClient.getCache().has(["test"])
       ).toBe(false);
     });
   });
@@ -824,7 +814,7 @@ describe("QueryProvider", () => {
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action"]))
+          .has(["movies", "action"])
       ).toBe(true);
 
       contextValue!.queryClient.invalidate(["movies", "action"]);
@@ -832,7 +822,7 @@ describe("QueryProvider", () => {
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action"]))
+          .has(["movies", "action"])
       ).toBe(true);
     });
 
@@ -875,29 +865,30 @@ describe("QueryProvider", () => {
         key: ["users"],
         queryFn: vi.fn().mockResolvedValue("users"),
         gcTime: 5000,
+        staleTime: "static", // Never stale, so it won't be affected by invalidation
       });
 
       // Verify all entries exist
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
+        contextValue!.queryClient.getCache().has(["movies"])
       ).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action"]))
+          .has(["movies", "action"])
       ).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "comedy"]))
+          .has(["movies", "comedy"])
       ).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action", "popular"]))
+          .has(["movies", "action", "popular"])
       ).toBe(true);
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["users"]))
+        contextValue!.queryClient.getCache().has(["users"])
       ).toBe(true);
 
       // Invalidate all queries starting with ["movies"]
@@ -906,46 +897,46 @@ describe("QueryProvider", () => {
       // All movie queries should still exist but be stale
       const moviesQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies"]));
+        .get(["movies"]);
       const actionQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "action"]));
+        .get(["movies", "action"]);
       const comedyQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "comedy"]));
+        .get(["movies", "comedy"]);
       const popularQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "action", "popular"]));
+        .get(["movies", "action", "popular"]);
 
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
+        contextValue!.queryClient.getCache().has(["movies"])
       ).toBe(true);
       expect(moviesQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action"]))
+          .has(["movies", "action"])
       ).toBe(true);
       expect(actionQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "comedy"]))
+          .has(["movies", "comedy"])
       ).toBe(true);
       expect(comedyQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action", "popular"]))
+          .has(["movies", "action", "popular"])
       ).toBe(true);
       expect(popularQuery?.isStale()).toBe(true);
 
       // Users query should still exist and not be stale
       const usersQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["users"]));
+        .get(["users"]);
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["users"]))
+        contextValue!.queryClient.getCache().has(["users"])
       ).toBe(true);
       expect(usersQuery?.isStale()).toBe(false);
     });
@@ -982,6 +973,7 @@ describe("QueryProvider", () => {
         key: ["movies", "comedy"],
         queryFn: vi.fn().mockResolvedValue("comedy movies"),
         gcTime: 5000,
+        staleTime: "static", // Never stale, so it won't be affected by invalidation
       });
 
       // Invalidate all queries starting with ["movies", "action"]
@@ -990,41 +982,41 @@ describe("QueryProvider", () => {
       // All action movie queries should still exist but be stale
       const actionQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "action"]));
+        .get(["movies", "action"]);
       const popularQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "action", "popular"]));
+        .get(["movies", "action", "popular"]);
       const recentQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "action", "recent"]));
+        .get(["movies", "action", "recent"]);
 
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action"]))
+          .has(["movies", "action"])
       ).toBe(true);
       expect(actionQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action", "popular"]))
+          .has(["movies", "action", "popular"])
       ).toBe(true);
       expect(popularQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "action", "recent"]))
+          .has(["movies", "action", "recent"])
       ).toBe(true);
       expect(recentQuery?.isStale()).toBe(true);
 
-      // Comedy query should still exist and not be stale
+      // Comedy query should still exist and not be stale (because it has staleTime: 'static')
       const comedyQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies", "comedy"]));
+        .get(["movies", "comedy"]);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["movies", "comedy"]))
+          .has(["movies", "comedy"])
       ).toBe(true);
       expect(comedyQuery?.isStale()).toBe(false);
     });
@@ -1054,11 +1046,11 @@ describe("QueryProvider", () => {
 
       // Entry should still exist but be stale
       expect(
-        contextValue!.queryClient.getCache().has(JSON.stringify(["movies"]))
+        contextValue!.queryClient.getCache().has(["movies"])
       ).toBe(true);
       const cachedQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["movies"]));
+        .get(["movies"]);
       expect(cachedQuery?.isStale()).toBe(true);
     });
 
@@ -1105,6 +1097,7 @@ describe("QueryProvider", () => {
         key: ["user", 456, { active: true }],
         queryFn: vi.fn().mockResolvedValue("other user data"),
         gcTime: 5000,
+        staleTime: "static", // Never stale, so it won't be affected by invalidation
       });
 
       // Invalidate all queries for user 123
@@ -1113,32 +1106,32 @@ describe("QueryProvider", () => {
       // User 123 queries should still exist but be stale
       const user123ActiveQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["user", 123, { active: true }]));
+        .get(["user", 123, { active: true }]);
       const user123InactiveQuery = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["user", 123, { active: false }]));
+        .get(["user", 123, { active: false }]);
 
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["user", 123, { active: true }]))
+          .has(["user", 123, { active: true }])
       ).toBe(true);
       expect(user123ActiveQuery?.isStale()).toBe(true);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["user", 123, { active: false }]))
+          .has(["user", 123, { active: false }])
       ).toBe(true);
       expect(user123InactiveQuery?.isStale()).toBe(true);
 
       // User 456 should still exist and not be stale
       const user456Query = contextValue!.queryClient
         .getCache()
-        .get(JSON.stringify(["user", 456, { active: true }]));
+        .get(["user", 456, { active: true }]);
       expect(
         contextValue!.queryClient
           .getCache()
-          .has(JSON.stringify(["user", 456, { active: true }]))
+          .has(["user", 456, { active: true }])
       ).toBe(true);
       expect(user456Query?.isStale()).toBe(false);
     });
