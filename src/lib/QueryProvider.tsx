@@ -198,7 +198,7 @@ export function useQuery<
   const isError = queryState.status === "error";
 
   // Subscribe to query changes
-  useEffect(() => query.subscribe(() => {}), [query]);
+  useEffect(() => query.subscribe(noop), [query]);
 
   useDebugValue(query);
   useDebugValue(queryState);
