@@ -3,8 +3,13 @@ import { QueryClient, QueryProvider, useMutation, useQuery } from "../../lib";
 import { MovieList, MovieCard, SearchBox } from "../shared";
 import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
+import {
+  appGraph,
+  moviesQuery,
+  updateMovieRatingMutation,
+} from "../../queries";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ graph: appGraph });
 
 export default function CustomLibraryTab({
   formState,
@@ -35,12 +40,14 @@ function CustomLibraryTabContent({
 }: TabProps<{}>) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
-  const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
 
   const { promise } = useQuery({
-    key: ["movies", searchQuery, movieLimit],
-    queryFn: ([, query]) => api.searchMovies(query, movieLimit),
-    gcTime: gcTimeout,
+    query: moviesQuery,
+    params: {
+      api,
+      searchQuery,
+      movieLimit,
+    },
   });
 
   const movies = use(promise);
@@ -56,7 +63,6 @@ function CustomLibraryTabContent({
               key={movie.id}
               movie={movie}
               api={api}
-              gcTimeout={gcTimeout}
               searchQuery={searchQuery}
               movieLimit={movieLimit}
             />
@@ -75,36 +81,31 @@ function CustomLibraryTabContent({
 function MovieCardCustom({
   movie,
   api,
-  gcTimeout,
   searchQuery,
   movieLimit,
 }: {
   movie: Movie;
   api: TabProps["api"];
-  gcTimeout: number;
   searchQuery: string;
   movieLimit: number;
 }) {
   const movieId = movie.id;
 
   const { mutate: updateRating, isPending } = useMutation({
-    mutationFn: ({ rating }: { rating: number }) =>
-      api.updateMovieRating(movieId, rating),
-    // Invalidate all queries starting with ['movies'] - this will refetch all movie searches
-    invalidateQueries: [["movies"], ["movie", movieId]],
+    mutation: updateMovieRatingMutation,
   });
 
+  // Subscribe to movies query to keep it fresh
   useQuery({
-    key: ["movies", searchQuery, movieLimit],
-    queryFn: ([, query]) => api.searchMovies(query, movieLimit),
-    gcTime: gcTimeout,
+    query: moviesQuery,
+    params: { api, searchQuery, movieLimit },
   });
 
   return (
     <MovieCard
       movie={movie}
       onUpdateRating={(rating) => {
-        void updateRating({ rating });
+        void updateRating({ api, movieId }, { rating });
       }}
       isPending={isPending}
     />

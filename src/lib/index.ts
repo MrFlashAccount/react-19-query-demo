@@ -25,7 +25,22 @@ export {
 
 export { QueryClient, type QueryClientOptions } from "./QueryClient";
 
-export { QueryKeyTree } from "./QueryKeyTree";
+export { QueryKeyTree, type AnyKey } from "./QueryKeyTree";
+
+export { QueryCache } from "./QueryCache";
+
+export {
+  DependencyGraph,
+  query,
+  mutation,
+  isQuery,
+  isMutation,
+  getQueryInstanceKey,
+  serializeParams,
+  type QueryDefinition,
+  type MutationDefinition,
+  type QueryOptions as GraphQueryOptions,
+} from "./DependencyGraph";
 
 export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Query } from "../Query";
+import { query } from "../DependencyGraph";
 import { timerWheel as defaultTimerWheel } from "../TimerWheel";
 import type { TimerWheel } from "../TimerWheel";
+import type { QueryDefinition } from "../DependencyGraph";
 
 describe("Query", () => {
   let timerWheel: TimerWheel;
@@ -16,6 +18,23 @@ describe("Query", () => {
     timerWheel.clear();
     vi.useRealTimers();
   });
+
+  // Helper to create test query definitions
+  function createTestQuery<TData = unknown, TParams = any>(
+    queryFn: (params: TParams) => Promise<TData>,
+    options: {
+      gcTime?: number;
+      staleTime?: number | "static";
+      retry?: number;
+      retryDelay?: number | ((failureCount: number, error: unknown) => number);
+      name?: string;
+    } = {}
+  ): QueryDefinition<TData, TParams> {
+    return query({
+      queryFn,
+      ...options,
+    });
+  }
 
   describe("initialization", () => {
     it("should create query with required options", () => {

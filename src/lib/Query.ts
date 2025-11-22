@@ -1,12 +1,8 @@
 import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
-import {
-  createBatcher,
-  exponentialBackoff,
-  stableKeySerialize,
-  type Batch,
-} from "./utils";
+import { createBatcher, exponentialBackoff, type Batch } from "./utils";
 import { eventEmitter } from "./EventEmitter";
+import { type QueryDefinition, getQueryInstanceKey } from "./DependencyGraph";
 
 /**
  * Query state tracking
@@ -28,51 +24,49 @@ export interface QueryState<TData> {
   prefetchedAt: number | undefined;
 }
 
-export type Key<T extends unknown> = Array<T>;
-export type AnyKey = Key<unknown>;
-
 /**
- * Options for a query
+ * Options for creating a Query instance (internal use)
+ * Note: Most options come from the QueryDefinition and cannot be overridden
  */
-export interface QueryOptions<Key extends Array<unknown>, TData> {
-  /** The query key */
-  key: Key;
-  /** Function that returns a promise to fetch data */
-  queryFn: (key: Key) => Promise<TData>;
-  /** Time in milliseconds after which the query will be garbage collected. Default: Infinity */
-  gcTime?: number;
-  /** Time in milliseconds until data becomes stale. Can be 'static' to never refetch. Default: 0 */
-  staleTime?: number | "static";
-  /** Retry configuration - number of retries, boolean, or custom function. Default: true (3 retries) */
-  retry?: RetryConfig;
-  /** Delay between retries in milliseconds. Default: 0 */
-  retryDelay?: number | ((failureCount: number, error: unknown) => number);
+export interface QueryOptions<TData, TParams> {
+  /** The query definition containing the queryFn and cache options */
+  queryDefinition: QueryDefinition<TData, TParams>;
+  /** The parameters for this query instance */
+  params: TParams;
 }
 
 /**
- * Query class that manages an individual query's state, fetching, subscribers, and GC
+ * Query class that manages an individual query instance's state, fetching, subscribers, and GC.
+ * A query instance is a combination of a QueryDefinition and specific parameters.
  *
  * Features:
  * - Tracks query state (status, data, error)
  * - Manages subscribers with automatic refetch on subscribe if stale
  * - Handles retries using Retrier
  * - Schedules garbage collection using TimerWheel when no subscribers remain
- * - Supports custom options with defaults
+ * - Options are immutable and come from the QueryDefinition
  *
  * @example
  * ```typescript
- * const query = new Query(
- *   ['user', 1],
- *   { queryFn: fetchUser, gcTime: 5000, staleTime: 30000 }
+ * const moviesQuery = query({
+ *   queryFn: (params: { page: number }) => fetchMovies(params.page),
+ *   gcTime: 5000,
+ *   staleTime: 30000
+ * });
+ *
+ * const queryInstance = new Query(
+ *   moviesQuery,
+ *   { page: 1 },
+ *   { onRemove: () => cache.delete(key) }
  * );
  *
  * // Subscribe to changes
- * const unsubscribe = query.subscribe(() => {
- *   console.log('Query updated:', query.getState());
+ * const unsubscribe = queryInstance.subscribe(() => {
+ *   console.log('Query updated:', queryInstance.getState());
  * });
  *
  * // Fetch data
- * await query.fetchQuery();
+ * await queryInstance.fetch();
  *
  * // Later...
  * unsubscribe();
@@ -85,11 +79,10 @@ interface QueryEnvironment {
 const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
 const DEFAULT_GC_TIME = 1000 * 60 * 60; // 60 minutes
 
-export class Query<Key extends AnyKey, TData = unknown> {
-  private queryKey: Key;
+export class Query<TData = unknown, TParams = void> {
+  private queryDefinition: QueryDefinition<TData, TParams>;
+  private params: TParams;
   private state: QueryState<TData>;
-  private options: Required<QueryOptions<Key, TData>>;
-  private defaultOptions: Partial<QueryOptions<Key, TData>>;
   private readonly serializedKeyValue: string;
 
   // Subscribers
@@ -107,9 +100,13 @@ export class Query<Key extends AnyKey, TData = unknown> {
   private currentPromise: Promise<TData>;
   private environment: QueryEnvironment;
 
-  static getSerializedKey(key: AnyKey): string {
-    return stableKeySerialize(key);
-  }
+  // Resolved options from the definition
+  private readonly gcTime: number;
+  private readonly staleTime: number | "static";
+  private readonly retry: RetryConfig;
+  private readonly retryDelay:
+    | number
+    | ((failureCount: number, error: unknown) => number);
 
   get promise() {
     return this.currentPromise;
@@ -119,41 +116,29 @@ export class Query<Key extends AnyKey, TData = unknown> {
     return this.subscribers.size;
   }
 
-  get key(): Readonly<Key> {
-    return this.queryKey;
-  }
-
   constructor(
-    options: QueryOptions<Key, TData>,
-    defaultOptions: Partial<QueryOptions<Key, TData>> = {},
+    queryDefinition: QueryDefinition<TData, TParams>,
+    params: TParams,
     environment: QueryEnvironment
   ) {
-    this.queryKey = options.key;
-
-    if (defaultOptions.gcTime == null) {
-      defaultOptions.gcTime = DEFAULT_GC_TIME;
-    }
-
-    if (defaultOptions.staleTime == null) {
-      defaultOptions.staleTime = 0;
-    }
-
-    if (defaultOptions.retry == null) {
-      defaultOptions.retry = 3;
-    }
-
-    if (defaultOptions.retryDelay == null) {
-      defaultOptions.retryDelay = (failureCount) =>
-        exponentialBackoff(1000, failureCount, 10000);
-    }
-
-    this.defaultOptions = defaultOptions;
-    this.options = this.mergeOptions(options);
-    this.timerWheel = timerWheel;
-    this.serializedKeyValue = Query.getSerializedKey(this.queryKey);
-
+    this.queryDefinition = queryDefinition;
+    this.params = params;
     this.environment = environment;
+    this.timerWheel = timerWheel;
     this.batch = createBatcher();
+
+    // Generate cache key from definition + params
+    this.serializedKeyValue = getQueryInstanceKey(params);
+
+    // Extract options from definition (with defaults)
+    const config = queryDefinition.config;
+    this.gcTime = config.gcTime ?? DEFAULT_GC_TIME;
+    this.staleTime = config.staleTime ?? 0;
+    this.retry = config.retry ?? 3;
+    this.retryDelay =
+      config.retryDelay ??
+      ((failureCount) => exponentialBackoff(1000, failureCount, 10000));
+
     // Initialize state
     this.state = {
       status: "pending",
@@ -165,10 +150,10 @@ export class Query<Key extends AnyKey, TData = unknown> {
       prefetchedAt: undefined,
     };
 
-    // Create retrier with merged options
+    // Create retrier with options from definition
     this.retrier = new Retrier({
-      retry: this.options.retry,
-      retryDelay: this.options.retryDelay,
+      retry: this.retry,
+      retryDelay: this.retryDelay,
     });
 
     this.retrier.pause();
@@ -183,36 +168,17 @@ export class Query<Key extends AnyKey, TData = unknown> {
   }
 
   /**
-   * Get the query key
+   * Get the query definition and parameters
    */
-  getKey(): Readonly<Key> {
-    return this.queryKey;
+  getKey(): { definition: QueryDefinition<TData, TParams>; params: TParams } {
+    return {
+      definition: this.queryDefinition,
+      params: this.params,
+    };
   }
 
   get serializedKey(): Readonly<string> {
     return this.serializedKeyValue;
-  }
-
-  /**
-   * Get the query options
-   */
-  getOptions(): Readonly<QueryOptions<Key, TData>> {
-    return this.options;
-  }
-
-  /**
-   * Update query options
-   */
-  setOptions(options: Partial<QueryOptions<Key, TData>>): void {
-    this.options = { ...this.options, ...options };
-
-    // Update retrier if retry options changed
-    if (options.retry !== undefined || options.retryDelay !== undefined) {
-      this.retrier.setOptions({
-        retry: options.retry,
-        retryDelay: options.retryDelay,
-      });
-    }
   }
 
   /**
@@ -226,7 +192,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
     }
 
     // If staleTime is 'static', data is never stale (even if never fetched or invalidated)
-    if (this.options.staleTime === "static") {
+    if (this.staleTime === "static") {
       return false;
     }
 
@@ -236,15 +202,14 @@ export class Query<Key extends AnyKey, TData = unknown> {
     }
 
     // If staleTime is Infinity, data is never stale (but can be invalidated)
-    if (this.options.staleTime === Infinity) {
+    if (this.staleTime === Infinity) {
       return false;
     }
 
     // staleTime can't be less than 1, so we set it to 1 if it's undefined or 0.
-    const staleTime = this.options.staleTime ?? 0;
     const now = Date.now();
 
-    return now >= this.state.dataUpdatedAt + staleTime;
+    return now >= this.state.dataUpdatedAt + this.staleTime;
   }
 
   /**
@@ -266,7 +231,8 @@ export class Query<Key extends AnyKey, TData = unknown> {
         // Notify after promise is created to ensure deduplication works
         this.notifySubscribers();
 
-        return this.options.queryFn(this.queryKey);
+        // Call queryFn with params from definition
+        return this.queryDefinition.config.queryFn(this.params);
       })
       .then((data) => {
         // Update state on success
@@ -396,8 +362,13 @@ export class Query<Key extends AnyKey, TData = unknown> {
   subscribe(callback: () => void): () => void {
     const wasFirstSubscription = this.subscribers.size === 0;
 
-    const wrappedCallback = () => callback();
-    this.subscribers.add(wrappedCallback);
+    if (this.subscribers.has(callback)) {
+      return () => {
+        this.unsubscribe(callback);
+      };
+    }
+
+    this.subscribers.add(callback);
 
     if (wasFirstSubscription) {
       this.retrier.resume();
@@ -426,7 +397,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
     });
 
     return () => {
-      this.unsubscribe(wrappedCallback);
+      this.unsubscribe(callback);
     };
   }
 
@@ -480,17 +451,15 @@ export class Query<Key extends AnyKey, TData = unknown> {
     // Cancel any existing GC timer
     this.cancelGC();
 
-    const gcTime = this.options.gcTime ?? DEFAULT_GC_TIME;
-
     // Don't schedule GC if gcTime is Infinity
-    if (gcTime === Infinity || this.subscribers.size > 0) {
+    if (this.gcTime === Infinity || this.subscribers.size > 0) {
       return;
     }
 
     // Schedule GC using timer wheel
     this.gcTimerId = this.timerWheel.schedule(() => {
       this.handleGC();
-    }, gcTime);
+    }, this.gcTime);
   }
 
   /**
@@ -542,7 +511,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
     // 1. GC time is Infinity (never collect)
     // 2. GC timer already fired
     // We consider it eligible only if gcTime is not Infinity
-    return this.options.gcTime !== Infinity;
+    return this.gcTime !== Infinity;
   }
 
   /**
@@ -551,7 +520,7 @@ export class Query<Key extends AnyKey, TData = unknown> {
    */
   invalidate(parentScopeId?: string): Promise<TData> {
     // Only invalidate if not static
-    if (this.options.staleTime !== "static") {
+    if (this.staleTime !== "static") {
       this.state.dataUpdatedAt = undefined;
 
       // If there are subscribers, trigger a refetch
@@ -596,20 +565,5 @@ export class Query<Key extends AnyKey, TData = unknown> {
 
   refetch(): void {
     void this.fetch();
-  }
-
-  private mergeOptions(
-    options: Partial<QueryOptions<Key, TData>>
-  ): Required<QueryOptions<Key, TData>> {
-    for (const key in this.defaultOptions) {
-      if (key in options) {
-        continue;
-      }
-
-      // @ts-expect-error - we know that the key is a valid key of QueryOptions
-      options[key] = this.defaultOptions[key];
-    }
-
-    return options as Required<QueryOptions<Key, TData>>;
   }
 }

@@ -7,9 +7,9 @@ import {
   useEffect,
   startTransition,
   useDebugValue,
+  useRef,
 } from "react";
-import { QueryClient, type QueryClientOptions } from "./QueryClient";
-import type { RetryConfig } from "./Retrier";
+import { QueryClient } from "./QueryClient";
 import { createMeasurer, noop } from "./utils";
 import type { QueryState } from "./Query";
 import {
@@ -18,59 +18,71 @@ import {
   eventEmitter,
 } from "./EventEmitter";
 import { useEvent } from "../useEvent";
+import {
+  type QueryDefinition,
+  type MutationDefinition,
+  type DependencyGraph,
+} from "./DependencyGraph";
 
 /**
  * Context value for the query provider
  */
-export interface QueryContextValue {
-  queryClient: QueryClient;
+export type QueryContextValue = {
   withMeasure: ReturnType<typeof createMeasurer>;
-}
-
+  queryClient: QueryClient;
+  graph: DependencyGraph;
+};
 /**
  * Query Context - exposed for testing purposes.
  * In production code, use the useQuery hook instead of accessing this directly.
  */
-const defaultQueryClient = new QueryClient();
-export const QueryContext = createContext<QueryContextValue>({
-  queryClient: defaultQueryClient,
-  withMeasure: noop as ReturnType<typeof createMeasurer>,
-});
+export const QueryContext = createContext<QueryContextValue | null>(null);
 
 /**
  * Props for {@link QueryProvider}
  */
-export interface QueryProviderProps extends PropsWithChildren {
-  queryCacheOptions?: QueryClientOptions;
-  queryClient?: QueryClient;
+export type QueryProviderProps = {
+  /** Optional event emitter for debugging */
   eventEmitter?: EventEmitter<EventsMap>;
-}
+} & (
+  | {
+      queryClient: QueryClient;
+      graph?: never;
+    }
+  | {
+      queryClient?: never;
+      graph: DependencyGraph;
+    }
+) &
+  PropsWithChildren;
 
 /**
- * Query Provider component that manages promise caching with garbage collection.
+ * Query Provider component that manages query instances based on a dependency graph.
  *
  * Features:
- * - Caches promises by key
+ * - Manages query instances by definition + params
  * - Tracks active subscriptions per cache entry
  * - Only triggers GC when there are no active subscriptions
  * - Cancels GC timer when new subscriptions are added
- * - Background refetching on focus and reconnect
+ * - Uses dependency graph for invalidations and optimistic updates
  *
  * @example
  * ```tsx
- * <QueryProvider queryCacheOptions={{}}>
+ * const graph = new DependencyGraph([moviesQuery, addMovieMutation]);
+ *
+ * <QueryProvider graph={graph}>
  *   <App />
  * </QueryProvider>
  * ```
  */
 export function QueryProvider({
   children,
+  graph,
   queryClient: initialQueryClient,
-  queryCacheOptions = {},
 }: QueryProviderProps) {
   const withMeasure = createMeasurer({
     trackGroup: "Custom Library 🐐",
-    properties: [["QueryClient", JSON.stringify(queryCacheOptions)]],
+    properties: [],
     color: "primary",
   });
 
@@ -91,53 +103,62 @@ export function QueryProvider({
     }
 
     return new QueryClient({
-      ...queryCacheOptions,
+      graph,
       onChange,
       context: { measurer: withMeasure },
     });
   });
 
   return (
-    <QueryContext value={{ queryClient, withMeasure }}>{children}</QueryContext>
+    <QueryContext
+      value={{ queryClient, graph: queryClient.getGraph(), withMeasure }}
+    >
+      {children}
+    </QueryContext>
   );
 }
 
 /**
- * Options for useQuery hook
+ * Options for useQuery hook with parameters
  */
-export interface UseQueryOptions<
-  Key extends Array<unknown>,
-  PromiseValue extends unknown
-> {
-  /** The cache key */
-  key: Key;
-  /** Function that returns a promise to fetch data */
-  queryFn: (key: Key) => Promise<PromiseValue>;
-  /** Time in milliseconds after which the cache entry will be removed. Default: Infinity */
-  gcTime?: number;
-  /** Time in milliseconds until data becomes stale. Can be 'static' or Infinity. Default: 0 */
-  staleTime?: number | "static";
-  /** Retry configuration - number of retries, boolean, or custom function. Default: true (3 retries) */
-  retry?: RetryConfig;
-  /** Delay between retries in milliseconds. Default: 0 */
-  retryDelay?: number | ((failureCount: number, error: unknown) => number);
-}
-
-export function useQueryClient(): QueryClient {
-  return use(QueryContext).queryClient;
-}
-
-export function useQueryContext(): QueryContextValue {
-  return use(QueryContext);
+export interface UseQueryOptions<TData, TParams> {
+  /** The query definition */
+  query: QueryDefinition<TData, TParams>;
+  /** The parameters for this query instance */
+  params: TParams;
 }
 
 /**
- * Hook to fetch and cache data with automatic garbage collection.
+ * Options for useQuery hook without parameters (void params)
+ */
+export interface UseQueryOptionsNoParams<TData> {
+  /** The query definition */
+  query: QueryDefinition<TData, void>;
+}
+
+export function useQueryClient(): QueryClient {
+  const context = use(QueryContext);
+  if (!context) {
+    throw new Error("useQueryClient must be used within a QueryProvider");
+  }
+  return context.queryClient;
+}
+
+export function useQueryContext(): QueryContextValue {
+  const context = use(QueryContext);
+  if (!context) {
+    throw new Error("useQueryContext must be used within a QueryProvider");
+  }
+  return context;
+}
+
+/**
+ * Hook to fetch and cache data based on a query definition.
  *
  * Automatically manages subscriptions:
  * - Subscribes on mount
  * - Unsubscribes on unmount
- * - Re-subscribes when key changes
+ * - Re-subscribes when definition or params change
  *
  * GC behavior:
  * - GC timer only runs when subscriptions = 0
@@ -145,51 +166,68 @@ export function useQueryContext(): QueryContextValue {
  * - Timer starts when component unmounts
  *
  * Stale behavior:
- * - Stale queries are refetched automatically in the background when:
- *   - New instances of the query mount (handled by QueryClient.addQuery)
- *   - The window is refocused (handled by BackgroundRefetch)
- *   - The network is reconnected (handled by BackgroundRefetch)
+ * - Stale queries are refetched automatically in the background when new instances mount
  *
  * @example
  * ```tsx
+ * // With parameters
  * function UserProfile({ userId }) {
- *   const promise = useQuery({
- *     key: ['user', userId],
- *     queryFn: () => fetchUser(userId),
- *     gcTime: 5000, // Cache for 5 seconds after unmount
- *     staleTime: 2 * 60 * 1000 // Fresh for 2 minutes
- *   })
- *   const user = use(promise)
- *   return <div>{user.name}</div>
+ *   const { promise } = useQuery({
+ *     query: userQuery,
+ *     params: { userId }
+ *   });
+ *   const user = use(promise);
+ *   return <div>{user.name}</div>;
+ * }
+ *
+ * // Without parameters
+ * function CurrentUser() {
+ *   const { promise } = useQuery({ query: currentUserQuery });
+ *   const user = use(promise);
+ *   return <div>{user.name}</div>;
  * }
  * ```
  */
-export function useQuery<
-  const Key extends Array<unknown>,
-  PromiseValue extends unknown
->(
-  options: UseQueryOptions<Key, PromiseValue>
+export function useQuery<TData, TParams>(
+  options: UseQueryOptions<TData, TParams>
 ): {
-  promise: Promise<PromiseValue>;
+  promise: Promise<TData>;
   isPending: boolean;
   isFetching: boolean;
   isSuccess: boolean;
   isError: boolean;
-  state: Readonly<QueryState<PromiseValue>>;
+  state: Readonly<QueryState<TData>>;
+};
+
+export function useQuery<TData>(options: UseQueryOptionsNoParams<TData>): {
+  promise: Promise<TData>;
+  isPending: boolean;
+  isFetching: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  state: Readonly<QueryState<TData>>;
+};
+
+export function useQuery<TData, TParams = void>(
+  options: UseQueryOptions<TData, TParams> | UseQueryOptionsNoParams<TData>
+): {
+  promise: Promise<TData>;
+  isPending: boolean;
+  isFetching: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  state: Readonly<QueryState<TData>>;
 } {
-  const { key, queryFn, gcTime, staleTime, retry, retryDelay } = options;
+  const { query: queryDefinition } = options;
+  const params = "params" in options ? options.params : (undefined as TParams);
   const { queryClient } = useQueryContext();
 
-  // Add or get query from cache (staleness check happens inside addQuery)
-  const query = queryClient.addQuery<Key, PromiseValue>({
-    key,
-    queryFn,
-    gcTime,
-    staleTime,
-    retry,
-    retryDelay,
-    prefetch: true,
-  });
+  // Add or get query instance from cache
+  const query = queryClient.addQuery<TData, TParams>(
+    queryDefinition as QueryDefinition<TData, TParams>,
+    params,
+    { prefetch: true }
+  );
 
   const queryState = query.getState();
   const isPending = queryState.status === "pending";
@@ -217,25 +255,17 @@ export function useQuery<
 /**
  * Options for useMutation hook
  */
-export interface UseMutationOptions<
-  Variables extends unknown,
-  Data extends unknown
-> {
-  /** Function that performs the mutation */
-  mutationFn: (variables: Variables) => Promise<Data>;
-  /** Array of query keys to invalidate after successful mutation */
-  invalidateQueries?: Array<Array<unknown>>;
+export interface UseMutationOptions<TData, TParams, TResult> {
+  /** The mutation definition from the dependency graph */
+  mutation: MutationDefinition<TData, TParams, TResult>;
 }
 
 /**
  * Result returned by useMutation hook
  */
-export interface UseMutationResult<
-  Variables extends unknown,
-  Data extends unknown
-> {
+export interface UseMutationResult<TData, TParams, TResult> {
   /** Function to trigger the mutation */
-  mutate: (variables: Variables) => Promise<Data>;
+  mutate: (params: TParams, data: TData) => Promise<TResult>;
   /** Whether the mutation is currently running */
   isPending: boolean;
   /** Error from the last mutation attempt, or null if no error */
@@ -243,137 +273,170 @@ export interface UseMutationResult<
 }
 
 /**
- * Hook to perform mutations with automatic query invalidation.
+ * Hook to perform mutations with automatic graph-based query invalidation.
  *
  * Features:
  * - Wraps mutation in async transition
- * - Automatically invalidates specified queries after successful mutation
+ * - Uses dependency graph for automatic invalidations
+ * - Supports optimistic updates
  * - Tracks loading and error states
  * - Stable mutate function that doesn't cause re-renders
- * - Returns data directly from the mutate promise
  *
  * @example
  * ```tsx
  * function AddMovie() {
  *   const { mutate, isPending, error } = useMutation({
- *     mutationFn: (movie: Movie) => createMovie(movie),
- *     invalidateQueries: [['movies']]
- *   })
+ *     mutation: addMovieMutation
+ *   });
  *
  *   const handleSubmit = async (movie: Movie) => {
- *     const result = await mutate(movie)
- *     console.log('Created:', result)
- *   }
+ *     const result = await mutate(undefined, movie);
+ *     console.log('Created:', result);
+ *   };
  *
  *   return (
  *     <form onSubmit={(e) => {
- *       e.preventDefault()
- *       handleSubmit(movie)
+ *       e.preventDefault();
+ *       handleSubmit(movie);
  *     }}>
  *       {isPending && <Spinner />}
  *       {error && <Error message={error.message} />}
  *     </form>
- *   )
+ *   );
  * }
  * ```
  */
-export function useMutation<Variables extends unknown, Data extends unknown>(
-  options: UseMutationOptions<Variables, Data>
-): UseMutationResult<Variables, Data> {
-  const { mutationFn, invalidateQueries = [] } = options;
-
-  const { queryClient } = use(QueryContext);
+export function useMutation<TData, TParams, TResult>(
+  options: UseMutationOptions<TData, TParams, TResult>
+): UseMutationResult<TData, TParams, TResult> {
+  const { mutation: mutationDefinition } = options;
+  const { queryClient, graph } = useQueryContext();
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
 
-  const mutate = useEvent(async (variables: Variables): Promise<Data> => {
-    const scope = eventEmitter.createScope();
-    scope.emit("mutation:start", { variables });
-    const executionScope = scope.createChildScope();
-    executionScope.emit("mutation:execution:start", { variables });
+  const mutate = useEvent(
+    async (params: TParams, data: TData): Promise<TResult> => {
+      const scope = eventEmitter.createScope();
+      scope.emit("mutation:start", { variables: { params, data } });
+      const executionScope = scope.createChildScope();
+      executionScope.emit("mutation:execution:start", {
+        variables: { params, data },
+      });
 
-    return new Promise<Data>((resolve, reject) => {
-      startTransition(async () => {
-        setError(null);
+      return new Promise<TResult>((resolve, reject) => {
+        startTransition(async () => {
+          setError(null);
 
-        await mutationFn(variables)
-          .then(async (result) => {
+          try {
+            // Execute the mutation
+            const result = await mutationDefinition.config.mutationFn(
+              params,
+              data
+            );
+
             executionScope.emit("mutation:execution:success", {
-              variables,
+              variables: { params, data },
               data: result,
             });
-            // Invalidate queries after successful mutation
-            if (invalidateQueries.length > 0) {
-              const queries = invalidateQueries.map((k) => JSON.stringify(k));
+
+            const mutationIndex = mutationDefinition.__index!;
+
+            // Handle static invalidations
+            const staticInvalidations =
+              graph.getStaticInvalidations(mutationIndex);
+            if (staticInvalidations.length > 0) {
               const invalidationScope = scope.createChildScope();
+              const queries = staticInvalidations.map((idx) => `query:${idx}`);
               invalidationScope.emit("mutation:invalidation:start", {
-                variables,
+                variables: { params, data },
                 queries,
               });
 
-              const invalidationPromise = new Promise<void>(
-                (resolve, reject) => {
-                  startTransition(async () => {
-                    try {
-                      await Promise.all(
-                        invalidateQueries.map((queryKey) =>
-                          queryClient.invalidate(queryKey, {
-                            parentScopeId: invalidationScope.scopeId,
-                          })
-                        )
-                      );
-                      resolve();
-                    } catch (error) {
-                      reject(error);
-                    }
-                  });
-                }
+              await Promise.all(
+                staticInvalidations.map((queryIndex) => {
+                  const queryDef = graph.getQueryByIndex(queryIndex);
+                  if (queryDef) {
+                    return queryClient.invalidateQuery(queryDef, {
+                      parentScopeId: invalidationScope.scopeId,
+                    });
+                  }
+                })
               );
 
-              try {
-                await invalidationPromise;
+              invalidationScope.emit("mutation:invalidation:success", {
+                variables: { params, data },
+                queries,
+              });
+            }
+
+            // Handle dynamic invalidations
+            if (graph.hasDynamicInvalidations(mutationIndex)) {
+              const dynamicInvalidations = graph.computeDynamicInvalidations(
+                mutationIndex,
+                params,
+                result
+              );
+
+              if (dynamicInvalidations.length > 0) {
+                const invalidationScope = scope.createChildScope();
+                const queries = dynamicInvalidations.map(
+                  (idx) => `query:${idx}`
+                );
+                invalidationScope.emit("mutation:invalidation:start", {
+                  variables: { params, data },
+                  queries,
+                });
+
+                await Promise.all(
+                  dynamicInvalidations.map((queryIndex) => {
+                    const queryDef = graph.getQueryByIndex(queryIndex);
+                    if (queryDef) {
+                      return queryClient.invalidateQuery(queryDef, {
+                        parentScopeId: invalidationScope.scopeId,
+                      });
+                    }
+                  })
+                );
+
                 invalidationScope.emit("mutation:invalidation:success", {
-                  variables,
+                  variables: { params, data },
                   queries,
                 });
-              } catch (invError) {
-                invalidationScope.emit("mutation:invalidation:error", {
-                  variables,
-                  queries,
-                  error: invError,
-                });
-                throw invError;
               }
             }
 
+            // TODO: Handle optimistic updates
+            // const updates = graph.computeDynamicOptimisticUpdates(mutationIndex, params, data);
+            // For now, we just invalidate
+
             scope.emit("mutation:success", {
-              variables,
+              variables: { params, data },
               data: result,
             });
 
             resolve(result);
-          })
-          .catch((err) => {
+          } catch (err) {
             const errorObj =
               err instanceof Error ? err : new Error(String(err));
             setError(errorObj);
 
             executionScope.emit("mutation:execution:error", {
-              variables,
+              variables: { params, data },
               error: errorObj,
             });
 
             scope.emit("mutation:error", {
-              variables,
+              variables: { params, data },
               error: errorObj,
             });
 
             reject(errorObj);
-          });
+          }
+        });
       });
-    });
-  });
+    }
+  );
 
   return { mutate, isPending, error };
 }

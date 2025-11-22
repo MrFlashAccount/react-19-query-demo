@@ -1,4 +1,9 @@
-import type { Query, AnyKey } from "./Query";
+import type { Query } from "./Query";
+
+/**
+ * Type for array-based query keys (backward compatibility)
+ */
+export type AnyKey = Array<unknown>;
 
 /**
  * A node in the query key tree

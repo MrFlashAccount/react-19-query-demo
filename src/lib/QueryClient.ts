@@ -1,39 +1,21 @@
-import type { RetryConfig } from "./Retrier";
-import { Query, type AnyKey, type QueryOptions } from "./Query";
+import { Query } from "./Query";
 import { noop } from "./utils";
 import { eventEmitter } from "./EventEmitter";
-import { QueryKeyTree } from "./QueryKeyTree";
+import {
+  type QueryDefinition,
+  type DependencyGraph,
+  getQueryInstanceKey,
+} from "./DependencyGraph";
+import { QueryCache } from "./QueryCache";
 
 /**
- * Options for adding a promise to the cache
- */
-export interface AddPromiseOptions<
-  Key extends Array<unknown>,
-  PromiseValue extends unknown
-> {
-  /** The cache key */
-  key: Key;
-  /** Function that returns a promise to fetch data (preferred) */
-  queryFn: (key: Key) => Promise<PromiseValue>;
-  /** The promise to cache (deprecated, use queryFn instead) */
-  promise?: Promise<PromiseValue>;
-  /** Time in milliseconds after which the cache entry will be removed. Default: Infinity */
-  gcTime?: number;
-  /** Time in milliseconds until data becomes stale. Can be 'static' to never refetch. Default: 0 */
-  staleTime?: number | "static";
-  /** Retry configuration - number of retries, boolean, or custom function. Default: true (3 retries) */
-  retry?: RetryConfig;
-  /** Delay between retries in milliseconds. Default: 0 */
-  retryDelay?: number | ((failureCount: number, error: unknown) => number);
-}
-
-/**
- * Options for QueryClient
- *  constructor
+ * Options for QueryClient constructor
  */
 export interface QueryClientOptions {
+  /** Dependency graph containing all query and mutation definitions (required) */
+  graph: DependencyGraph;
   /** Cache implementation */
-  cache?: QueryKeyTree;
+  cache?: QueryCache;
   /** Callback invoked when a new instance is created after cache mutation */
   onChange?: (newInstance: QueryClient) => void;
   context?: QueryClientContext;
@@ -46,50 +28,52 @@ export interface InvalidateOptions {
 }
 
 /**
- * QueryClient
- *  class that manages promise caching with garbage collection.
+ * QueryClient manages query instances based on definitions from a dependency graph.
  *
  * Features:
- * - Caches promises by key
+ * - Caches query instances by definition + params
  * - Tracks active subscriptions per cache entry
  * - Only triggers GC when there are no active subscriptions
- * - Uses idle-based scheduler to check for expired entries every 100ms
- * - Supports prefix-based query invalidation
+ * - Supports definition-level and instance-level invalidation
+ * - Uses dependency graph for managing relationships
  *
  * @example
  * ```tsx
- * const cache = new QueryClient
- * ()
+ * const moviesQuery = query({
+ *   queryFn: (params: { page: number }) => fetchMovies(params.page)
+ * });
  *
- * // Add promises to cache
- * cache.addPromise({
- *   key: ['user', 1],
- *   promise: fetchUser(1),
- *   gcTime: 5000
- * })
+ * const graph = new DependencyGraph([moviesQuery]);
+ * const client = new QueryClient({ graph });
  *
- * cache.addPromise({
- *   key: ['user', 1, 'posts'],
- *   promise: fetchUserPosts(1),
- *   gcTime: 5000
- * })
+ * // Add query instance to cache
+ * const queryInstance = client.addQuery(moviesQuery, { page: 1 });
  *
- * // Invalidate all queries for user 1 (including posts)
- * cache.invalidate(['user', 1])
+ * // Invalidate all instances of moviesQuery
+ * await client.invalidateQuery(moviesQuery);
+ *
+ * // Invalidate specific instance
+ * await client.invalidateQueryInstance(moviesQuery, { page: 1 });
  * ```
  */
 export class QueryClient {
-  private _cache: QueryKeyTree;
+  private _cache: QueryCache;
+  private graph: DependencyGraph;
   private onChange: (newInstance: QueryClient) => void;
   private context: QueryClientContext;
 
-  constructor(options: QueryClientOptions = {}) {
-    this._cache = options.cache || new QueryKeyTree();
+  constructor(options: QueryClientOptions) {
+    this.graph = options.graph;
+    this._cache = options.cache || new QueryCache();
     this.onChange = options.onChange ?? noop;
     this.context = options.context ?? {};
   }
 
-  setOptions(options: QueryClientOptions): void {
+  setOptions(options: Partial<QueryClientOptions>): void {
+    if (options.graph !== undefined) {
+      this.graph = options.graph;
+    }
+
     if (options.cache !== undefined) {
       this._cache = options.cache;
     }
@@ -109,6 +93,7 @@ export class QueryClient {
    */
   public clone(): QueryClient {
     const newInstance = new QueryClient({
+      graph: this.graph,
       cache: this._cache, // Reuse same cache reference
       onChange: this.onChange,
       context: this.context,
@@ -125,51 +110,49 @@ export class QueryClient {
   }
 
   /**
-   * Get the underlying cache tree (exposed for testing)
+   * Get the underlying cache (exposed for testing)
    */
-  getCache(): QueryKeyTree {
+  getCache(): Readonly<QueryCache> {
     return this._cache;
   }
 
   /**
-   * Add a promise to the cache. If a promise with the same key already exists,
-   * checks if it's stale and optionally refetches.
+   * Add a query instance to the cache. If an instance with the same definition + params
+   * already exists, returns the existing instance.
    *
-   * @param options - Options containing key, queryFn (or promise for backwards compat), and optional gcTime/staleTime/retry
-   * @returns The cached promise entry
+   * @param queryDefinition - The query definition from the dependency graph
+   * @param params - The parameters for this query instance
+   * @param options - Optional configuration
+   * @returns The cached query instance
    */
-  addQuery<const Key extends Array<unknown>, PromiseValue extends unknown>(
-    options: QueryOptions<Key, PromiseValue> & {
+  addQuery<TData, TParams>(
+    queryDefinition: QueryDefinition<TData, TParams>,
+    params: TParams,
+    options?: {
       prefetch?: boolean;
     }
-  ): Query<Key, PromiseValue> {
-    const { key, queryFn, gcTime, staleTime, retry, retryDelay, prefetch } =
-      options;
-
-    const existingQuery = this._cache.get(key) as
-      | Query<Key, PromiseValue>
+  ): Query<TData, TParams> {
+    const existingQuery = this._cache.get(queryDefinition, params) as
+      | Query<TData, TParams>
       | undefined;
 
     if (existingQuery != null) {
       return existingQuery;
     }
 
-    const entry = new Query<Key, PromiseValue>(
-      { key, queryFn, gcTime, staleTime, retry, retryDelay },
-      {},
-      {
-        onRemove: () => {
-          eventEmitter.emit("query:garbage-collect", {
-            key: entry.serializedKey,
-          });
-          this.handleQueryGarbageCollect(key);
-        },
-      }
-    );
+    const entry = new Query<TData, TParams>(queryDefinition, params, {
+      onRemove: () => {
+        const instanceKey = getQueryInstanceKey(params);
+        eventEmitter.emit("query:garbage-collect", {
+          key: instanceKey,
+        });
+        this.handleQueryGarbageCollect(queryDefinition, params);
+      },
+    });
 
-    this._cache.set(key, entry as unknown as Query<AnyKey, unknown>);
+    this._cache.set(queryDefinition, params, entry);
 
-    if (prefetch) {
+    if (options?.prefetch) {
       entry.prefetch();
     }
 
@@ -177,41 +160,44 @@ export class QueryClient {
   }
 
   /**
-   * Get a promise from the cache by key
+   * Get a query instance if it exists in the cache
    *
-   * @param key - The cache key
-   * @returns The cached promise entry or null if not found
+   * @param queryDefinition - The query definition
+   * @param params - The query parameters
+   * @returns The cached query instance or undefined
    */
-  getPromise<const Key extends Array<unknown>, PromiseValue extends unknown>(
-    key: Key
-  ): Promise<PromiseValue> | null {
-    const entry = this._cache.get(key);
-
-    if (entry == null) {
-      return null;
-    }
-
-    return entry.promise as Promise<PromiseValue> | null;
+  getQuery<TData, TParams>(
+    queryDefinition: QueryDefinition<TData, TParams>,
+    params: TParams
+  ): Query<TData, TParams> | undefined {
+    return this._cache.get(queryDefinition, params) as
+      | Query<TData, TParams>
+      | undefined;
   }
 
   /**
-   * Check if a key exists in the cache
+   * Check if a query instance exists in the cache
    *
-   * @param key - The cache key to check
-   * @returns True if the key exists in the cache
+   * @param queryDefinition - The query definition
+   * @param params - The query parameters
+   * @returns True if the query instance exists
    */
-  has<const Key extends Array<unknown>>(key: Key): boolean {
-    return this._cache.has(key);
+  hasQuery<TParams>(
+    queryDefinition: QueryDefinition,
+    params: TParams
+  ): boolean {
+    return this._cache.has(queryDefinition, params);
   }
 
   /**
-   * Check if cached data is stale based on staleTime
+   * Check if a query instance is stale
    *
-   * @param key - The cache key to check
-   * @returns True if the data is stale and should be refetched
+   * @param queryDefinition - The query definition
+   * @param params - The query parameters
+   * @returns True if the query is stale or doesn't exist
    */
-  isStale<const Key extends Array<unknown>>(key: Key): boolean {
-    const entry = this._cache.get(key);
+  isStale<TParams>(queryDefinition: QueryDefinition, params: TParams): boolean {
+    const entry = this._cache.get(queryDefinition, params);
 
     if (entry == null) {
       return true;
@@ -235,23 +221,19 @@ export class QueryClient {
   }
 
   /**
-   * Invalidate cache entries by key prefix. Removes entries from the cache
-   * that start with the specified key, forcing them to be refetched on next access.
+   * Invalidate all instances of a query definition, forcing them to refetch on next access.
    *
-   * Supports partial key matching:
-   * - `['movies']` invalidates `['movies']`, `['movies', 'action']`, `['movies', 'search', 'query']`, etc.
-   * - `['movies', 'action']` invalidates `['movies', 'action']` and `['movies', 'action', 'popular']`, etc.
+   * Note: Queries with staleTime='static' are never invalidated.
    *
-   * Note: Entries with staleTime='static' are never invalidated.
-   *
-   * @param key - The cache key prefix to invalidate
+   * @param queryDefinition - The query definition to invalidate
+   * @param options - Optional invalidation options
    */
-  async invalidate<const Key extends Array<unknown>>(
-    key: Key,
+  async invalidateQuery(
+    queryDefinition: QueryDefinition,
     options: InvalidateOptions = {}
   ): Promise<void> {
-    // Use tree's efficient prefix search - no need to iterate all keys!
-    const queries = this._cache.findByPrefix(key);
+    // Find all cache entries for this query definition
+    const queries = this._cache.findByDefinition(queryDefinition);
 
     for (const query of queries) {
       await query.invalidate(options.parentScopeId);
@@ -261,22 +243,56 @@ export class QueryClient {
     this.notifyChange(newInstance);
   }
 
-  private handleQueryGarbageCollect<Key extends AnyKey>(key: Key): void {
-    if (this.deleteQuery(key)) {
+  /**
+   * Invalidate a specific query instance by definition + params.
+   *
+   * @param queryDefinition - The query definition
+   * @param params - The query parameters
+   * @param options - Optional invalidation options
+   */
+  async invalidateQueryInstance<TParams>(
+    queryDefinition: QueryDefinition,
+    params: TParams,
+    options: InvalidateOptions = {}
+  ): Promise<void> {
+    const query = this._cache.get(queryDefinition, params);
+
+    if (query) {
+      await query.invalidate(options.parentScopeId);
       const newInstance = this.clone();
       this.notifyChange(newInstance);
     }
   }
 
-  private deleteQuery<Key extends AnyKey>(key: Key): boolean {
-    const query = this._cache.get(key);
+  private handleQueryGarbageCollect<TData, TParams>(
+    queryDefinition: QueryDefinition<TData, TParams>,
+    params: TParams
+  ): void {
+    if (this.deleteQuery(queryDefinition, params)) {
+      const newInstance = this.clone();
+      this.notifyChange(newInstance);
+    }
+  }
+
+  private deleteQuery<TData, TParams>(
+    queryDefinition: QueryDefinition<TData, TParams>,
+    params: TParams
+  ): boolean {
+    const query = this._cache.get(queryDefinition, params);
     if (query == null) {
       return false;
     }
 
     query.destroy();
-    this._cache.delete(key);
+    this._cache.delete(queryDefinition, params);
 
     return true;
+  }
+
+  /**
+   * Get the dependency graph
+   */
+  getGraph(): DependencyGraph {
+    return this.graph;
   }
 }
