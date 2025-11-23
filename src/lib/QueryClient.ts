@@ -5,6 +5,8 @@ import {
   type QueryDefinition,
   type DependencyGraph,
   getQueryInstanceKey,
+  type Context,
+  type QueryParams,
 } from "./DependencyGraph";
 import { QueryCache } from "./QueryCache";
 
@@ -18,10 +20,10 @@ export interface QueryClientOptions {
   cache?: QueryCache;
   /** Callback invoked when a new instance is created after cache mutation */
   onChange?: (newInstance: QueryClient) => void;
-  context?: QueryClientContext;
+  context?: Readonly<QueryClientContext>;
 }
 
-export interface QueryClientContext extends Record<string, unknown> {}
+export interface QueryClientContext extends Readonly<Context> {}
 
 export interface InvalidateOptions {
   parentScopeId?: string;
@@ -60,13 +62,17 @@ export class QueryClient {
   private _cache: QueryCache;
   private graph: DependencyGraph;
   private onChange: (newInstance: QueryClient) => void;
-  private context: QueryClientContext;
+  private context: Readonly<QueryClientContext>;
 
   constructor(options: QueryClientOptions) {
     this.graph = options.graph;
     this._cache = options.cache || new QueryCache();
     this.onChange = options.onChange ?? noop;
-    this.context = options.context ?? {};
+    this.context = options.context ?? ({} as Readonly<QueryClientContext>);
+  }
+
+  getContext(): typeof this.context {
+    return this.context;
   }
 
   setOptions(options: Partial<QueryClientOptions>): void {
@@ -82,8 +88,8 @@ export class QueryClient {
       this.onChange = options.onChange;
     }
 
-    if (options.context?.measure !== undefined) {
-      this.context.measure = options.context.measure;
+    if (options.context !== undefined) {
+      this.context = options.context;
     }
   }
 
@@ -125,22 +131,24 @@ export class QueryClient {
    * @param options - Optional configuration
    * @returns The cached query instance
    */
-  addQuery<TData, TParams>(
-    queryDefinition: QueryDefinition<TData, TParams>,
+  addQuery<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(
+    queryDefinition: QD,
     params: TParams,
-    options?: {
-      prefetch?: boolean;
-    }
-  ): Query<TData, TParams> {
+    options?: { prefetch?: boolean }
+  ): Query<QD, TParams, TData> {
     const existingQuery = this._cache.get(queryDefinition, params) as
-      | Query<TData, TParams>
+      | Query<QD, TParams, TData>
       | undefined;
 
     if (existingQuery != null) {
       return existingQuery;
     }
 
-    const entry = new Query<TData, TParams>(queryDefinition, params, {
+    const entry = new Query<QD, TParams, TData>(queryDefinition, params, {
       onRemove: () => {
         const instanceKey = getQueryInstanceKey(params);
         eventEmitter.emit("query:garbage-collect", {
@@ -148,6 +156,7 @@ export class QueryClient {
         });
         this.handleQueryGarbageCollect(queryDefinition, params);
       },
+      context: this.context,
     });
 
     this._cache.set(queryDefinition, params, entry);
@@ -166,13 +175,11 @@ export class QueryClient {
    * @param params - The query parameters
    * @returns The cached query instance or undefined
    */
-  getQuery<TData, TParams>(
-    queryDefinition: QueryDefinition<TData, TParams>,
-    params: TParams
-  ): Query<TData, TParams> | undefined {
-    return this._cache.get(queryDefinition, params) as
-      | Query<TData, TParams>
-      | undefined;
+  getQuery<QD extends QueryDefinition>(
+    queryDefinition: QD,
+    params: QueryParams<QD>
+  ): Query<QD> | undefined {
+    return this._cache.get<QD>(queryDefinition, params);
   }
 
   /**
@@ -182,11 +189,11 @@ export class QueryClient {
    * @param params - The query parameters
    * @returns True if the query instance exists
    */
-  hasQuery<TParams>(
-    queryDefinition: QueryDefinition,
-    params: TParams
+  hasQuery<QD extends QueryDefinition>(
+    queryDefinition: QD,
+    params: QueryParams<QD>
   ): boolean {
-    return this._cache.has(queryDefinition, params);
+    return this._cache.has<QD>(queryDefinition, params);
   }
 
   /**
@@ -196,8 +203,11 @@ export class QueryClient {
    * @param params - The query parameters
    * @returns True if the query is stale or doesn't exist
    */
-  isStale<TParams>(queryDefinition: QueryDefinition, params: TParams): boolean {
-    const entry = this._cache.get(queryDefinition, params);
+  isStale<QD extends QueryDefinition>(
+    queryDefinition: QD,
+    params: QueryParams<QD>
+  ): boolean {
+    const entry = this._cache.get<QD>(queryDefinition, params);
 
     if (entry == null) {
       return true;
@@ -228,12 +238,12 @@ export class QueryClient {
    * @param queryDefinition - The query definition to invalidate
    * @param options - Optional invalidation options
    */
-  async invalidateQuery(
-    queryDefinition: QueryDefinition,
+  async invalidateQuery<QD extends QueryDefinition>(
+    queryDefinition: QD,
     options: InvalidateOptions = {}
   ): Promise<void> {
     // Find all cache entries for this query definition
-    const queries = this._cache.findByDefinition(queryDefinition);
+    const queries = this._cache.findByDefinition<QD>(queryDefinition);
 
     for (const query of queries) {
       await query.invalidate(options.parentScopeId);
@@ -250,12 +260,12 @@ export class QueryClient {
    * @param params - The query parameters
    * @param options - Optional invalidation options
    */
-  async invalidateQueryInstance<TParams>(
-    queryDefinition: QueryDefinition,
-    params: TParams,
+  async invalidateQueryInstance<QD extends QueryDefinition>(
+    queryDefinition: QD,
+    params: QueryParams<QD>,
     options: InvalidateOptions = {}
   ): Promise<void> {
-    const query = this._cache.get(queryDefinition, params);
+    const query = this._cache.get<QD>(queryDefinition, params);
 
     if (query) {
       await query.invalidate(options.parentScopeId);
@@ -264,20 +274,22 @@ export class QueryClient {
     }
   }
 
-  private handleQueryGarbageCollect<TData, TParams>(
-    queryDefinition: QueryDefinition<TData, TParams>,
-    params: TParams
-  ): void {
+  private handleQueryGarbageCollect<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(queryDefinition: QD, params: TParams): void {
     if (this.deleteQuery(queryDefinition, params)) {
       const newInstance = this.clone();
       this.notifyChange(newInstance);
     }
   }
 
-  private deleteQuery<TData, TParams>(
-    queryDefinition: QueryDefinition<TData, TParams>,
-    params: TParams
-  ): boolean {
+  private deleteQuery<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(queryDefinition: QD, params: TParams): boolean {
     const query = this._cache.get(queryDefinition, params);
     if (query == null) {
       return false;

@@ -59,6 +59,7 @@ function sendWorkerMessage<T>(
   return new Promise(async (resolve, reject) => {
     const worker = await getWorker();
     const id = `${Date.now()}-${Math.random()}`;
+    const startRequest = performance.now();
 
     const messageHandler = (event: MessageEvent<WorkerResponse>) => {
       if (event.data.id !== id) {
@@ -66,6 +67,24 @@ function sendWorkerMessage<T>(
       }
 
       worker.removeEventListener("message", messageHandler);
+      const endRequest = performance.now();
+
+      performance.measure(`${type} Request Time`, {
+        start: startRequest,
+        end: endRequest,
+        detail: {
+          devtools: {
+            track: `${type}`,
+            properties: [
+              ["ID", id],
+              ["Type", type],
+              ["Payload", JSON.stringify(payload)],
+            ],
+            color: "primary",
+            trackGroup: "API Calls",
+          },
+        },
+      });
 
       if (event.data.type === "error") {
         reject(new Error(event.data.error));
@@ -104,6 +123,25 @@ function sendWorkerMessage<T>(
                 ["ID", id],
                 ["Type", type],
                 ["Payload", JSON.stringify(payload)],
+              ],
+              color: "primary",
+            },
+          },
+        });
+
+        const totalEnd = performance.now();
+        performance.measure(`${type} Total Time`, {
+          start: startRequest,
+          end: totalEnd,
+          detail: {
+            devtools: {
+              track: `${type}`,
+              trackGroup: "API Calls",
+              properties: [
+                ["ID", id],
+                ["Type", type],
+                ["Payload", JSON.stringify(payload)],
+                ["Time", totalEnd - startRequest],
               ],
               color: "primary",
             },

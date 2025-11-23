@@ -1,4 +1,4 @@
-import { query, mutation, DependencyGraph } from "./lib/DependencyGraph";
+import { query, mutation, DependencyGraph } from "./lib";
 import type { MovieApi } from "./api/types";
 
 /**
@@ -9,13 +9,8 @@ import type { MovieApi } from "./api/types";
  * Query to search for movies
  */
 export const moviesQuery = query({
-  queryFn: async (params: {
-    api: MovieApi;
-    searchQuery: string;
-    movieLimit: number;
-  }) => {
-    return params.api.searchMovies(params.searchQuery, params.movieLimit);
-  },
+  queryFn: (params: { searchQuery: string; movieLimit: number }, ctx) =>
+    ctx.api.searchMovies(params.searchQuery, params.movieLimit),
   staleTime: 5000,
   gcTime: 60000,
 });
@@ -24,9 +19,8 @@ export const moviesQuery = query({
  * Query to get a single movie by ID
  */
 export const movieQuery = query({
-  queryFn: async (params: { api: MovieApi; movieId: string }) => {
-    return params.api.getMovieById(params.movieId);
-  },
+  queryFn: (params: { movieId: string }, ctx) =>
+    ctx.api.getMovieById(params.movieId),
   staleTime: 10000,
   gcTime: 60000,
 });
@@ -39,13 +33,8 @@ export const movieQuery = query({
  * Mutation to update a movie's rating
  */
 export const updateMovieRatingMutation = mutation({
-  mutationFn: async (
-    params: { api: MovieApi; movieId: string },
-    data: { rating: number }
-  ) => {
-    return params.api.updateMovieRating(params.movieId, data.rating);
-  },
-  // Invalidate the movies list and the specific movie after updating rating
+  mutationFn: (params: { movieId: string; rating: number }, ctx) =>
+    ctx.api.updateMovieRating(params.movieId, params.rating),
   invalidates: [moviesQuery, movieQuery],
 });
 
@@ -57,3 +46,9 @@ export const appGraph = new DependencyGraph([
   movieQuery,
   updateMovieRatingMutation,
 ]);
+
+declare module "./lib" {
+  interface Context {
+    api: MovieApi;
+  }
+}

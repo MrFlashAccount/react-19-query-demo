@@ -2,7 +2,12 @@ import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
 import { createBatcher, exponentialBackoff, type Batch } from "./utils";
 import { eventEmitter } from "./EventEmitter";
-import { type QueryDefinition, getQueryInstanceKey } from "./DependencyGraph";
+import {
+  type Context,
+  type QueryDefinition,
+  type QueryFnContext,
+  getQueryInstanceKey,
+} from "./DependencyGraph";
 
 /**
  * Query state tracking
@@ -28,9 +33,9 @@ export interface QueryState<TData> {
  * Options for creating a Query instance (internal use)
  * Note: Most options come from the QueryDefinition and cannot be overridden
  */
-export interface QueryOptions<TData, TParams> {
+export interface QueryOptions<TParams, TData> {
   /** The query definition containing the queryFn and cache options */
-  queryDefinition: QueryDefinition<TData, TParams>;
+  queryDefinition: QueryDefinition<TParams, TData>;
   /** The parameters for this query instance */
   params: TParams;
 }
@@ -74,13 +79,65 @@ export interface QueryOptions<TData, TParams> {
  */
 interface QueryEnvironment {
   onRemove: () => void;
+  context: Context;
+}
+
+class QueryPromise<TData> extends Promise<TData> {
+  value: TData | undefined = undefined;
+  reason: unknown = undefined;
+  status: "pending" | "fulfilled" | "rejected" = "pending";
+  dataUpdatedAt: number | undefined = undefined;
+  errorUpdatedAt: number | undefined = undefined;
+  fetchStatus: "idle" | "fetching" = "fetching";
+
+  constructor(
+    executor: (
+      resolve: (value: TData) => void,
+      reject: (reason: unknown) => void
+    ) => void
+  ) {
+    let resolve: (value: TData) => void;
+    let reject: (reason: unknown) => void;
+
+    super((_resolve, _reject) => {
+      resolve = _resolve;
+      reject = _reject;
+    });
+    // Setting the `status` field allows React to
+    // synchronously read the value if the Promise
+    // is already settled by the time the Promise is
+    // passed to `use`.
+    executor(
+      (value) => {
+        this.status = "fulfilled";
+        this.value = value;
+        this.dataUpdatedAt = Date.now();
+        this.fetchStatus = "idle";
+        
+        resolve(value);
+      },
+      (reason) => {
+        this.status = "rejected";
+        this.reason = reason;
+        this.dataUpdatedAt = Date.now();
+        this.errorUpdatedAt = Date.now();
+        this.fetchStatus = "idle";
+        
+        reject(reason);
+      }
+    );
+  }
 }
 
 const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
 const DEFAULT_GC_TIME = 1000 * 60 * 60; // 60 minutes
 
-export class Query<TData = unknown, TParams = void> {
-  private queryDefinition: QueryDefinition<TData, TParams>;
+export class Query<
+  QD extends QueryDefinition<TParams, TData>,
+  TParams extends unknown = unknown,
+  TData extends unknown = unknown
+> {
+  private queryDefinition: QD;
   private params: TParams;
   private state: QueryState<TData>;
   private readonly serializedKeyValue: string;
@@ -97,7 +154,7 @@ export class Query<TData = unknown, TParams = void> {
   private batch: Batch;
 
   // Promise tracking
-  private currentPromise: Promise<TData>;
+  private currentPromise: QueryPromise<TData>;
   private environment: QueryEnvironment;
 
   // Resolved options from the definition
@@ -117,7 +174,7 @@ export class Query<TData = unknown, TParams = void> {
   }
 
   constructor(
-    queryDefinition: QueryDefinition<TData, TParams>,
+    queryDefinition: QD,
     params: TParams,
     environment: QueryEnvironment
   ) {
@@ -170,7 +227,7 @@ export class Query<TData = unknown, TParams = void> {
   /**
    * Get the query definition and parameters
    */
-  getKey(): { definition: QueryDefinition<TData, TParams>; params: TParams } {
+  getKey(): { definition: QD; params: TParams } {
     return {
       definition: this.queryDefinition,
       params: this.params,
@@ -225,19 +282,23 @@ export class Query<TData = unknown, TParams = void> {
 
     // Create new promise with retrier (before notifying to ensure deduplication)
     const promise = this.retrier
-      .execute(() => {
+      .execute(({ signal }) => {
         // Update fetch status
         this.state.fetchStatus = "fetching";
         // Notify after promise is created to ensure deduplication works
         this.notifySubscribers();
 
+        const ctx: QueryFnContext = { ...this.environment.context, signal };
+
         // Call queryFn with params from definition
-        return this.queryDefinition.config.queryFn(this.params);
+        return this.queryDefinition.config
+          .queryFn(this.params, ctx)
+          .then((data) => new QueryPromise<TData>(Promise.resolve(data)));
       })
       .then((data) => {
         // Update state on success
         this.state.status = "success";
-        this.state.data = data;
+        this.state.data = data as TData;
         this.state.error = undefined;
         this.state.dataUpdatedAt = Date.now();
         this.state.errorUpdatedAt = undefined;
@@ -261,7 +322,7 @@ export class Query<TData = unknown, TParams = void> {
         this.scheduleGC();
       });
 
-    return promise;
+    return promise as unknown as QueryPromise<TData>;
   }
 
   /**

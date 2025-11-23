@@ -18,11 +18,11 @@ export default function CustomLibraryTab({
   devtools,
 }: TabProps<{}>) {
   return (
-    <QueryProvider queryClient={queryClient}>
+    <QueryProvider queryClient={queryClient} context={{ api }}>
       <CustomLibraryTabContent
+        api={api}
         formState={formState}
         onFormStateChange={onFormStateChange}
-        api={api}
         devtools={devtools}
       />
     </QueryProvider>
@@ -35,7 +35,6 @@ export default function CustomLibraryTab({
 function CustomLibraryTabContent({
   formState,
   onFormStateChange,
-  api,
   devtools: Devtools,
 }: TabProps<{}>) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
@@ -43,11 +42,7 @@ function CustomLibraryTabContent({
 
   const { promise } = useQuery({
     query: moviesQuery,
-    params: {
-      api,
-      searchQuery,
-      movieLimit,
-    },
+    params: { searchQuery, movieLimit },
   });
 
   const movies = use(promise);
@@ -62,7 +57,6 @@ function CustomLibraryTabContent({
             <MovieCardCustom
               key={movie.id}
               movie={movie}
-              api={api}
               searchQuery={searchQuery}
               movieLimit={movieLimit}
             />
@@ -80,12 +74,10 @@ function CustomLibraryTabContent({
  */
 function MovieCardCustom({
   movie,
-  api,
   searchQuery,
   movieLimit,
 }: {
   movie: Movie;
-  api: TabProps["api"];
   searchQuery: string;
   movieLimit: number;
 }) {
@@ -98,14 +90,14 @@ function MovieCardCustom({
   // Subscribe to movies query to keep it fresh
   useQuery({
     query: moviesQuery,
-    params: { api, searchQuery, movieLimit },
+    params: { searchQuery, movieLimit },
   });
 
   return (
     <MovieCard
       movie={movie}
       onUpdateRating={(rating) => {
-        void updateRating({ api, movieId }, { rating });
+        void updateRating({ movieId, rating });
       }}
       isPending={isPending}
     />

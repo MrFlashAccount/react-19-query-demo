@@ -7,10 +7,9 @@ import {
   useEffect,
   startTransition,
   useDebugValue,
-  useRef,
 } from "react";
-import { QueryClient } from "./QueryClient";
-import { createMeasurer, noop } from "./utils";
+import { QueryClient, type QueryClientContext } from "./QueryClient";
+import { noop } from "./utils";
 import type { QueryState } from "./Query";
 import {
   type EventEmitter,
@@ -28,7 +27,6 @@ import {
  * Context value for the query provider
  */
 export type QueryContextValue = {
-  withMeasure: ReturnType<typeof createMeasurer>;
   queryClient: QueryClient;
   graph: DependencyGraph;
 };
@@ -42,6 +40,7 @@ export const QueryContext = createContext<QueryContextValue | null>(null);
  * Props for {@link QueryProvider}
  */
 export type QueryProviderProps = {
+  context?: QueryClientContext;
   /** Optional event emitter for debugging */
   eventEmitter?: EventEmitter<EventsMap>;
 } & (
@@ -76,16 +75,11 @@ export type QueryProviderProps = {
  * ```
  */
 export function QueryProvider({
+  context = {} as Readonly<QueryClientContext>,
   children,
   graph,
   queryClient: initialQueryClient,
 }: QueryProviderProps) {
-  const withMeasure = createMeasurer({
-    trackGroup: "Custom Library 🐐",
-    properties: [],
-    color: "primary",
-  });
-
   const [queryClient, setQueryClient] = useState(() => {
     const onChange = (newInstance: QueryClient) => {
       eventEmitter.emit("client:change", { client: newInstance });
@@ -95,24 +89,17 @@ export function QueryProvider({
     };
 
     if (initialQueryClient !== undefined) {
-      initialQueryClient.setOptions({
-        onChange,
-        context: { measurer: withMeasure },
-      });
+      initialQueryClient.setOptions({ onChange });
       return initialQueryClient;
     }
 
-    return new QueryClient({
-      graph,
-      onChange,
-      context: { measurer: withMeasure },
-    });
+    return new QueryClient({ graph, onChange, context });
   });
 
+  queryClient.setOptions({ context });
+
   return (
-    <QueryContext
-      value={{ queryClient, graph: queryClient.getGraph(), withMeasure }}
-    >
+    <QueryContext value={{ queryClient, graph: queryClient.getGraph() }}>
       {children}
     </QueryContext>
   );
@@ -121,9 +108,13 @@ export function QueryProvider({
 /**
  * Options for useQuery hook with parameters
  */
-export interface UseQueryOptions<TData, TParams> {
+export interface UseQueryOptions<
+  QD extends QueryDefinition<TParams, TData>,
+  TParams extends unknown = unknown,
+  TData extends unknown = unknown
+> {
   /** The query definition */
-  query: QueryDefinition<TData, TParams>;
+  query: QD;
   /** The parameters for this query instance */
   params: TParams;
 }
@@ -133,7 +124,7 @@ export interface UseQueryOptions<TData, TParams> {
  */
 export interface UseQueryOptionsNoParams<TData> {
   /** The query definition */
-  query: QueryDefinition<TData, void>;
+  query: QueryDefinition<void, TData>;
 }
 
 export function useQueryClient(): QueryClient {
@@ -188,8 +179,12 @@ export function useQueryContext(): QueryContextValue {
  * }
  * ```
  */
-export function useQuery<TData, TParams>(
-  options: UseQueryOptions<TData, TParams>
+export function useQuery<
+  QD extends QueryDefinition<TParams, TData>,
+  TParams extends unknown = unknown,
+  TData extends unknown = unknown
+>(
+  options: UseQueryOptions<QD, TParams, TData>
 ): {
   promise: Promise<TData>;
   isPending: boolean;
@@ -197,43 +192,31 @@ export function useQuery<TData, TParams>(
   isSuccess: boolean;
   isError: boolean;
   state: Readonly<QueryState<TData>>;
-};
-
-export function useQuery<TData>(options: UseQueryOptionsNoParams<TData>): {
-  promise: Promise<TData>;
-  isPending: boolean;
-  isFetching: boolean;
-  isSuccess: boolean;
-  isError: boolean;
-  state: Readonly<QueryState<TData>>;
-};
-
-export function useQuery<TData, TParams = void>(
-  options: UseQueryOptions<TData, TParams> | UseQueryOptionsNoParams<TData>
-): {
-  promise: Promise<TData>;
-  isPending: boolean;
-  isFetching: boolean;
-  isSuccess: boolean;
-  isError: boolean;
-  state: Readonly<QueryState<TData>>;
+  refetch: () => Promise<TData>;
 } {
   const { query: queryDefinition } = options;
-  const params = "params" in options ? options.params : (undefined as TParams);
+  const params = "params" in options ? options.params : ({} as TParams);
   const { queryClient } = useQueryContext();
+  const [isPendingTransition, startPendingTransition] = useTransition();
 
   // Add or get query instance from cache
-  const query = queryClient.addQuery<TData, TParams>(
-    queryDefinition as QueryDefinition<TData, TParams>,
+  const query = queryClient.addQuery<QD, TParams, TData>(
+    queryDefinition,
     params,
     { prefetch: true }
   );
 
   const queryState = query.getState();
-  const isPending = queryState.status === "pending";
+  const isPending = queryState.status === "pending" || isPendingTransition;
   const isFetching = queryState.fetchStatus === "fetching";
   const isSuccess = queryState.status === "success";
   const isError = queryState.status === "error";
+
+  const refetch = useEvent((): Promise<TData> => {
+    return new Promise<TData>((resolve, reject) => {
+      startPendingTransition(() => query.fetch().then(resolve).catch(reject));
+    });
+  });
 
   // Subscribe to query changes
   useEffect(() => query.subscribe(noop), [query]);
@@ -249,23 +232,24 @@ export function useQuery<TData, TParams = void>(
     isError,
     state: queryState,
     promise: query.promise,
+    refetch,
   };
 }
 
 /**
  * Options for useMutation hook
  */
-export interface UseMutationOptions<TData, TParams, TResult> {
+export interface UseMutationOptions<TParams, TResult> {
   /** The mutation definition from the dependency graph */
-  mutation: MutationDefinition<TData, TParams, TResult>;
+  mutation: MutationDefinition<TParams, TResult>;
 }
 
 /**
  * Result returned by useMutation hook
  */
-export interface UseMutationResult<TData, TParams, TResult> {
+export interface UseMutationResult<TParams, TResult> {
   /** Function to trigger the mutation */
-  mutate: (params: TParams, data: TData) => Promise<TResult>;
+  mutate: (params: TParams) => Promise<TResult>;
   /** Whether the mutation is currently running */
   isPending: boolean;
   /** Error from the last mutation attempt, or null if no error */
@@ -306,55 +290,87 @@ export interface UseMutationResult<TData, TParams, TResult> {
  * }
  * ```
  */
-export function useMutation<TData, TParams, TResult>(
-  options: UseMutationOptions<TData, TParams, TResult>
-): UseMutationResult<TData, TParams, TResult> {
+export function useMutation<TParams, TResult>(
+  options: UseMutationOptions<TParams, TResult>
+): UseMutationResult<TParams, TResult> {
   const { mutation: mutationDefinition } = options;
   const { queryClient, graph } = useQueryContext();
 
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
 
-  const mutate = useEvent(
-    async (params: TParams, data: TData): Promise<TResult> => {
-      const scope = eventEmitter.createScope();
-      scope.emit("mutation:start", { variables: { params, data } });
-      const executionScope = scope.createChildScope();
-      executionScope.emit("mutation:execution:start", {
-        variables: { params, data },
-      });
+  const mutate = useEvent(async (params: TParams): Promise<TResult> => {
+    const scope = eventEmitter.createScope();
+    scope.emit("mutation:start", { variables: { params } });
+    const executionScope = scope.createChildScope();
+    executionScope.emit("mutation:execution:start", {
+      variables: { params },
+    });
 
-      return new Promise<TResult>((resolve, reject) => {
-        startTransition(async () => {
-          setError(null);
+    return new Promise<TResult>((resolve, reject) => {
+      startTransition(async () => {
+        setError(null);
 
-          try {
-            // Execute the mutation
-            const result = await mutationDefinition.config.mutationFn(
-              params,
-              data
-            );
+        try {
+          // Execute the mutation
+          const result = await mutationDefinition.config.mutationFn(
+            params,
+            queryClient.getContext()
+          );
 
-            executionScope.emit("mutation:execution:success", {
-              variables: { params, data },
-              data: result,
+          executionScope.emit("mutation:execution:success", {
+            variables: { params },
+            data: result,
+          });
+
+          const mutationIndex = mutationDefinition.__index!;
+
+          // Handle static invalidations
+          const staticInvalidations =
+            graph.getStaticInvalidations(mutationIndex);
+          if (staticInvalidations.length > 0) {
+            const invalidationScope = scope.createChildScope();
+            const queries = staticInvalidations.map((idx) => `query:${idx}`);
+            invalidationScope.emit("mutation:invalidation:start", {
+              variables: { params },
+              queries,
             });
 
-            const mutationIndex = mutationDefinition.__index!;
+            await Promise.all(
+              staticInvalidations.map((queryIndex) => {
+                const queryDef = graph.getQueryByIndex(queryIndex);
+                if (queryDef) {
+                  return queryClient.invalidateQuery(queryDef, {
+                    parentScopeId: invalidationScope.scopeId,
+                  });
+                }
+              })
+            );
 
-            // Handle static invalidations
-            const staticInvalidations =
-              graph.getStaticInvalidations(mutationIndex);
-            if (staticInvalidations.length > 0) {
+            invalidationScope.emit("mutation:invalidation:success", {
+              variables: { params },
+              queries,
+            });
+          }
+
+          // Handle dynamic invalidations
+          if (graph.hasDynamicInvalidations(mutationIndex)) {
+            const dynamicInvalidations = graph.computeDynamicInvalidations(
+              mutationIndex,
+              params,
+              result
+            );
+
+            if (dynamicInvalidations.length > 0) {
               const invalidationScope = scope.createChildScope();
-              const queries = staticInvalidations.map((idx) => `query:${idx}`);
+              const queries = dynamicInvalidations.map((idx) => `query:${idx}`);
               invalidationScope.emit("mutation:invalidation:start", {
-                variables: { params, data },
+                variables: { params },
                 queries,
               });
 
               await Promise.all(
-                staticInvalidations.map((queryIndex) => {
+                dynamicInvalidations.map((queryIndex) => {
                   const queryDef = graph.getQueryByIndex(queryIndex);
                   if (queryDef) {
                     return queryClient.invalidateQuery(queryDef, {
@@ -365,78 +381,41 @@ export function useMutation<TData, TParams, TResult>(
               );
 
               invalidationScope.emit("mutation:invalidation:success", {
-                variables: { params, data },
+                variables: { params },
                 queries,
               });
             }
-
-            // Handle dynamic invalidations
-            if (graph.hasDynamicInvalidations(mutationIndex)) {
-              const dynamicInvalidations = graph.computeDynamicInvalidations(
-                mutationIndex,
-                params,
-                result
-              );
-
-              if (dynamicInvalidations.length > 0) {
-                const invalidationScope = scope.createChildScope();
-                const queries = dynamicInvalidations.map(
-                  (idx) => `query:${idx}`
-                );
-                invalidationScope.emit("mutation:invalidation:start", {
-                  variables: { params, data },
-                  queries,
-                });
-
-                await Promise.all(
-                  dynamicInvalidations.map((queryIndex) => {
-                    const queryDef = graph.getQueryByIndex(queryIndex);
-                    if (queryDef) {
-                      return queryClient.invalidateQuery(queryDef, {
-                        parentScopeId: invalidationScope.scopeId,
-                      });
-                    }
-                  })
-                );
-
-                invalidationScope.emit("mutation:invalidation:success", {
-                  variables: { params, data },
-                  queries,
-                });
-              }
-            }
-
-            // TODO: Handle optimistic updates
-            // const updates = graph.computeDynamicOptimisticUpdates(mutationIndex, params, data);
-            // For now, we just invalidate
-
-            scope.emit("mutation:success", {
-              variables: { params, data },
-              data: result,
-            });
-
-            resolve(result);
-          } catch (err) {
-            const errorObj =
-              err instanceof Error ? err : new Error(String(err));
-            setError(errorObj);
-
-            executionScope.emit("mutation:execution:error", {
-              variables: { params, data },
-              error: errorObj,
-            });
-
-            scope.emit("mutation:error", {
-              variables: { params, data },
-              error: errorObj,
-            });
-
-            reject(errorObj);
           }
-        });
+
+          // TODO: Handle optimistic updates
+          // const updates = graph.computeDynamicOptimisticUpdates(mutationIndex, params, data);
+          // For now, we just invalidate
+
+          scope.emit("mutation:success", {
+            variables: { params },
+            data: result,
+          });
+
+          resolve(result);
+        } catch (err) {
+          const errorObj = err instanceof Error ? err : new Error(String(err));
+          setError(errorObj);
+
+          executionScope.emit("mutation:execution:error", {
+            variables: { params },
+            error: errorObj,
+          });
+
+          scope.emit("mutation:error", {
+            variables: { params },
+            error: errorObj,
+          });
+
+          reject(errorObj);
+        }
       });
-    }
-  );
+    });
+  });
 
   return { mutate, isPending, error };
 }

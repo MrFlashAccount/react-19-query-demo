@@ -1,5 +1,5 @@
 import type { Query } from "./Query";
-import type { QueryDefinition } from "./DependencyGraph";
+import type { QueryDefinition, QueryParams } from "./DependencyGraph";
 import { serializeParams } from "./DependencyGraph";
 
 /**
@@ -62,11 +62,11 @@ export class QueryCache {
    * @param params - The query parameters
    * @param query - The Query instance to store
    */
-  set<TData, TParams>(
-    definition: QueryDefinition<TData, TParams>,
-    params: TParams,
-    query: Query<TData, TParams>
-  ): void {
+  set<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(definition: QD, params: TParams, query: Query<QD, TParams, TData>): void {
     const paramsKey = serializeParams(params);
 
     // Get or create param map for this definition
@@ -93,13 +93,15 @@ export class QueryCache {
    * @param params - The query parameters
    * @returns The Query instance or undefined if not found
    */
-  get<TData, TParams>(
-    definition: QueryDefinition<TData, TParams>,
-    params: TParams
-  ): Query<any, unknown> | undefined {
+  get<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(definition: QD, params: TParams): Query<QD, TParams, TData> | undefined {
     const paramsKey = serializeParams(params);
     const paramMap = this.cache.get(definition);
-    return paramMap?.get(paramsKey);
+
+    return paramMap?.get(paramsKey) as Query<QD, TParams, TData>;
   }
 
   /**
@@ -110,11 +112,11 @@ export class QueryCache {
    * @param params - The query parameters
    * @returns True if the query exists
    */
-  has<TData, TParams>(
-    definition: QueryDefinition<TData, TParams>,
-    params: TParams
+  has<QD extends QueryDefinition>(
+    definition: QD,
+    params: QueryParams<QD>
   ): boolean {
-    return this.get(definition, params) !== undefined;
+    return this.get<QD>(definition, params) !== undefined;
   }
 
   /**
@@ -125,10 +127,11 @@ export class QueryCache {
    * @param params - The query parameters
    * @returns True if the query was deleted
    */
-  delete<TData, TParams>(
-    definition: QueryDefinition<TData, TParams>,
-    params: TParams
-  ): boolean {
+  delete<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(definition: QD, params: TParams): boolean {
     const paramsKey = serializeParams(params);
     const paramMap = this.cache.get(definition);
 
@@ -156,8 +159,8 @@ export class QueryCache {
    * @param definition - The query definition reference
    * @returns Array of all Query instances for this definition
    */
-  findByDefinition<TData, TParams>(
-    definition: QueryDefinition<TData, TParams>
+  findByDefinition<QD extends QueryDefinition>(
+    definition: QD
   ): Array<Query<any, unknown>> {
     const paramMap = this.cache.get(definition);
 
@@ -293,9 +296,7 @@ export class QueryCache {
    * @param definition - The query definition reference
    * @returns Number of parameter combinations for this definition
    */
-  getDefinitionSize<TData, TParams>(
-    definition: QueryDefinition<TData, TParams>
-  ): number {
+  getDefinitionSize<QD extends QueryDefinition>(definition: QD): number {
     const paramMap = this.cache.get(definition);
     return paramMap?.size ?? 0;
   }

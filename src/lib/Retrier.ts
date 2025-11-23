@@ -90,11 +90,14 @@ export class Retrier {
    * @param fn - The async function to execute
    * @returns Promise that resolves with the function result or rejects after all retries
    */
-  async execute<T>(fn: () => Promise<T>): Promise<T> {
+  async execute<T, P extends Promise<T>>(
+    fn: (props: { signal: AbortSignal }) => P
+  ): Promise<T> {
     // Cancel any previous execution by updating the current execution ID
     // This will cause the previous execution to throw RetrierCancelledError
     const executionId = this.nextExecutionId++;
     this.currentExecutionId = executionId;
+    const abortSignal = new AbortController().signal;
 
     // Cancel all active timers to wake up any sleeping previous execution
     const timers = Array.from(this.activeTimers);
@@ -128,7 +131,7 @@ export class Retrier {
       }
 
       try {
-        return await fn();
+        return await fn({ signal: abortSignal });
       } catch (error) {
         // Check if this execution has been superseded
         if (this.currentExecutionId !== executionId) {
@@ -141,7 +144,7 @@ export class Retrier {
         }
 
         // Check if we should retry
-        if (!this.shouldRetry(failureCount, error)) {
+        if (!this.shouldRetry(failureCount, error, abortSignal)) {
           throw error;
         }
 
@@ -149,7 +152,7 @@ export class Retrier {
         const delay = this.getRetryDelay(failureCount, error);
 
         if (delay > 0) {
-          await this.sleep(delay);
+          await this.sleep(delay, abortSignal);
         } else {
           // Even with no delay, yield control to allow cancellation
           await Promise.resolve();
@@ -177,8 +180,16 @@ export class Retrier {
    * @param error - The error that occurred
    * @returns True if we should retry
    */
-  private shouldRetry(failureCount: number, error: unknown): boolean {
+  private shouldRetry(
+    failureCount: number,
+    error: unknown,
+    signal: AbortSignal
+  ): boolean {
     const { retry } = this.options;
+
+    if (signal.aborted) {
+      return false;
+    }
 
     if (typeof retry === "boolean") {
       // Boolean: true = retry 3 times, false = no retry
@@ -224,7 +235,7 @@ export class Retrier {
    *
    * @param ms - Milliseconds to sleep
    */
-  private sleep(ms: number): Promise<void> {
+  private sleep(ms: number, signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       let timerId: number | null = null;
       let isPaused: boolean = false;
@@ -245,6 +256,9 @@ export class Retrier {
       };
 
       const cancelFn = () => {
+        if (signal.aborted) {
+          return;
+        }
         this.activeTimers.delete(cancelFn);
         if (timerId !== null) {
           timerWheel.cancel(timerId);

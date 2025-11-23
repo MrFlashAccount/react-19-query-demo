@@ -1,8 +1,8 @@
 import type { RetryConfig } from "./Retrier";
 
 // Symbols for identifying query and mutation definitions
-export const QUERY_SYMBOL = Symbol("query");
-export const MUTATION_SYMBOL = Symbol("mutation");
+export const QUERY_SYMBOL = Symbol();
+export const MUTATION_SYMBOL = Symbol();
 
 // Marker for dynamic (conditional) relationships in the graph
 const DYNAMIC_MARKER = -1;
@@ -38,11 +38,19 @@ export function serializeParams(params: unknown): string {
   });
 }
 
+export interface Context {
+  [key: string]: unknown;
+}
+
+export interface QueryFnContext extends Context {
+  readonly signal: AbortSignal;
+}
+
 /**
  * Internal configuration for a query definition
  */
-interface QueryConfig<TData = unknown, TParams = void> {
-  queryFn: (params: TParams) => Promise<TData>;
+interface QueryConfig<TParams = unknown, TData = unknown> {
+  queryFn: (params: TParams, ctx: QueryFnContext) => Promise<TData>;
   gcTime?: number;
   staleTime?: number | "static";
   retry?: RetryConfig;
@@ -53,27 +61,22 @@ interface QueryConfig<TData = unknown, TParams = void> {
  * A query definition that describes how to fetch data.
  * This is a type-level construct that gets registered in the dependency graph.
  */
-export interface QueryDefinition<TData = unknown, TParams = void> {
+export interface QueryDefinition<
+  TParams extends unknown = unknown,
+  TData extends unknown = unknown
+> {
   readonly __type: typeof QUERY_SYMBOL;
-  __index?: number;
-  readonly config: QueryConfig<TData, TParams>;
+  readonly __index?: number;
+  readonly config: QueryConfig<TParams, TData>;
 }
 
-/**
- * Options for creating a query definition
- */
-export interface QueryOptions<TParams = unknown, TData = unknown> {
-  /** Function that returns a promise to fetch data */
-  queryFn: (params: TParams) => Promise<TData>;
-  /** Time in milliseconds after which the query will be garbage collected. Default: 60 minutes */
-  gcTime?: number;
-  /** Time in milliseconds until data becomes stale. Can be 'static' to never refetch. Default: 0 */
-  staleTime?: number | "static";
-  /** Retry configuration - number of retries, boolean, or custom function. Default: 3 retries */
-  retry?: RetryConfig;
-  /** Delay between retries in milliseconds. Default: exponential backoff */
-  retryDelay?: number | ((failureCount: number, error: unknown) => number);
-}
+export type QueryFn<QD extends QueryDefinition> = QD["config"]["queryFn"];
+export type QueryFnResult<QD extends QueryDefinition> = ReturnType<QueryFn<QD>>;
+export type QueryParams<QD extends QueryDefinition> = Parameters<
+  QueryFn<QD>
+>[0];
+export type QueryData<QD extends QueryDefinition> =
+  QueryFnResult<QD> extends Promise<infer T> ? T : never;
 
 /**
  * Creates a query definition that can be registered in a dependency graph.
@@ -83,8 +86,8 @@ export interface QueryOptions<TParams = unknown, TData = unknown> {
  *
  * @example
  * ```typescript
- * const moviesQuery = query({
- *   queryFn: async (params: { page: number }) => {
+ * const moviesQuery = query<{ page: number }>({
+ *   queryFn: async ({ params }) => {
  *     const res = await fetch(`/api/movies?page=${params.page}`);
  *     return res.json();
  *   },
@@ -93,13 +96,14 @@ export interface QueryOptions<TParams = unknown, TData = unknown> {
  * });
  * ```
  */
-export function query<TData = unknown, TParams = unknown>(
-  config: QueryOptions<TParams, TData>
-): QueryDefinition<TData, TParams> {
-  return {
-    __type: QUERY_SYMBOL,
-    config,
-  };
+
+export function query<
+  TParams extends unknown = never,
+  TData extends unknown = unknown
+>(
+  config: Readonly<QueryConfig<TParams, TData>>
+): Readonly<QueryDefinition<TParams, TData>> {
+  return { __type: QUERY_SYMBOL, config: config };
 }
 
 /**
@@ -126,8 +130,7 @@ export function isQuery(node: unknown): node is QueryDefinition {
  * @returns A unique string key for caching
  */
 export function getQueryInstanceKey(params: unknown): string {
-  const paramsKey = serializeParams(params);
-  return paramsKey;
+  return serializeParams(params);
 }
 
 /**
@@ -141,35 +144,31 @@ type InvalidationTarget<TParams, TResult> =
 /**
  * Defines an optimistic update to apply to a query before the mutation completes
  */
-type OptimisticUpdateTarget<TParams, TData, TQueryData> = {
-  query: QueryDefinition<TQueryData, any>;
-  updater: (old: TQueryData, params: TParams, data: TData) => TQueryData;
+type OptimisticUpdateTarget<TParams, TQueryData> = {
+  query: QueryDefinition<any, TQueryData>;
+  updater: (old: TQueryData, params: TParams) => TQueryData;
 };
 
 /**
  * Internal configuration for a mutation definition
  */
-interface MutationConfig<TData = unknown, TParams = void, TResult = unknown> {
-  mutationFn: (params: TParams, data: TData) => Promise<TResult>;
+interface MutationConfig<TParams = unknown, TResult = unknown> {
+  mutationFn: (params: TParams, ctx: Context) => Promise<TResult>;
   invalidates?: InvalidationTarget<TParams, TResult>;
   optimistic?: (
     params: TParams,
-    data: TData
-  ) => OptimisticUpdateTarget<TParams, TData, unknown>[];
+    ctx: Context
+  ) => OptimisticUpdateTarget<TParams, unknown>[];
 }
 
 /**
  * A mutation definition that describes how to perform a data mutation.
  * This is a type-level construct that gets registered in the dependency graph.
  */
-export interface MutationDefinition<
-  TData = unknown,
-  TParams = void,
-  TResult = unknown
-> {
+export interface MutationDefinition<TParams = unknown, TResult = unknown> {
   readonly __type: typeof MUTATION_SYMBOL;
   __index?: number;
-  readonly config: MutationConfig<TData, TParams, TResult>;
+  readonly config: MutationConfig<TParams, TResult>;
 }
 
 /**
@@ -180,29 +179,26 @@ export interface MutationDefinition<
  *
  * @example
  * ```typescript
- * const addMovieMutation = mutation({
- *   mutationFn: async (params: void, data: Movie) => {
- *     const res = await fetch('/api/movies', {
+ * const addMovieMutation = mutation<{ movieId: string }>({
+ *   mutationFn: async ({ params }) => {
+ *     const res = await fetch(`/api/movies/${params.movieId}`, {
  *       method: 'POST',
  *       body: JSON.stringify(data)
  *     });
  *     return res.json();
  *   },
  *   invalidates: [moviesQuery],
- *   optimistic: (params, movie) => [{
+ *   optimistic: ({ params }) => [{
  *     query: moviesQuery,
- *     updater: (old, params, newMovie) => [...old, newMovie]
+ *     updater: (old) => [...old, newMovie]
  *   }]
  * });
  * ```
  */
-export function mutation<TData = unknown, TParams = void, TResult = unknown>(
-  config: MutationConfig<TData, TParams, TResult>
-): MutationDefinition<TData, TParams, TResult> {
-  return {
-    __type: MUTATION_SYMBOL,
-    config,
-  };
+export function mutation<TParams = unknown, TResult = unknown>(
+  config: MutationConfig<TParams, TResult>
+): Readonly<MutationDefinition<TParams, TResult>> {
+  return { __type: MUTATION_SYMBOL, config: config };
 }
 
 /**
@@ -221,7 +217,7 @@ export function isMutation(node: unknown): node is MutationDefinition {
  * A node in the dependency graph (either a query or mutation definition)
  * Uses 'any' for type parameters to accept definitions with any params
  */
-type GraphNode = QueryDefinition<any, any> | MutationDefinition<any, any, any>;
+type GraphNode = QueryDefinition<any, any> | MutationDefinition<any, any>;
 
 /**
  * Parsed invalidation relationship between a mutation and query
@@ -248,7 +244,7 @@ interface ParsedOptimisticUpdate {
 export class DependencyGraph {
   private nodesByIndex = new Map<number, GraphNode>();
   private queries = new Map<number, QueryDefinition<any, any>>();
-  private mutations = new Map<number, MutationDefinition<any, any, any>>();
+  private mutations = new Map<number, MutationDefinition<any, any>>();
 
   private invalidations: ParsedInvalidation[] = [];
   private optimisticUpdates: ParsedOptimisticUpdate[] = [];
@@ -533,75 +529,6 @@ export class DependencyGraph {
   }
 
   /**
-   * Find queries that have no static relationships with any mutations.
-   * Note: Queries with only dynamic relationships will be marked as orphans.
-   *
-   * @returns Array of query indices with no static mutation relationships
-   */
-  findOrphanQueries(): number[] {
-    const affectedQueries = new Set<number>();
-
-    for (const inv of this.invalidations) {
-      if (!inv.conditional) {
-        affectedQueries.add(inv.queryIndex);
-      }
-    }
-
-    for (const opt of this.optimisticUpdates) {
-      if (!opt.conditional) {
-        affectedQueries.add(opt.queryIndex);
-      }
-    }
-
-    const orphans: number[] = [];
-    for (const [index] of this.queries) {
-      if (!affectedQueries.has(index)) {
-        orphans.push(index);
-      }
-    }
-
-    return orphans;
-  }
-
-  /**
-   * Find mutations that have no invalidation or optimistic update relationships.
-   *
-   * @returns Array of mutation indices with no relationships
-   */
-  findUnconnectedMutations(): number[] {
-    const unconnected: number[] = [];
-
-    for (const [index] of this.mutations) {
-      const hasInvalidations = this.invalidations.some(
-        (inv) => inv.mutationIndex === index
-      );
-      const hasOptimistic = this.optimisticUpdates.some(
-        (opt) => opt.mutationIndex === index
-      );
-
-      if (!hasInvalidations && !hasOptimistic) {
-        unconnected.push(index);
-      }
-    }
-
-    return unconnected;
-  }
-
-  /**
-   * Get all query definitions in the graph
-   */
-  getAllQueries(): QueryDefinition<any, any>[] {
-    return Array.from(this.queries.values());
-  }
-
-  /**
-   * Get all mutation definitions in the graph
-   */
-  getAllMutations(): MutationDefinition<any, any, any>[] {
-    return Array.from(this.mutations.values());
-  }
-
-  /**
    * Get a query definition by its graph index
    */
   getQueryByIndex(index: number): QueryDefinition<any, any> | undefined {
@@ -611,19 +538,7 @@ export class DependencyGraph {
   /**
    * Get a mutation definition by its graph index
    */
-  getMutationByIndex(
-    index: number
-  ): MutationDefinition<any, any, any> | undefined {
+  getMutationByIndex(index: number): MutationDefinition<any, any> | undefined {
     return this.mutations.get(index);
-  }
-
-  /**
-   * Get the size of the graph (number of queries and mutations)
-   */
-  size(): { queries: number; mutations: number } {
-    return {
-      queries: this.queries.size,
-      mutations: this.mutations.size,
-    };
   }
 }
