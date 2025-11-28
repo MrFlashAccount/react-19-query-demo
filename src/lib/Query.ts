@@ -14,19 +14,17 @@ import {
  */
 export interface QueryState<TData> {
   /** Current status of the query */
-  status: "pending" | "success" | "error";
+  status: QueryPromise<TData>["status"];
   /** The resolved data when query is successful */
-  data: TData | undefined;
+  data: QueryPromise<TData>["value"];
   /** The error when query fails */
-  error: unknown;
+  error: QueryPromise<TData>["reason"];
   /** Timestamp when the data was last fetched successfully */
-  dataUpdatedAt: number | undefined;
+  dataUpdatedAt: QueryPromise<TData>["dataUpdatedAt"];
   /** Timestamp when the error occurred */
-  errorUpdatedAt: number | undefined;
+  errorUpdatedAt: QueryPromise<TData>["errorUpdatedAt"];
   /** Current fetch status */
-  fetchStatus: "idle" | "fetching";
-  /** Whether the query is prefetched */
-  prefetchedAt: number | undefined;
+  fetchStatus: QueryPromise<TData>["fetchStatus"];
 }
 
 /**
@@ -40,97 +38,169 @@ export interface QueryOptions<TParams, TData> {
   params: TParams;
 }
 
-/**
- * Query class that manages an individual query instance's state, fetching, subscribers, and GC.
- * A query instance is a combination of a QueryDefinition and specific parameters.
- *
- * Features:
- * - Tracks query state (status, data, error)
- * - Manages subscribers with automatic refetch on subscribe if stale
- * - Handles retries using Retrier
- * - Schedules garbage collection using TimerWheel when no subscribers remain
- * - Options are immutable and come from the QueryDefinition
- *
- * @example
- * ```typescript
- * const moviesQuery = query({
- *   queryFn: (params: { page: number }) => fetchMovies(params.page),
- *   gcTime: 5000,
- *   staleTime: 30000
- * });
- *
- * const queryInstance = new Query(
- *   moviesQuery,
- *   { page: 1 },
- *   { onRemove: () => cache.delete(key) }
- * );
- *
- * // Subscribe to changes
- * const unsubscribe = queryInstance.subscribe(() => {
- *   console.log('Query updated:', queryInstance.getState());
- * });
- *
- * // Fetch data
- * await queryInstance.fetch();
- *
- * // Later...
- * unsubscribe();
- * ```
- */
 interface QueryEnvironment {
   onRemove: () => void;
   context: Context;
 }
 
-class QueryPromise<TData> extends Promise<TData> {
-  value: TData | undefined = undefined;
-  reason: unknown = undefined;
-  status: "pending" | "fulfilled" | "rejected" = "pending";
-  dataUpdatedAt: number | undefined = undefined;
-  errorUpdatedAt: number | undefined = undefined;
-  fetchStatus: "idle" | "fetching" = "fetching";
+const QUERY_PROMISE_SYMBOL = Symbol();
+
+export interface IdleQueryPromise<TData> {
+  __$type: typeof QUERY_PROMISE_SYMBOL;
+  status: "fulfilled" | "rejected";
+  value: undefined | TData;
+  dataUpdatedAt: undefined | number;
+  fetchStatus: "idle";
+  reason: undefined | unknown;
+  errorUpdatedAt: undefined | number;
+  readonly _promise: Promise<TData>;
+  then<TResult1 = TData, TResult2 = never>(
+    onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2>;
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<TData | TResult>;
+  finally(onfinally?: (() => void) | null): Promise<TData>;
+  readonly [Symbol.toStringTag]: string;
+}
+
+export interface PendingQueryPromise<TData> {
+  __$type: typeof QUERY_PROMISE_SYMBOL;
+  status: "pending";
+  value: undefined | TData;
+  dataUpdatedAt: undefined | number;
+  fetchStatus: "fetching";
+  reason: undefined | unknown;
+  errorUpdatedAt: undefined | number;
+  readonly _promise: Promise<TData>;
+  then<TResult1 = TData, TResult2 = never>(
+    onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2>;
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<TData | TResult>;
+  finally(onfinally?: (() => void) | null): Promise<TData>;
+  readonly [Symbol.toStringTag]: string;
+}
+
+export interface FulfilledQueryPromise<TData> {
+  __$type: typeof QUERY_PROMISE_SYMBOL;
+  status: "fulfilled";
+  value: TData;
+  dataUpdatedAt: number;
+  fetchStatus: "idle";
+  reason: never;
+  errorUpdatedAt: never;
+  readonly _promise: Promise<TData>;
+  then<TResult1 = TData, TResult2 = never>(
+    onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2>;
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<TData | TResult>;
+  finally(onfinally?: (() => void) | null): Promise<TData>;
+  readonly [Symbol.toStringTag]: string;
+}
+
+export interface RejectedQueryPromise {
+  __$type: typeof QUERY_PROMISE_SYMBOL;
+  status: "rejected";
+  value: never;
+  dataUpdatedAt: number;
+  fetchStatus: "idle";
+  reason: unknown;
+  errorUpdatedAt: number;
+  readonly _promise: Promise<never>;
+  then<TResult1 = never, TResult2 = never>(
+    onfulfilled?: ((value: never) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2>;
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<never | TResult>;
+  finally(onfinally?: (() => void) | null): Promise<never>;
+  readonly [Symbol.toStringTag]: string;
+}
+
+export class QueryPromise<TData> {
+  __$type = QUERY_PROMISE_SYMBOL;
+  status: "pending" | "fulfilled" | "rejected";
+  value: TData | undefined;
+  dataUpdatedAt: number | undefined;
+  fetchStatus: "idle" | "fetching";
+  reason: unknown | undefined;
+  errorUpdatedAt: number | undefined;
+
+  /** @internal */
+  readonly _promise: Promise<TData>;
 
   constructor(
-    executor: (
-      resolve: (value: TData) => void,
-      reject: (reason: unknown) => void
+    callback: (
+      resolve: (value: TData | PromiseLike<TData>) => void,
+      reject: (error: unknown) => void
     ) => void
   ) {
-    let resolve: (value: TData) => void;
-    let reject: (reason: unknown) => void;
+    this.status = "pending";
+    this.value = undefined;
+    this.dataUpdatedAt = undefined;
+    this.fetchStatus = "idle";
+    this.reason = undefined;
+    this.errorUpdatedAt = undefined;
 
-    super((_resolve, _reject) => {
-      resolve = _resolve;
-      reject = _reject;
-    });
-    // Setting the `status` field allows React to
-    // synchronously read the value if the Promise
-    // is already settled by the time the Promise is
-    // passed to `use`.
-    executor(
+    this._promise = new Promise<TData>(callback);
+
+    // Set up handlers to track promise state
+    this._promise.then(
       (value) => {
         this.status = "fulfilled";
         this.value = value;
         this.dataUpdatedAt = Date.now();
         this.fetchStatus = "idle";
-        
-        resolve(value);
+        this.reason = undefined;
+        this.errorUpdatedAt = undefined;
+        console.log("then", value, this);
+        return value;
       },
       (reason) => {
         this.status = "rejected";
-        this.reason = reason;
-        this.dataUpdatedAt = Date.now();
-        this.errorUpdatedAt = Date.now();
+        this.value = undefined;
+        this.dataUpdatedAt = undefined;
         this.fetchStatus = "idle";
-        
-        reject(reason);
+        this.reason = reason;
+        this.errorUpdatedAt = Date.now();
+        console.log("catch", reason, this);
+        throw reason;
       }
     );
+  }
+
+  then<TResult1 = TData, TResult2 = never>(
+    onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return this._promise.then(onfulfilled, onrejected);
+  }
+
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<TData | TResult> {
+    return this._promise.catch(onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null): Promise<TData> {
+    return this._promise.finally(onfinally);
+  }
+
+  get [Symbol.toStringTag]() {
+    return "QueryPromise";
   }
 }
 
 const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
-const DEFAULT_GC_TIME = 1000 * 60 * 60; // 60 minutes
+const DEFAULT_GC_TIME = 1000 * 60 * 5; // 5 minutes
 
 export class Query<
   QD extends QueryDefinition<TParams, TData>,
@@ -139,8 +209,8 @@ export class Query<
 > {
   private queryDefinition: QD;
   private params: TParams;
-  private state: QueryState<TData>;
   private readonly serializedKeyValue: string;
+  private prefetchedAt: number | undefined;
 
   // Subscribers
   private subscribers: Set<() => void> = new Set();
@@ -196,17 +266,6 @@ export class Query<
       config.retryDelay ??
       ((failureCount) => exponentialBackoff(1000, failureCount, 10000));
 
-    // Initialize state
-    this.state = {
-      status: "pending",
-      fetchStatus: "idle",
-      data: undefined,
-      error: undefined,
-      dataUpdatedAt: undefined,
-      errorUpdatedAt: undefined,
-      prefetchedAt: undefined,
-    };
-
     // Create retrier with options from definition
     this.retrier = new Retrier({
       retry: this.retry,
@@ -221,7 +280,14 @@ export class Query<
    * Get the current state of the query
    */
   getState(): Readonly<QueryState<TData>> {
-    return this.state;
+    return {
+      status: this.currentPromise.status,
+      data: this.currentPromise.value,
+      error: this.currentPromise.reason,
+      dataUpdatedAt: this.currentPromise.dataUpdatedAt,
+      errorUpdatedAt: this.currentPromise.errorUpdatedAt,
+      fetchStatus: this.currentPromise.fetchStatus,
+    };
   }
 
   /**
@@ -244,29 +310,26 @@ export class Query<
   isStale(): boolean {
     // If the query is prefetched, it's not stale for some time after the prefetch
     // this is to avoid double fetching the query after it was prefetched but not used yet.
-    if (this.state.prefetchedAt != null) {
+    if (this.prefetchedAt != null) {
       return false;
     }
 
     // If staleTime is 'static', data is never stale (even if never fetched or invalidated)
-    if (this.staleTime === "static") {
+    if (this.staleTime === "static" || this.staleTime === Infinity) {
       return false;
     }
+
+    const state = this.getState();
 
     // If no data has been fetched yet (or was invalidated), it's stale
-    if (this.state.dataUpdatedAt == null) {
+    if (state.dataUpdatedAt == null) {
       return true;
-    }
-
-    // If staleTime is Infinity, data is never stale (but can be invalidated)
-    if (this.staleTime === Infinity) {
-      return false;
     }
 
     // staleTime can't be less than 1, so we set it to 1 if it's undefined or 0.
     const now = Date.now();
 
-    return now >= this.state.dataUpdatedAt + this.staleTime;
+    return now >= state.dataUpdatedAt + this.staleTime;
   }
 
   /**
@@ -274,55 +337,31 @@ export class Query<
    *
    * @returns Promise that resolves with the query data
    */
-  private createFetcher(): Promise<TData> {
+  private createFetcher(): QueryPromise<TData> {
     // If already fetching, return the current promise
-    if (this.state.fetchStatus === "fetching" && this.currentPromise != null) {
+    if (
+      this.currentPromise != null &&
+      this.currentPromise.fetchStatus === "fetching"
+    ) {
       return this.currentPromise;
     }
 
     // Create new promise with retrier (before notifying to ensure deduplication)
     const promise = this.retrier
       .execute(({ signal }) => {
-        // Update fetch status
-        this.state.fetchStatus = "fetching";
-        // Notify after promise is created to ensure deduplication works
         this.notifySubscribers();
 
         const ctx: QueryFnContext = { ...this.environment.context, signal };
 
         // Call queryFn with params from definition
-        return this.queryDefinition.config
-          .queryFn(this.params, ctx)
-          .then((data) => new QueryPromise<TData>(Promise.resolve(data)));
-      })
-      .then((data) => {
-        // Update state on success
-        this.state.status = "success";
-        this.state.data = data as TData;
-        this.state.error = undefined;
-        this.state.dataUpdatedAt = Date.now();
-        this.state.errorUpdatedAt = undefined;
-        this.state.fetchStatus = "idle";
-
-        this.notifySubscribers();
-
-        return data;
-      })
-      .catch((error) => {
-        // Update state on error
-        this.state.status = "error";
-        this.state.error = error;
-        this.state.errorUpdatedAt = Date.now();
-        this.state.fetchStatus = "idle";
-
-        this.notifySubscribers();
-        throw error;
-      })
+        return this.queryDefinition.config.queryFn(this.params, ctx);
+      }, QueryPromise)
       .finally(() => {
+        this.notifySubscribers();
         this.scheduleGC();
-      });
+      }) as QueryPromise<TData>;
 
-    return promise as unknown as QueryPromise<TData>;
+    return promise;
   }
 
   /**
@@ -355,8 +394,12 @@ export class Query<
 
   prefetch(): void {
     const scope = eventEmitter.createScope();
+    console.log("prefetch", this.currentPromise);
 
-    if (this.state.data != null || this.state.fetchStatus === "fetching") {
+    if (
+      this.currentPromise.value != null ||
+      this.currentPromise.fetchStatus === "fetching"
+    ) {
       scope.emit("query:prefetch:success", {
         key: this.serializedKey,
       });
@@ -364,7 +407,7 @@ export class Query<
     }
 
     const now = Date.now();
-    this.state.prefetchedAt = now;
+    this.prefetchedAt = now;
 
     scope.emit("query:prefetch:start", {
       key: this.serializedKey,
@@ -377,7 +420,7 @@ export class Query<
         });
 
         this.timerWheel.schedule(() => {
-          this.state.prefetchedAt = undefined;
+          this.prefetchedAt = undefined;
 
           if (this.subscribers.size > 0) {
             return;
@@ -399,15 +442,15 @@ export class Query<
   }
 
   async enshureData(): Promise<TData> {
-    if (this.state.data != null) {
+    if (this.currentPromise.value != null) {
       if (this.isStale()) {
         return this.fetch();
       }
 
-      return this.state.data;
+      return this.currentPromise.value;
     }
 
-    if (this.state.fetchStatus === "fetching") {
+    if (this.currentPromise.fetchStatus === "fetching") {
       return await this.currentPromise;
     }
 
@@ -438,7 +481,7 @@ export class Query<
 
     const isStale = this.isStale();
 
-    if (this.state.status === "pending") {
+    if (this.currentPromise.status === "pending") {
       try {
         callback();
       } catch (error) {
@@ -452,7 +495,7 @@ export class Query<
     // this makes multiple calls of subscribe keep the same value of `isStale`.
     // So we don't refetch the query if it wasn't stale when the first call of subscribe was made.
     this.batch(() => {
-      if (isStale && this.state.status === "success") {
+      if (isStale && this.currentPromise.status === "fulfilled") {
         void this.createFetcher();
       }
     });
@@ -552,9 +595,9 @@ export class Query<
    * (no subscribers and GC timer has elapsed or not scheduled)
    */
   canBeCollected(): boolean {
-    // If the query is prefetched, it's not eligible for garbage collection
+    // If the query is prefetched, it's not eligible for garbage collection (for a couple of seconds)
     // this is to avoid double fetching the query after it was prefetched but not used yet.
-    if (this.state.prefetchedAt != null) {
+    if (this.prefetchedAt != null) {
       return false;
     }
 
@@ -563,15 +606,6 @@ export class Query<
       return false;
     }
 
-    // GC timer is scheduled, not eligible yet
-    if (this.gcTimerId !== undefined) {
-      return false;
-    }
-
-    // No subscribers and no timer means either:
-    // 1. GC time is Infinity (never collect)
-    // 2. GC timer already fired
-    // We consider it eligible only if gcTime is not Infinity
     return this.gcTime !== Infinity;
   }
 
@@ -582,7 +616,7 @@ export class Query<
   invalidate(parentScopeId?: string): Promise<TData> {
     // Only invalidate if not static
     if (this.staleTime !== "static") {
-      this.state.dataUpdatedAt = undefined;
+      this.currentPromise.dataUpdatedAt = undefined;
 
       // If there are subscribers, trigger a refetch
       if (this.subscribers.size > 0) {
@@ -602,15 +636,6 @@ export class Query<
    * Reset the query to its initial state
    */
   reset(): void {
-    this.state = {
-      status: "pending",
-      fetchStatus: "idle",
-      data: undefined,
-      error: undefined,
-      dataUpdatedAt: undefined,
-      errorUpdatedAt: undefined,
-      prefetchedAt: undefined,
-    };
     this.cancelGC();
     this.currentPromise = this.createFetcher();
     this.notifySubscribers();

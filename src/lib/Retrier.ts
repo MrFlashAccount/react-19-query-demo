@@ -28,6 +28,13 @@ export interface RetrierOptions {
   retryDelay?: number | ((failureCount: number, error: unknown) => number);
 }
 
+export type PromiseConstructor<T> = new (
+  callback: (
+    resolve: (value: T | PromiseLike<T>) => void,
+    reject: (error: unknown) => void
+  ) => void
+) => PromiseLike<T>;
+
 /**
  * Retrier class that handles retry logic for failed queries.
  *
@@ -90,8 +97,9 @@ export class Retrier {
    * @param fn - The async function to execute
    * @returns Promise that resolves with the function result or rejects after all retries
    */
-  async execute<T, P extends Promise<T>>(
-    fn: (props: { signal: AbortSignal }) => P
+  async execute<T, R extends PromiseConstructor<T> = PromiseConstructor<T>>(
+    fn: (props: { signal: AbortSignal }) => Promise<T>,
+    promiseConstructor?: R
   ): Promise<T> {
     // Cancel any previous execution by updating the current execution ID
     // This will cause the previous execution to throw RetrierCancelledError
@@ -131,18 +139,12 @@ export class Retrier {
       }
 
       try {
-        return await fn({ signal: abortSignal });
+        const PromiseCtor = (promiseConstructor ??
+          Promise) as PromiseConstructor<T>;
+        return await new PromiseCtor((resolve, reject) => {
+          fn({ signal: abortSignal }).then(resolve).catch(reject);
+        });
       } catch (error) {
-        // Check if this execution has been superseded
-        if (this.currentExecutionId !== executionId) {
-          throw new RetrierCancelledError();
-        }
-
-        // Check if cancelled after error
-        if (this.cancelled) {
-          throw new RetrierCancelledError();
-        }
-
         // Check if we should retry
         if (!this.shouldRetry(failureCount, error, abortSignal)) {
           throw error;

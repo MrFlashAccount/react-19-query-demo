@@ -10,7 +10,12 @@ import {
 } from "react";
 import { QueryClient, type QueryClientContext } from "./QueryClient";
 import { noop } from "./utils";
-import type { QueryState } from "./Query";
+import type {
+  FulfilledQueryPromise,
+  QueryPromise,
+  QueryState,
+  RejectedQueryPromise,
+} from "./Query";
 import {
   type EventEmitter,
   type EventsMap,
@@ -179,21 +184,31 @@ export function useQueryContext(): QueryContextValue {
  * }
  * ```
  */
-export function useQuery<
-  QD extends QueryDefinition<TParams, TData>,
-  TParams extends unknown = unknown,
-  TData extends unknown = unknown
->(
-  options: UseQueryOptions<QD, TParams, TData>
-): {
-  promise: Promise<TData>;
+export interface UseQueryResult<TData> {
+  promise: QueryPromise<TData>;
   isPending: boolean;
   isFetching: boolean;
   isSuccess: boolean;
   isError: boolean;
   state: Readonly<QueryState<TData>>;
-  refetch: () => Promise<TData>;
-} {
+  refetch: () => QueryPromise<TData>;
+}
+
+export interface UseQueryFullfilledResult<TData> extends UseQueryResult<TData> {
+  state: Readonly<QueryState<TData>>;
+  promise: FulfilledQueryPromise<TData>;
+}
+
+export interface UseQueryRejectedResult<TData> extends UseQueryResult<TData> {
+  state: Readonly<QueryState<TData>>;
+  promise: RejectedQueryPromise;
+}
+
+export function useQuery<
+  QD extends QueryDefinition<TParams, TData>,
+  TParams extends unknown = unknown,
+  TData extends unknown = unknown
+>(options: UseQueryOptions<QD, TParams, TData>): UseQueryResult<TData> {
   const { query: queryDefinition } = options;
   const params = "params" in options ? options.params : ({} as TParams);
   const { queryClient } = useQueryContext();
@@ -209,13 +224,14 @@ export function useQuery<
   const queryState = query.getState();
   const isPending = queryState.status === "pending" || isPendingTransition;
   const isFetching = queryState.fetchStatus === "fetching";
-  const isSuccess = queryState.status === "success";
-  const isError = queryState.status === "error";
+  const isSuccess = queryState.status === "fulfilled";
+  const isError = queryState.status === "rejected";
 
-  const refetch = useEvent((): Promise<TData> => {
-    return new Promise<TData>((resolve, reject) => {
-      startPendingTransition(() => query.fetch().then(resolve).catch(reject));
+  const refetch = useEvent(() => {
+    startPendingTransition(async () => {
+      await query.fetch();
     });
+    return query.promise;
   });
 
   // Subscribe to query changes
@@ -233,7 +249,7 @@ export function useQuery<
     state: queryState,
     promise: query.promise,
     refetch,
-  };
+  } as const;
 }
 
 /**
