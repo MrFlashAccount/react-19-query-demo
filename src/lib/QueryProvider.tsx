@@ -7,6 +7,7 @@ import {
   useEffect,
   startTransition,
   useDebugValue,
+  useOptimistic,
 } from "react";
 import { QueryClient, type QueryClientContext } from "./QueryClient";
 import { noop } from "./utils";
@@ -270,6 +271,8 @@ export interface UseMutationResult<TParams, TResult> {
   isPending: boolean;
   /** Error from the last mutation attempt, or null if no error */
   error: Error | null;
+  /** Promise returned by the mutation */
+  promise: Promise<TResult> | null;
 }
 
 /**
@@ -312,6 +315,8 @@ export function useMutation<TParams, TResult>(
   const { mutation: mutationDefinition } = options;
   const { queryClient, graph } = useQueryContext();
 
+  const [actionPromise, setActionPromise] =
+    useOptimistic<Promise<TResult> | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
 
@@ -323,16 +328,19 @@ export function useMutation<TParams, TResult>(
       variables: { params },
     });
 
+    const action = mutationDefinition.config.mutationFn(
+      params,
+      queryClient.getContext()
+    );
+
     return new Promise<TResult>((resolve, reject) => {
       startTransition(async () => {
+        setActionPromise(action);
         setError(null);
 
         try {
           // Execute the mutation
-          const result = await mutationDefinition.config.mutationFn(
-            params,
-            queryClient.getContext()
-          );
+          const result = await action;
 
           executionScope.emit("mutation:execution:success", {
             variables: { params },
@@ -433,5 +441,5 @@ export function useMutation<TParams, TResult>(
     });
   });
 
-  return { mutate, isPending, error };
+  return { mutate, isPending, error, promise: actionPromise };
 }
