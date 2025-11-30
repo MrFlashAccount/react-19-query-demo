@@ -38,6 +38,7 @@ function createHandler<P>(
 ): (payload: P, id: string) => Promise<void> {
   return async (payload: P, id: string) => {
     try {
+      await new Promise((res) => setTimeout(res, Math.random() * 1000 + 1000));
       const arrayBuffer = await handler(payload);
 
       const successResponse: WorkerResponse = {

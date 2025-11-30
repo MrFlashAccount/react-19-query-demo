@@ -5,6 +5,7 @@ import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
 import {
   appGraph,
+  movieQuery,
   moviesQuery,
   updateMovieRatingMutation,
 } from "../../queries";
@@ -91,6 +92,11 @@ function MovieCardCustom({
   useQuery({
     query: moviesQuery,
     params: { searchQuery, movieLimit },
+  });
+
+  useQuery({
+    query: movieQuery,
+    params: { movieId },
   });
 
   return (

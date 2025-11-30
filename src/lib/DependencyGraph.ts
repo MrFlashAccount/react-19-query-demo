@@ -137,9 +137,10 @@ export function getQueryInstanceKey(params: unknown): string {
  * Defines which queries should be invalidated after a mutation.
  * Can be a static array or a function that computes queries based on mutation result.
  */
-type InvalidationTarget<TParams, TResult> =
-  | QueryDefinition<any, any>[]
-  | ((params: TParams, result: TResult) => QueryDefinition<any, any>[]);
+type InvalidationTarget<TParams, TResult> = Array<
+  | QueryDefinition<any, any>
+  | ((params: TParams, result: TResult) => QueryDefinition<any, any>[])
+>;
 
 /**
  * Defines an optimistic update to apply to a query before the mutation completes

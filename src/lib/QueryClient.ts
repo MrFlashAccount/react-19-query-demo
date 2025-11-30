@@ -242,12 +242,31 @@ export class QueryClient {
     queryDefinition: QD,
     options: InvalidateOptions = {}
   ): Promise<void> {
+    const parentScopeId = options.parentScopeId;
+    const scope = eventEmitter.createScope();
     // Find all cache entries for this query definition
     const queries = this._cache.findByDefinition<QD>(queryDefinition);
+    const invalidationScope = parentScopeId
+      ? scope.createChildScope(parentScopeId)
+      : scope;
 
-    for (const query of queries) {
-      await query.invalidate(options.parentScopeId);
-    }
+    invalidationScope.emit("queries:invalidation:start", {
+      queries: queries.map((query) => query.serializedKey),
+    });
+
+    await Promise.all(
+      queries.map((query) => query.invalidate(invalidationScope.scopeId))
+    ).catch((error) => {
+      invalidationScope.emit("queries:invalidation:error", {
+        queries: queries.map((query) => query.serializedKey),
+        error,
+      });
+      throw error;
+    });
+
+    invalidationScope.emit("queries:invalidation:success", {
+      queries: queries.map((query) => query.serializedKey),
+    });
 
     const newInstance = this.clone();
     this.notifyChange(newInstance);

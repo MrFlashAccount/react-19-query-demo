@@ -161,7 +161,6 @@ export class QueryPromise<TData> {
         this.fetchStatus = "idle";
         this.reason = undefined;
         this.errorUpdatedAt = undefined;
-        console.log("then", value, this);
         return value;
       },
       (reason) => {
@@ -171,7 +170,6 @@ export class QueryPromise<TData> {
         this.fetchStatus = "idle";
         this.reason = reason;
         this.errorUpdatedAt = Date.now();
-        console.log("catch", reason, this);
         throw reason;
       }
     );
@@ -394,7 +392,6 @@ export class Query<
 
   prefetch(): void {
     const scope = eventEmitter.createScope();
-    console.log("prefetch", this.currentPromise);
 
     if (
       this.currentPromise.value != null ||

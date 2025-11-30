@@ -339,6 +339,18 @@ export function useMutation<TParams, TResult>(
         setError(null);
 
         try {
+          // TODO: Handle optimistic updates
+          // const updates = graph.computeDynamicOptimisticUpdates(mutationIndex, params, data);
+          // For now, we just invalidate
+          const optimisticUpdates = mutationDefinition.config.optimistic;
+          if (optimisticUpdates) {
+            for (const optimisticUpdate of optimisticUpdates(
+              params,
+              queryClient.getContext()
+            )) {
+            }
+          }
+
           // Execute the mutation
           const result = await action;
 
@@ -347,28 +359,30 @@ export function useMutation<TParams, TResult>(
             data: result,
           });
 
-          const mutationIndex = mutationDefinition.__index!;
+          const invalidations = mutationDefinition.config.invalidates;
+          let invalidationTargets: QueryDefinition<any, any>[] = [];
+          if (invalidations) {
+            for (const invalidation of invalidations) {
+              if (typeof invalidation === "function") {
+                invalidationTargets.push(...invalidation(params, result));
+              } else {
+                invalidationTargets.push(invalidation);
+              }
+            }
 
-          // Handle static invalidations
-          const staticInvalidations =
-            graph.getStaticInvalidations(mutationIndex);
-          if (staticInvalidations.length > 0) {
             const invalidationScope = scope.createChildScope();
-            const queries = staticInvalidations.map((idx) => `query:${idx}`);
+            const queries = invalidationTargets.map((idx) => `query:${idx}`);
             invalidationScope.emit("mutation:invalidation:start", {
               variables: { params },
               queries,
             });
 
             await Promise.all(
-              staticInvalidations.map((queryIndex) => {
-                const queryDef = graph.getQueryByIndex(queryIndex);
-                if (queryDef) {
-                  return queryClient.invalidateQuery(queryDef, {
-                    parentScopeId: invalidationScope.scopeId,
-                  });
-                }
-              })
+              invalidationTargets.map((queryDef) =>
+                queryClient.invalidateQuery(queryDef, {
+                  parentScopeId: invalidationScope.scopeId,
+                })
+              )
             );
 
             invalidationScope.emit("mutation:invalidation:success", {
@@ -376,44 +390,6 @@ export function useMutation<TParams, TResult>(
               queries,
             });
           }
-
-          // Handle dynamic invalidations
-          if (graph.hasDynamicInvalidations(mutationIndex)) {
-            const dynamicInvalidations = graph.computeDynamicInvalidations(
-              mutationIndex,
-              params,
-              result
-            );
-
-            if (dynamicInvalidations.length > 0) {
-              const invalidationScope = scope.createChildScope();
-              const queries = dynamicInvalidations.map((idx) => `query:${idx}`);
-              invalidationScope.emit("mutation:invalidation:start", {
-                variables: { params },
-                queries,
-              });
-
-              await Promise.all(
-                dynamicInvalidations.map((queryIndex) => {
-                  const queryDef = graph.getQueryByIndex(queryIndex);
-                  if (queryDef) {
-                    return queryClient.invalidateQuery(queryDef, {
-                      parentScopeId: invalidationScope.scopeId,
-                    });
-                  }
-                })
-              );
-
-              invalidationScope.emit("mutation:invalidation:success", {
-                variables: { params },
-                queries,
-              });
-            }
-          }
-
-          // TODO: Handle optimistic updates
-          // const updates = graph.computeDynamicOptimisticUpdates(mutationIndex, params, data);
-          // For now, we just invalidate
 
           scope.emit("mutation:success", {
             variables: { params },

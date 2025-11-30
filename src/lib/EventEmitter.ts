@@ -206,6 +206,18 @@ export class EventEmitter<EventMap extends Record<string, any>> {
 }
 
 export interface EventsMap {
+  // Global events
+  "global:start": { scopeId: string };
+  "global:success": { scopeId: string };
+  "global:error": { scopeId: string; error: unknown };
+  // QueryClient events
+  "queries:invalidation:start": { queries: string[]; scopeId: string };
+  "queries:invalidation:success": { queries: string[]; scopeId: string };
+  "queries:invalidation:error": {
+    queries: string[];
+    error: unknown;
+    scopeId: string;
+  };
   // Query events
   "query:fetch:start": { key: string; scopeId: string };
   "query:fetch:success": { key: string; scopeId: string };

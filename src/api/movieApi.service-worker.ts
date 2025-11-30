@@ -142,6 +142,9 @@ self.addEventListener("fetch", (event: FetchEvent) => {
           const movieId = getMovieMatch[1];
           const database = await getDatabase();
           const movie = database.find((m) => m.id === movieId);
+          await new Promise((res) =>
+            setTimeout(res, Math.random() * 1000 + 1500)
+          );
 
           if (movie == null) {
             return jsonResponse(
