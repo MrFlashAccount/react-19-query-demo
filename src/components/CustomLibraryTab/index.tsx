@@ -94,11 +94,6 @@ function MovieCardCustom({
     params: { searchQuery, movieLimit },
   });
 
-  useQuery({
-    query: movieQuery,
-    params: { movieId },
-  });
-
   return (
     <MovieCard
       movie={movie}
