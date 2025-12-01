@@ -61,10 +61,7 @@ interface QueryConfig<TParams = unknown, TData = unknown> {
  * A query definition that describes how to fetch data.
  * This is a type-level construct that gets registered in the dependency graph.
  */
-export interface QueryDefinition<
-  TParams extends unknown = unknown,
-  TData extends unknown = unknown
-> {
+export interface QueryDefinition<TParams = never, TData = unknown> {
   readonly __type: typeof QUERY_SYMBOL;
   readonly __index?: number;
   readonly config: QueryConfig<TParams, TData>;

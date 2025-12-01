@@ -27,6 +27,8 @@ import {
   type QueryDefinition,
   type MutationDefinition,
   type DependencyGraph,
+  type QueryData,
+  type QueryParams,
 } from "./DependencyGraph";
 
 /**
@@ -116,8 +118,8 @@ export function QueryProvider({
  */
 export interface UseQueryOptions<
   QD extends QueryDefinition<TParams, TData>,
-  TParams extends unknown = unknown,
-  TData extends unknown = unknown
+  TParams = QueryParams<QD>,
+  TData = QueryData<QD>
 > {
   /** The query definition */
   query: QD;
@@ -207,8 +209,8 @@ export interface UseQueryRejectedResult<TData> extends UseQueryResult<TData> {
 
 export function useQuery<
   QD extends QueryDefinition<TParams, TData>,
-  TParams extends unknown = unknown,
-  TData extends unknown = unknown
+  TParams = QueryParams<QD>,
+  TData = QueryData<QD>
 >(options: UseQueryOptions<QD, TParams, TData>): UseQueryResult<TData> {
   const { query: queryDefinition } = options;
   const params = "params" in options ? options.params : ({} as TParams);
@@ -250,7 +252,7 @@ export function useQuery<
     state: queryState,
     promise: query.promise,
     refetch,
-  } as const;
+  };
 }
 
 /**
