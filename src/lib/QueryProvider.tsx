@@ -313,7 +313,7 @@ export function useMutation<TParams, TResult>(
   options: UseMutationOptions<TParams, TResult>
 ): UseMutationResult<TParams, TResult> {
   const { mutation: mutationDefinition } = options;
-  const { queryClient, graph } = useQueryContext();
+  const { queryClient } = useQueryContext();
 
   const [actionPromise, setActionPromise] =
     useOptimistic<Promise<TResult> | null>(null);

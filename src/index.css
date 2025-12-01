@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@toolwind/anchors";
 
 .lagRadar-hand {
   stroke: #fff;

@@ -39,6 +39,9 @@ importers:
       '@testing-library/react':
         specifier: 16.3.0
         version: 16.3.0(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.5))(@types/react@19.2.5)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@toolwind/anchors':
+        specifier: 1.0.10
+        version: 1.0.10(tailwindcss@4.1.17)
       '@types/node':
         specifier: ^22.10.5
         version: 22.18.12
@@ -640,6 +643,11 @@ packages:
         optional: true
       '@types/react-dom':
         optional: true
+
+  '@toolwind/anchors@1.0.10':
+    resolution: {integrity: sha512-F3J/lxGGPUy+GIpT49NmYMF1X7l0d7UzdDASni29il2ro5sT4cYfPBFHBAfOM0lpgKOr/HnqINlomngt8BcvnA==}
+    peerDependencies:
+      tailwindcss: '>=3.0.0 || >=4.0.0'
 
   '@types/aria-query@5.0.4':
     resolution: {integrity: sha512-rfT93uj5s0PRL7EzccGMs3brplhcrghnDoV26NqKhCAS1hVo+WdNsPvE/yb6ilfr5hi2MEk6d5EWJTKdxg8jVw==}
@@ -1770,6 +1778,10 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.5
       '@types/react-dom': 19.2.3(@types/react@19.2.5)
+
+  '@toolwind/anchors@1.0.10(tailwindcss@4.1.17)':
+    dependencies:
+      tailwindcss: 4.1.17
 
   '@types/aria-query@5.0.4': {}
 

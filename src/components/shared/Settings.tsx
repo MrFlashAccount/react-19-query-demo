@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId } from "react";
 import type { SettingsProps } from "./types";
 
 const MIN_LIMIT = 0;
@@ -16,7 +16,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
   const showDevtools = formState.get("showDevtools") === "true";
   const showLagRadar = formState.get("showLagRadar") === "true";
 
-  const [isOpen, setIsOpen] = useState(false);
+  const popoverTarget = useId();
 
   const cloneFormData = (formData: FormData) => {
     const newFormData = new FormData();
@@ -30,21 +30,11 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
 
   return (
     <div className="flex flex-none relative">
-      {/* Tooltip */}
-      <div className="absolute -top-10 left-[20%] z-50 pointer-events-none">
-        <div className="relative">
-          <div className="bg-black text-white text-xs px-3 py-2 rounded-2xl [corner-shape:squircle] whitespace-nowrap shadow-lg">
-            Try playing with settings!
-          </div>
-          {/* Arrow pointing down to the button */}
-          <div className="absolute left-4 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-black"></div>
-        </div>
-      </div>
-
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="h-[48px] md:h-[52px] aspect-square px-3 rounded-2xl [corner-shape:squircle] border border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
+        popoverTarget={popoverTarget}
+        popoverTargetAction="toggle"
+        className="anchor/settings h-[48px] md:h-[52px] aspect-square px-3 rounded-4xl [corner-shape:superellipse(1.33)] border border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
         aria-label="Settings"
       >
         <svg
@@ -68,178 +58,179 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
         </svg>
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 bg-white rounded-2xl [corner-shape:squircle] shadow-xl border-2 border-gray-200 p-4 w-[400px] z-50">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900">Settings</h3>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="text-gray-500 hover:text-gray-700"
-              aria-label="Close settings"
+      <div
+        id={popoverTarget}
+        popover="auto"
+        className="anchored/settings anchored-bottom-span-right mt-2 bg-white rounded-4xl [corner-shape:superellipse(1.33)] shadow-xl border-1 border-gray-200 p-3 sm:p-4 z-50 [left:anchor(left)] [right:1rem] max-w-none sm:[right:auto] sm:w-[400px]"
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base sm:text-lg font-bold text-gray-900">
+            Settings
+          </h3>
+          <button
+            type="button"
+            popoverTarget={popoverTarget}
+            popoverTargetAction="hide"
+            className="text-gray-500 hover:text-gray-700 -mr-1"
+            aria-label="Close settings"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label
+              htmlFor="movie-limit"
+              className="block text-xs sm:text-sm font-medium text-gray-700 mb-2"
+            >
+              Number of movies
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="movie-limit"
+                name="movieLimit"
+                type="range"
+                min={MIN_LIMIT}
+                max={MAX_LIMIT}
+                defaultValue={movieLimit}
+                className="flex-1 h-2 bg-gray-200 rounded-4xl [corner-shape:superellipse(1.33)] appearance-none cursor-pointer accent-black min-w-0"
+              />
+              <input
+                name="movieLimit"
+                type="number"
+                min={MIN_LIMIT}
+                max={MAX_LIMIT}
+                defaultValue={movieLimit}
+                className="w-16 sm:w-20 px-2 py-1 text-xs sm:text-sm border-2 border-gray-200 rounded-4xl [corner-shape:superellipse(1.33)] focus:outline-none focus:border-black"
+              />
+            </div>
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>{MIN_LIMIT}</span>
+              <span>{MAX_LIMIT}</span>
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label
-                htmlFor="movie-limit"
-                className="block text-sm font-medium text-gray-700 mb-2"
-              >
-                Number of movies to display
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  id="movie-limit"
-                  name="movieLimit"
-                  type="range"
-                  min={MIN_LIMIT}
-                  max={MAX_LIMIT}
-                  defaultValue={movieLimit}
-                  className="flex-1 h-2 bg-gray-200 rounded-2xl [corner-shape:squircle] appearance-none cursor-pointer accent-black"
-                />
-                <input
-                  name="movieLimit"
-                  type="number"
-                  min={MIN_LIMIT}
-                  max={MAX_LIMIT}
-                  defaultValue={movieLimit}
-                  className="w-20 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
-                />
-              </div>
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>{MIN_LIMIT}</span>
-                <span>{MAX_LIMIT}</span>
-              </div>
+          <div className="pt-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+              {LIMIT_OPTIONS.map((limit) => (
+                <button
+                  key={limit}
+                  type="button"
+                  onClick={() => {
+                    const newFormData = cloneFormData(formState);
+                    newFormData.set("movieLimit", limit.toString());
+                    onFormStateChange(newFormData);
+                  }}
+                  className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-4xl [corner-shape:superellipse(1.33)] transition-colors ${
+                    movieLimit === limit
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {limit}
+                </button>
+              ))}
             </div>
+          </div>
 
-            <div className="pt-3">
-              <div className="flex gap-2">
-                {LIMIT_OPTIONS.map((limit) => (
+          <div className="pt-2 border-t border-gray-200">
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col text-xs sm:text-sm font-medium text-gray-700 w-full">
+                GC Timeout
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={Infinity}
+                  defaultValue={gcTimeout}
+                  name="gcTimeout"
+                  className="w-full mt-2 px-2 py-1 text-xs sm:text-sm border-2 border-gray-200 rounded-4xl [corner-shape:superellipse(1.33)] focus:outline-none focus:border-black"
+                />
+              </label>
+
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+                {GC_OPTIONS.map((option, index) => (
                   <button
-                    key={limit}
+                    key={option}
                     type="button"
                     onClick={() => {
                       const newFormData = cloneFormData(formState);
-                      newFormData.set("movieLimit", limit.toString());
+                      newFormData.set("gcTimeout", option.toString());
                       onFormStateChange(newFormData);
                     }}
-                    className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors ${
-                      movieLimit === limit
+                    className={`px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-4xl [corner-shape:superellipse(1.33)] transition-colors ${
+                      gcTimeout === option
                         ? "bg-black text-white"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }`}
                   >
-                    {limit}
+                    {GC_OPTIONS_LABELS[index]}
                   </button>
                 ))}
               </div>
             </div>
-
-            <div className="pt-3 border-t border-gray-200">
-              <div className="flex flex-col gap-3">
-                <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
-                  GC Timeout
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={Infinity}
-                    defaultValue={gcTimeout}
-                    name="gcTimeout"
-                    className="w-full mt-2 px-2 py-1 text-sm border-2 border-gray-200 rounded-2xl [corner-shape:squircle] focus:outline-none focus:border-black"
-                  />
-                </label>
-
-                <div className="flex justify-between text-xs gap-2 text-gray-500 self-start">
-                  {GC_OPTIONS.map((option, index) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        const newFormData = cloneFormData(formState);
-                        newFormData.set("gcTimeout", option.toString());
-                        onFormStateChange(newFormData);
-                      }}
-                      className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors min-w-18 ${
-                        gcTimeout === option
-                          ? "bg-black text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                    >
-                      {GC_OPTIONS_LABELS[index]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 pt-3 border-t border-gray-200">
-              <div className="flex flex-col gap-3">
-                <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
-                  Devtools visibility
-                </label>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const newFormData = cloneFormData(formState);
-                  newFormData.set(
-                    "showDevtools",
-                    !showDevtools ? "true" : "false"
-                  );
-                  onFormStateChange(newFormData);
-                }}
-                className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors ${
-                  showDevtools
-                    ? "bg-black text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {showDevtools ? "Hide" : "Show"} Devtools
-              </button>
-            </div>
-            <div className="flex flex-col gap-3 pt-3 border-t border-gray-200">
-              <div className="flex flex-col gap-3">
-                <label className="flex flex-col text-sm font-medium text-gray-700 w-full">
-                  Lag Radar visibility
-                </label>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const newFormData = cloneFormData(formState);
-                  newFormData.set(
-                    "showLagRadar",
-                    !showLagRadar ? "true" : "false"
-                  );
-                  onFormStateChange(newFormData);
-                }}
-                className={`flex-1 px-3 py-2 text-sm rounded-2xl [corner-shape:squircle] transition-colors ${
-                  showLagRadar
-                    ? "bg-black text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                {showLagRadar ? "Hide" : "Show"} Lag Radar
-              </button>
-            </div>
+          </div>
+          <div className="pt-2 border-t border-gray-200">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+              Devtools
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const newFormData = cloneFormData(formState);
+                newFormData.set(
+                  "showDevtools",
+                  !showDevtools ? "true" : "false"
+                );
+                onFormStateChange(newFormData);
+              }}
+              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-4xl [corner-shape:superellipse(1.33)] transition-colors ${
+                showDevtools
+                  ? "bg-black text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {showDevtools ? "Hide" : "Show"} Devtools
+            </button>
+          </div>
+          <div className="pt-2 border-t border-gray-200">
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+              Lag Radar
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const newFormData = cloneFormData(formState);
+                newFormData.set(
+                  "showLagRadar",
+                  !showLagRadar ? "true" : "false"
+                );
+                onFormStateChange(newFormData);
+              }}
+              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-4xl [corner-shape:superellipse(1.33)] transition-colors ${
+                showLagRadar
+                  ? "bg-black text-white"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              }`}
+            >
+              {showLagRadar ? "Hide" : "Show"} Lag Radar
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

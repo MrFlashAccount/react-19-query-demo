@@ -24,6 +24,7 @@
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.0",
     "@testing-library/dom": "10.4.1",
+    "@toolwind/anchors": "1.0.10",
     "@types/node": "^22.10.5",
     "@types/react": "19.2.5",
     "@types/react-dom": "19.2.3",
