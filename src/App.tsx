@@ -113,7 +113,7 @@ export default function App() {
         })()}
       </div>
       {showLagRadar && <LagRadar />}
-      <LazyGitHubCorner />
+      <LazyGitHubCorner href="https://github.com/MrFlashAccount/react-19-query-demo" />
     </Suspense>
   );
 }
