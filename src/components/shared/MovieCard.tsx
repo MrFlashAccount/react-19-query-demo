@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { Movie } from "../../api/types";
 import { StarIcon } from "../shared/StarIcon";
 
@@ -8,19 +8,19 @@ import { StarIcon } from "../shared/StarIcon";
 export function MovieCard({
   movie,
   onUpdateRating,
-  isPending,
 }: {
   movie: Movie;
-  onUpdateRating: (rating: number) => void;
-  isPending: boolean;
+  onUpdateRating: (rating: number) => Promise<void>;
 }) {
+  const [isPending, startTransition] = useTransition();
+
   const rating = movie.rating;
   const currentStars = Math.ceil((rating ?? 0) / 2); // Convert 0-10 rating to 0-5 stars
   const director = movie.directors.join(", ") || "Unknown";
   const genres = movie.genres.join(", ") || "Unknown";
 
   return (
-    <div className="[content-visibility:auto] [contain-intrinsic-size:160px] group bg-white border border-gray-100 rounded-4xl [corner-shape:superellipse(1.33)] overflow-hidden hover:border-black hover:shadow-lg flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
+    <div className="[content-visibility:auto] [contain-intrinsic-size:138px] group bg-white border border-gray-100 rounded-4xl [corner-shape:superellipse(1.33)] overflow-hidden hover:border-black hover:shadow-lg flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
       {/* Movie Info */}
       <div className="p-3 sm:p-4 flex-1 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
@@ -68,7 +68,11 @@ export function MovieCard({
         {/* Star Rating */}
         <div className="flex items-center gap-2">
           <RatingStars
-            onUpdateRating={onUpdateRating}
+            onUpdateRating={(rating) => {
+              startTransition(async () => {
+                await onUpdateRating(rating);
+              });
+            }}
             isPending={isPending}
             currentStars={currentStars}
           />

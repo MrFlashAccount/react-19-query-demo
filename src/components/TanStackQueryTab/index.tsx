@@ -95,7 +95,7 @@ function MovieCardTanStack({
 
   const queryClient = useQueryClient();
 
-  const { mutate: updateRating, isPending } = useMutation({
+  const { mutateAsync: updateRating } = useMutation({
     mutationFn: ({ rating }: { rating: number }) =>
       api.updateMovieRating(movieId, rating),
     onSuccess: async ({ id }) => {
@@ -111,15 +111,9 @@ function MovieCardTanStack({
     gcTime: gcTimeout,
   });
 
-  const handleStarClick = (starIndex: number) => {
-    updateRating({ rating: starIndex * 2 });
+  const handleStarClick = async (starIndex: number) => {
+    await updateRating({ rating: starIndex * 2 });
   };
 
-  return (
-    <MovieCard
-      movie={movie}
-      onUpdateRating={handleStarClick}
-      isPending={isPending}
-    />
-  );
+  return <MovieCard movie={movie} onUpdateRating={handleStarClick} />;
 }

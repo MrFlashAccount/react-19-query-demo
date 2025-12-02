@@ -5,7 +5,6 @@ import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
 import {
   appGraph,
-  movieQuery,
   moviesQuery,
   updateMovieRatingMutation,
 } from "../../queries";
@@ -84,11 +83,11 @@ function MovieCardCustom({
 }) {
   const movieId = movie.id;
 
-  const { mutate: updateRating, isPending } = useMutation({
+  const { mutate: updateRating } = useMutation({
     mutation: updateMovieRatingMutation,
   });
 
-  // Subscribe to movies query to keep it fresh
+  // Subscribe to movies query just to add some overhead
   useQuery({
     query: moviesQuery,
     params: { searchQuery, movieLimit },
@@ -97,10 +96,9 @@ function MovieCardCustom({
   return (
     <MovieCard
       movie={movie}
-      onUpdateRating={(rating) => {
-        void updateRating({ movieId, rating });
+      onUpdateRating={async (rating) => {
+        await updateRating({ movieId, rating });
       }}
-      isPending={isPending}
     />
   );
 }

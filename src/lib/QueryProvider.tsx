@@ -36,7 +36,6 @@ import {
  */
 export type QueryContextValue = {
   queryClient: QueryClient;
-  graph: DependencyGraph;
 };
 /**
  * Query Context - exposed for testing purposes.
@@ -106,11 +105,7 @@ export function QueryProvider({
 
   queryClient.setOptions({ context });
 
-  return (
-    <QueryContext value={{ queryClient, graph: queryClient.getGraph() }}>
-      {children}
-    </QueryContext>
-  );
+  return <QueryContext value={{ queryClient }}>{children}</QueryContext>;
 }
 
 /**
