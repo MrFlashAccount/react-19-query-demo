@@ -178,7 +178,7 @@ export class QueryClient {
   getQuery<QD extends QueryDefinition>(
     queryDefinition: QD,
     params: QueryParams<QD>
-  ): Query<QD> | undefined {
+  ): Query<QD, unknown, unknown> | undefined {
     return this._cache.get<QD>(queryDefinition, params);
   }
 

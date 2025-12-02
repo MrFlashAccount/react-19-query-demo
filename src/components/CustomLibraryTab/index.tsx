@@ -1,5 +1,5 @@
 import { use } from "react";
-import { QueryClient, QueryProvider, useMutation, useQuery } from "../../lib";
+import { QueryClient, QueryProvider, useMutation, useQuery } from "lib/react";
 import { MovieList, MovieCard, SearchBox } from "../shared";
 import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";

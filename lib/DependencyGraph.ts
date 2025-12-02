@@ -61,7 +61,7 @@ interface QueryConfig<TParams = unknown, TData = unknown> {
  * A query definition that describes how to fetch data.
  * This is a type-level construct that gets registered in the dependency graph.
  */
-export interface QueryDefinition<TParams = never, TData = unknown> {
+export interface QueryDefinition<TParams = unknown, TData = unknown> {
   readonly __type: typeof QUERY_SYMBOL;
   readonly __index?: number;
   readonly config: QueryConfig<TParams, TData>;
@@ -69,10 +69,9 @@ export interface QueryDefinition<TParams = never, TData = unknown> {
 
 export type QueryFn<QD extends QueryDefinition> = QD["config"]["queryFn"];
 export type QueryFnResult<QD extends QueryDefinition> = ReturnType<QueryFn<QD>>;
-export type QueryParams<QD extends QueryDefinition> = Parameters<
-  QueryFn<QD>
->[0];
-export type QueryData<QD extends QueryDefinition> =
+export type QueryParams<QD extends QueryDefinition<unknown, unknown>> =
+  Parameters<QueryFn<QD>>[0];
+export type QueryData<QD extends QueryDefinition<unknown, unknown>> =
   QueryFnResult<QD> extends Promise<infer T> ? T : never;
 
 /**

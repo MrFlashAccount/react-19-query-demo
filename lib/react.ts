@@ -1,15 +1,3 @@
-/**
- * Query Cache Library
- *
- * A lightweight, React 19-compatible query caching solution with:
- * - Promise-based caching
- * - Automatic garbage collection
- * - Subscription tracking
- * - Debug logging
- * - Prefix-based invalidation
- */
-
-// Core exports
 export {
   QueryProvider,
   useQuery,
@@ -21,8 +9,7 @@ export {
   type UseQueryOptions,
   type UseMutationOptions,
   type QueryContextValue,
-} from "./QueryProvider";
-
+} from "./react/QueryProvider";
 export { QueryClient, type QueryClientOptions } from "./QueryClient";
 
 export { QueryCache } from "./QueryCache";
@@ -54,5 +41,3 @@ export {
   type ScopedEmitter,
   type ScopeEvent,
 } from "./EventEmitter";
-
-export {};

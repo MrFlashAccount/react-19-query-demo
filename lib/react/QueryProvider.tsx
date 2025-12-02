@@ -9,27 +9,27 @@ import {
   useDebugValue,
   useOptimistic,
 } from "react";
-import { QueryClient, type QueryClientContext } from "./QueryClient";
-import { noop } from "./utils";
+import { QueryClient, type QueryClientContext } from "../QueryClient";
+import { noop } from "../utils";
 import type {
   FulfilledQueryPromise,
   QueryPromise,
   QueryState,
   RejectedQueryPromise,
-} from "./Query";
+} from "../Query";
 import {
   type EventEmitter,
   type EventsMap,
   eventEmitter,
-} from "./EventEmitter";
-import { useEvent } from "../useEvent";
+} from "../EventEmitter";
+import { useEvent } from "./useEvent";
 import {
   type QueryDefinition,
   type MutationDefinition,
   type DependencyGraph,
   type QueryData,
   type QueryParams,
-} from "./DependencyGraph";
+} from "../DependencyGraph";
 
 /**
  * Context value for the query provider

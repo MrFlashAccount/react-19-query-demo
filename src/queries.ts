@@ -1,4 +1,4 @@
-import { query, mutation, DependencyGraph } from "./lib";
+import { query, mutation, DependencyGraph } from "lib/react";
 import type { MovieApi } from "./api/types";
 
 /**
@@ -47,7 +47,7 @@ export const appGraph = new DependencyGraph([
   updateMovieRatingMutation,
 ]);
 
-declare module "./lib" {
+declare module "lib/react" {
   interface Context {
     api: MovieApi;
   }
