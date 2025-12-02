@@ -27,17 +27,6 @@ export interface QueryState<TData> {
   fetchStatus: QueryPromise<TData>["fetchStatus"];
 }
 
-/**
- * Options for creating a Query instance (internal use)
- * Note: Most options come from the QueryDefinition and cannot be overridden
- */
-export interface QueryOptions<TParams, TData> {
-  /** The query definition containing the queryFn and cache options */
-  queryDefinition: QueryDefinition<TParams, TData>;
-  /** The parameters for this query instance */
-  params: TParams;
-}
-
 interface QueryEnvironment {
   onRemove: () => void;
   context: Context;

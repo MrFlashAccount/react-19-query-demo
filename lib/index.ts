@@ -44,7 +44,8 @@ export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
 
 export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";
 
-export { Query, type QueryOptions, type QueryState } from "./Query";
+export { Query, type QueryState } from "./Query";
+export { Mutation } from "./Mutation";
 
 // Event system
 export {

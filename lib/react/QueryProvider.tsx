@@ -30,6 +30,7 @@ import {
   type QueryData,
   type QueryParams,
 } from "../DependencyGraph";
+import { Mutation } from "../Mutation";
 
 /**
  * Context value for the query provider
@@ -317,99 +318,22 @@ export function useMutation<TParams, TResult>(
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<Error | null>(null);
 
-  const mutate = useEvent(async (params: TParams): Promise<TResult> => {
-    const scope = eventEmitter.createScope();
-    scope.emit("mutation:start", { variables: { params } });
-    const executionScope = scope.createChildScope();
-    executionScope.emit("mutation:execution:start", {
-      variables: { params },
-    });
+  const mutation = queryClient.addMutation<TParams, TResult>(
+    mutationDefinition
+  );
 
-    const action = mutationDefinition.config.mutationFn(
-      params,
-      queryClient.getContext()
-    );
+  const mutate = useEvent(async (params: TParams): Promise<TResult> => {
+    const action = mutation.mutate(params);
 
     return new Promise<TResult>((resolve, reject) => {
       startTransition(async () => {
         setActionPromise(action);
         setError(null);
 
-        try {
-          // TODO: Handle optimistic updates
-          // const updates = graph.computeDynamicOptimisticUpdates(mutationIndex, params, data);
-          // For now, we just invalidate
-          const optimisticUpdates = mutationDefinition.config.optimistic;
-          if (optimisticUpdates) {
-            for (const optimisticUpdate of optimisticUpdates(
-              params,
-              queryClient.getContext()
-            )) {
-            }
-          }
-
-          // Execute the mutation
-          const result = await action;
-
-          executionScope.emit("mutation:execution:success", {
-            variables: { params },
-            data: result,
-          });
-
-          const invalidations = mutationDefinition.config.invalidates;
-          let invalidationTargets: QueryDefinition<any, any>[] = [];
-          if (invalidations) {
-            for (const invalidation of invalidations) {
-              if (typeof invalidation === "function") {
-                invalidationTargets.push(...invalidation(params, result));
-              } else {
-                invalidationTargets.push(invalidation);
-              }
-            }
-
-            const invalidationScope = scope.createChildScope();
-            const queries = invalidationTargets.map((idx) => `query:${idx}`);
-            invalidationScope.emit("mutation:invalidation:start", {
-              variables: { params },
-              queries,
-            });
-
-            await Promise.all(
-              invalidationTargets.map((queryDef) =>
-                queryClient.invalidateQuery(queryDef, {
-                  parentScopeId: invalidationScope.scopeId,
-                })
-              )
-            );
-
-            invalidationScope.emit("mutation:invalidation:success", {
-              variables: { params },
-              queries,
-            });
-          }
-
-          scope.emit("mutation:success", {
-            variables: { params },
-            data: result,
-          });
-
-          resolve(result);
-        } catch (err) {
-          const errorObj = err instanceof Error ? err : new Error(String(err));
-          setError(errorObj);
-
-          executionScope.emit("mutation:execution:error", {
-            variables: { params },
-            error: errorObj,
-          });
-
-          scope.emit("mutation:error", {
-            variables: { params },
-            error: errorObj,
-          });
-
-          reject(errorObj);
-        }
+        action.then(resolve).catch((error) => {
+          setError(error);
+          reject(error);
+        });
       });
     });
   });

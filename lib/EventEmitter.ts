@@ -281,6 +281,24 @@ export interface EventsMap {
   "mutation:notify:start": { scopeId: string };
   "mutation:notify:success": { scopeId: string };
 
+  "mutation:optimistic:start": { variables: unknown; scopeId: string };
+  "mutation:optimistic:update": {
+    variables: unknown;
+    optimisticUpdate: unknown;
+    scopeId: string;
+  };
+  "mutation:optimistic:update:done": {
+    variables: unknown;
+    optimisticUpdate: unknown;
+    scopeId: string;
+  };
+  "mutation:optimistic:error": {
+    variables: unknown;
+    error: unknown;
+    scopeId: string;
+  };
+  "mutation:optimistic:done": { variables: unknown; scopeId: string };
+
   // QueryClient events
   "client:change": { client: any };
 

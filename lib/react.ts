@@ -10,34 +10,5 @@ export {
   type UseMutationOptions,
   type QueryContextValue,
 } from "./react/QueryProvider";
-export { QueryClient, type QueryClientOptions } from "./QueryClient";
 
-export { QueryCache } from "./QueryCache";
-
-export {
-  DependencyGraph,
-  query,
-  mutation,
-  isQuery,
-  isMutation,
-  getQueryInstanceKey,
-  serializeParams,
-  type Context,
-  type QueryDefinition,
-  type MutationDefinition,
-} from "./DependencyGraph";
-
-export { Retrier, type RetryConfig, type RetrierOptions } from "./Retrier";
-
-export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";
-
-export { Query, type QueryOptions, type QueryState } from "./Query";
-
-// Event system
-export {
-  EventEmitter,
-  eventEmitter,
-  type EventsMap,
-  type ScopedEmitter,
-  type ScopeEvent,
-} from "./EventEmitter";
+export * from "./index.ts";

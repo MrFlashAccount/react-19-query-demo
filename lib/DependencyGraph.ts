@@ -141,7 +141,7 @@ type InvalidationTarget<TParams, TResult> = Array<
 /**
  * Defines an optimistic update to apply to a query before the mutation completes
  */
-type OptimisticUpdateTarget<TParams, TQueryData> = {
+export type OptimisticUpdateTarget<TParams, TQueryData> = {
   query: QueryDefinition<any, TQueryData>;
   updater: (old: TQueryData, params: TParams) => TQueryData;
 };
@@ -151,6 +151,8 @@ type OptimisticUpdateTarget<TParams, TQueryData> = {
  */
 interface MutationConfig<TParams = unknown, TResult = unknown> {
   mutationFn: (params: TParams, ctx: Context) => Promise<TResult>;
+  retry?: RetryConfig;
+  retryDelay?: number | ((failureCount: number, error: unknown) => number);
   invalidates?: InvalidationTarget<TParams, TResult>;
   optimistic?: (
     params: TParams,

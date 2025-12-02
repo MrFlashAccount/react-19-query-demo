@@ -7,8 +7,10 @@ import {
   getQueryInstanceKey,
   type Context,
   type QueryParams,
+  type MutationDefinition,
 } from "./DependencyGraph";
 import { QueryCache } from "./QueryCache";
+import { Mutation } from "./Mutation";
 
 /**
  * Options for QueryClient constructor
@@ -166,6 +168,24 @@ export class QueryClient {
     }
 
     return entry;
+  }
+
+  addMutation<TParams, TResult>(
+    mutationDefinition: MutationDefinition<TParams, TResult>
+  ): Mutation<TParams, TResult> {
+    return new Mutation(mutationDefinition, {
+      context: this.context,
+      invalidate: (
+        queryDefinition: QueryDefinition<unknown, unknown>,
+        parentScopeId?: string
+      ) => {
+        return this.invalidateQuery(queryDefinition, {
+          parentScopeId,
+        });
+      },
+      // TODO: Implement optimistic updates
+      applyOptimisticUpdates: () => {},
+    });
   }
 
   /**
