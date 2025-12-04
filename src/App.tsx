@@ -34,7 +34,7 @@ export default function App() {
   const [formState, setFormState] = useState(() => {
     const formData = new FormData();
 
-    formData.set("movieLimit", "10");
+    formData.set("movieLimit", "100");
     formData.set("gcTimeout", "60000");
     formData.set("searchQuery", "");
     formData.set("showDevtools", "false");

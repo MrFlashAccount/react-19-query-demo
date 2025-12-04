@@ -30,7 +30,6 @@ import {
   type QueryData,
   type QueryParams,
 } from "../DependencyGraph";
-import { Mutation } from "../Mutation";
 
 /**
  * Context value for the query provider
@@ -113,9 +112,8 @@ export function QueryProvider({
  * Options for useQuery hook with parameters
  */
 export interface UseQueryOptions<
-  QD extends QueryDefinition<TParams, TData>,
-  TParams = QueryParams<QD>,
-  TData = QueryData<QD>
+  QD extends QueryDefinition<any, any>,
+  TParams = QueryParams<QD>
 > {
   /** The query definition */
   query: QD;
@@ -204,10 +202,10 @@ export interface UseQueryRejectedResult<TData> extends UseQueryResult<TData> {
 }
 
 export function useQuery<
-  QD extends QueryDefinition<TParams, TData>,
+  QD extends QueryDefinition<any, any>,
   TParams = QueryParams<QD>,
   TData = QueryData<QD>
->(options: UseQueryOptions<QD, TParams, TData>): UseQueryResult<TData> {
+>(options: UseQueryOptions<QD, TParams>): UseQueryResult<TData> {
   const { query: queryDefinition } = options;
   const params = "params" in options ? options.params : ({} as TParams);
   const { queryClient } = useQueryContext();

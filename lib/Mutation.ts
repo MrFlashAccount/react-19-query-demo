@@ -6,7 +6,7 @@ import type {
 } from "./DependencyGraph";
 import { eventEmitter } from "./EventEmitter";
 import { Retrier, type RetryConfig } from "./Retrier";
-import { createBatcher, exponentialBackoff, type Batch } from "./utils";
+import { exponentialBackoff } from "./utils";
 
 interface MutationEnvironment<TParams = unknown> {
   context: Context;
@@ -22,7 +22,6 @@ interface MutationEnvironment<TParams = unknown> {
 export class Mutation<TParams = unknown, TResult = unknown> {
   private mutationDefinition: MutationDefinition<TParams, TResult>;
   private environment: MutationEnvironment;
-  private batch: Batch;
   private retry: RetryConfig;
   private retryDelay:
     | number
@@ -37,7 +36,6 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     this.mutationDefinition = mutationDefinition;
 
     this.environment = environment;
-    this.batch = createBatcher();
 
     const config = mutationDefinition.config;
     this.retry = config.retry ?? 0;
@@ -57,7 +55,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
 
   private createMutationFn(): (params: TParams) => Promise<TResult> {
     return async (params: TParams) => {
-      return this.retrier.execute(({ signal }) => {
+      return this.retrier.execute(() => {
         return this.mutationDefinition.config.mutationFn(
           params,
           this.environment.context
