@@ -264,6 +264,3 @@ export class Logger {
     return Array.from(this.traces.values());
   }
 }
-
-// Create a singleton instance
-export const logger = new Logger();

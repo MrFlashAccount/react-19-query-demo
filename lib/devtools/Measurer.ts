@@ -53,7 +53,6 @@ export class Measurer {
       useUserTiming: options.useUserTiming ?? true,
       defaultDetail: options.defaultDetail || {},
     };
-    this.setupListeners();
   }
 
   public start() {
@@ -484,6 +483,3 @@ export class Measurer {
     return Array.from(this.scopes.values());
   }
 }
-
-// Create a singleton instance
-export const measurer = new Measurer();

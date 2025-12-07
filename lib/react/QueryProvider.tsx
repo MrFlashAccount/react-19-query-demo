@@ -11,12 +11,11 @@ import {
 } from "react";
 import { QueryClient, type QueryClientContext } from "../QueryClient";
 import { noop } from "../utils";
-import type {
-  FulfilledQueryPromise,
-  QueryPromise,
-  QueryState,
-  RejectedQueryPromise,
-} from "../Query";
+import {
+  type FulfilledQueryPromise,
+  type QueryPromise,
+  type RejectedQueryPromise,
+} from "../QueryPromise";
 import {
   type EventEmitter,
   type EventsMap,
@@ -29,7 +28,10 @@ import {
   type DependencyGraph,
   type QueryData,
   type QueryParams,
+  serializeParams,
+  type SerializedParams,
 } from "../DependencyGraph";
+import type { QueryState } from "../Query";
 
 /**
  * Context value for the query provider
@@ -108,6 +110,29 @@ export function QueryProvider({
   return <QueryContext value={{ queryClient }}>{children}</QueryContext>;
 }
 
+const SERIALIZED_PARAMS_SYMBOL = Symbol("serializedParams");
+
+type WithSerializedParams<TParams> = TParams & {
+  [SERIALIZED_PARAMS_SYMBOL]: SerializedParams;
+};
+
+export function params<const TParams>(
+  params: TParams
+): WithSerializedParams<TParams> {
+  if ((params as any)[SERIALIZED_PARAMS_SYMBOL] !== undefined) {
+    return params as WithSerializedParams<TParams>;
+  }
+
+  Object.defineProperty(params, SERIALIZED_PARAMS_SYMBOL, {
+    value: serializeParams(params),
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
+
+  return params as WithSerializedParams<TParams>;
+}
+
 /**
  * Options for useQuery hook with parameters
  */
@@ -118,7 +143,7 @@ export interface UseQueryOptions<
   /** The query definition */
   query: QD;
   /** The parameters for this query instance */
-  params: TParams;
+  params: WithSerializedParams<TParams>;
 }
 
 /**
@@ -207,14 +232,15 @@ export function useQuery<
   TData = QueryData<QD>
 >(options: UseQueryOptions<QD, TParams>): UseQueryResult<TData> {
   const { query: queryDefinition } = options;
-  const params = "params" in options ? options.params : ({} as TParams);
+  const params = options.params;
   const { queryClient } = useQueryContext();
   const [isPendingTransition, startPendingTransition] = useTransition();
 
   // Add or get query instance from cache
-  const query = queryClient.addQuery<QD, TParams, TData>(
+  const query = queryClient.addQueryRaw<QD, TParams, TData>(
     queryDefinition,
     params,
+    params[SERIALIZED_PARAMS_SYMBOL],
     { prefetch: true }
   );
 
@@ -224,7 +250,7 @@ export function useQuery<
   const isSuccess = queryState.status === "fulfilled";
   const isError = queryState.status === "rejected";
 
-  const refetch = useEvent(() => {
+  const refetch = useEvent(function refetch() {
     startPendingTransition(async () => {
       await query.fetch();
     });
@@ -269,6 +295,10 @@ export interface UseMutationResult<TParams, TResult> {
   error: Error | null;
   /** Promise returned by the mutation */
   promise: Promise<TResult> | null;
+  status: QueryPromise<TResult>["status"];
+  fetchStatus: QueryPromise<TResult>["fetchStatus"];
+  isSuccess: boolean;
+  isError: boolean;
 }
 
 /**
@@ -311,30 +341,48 @@ export function useMutation<TParams, TResult>(
   const { mutation: mutationDefinition } = options;
   const { queryClient } = useQueryContext();
 
-  const [actionPromise, setActionPromise] =
-    useOptimistic<Promise<TResult> | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<Error | null>(null);
+  const [pendingPromise, setPendingPromise] =
+    useOptimistic<QueryPromise<TResult> | null>(null);
+  const [isPendingTransition, startPendingTransition] = useTransition();
 
   const mutation = queryClient.addMutation<TParams, TResult>(
     mutationDefinition
   );
 
-  const mutate = useEvent(async (params: TParams): Promise<TResult> => {
-    const action = mutation.mutate(params);
-
+  const mutate = useEvent(function mutate(params: TParams): Promise<TResult> {
     return new Promise<TResult>((resolve, reject) => {
-      startTransition(async () => {
-        setActionPromise(action);
-        setError(null);
-
-        action.then(resolve).catch((error) => {
-          setError(error);
-          reject(error);
-        });
+      startPendingTransition(() => {
+        const promise = mutation.mutate(params);
+        setPendingPromise(promise);
+        return promise.then(resolve).catch(reject);
       });
     });
   });
 
-  return { mutate, isPending, error, promise: actionPromise };
+  const state = pendingPromise ? mutation.getState(pendingPromise) : null;
+  let status: QueryPromise<TResult>["status"] = "pending";
+  let isPending = false;
+  let isSuccess = false;
+  let isError = false;
+  let error: QueryPromise<TResult>["reason"] | null = null;
+  let fetchStatus: QueryPromise<TResult>["fetchStatus"] = "idle";
+
+  if (state !== null) {
+    isPending = state.status === "pending" || isPendingTransition;
+    isSuccess = state.status === "fulfilled";
+    isError = state.status === "rejected";
+    error = state.error;
+    fetchStatus = state.fetchStatus;
+  }
+
+  return {
+    mutate,
+    isPending,
+    isSuccess,
+    isError,
+    error: error as Error | null,
+    promise: pendingPromise,
+    status,
+    fetchStatus,
+  };
 }

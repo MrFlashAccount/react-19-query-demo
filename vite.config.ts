@@ -12,7 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "lib/react": path.resolve(__dirname, "lib/react"),
-      "lib/devtools": path.resolve(__dirname, "lib/devtools"),
+      "lib/devtools": path.resolve(__dirname, "lib/devtools/index.ts"),
     },
   },
   worker: {
@@ -20,12 +20,10 @@ export default defineConfig({
   },
   build: {
     sourcemap: true,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          react: ["react", "react-dom"],
-          "react-query": ["@tanstack/react-query"],
-          lib: ["lib"],
+        advancedChunks: {
+          groups: [{ name: "react", test: /node_modules\/react/ }],
         },
       },
     },

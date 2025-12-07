@@ -1,7 +1,8 @@
 export {
-  QueryProvider,
+  params,
   useQuery,
   useMutation,
+  QueryProvider,
   useQueryClient,
   useQueryContext,
   QueryContext,

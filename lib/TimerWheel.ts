@@ -1,4 +1,4 @@
-import { createBatcher } from "./utils";
+import { createBatcher } from "./batcher";
 
 /**
  * Timer entry in the heap

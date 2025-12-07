@@ -1,4 +1,5 @@
 import type { RetryConfig } from "./Retrier";
+import { brand } from "./types";
 
 // Symbols for identifying query and mutation definitions
 export const QUERY_SYMBOL = Symbol();
@@ -14,28 +15,38 @@ const DYNAMIC_MARKER = -1;
  * @param params - The parameters to serialize
  * @returns Serialized string representation
  */
-export function serializeParams(params: unknown): string {
+
+export const SerializedParams = brand<string, "SerializedParams">();
+export type SerializedParams = ReturnType<typeof SerializedParams>;
+
+export function serializeParams(params: unknown): SerializedParams {
   if (params === undefined || params === null) {
-    return "__void__";
+    return SerializedParams("__void__");
   }
 
-  return JSON.stringify(params, (_, value) => {
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
+  return SerializedParams(
+    JSON.stringify(params, (_, value) => {
+      if (value instanceof Date) {
+        return value.toISOString();
+      }
 
-    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-      const sorted = Object.entries(value).sort((a, b) => {
-        if (a[0] < b[0]) return -1;
-        if (a[0] > b[0]) return 1;
-        return 0;
-      });
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value)
+      ) {
+        const sorted = Object.entries(value).sort((a, b) => {
+          if (a[0] < b[0]) return -1;
+          if (a[0] > b[0]) return 1;
+          return 0;
+        });
 
-      return sorted;
-    }
+        return sorted;
+      }
 
-    return value;
-  });
+      return value;
+    })
+  );
 }
 
 export interface Context {
@@ -351,60 +362,5 @@ export class DependencyGraph {
         conditional: true,
       });
     }
-  }
-
-  /**
-   * Export the graph structure for visualization and debugging (e.g., devtools).
-   *
-   * @returns Object containing nodes and edges of the graph
-   */
-  exportGraph(): {
-    nodes: Array<{ index: number; type: "query" | "mutation" }>;
-    edges: Array<{
-      from: number;
-      to: number | string;
-      type: "invalidates" | "optimistic";
-      conditional: boolean;
-    }>;
-  } {
-    const nodes: Array<{ index: number; type: "query" | "mutation" }> = [];
-    const edges: Array<{
-      from: number;
-      to: number | string;
-      type: "invalidates" | "optimistic";
-      conditional: boolean;
-    }> = [];
-
-    // Add all query nodes
-    for (const [index] of this.queries) {
-      nodes.push({ index, type: "query" });
-    }
-
-    // Add all mutation nodes
-    for (const [index] of this.mutations) {
-      nodes.push({ index, type: "mutation" });
-    }
-
-    // Add invalidation edges
-    for (const inv of this.invalidations) {
-      edges.push({
-        from: inv.mutationIndex,
-        to: inv.conditional ? "__dynamic__" : inv.queryIndex,
-        type: "invalidates",
-        conditional: inv.conditional,
-      });
-    }
-
-    // Add optimistic update edges
-    for (const opt of this.optimisticUpdates) {
-      edges.push({
-        from: opt.mutationIndex,
-        to: opt.conditional ? "__dynamic__" : opt.queryIndex,
-        type: "optimistic",
-        conditional: opt.conditional,
-      });
-    }
-
-    return { nodes, edges };
   }
 }

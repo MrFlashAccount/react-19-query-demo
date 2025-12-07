@@ -2,6 +2,7 @@ import { Query } from "./Query";
 import { noop } from "./utils";
 import { eventEmitter } from "./EventEmitter";
 import {
+  SerializedParams,
   type QueryDefinition,
   type DependencyGraph,
   getQueryInstanceKey,
@@ -156,6 +157,42 @@ export class QueryClient {
         eventEmitter.emit("query:garbage-collect", {
           key: instanceKey,
         });
+
+        this.handleQueryGarbageCollect(queryDefinition, params);
+      },
+      context: this.context,
+    });
+
+    this._cache.set(queryDefinition, params, entry);
+
+    if (options?.prefetch) {
+      entry.prefetch();
+    }
+
+    return entry;
+  }
+
+  addQueryRaw<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(
+    queryDefinition: QD,
+    params: TParams,
+    serializedParams: SerializedParams,
+    options?: { prefetch?: boolean }
+  ): Query<QD, TParams, TData> {
+    const existingQuery = this._cache.getRaw<QD, TParams, TData>(
+      queryDefinition,
+      serializedParams
+    );
+
+    if (existingQuery != null) {
+      return existingQuery;
+    }
+
+    const entry = new Query<QD, TParams, TData>(queryDefinition, params, {
+      onRemove: () => {
         this.handleQueryGarbageCollect(queryDefinition, params);
       },
       context: this.context,

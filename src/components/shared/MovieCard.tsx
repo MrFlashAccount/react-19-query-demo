@@ -29,7 +29,7 @@ export function MovieCard({
           </h3>
 
           <div
-            className={`flex items-center gap-1 text-xs text-gray-500 flex-shrink-0 ${
+            className={`flex items-center gap-1 text-xs text-gray-500 shrink-0 ${
               isPending ? "" : "hidden"
             }`}
           >

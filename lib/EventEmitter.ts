@@ -1,5 +1,3 @@
-import { generateScopeId } from "./utils";
-
 export type Listener<T> = (payload: T) => void;
 
 export interface CreateScopeOptions {
@@ -323,3 +321,7 @@ export interface EventsMap {
 }
 
 export const eventEmitter = new EventEmitter<EventsMap>();
+
+function generateScopeId(): string {
+  return `${Math.random().toString(36)}-${Date.now().toString(36)}`;
+}

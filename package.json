@@ -31,8 +31,8 @@
     "@vitejs/plugin-react": "5.1.1",
     "babel-plugin-react-compiler": "1.0.0",
     "tailwindcss": "4.1.17",
-    "@typescript/native-preview": "7.0.0-dev.20251202.1",
-    "vite": "7.2.2",
+    "@typescript/native-preview": "7.0.0-dev.20251204.1",
+    "vite": "8.0.0-beta.0",
     "vitest": "4.0.9"
   }
 }

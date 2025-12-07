@@ -1,9 +1,7 @@
 import { useState, Suspense, lazy } from "react";
-import { LagRadar, Loader, TabSelector } from "./components/shared";
+import { Loader, TabSelector } from "./components/shared";
 import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
 import type { MovieApi } from "./api/types";
-
-const LazyGitHubCorner = lazy(() => import("react-github-corner"));
 
 const LazyTanStackQueryTab = lazy(
   () => import("./components/TanStackQueryTab")
@@ -11,15 +9,16 @@ const LazyTanStackQueryTab = lazy(
 const LazyCustomLibraryTab = lazy(
   () => import("./components/CustomLibraryTab")
 );
-
 const ReactQueryDevtoolsProduction = lazy(() =>
   import("@tanstack/react-query-devtools/build/modern/production.js").then(
     (d) => ({ default: d.ReactQueryDevtools })
   )
 );
-
 const CustomLibraryDevtools = lazy(() =>
-  import("../lib/devtools").then((d) => ({ default: d.QueryDevtools }))
+  import("lib/devtools").then((d) => ({ default: d.QueryDevtools }))
+);
+const LazyLagRadar = lazy(() =>
+  import("./components/shared").then((d) => ({ default: d.LagRadar }))
 );
 
 /**
@@ -110,8 +109,7 @@ export default function App() {
           }
         })()}
       </div>
-      {showLagRadar && <LagRadar />}
-      <LazyGitHubCorner href="https://github.com/MrFlashAccount/react-19-query-demo" />
+      {showLagRadar && <LazyLagRadar />}
     </Suspense>
   );
 }

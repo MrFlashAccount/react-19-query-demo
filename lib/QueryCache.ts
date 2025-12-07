@@ -1,5 +1,9 @@
 import type { Query } from "./Query";
-import type { QueryDefinition, QueryParams } from "./DependencyGraph";
+import type {
+  QueryDefinition,
+  QueryParams,
+  SerializedParams,
+} from "./DependencyGraph";
 import { serializeParams } from "./DependencyGraph";
 
 /**
@@ -102,6 +106,18 @@ export class QueryCache {
     const paramMap = this.cache.get(definition);
 
     return paramMap?.get(paramsKey) as Query<QD, TParams, TData>;
+  }
+
+  getRaw<
+    QD extends QueryDefinition<TParams, TData>,
+    TParams extends unknown = unknown,
+    TData extends unknown = unknown
+  >(
+    definition: QD,
+    serializedParams: SerializedParams
+  ): Query<QD, TParams, TData> | undefined {
+    const paramMap = this.cache.get(definition);
+    return paramMap?.get(serializedParams) as Query<QD, TParams, TData>;
   }
 
   /**

@@ -1,17 +1,15 @@
 import { useEffect } from "react";
-import { logger as defaultLogger, type Logger } from "./Logger";
-import { measurer as defaultMeasurer, type Measurer } from "./Measurer";
+import { Logger } from "./Logger";
+import { Measurer } from "./Measurer";
 
 export interface QueryLoggerProps {
   logger?: Logger;
 }
 
-export function QueryLogger({ logger = defaultLogger }: QueryLoggerProps) {
-  useEffect(() => {
-    if (logger !== undefined) {
-      return logger.start();
-    }
-  }, [logger]);
+export function QueryLogger(props: QueryLoggerProps) {
+  const logger = props.logger ?? new Logger();
+
+  useEffect(() => logger.start(), [logger]);
 
   return null;
 }
@@ -19,14 +17,10 @@ export function QueryLogger({ logger = defaultLogger }: QueryLoggerProps) {
 export interface QueryPerformanceTrackerProps {
   measurer?: Measurer;
 }
-export function QueryPerformanceTracker({
-  measurer = defaultMeasurer,
-}: QueryPerformanceTrackerProps) {
-  useEffect(() => {
-    if (measurer !== undefined) {
-      return measurer.start();
-    }
-  }, [measurer]);
+export function QueryPerformanceTracker(props: QueryPerformanceTrackerProps) {
+  const measurer = props.measurer ?? new Measurer();
+
+  useEffect(() => measurer.start(), [measurer]);
 
   return null;
 }

@@ -7,6 +7,16 @@ import type {
 import { eventEmitter } from "./EventEmitter";
 import { Retrier, type RetryConfig } from "./Retrier";
 import { exponentialBackoff } from "./utils";
+import { QueryPromise } from "./QueryPromise";
+
+export interface MutationState<TResult> {
+  promise: QueryPromise<TResult>;
+  error: QueryPromise<TResult>["reason"];
+  dataUpdatedAt: QueryPromise<TResult>["dataUpdatedAt"];
+  fetchStatus: QueryPromise<TResult>["fetchStatus"];
+  errorUpdatedAt: QueryPromise<TResult>["errorUpdatedAt"];
+  status: QueryPromise<TResult>["status"];
+}
 
 interface MutationEnvironment<TParams = unknown> {
   context: Context;
@@ -27,7 +37,10 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     | number
     | ((failureCount: number, error: unknown) => number);
   private retrier: Retrier;
-  private mutationFn: (params: TParams) => Promise<TResult>;
+  private mutationFn: (
+    params: TParams,
+    parentScopeId: string
+  ) => QueryPromise<TResult>;
 
   constructor(
     mutationDefinition: MutationDefinition<TParams, TResult>,
@@ -53,18 +66,53 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     this.mutationFn = this.createMutationFn();
   }
 
-  private createMutationFn(): (params: TParams) => Promise<TResult> {
-    return async (params: TParams) => {
-      return this.retrier.execute(() => {
-        return this.mutationDefinition.config.mutationFn(
-          params,
-          this.environment.context
-        );
-      }, Promise);
+  getState(promise: QueryPromise<TResult>): Readonly<MutationState<TResult>> {
+    return {
+      promise,
+      error: promise.reason,
+      dataUpdatedAt: promise.dataUpdatedAt,
+      fetchStatus: promise.fetchStatus,
+      errorUpdatedAt: promise.errorUpdatedAt,
+      status: promise.status,
     };
   }
 
-  mutate(params: TParams): Promise<TResult> {
+  private createMutationFn(): (
+    params: TParams,
+    parentScopeId: string
+  ) => QueryPromise<TResult> {
+    return (params: TParams, parentScopeId: string) => {
+      const executionScope = eventEmitter.createScope({ parentScopeId });
+      return this.retrier.execute(() => {
+        return this.mutationDefinition.config
+          .mutationFn(params, this.environment.context)
+          .then(async (result) => {
+            executionScope.emit("mutation:execution:success", {
+              variables: { params },
+              data: result,
+            });
+            await this.invalidateDependencies(
+              params,
+              result,
+              executionScope.scopeId
+            );
+            return result;
+          })
+          .catch((error) => {
+            executionScope.emit("mutation:execution:error", {
+              variables: { params },
+              error,
+            });
+            throw error;
+          })
+          .finally(() => {
+            this.retrier.pause();
+          });
+      }, QueryPromise) as QueryPromise<TResult>;
+    };
+  }
+
+  mutate(params: TParams): QueryPromise<TResult> {
     const scope = eventEmitter.createScope();
     scope.emit("mutation:start", { variables: { params } });
     const executionScope = scope.createChildScope();
@@ -75,25 +123,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     this.applyOptimisticUpdates(params, executionScope.scopeId);
     this.retrier.resume();
 
-    return this.mutationFn(params)
-      .then((result) => {
-        executionScope.emit("mutation:execution:success", {
-          variables: { params },
-          data: result,
-        });
-        this.invalidateDependencies(params, result, executionScope.scopeId);
-        return result;
-      })
-      .catch((error) => {
-        executionScope.emit("mutation:execution:error", {
-          variables: { params },
-          error,
-        });
-        throw error;
-      })
-      .finally(() => {
-        this.retrier.pause();
-      });
+    return this.mutationFn(params, executionScope.scopeId);
   }
 
   private async invalidateDependencies(

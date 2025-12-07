@@ -1,5 +1,11 @@
 import { use } from "react";
-import { QueryClient, QueryProvider, useMutation, useQuery } from "lib/react";
+import {
+  QueryClient,
+  QueryProvider,
+  useMutation,
+  useQuery,
+  params,
+} from "lib/react";
 import { MovieList, MovieCard, SearchBox } from "../shared";
 import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
@@ -42,7 +48,8 @@ function CustomLibraryTabContent({
 
   const { promise } = useQuery({
     query: moviesQuery,
-    params: { searchQuery, movieLimit },
+    params: params({ searchQuery, movieLimit }),
+    
   });
 
   const movies = use(promise);
@@ -90,7 +97,7 @@ function MovieCardCustom({
   // Subscribe to movies query just to add some overhead
   useQuery({
     query: moviesQuery,
-    params: { searchQuery, movieLimit },
+    params: params({ searchQuery, movieLimit }),
   });
 
   return (
