@@ -78,6 +78,10 @@ export class Query<
     return this.subscribers.size;
   }
 
+  getParams(): TParams {
+    return this.params;
+  }
+
   constructor(
     queryDefinition: QD,
     params: TParams,

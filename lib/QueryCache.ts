@@ -195,7 +195,7 @@ export class QueryCache {
    * @returns Array of all matching Query instances
    */
   findByDefinitions(
-    definitions: Set<QueryDefinition<any, any>>
+    definitions: readonly QueryDefinition<any, any>[]
   ): Array<Query<any, unknown>> {
     const queries: Array<Query<any, unknown>> = [];
 

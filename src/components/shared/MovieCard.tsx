@@ -1,6 +1,7 @@
 import { useState, useTransition } from "react";
 import type { Movie } from "../../api/types";
 import { StarIcon } from "../shared/StarIcon";
+import { useEvent } from "./useEvent";
 
 /**
  * Movie card component using custom query library
@@ -13,6 +14,10 @@ export function MovieCard({
   onUpdateRating: (rating: number) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
+
+  const handleUpdateRating = useEvent((rating: number) => {
+    startTransition(() => onUpdateRating(rating));
+  });
 
   const rating = movie.rating;
   const currentStars = Math.ceil((rating ?? 0) / 2); // Convert 0-10 rating to 0-5 stars
@@ -68,11 +73,7 @@ export function MovieCard({
         {/* Star Rating */}
         <div className="flex items-center gap-2">
           <RatingStars
-            onUpdateRating={(rating) => {
-              startTransition(async () => {
-                await onUpdateRating(rating);
-              });
-            }}
+            onUpdateRating={handleUpdateRating}
             isPending={isPending}
             currentStars={currentStars}
           />
