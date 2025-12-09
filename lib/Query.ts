@@ -238,9 +238,7 @@ export class Query<
       this.currentPromise.value != null ||
       this.currentPromise.fetchStatus === "fetching"
     ) {
-      scope.emit("query:prefetch:success", {
-        key: this.serializedKey,
-      });
+      scope.emit("query:prefetch:success", { key: this.serializedKey });
       return;
     }
 

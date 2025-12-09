@@ -18,7 +18,7 @@ const CustomLibraryDevtools = lazy(() =>
   import("lib/devtools").then((d) => ({ default: d.QueryDevtools }))
 );
 const LazyLagRadar = lazy(() =>
-  import("./components/shared").then((d) => ({ default: d.LagRadar }))
+  import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar }))
 );
 
 /**

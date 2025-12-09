@@ -49,7 +49,6 @@ function CustomLibraryTabContent({
   const { promise } = useQuery({
     query: moviesQuery,
     params: params({ searchQuery, movieLimit }),
-    
   });
 
   const movies = use(promise);

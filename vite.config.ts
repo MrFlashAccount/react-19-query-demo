@@ -15,15 +15,21 @@ export default defineConfig({
       "lib/devtools": path.resolve(__dirname, "lib/devtools/index.ts"),
     },
   },
-  worker: {
-    format: "es",
-  },
+  worker: { format: "es" },
   build: {
     sourcemap: true,
     rolldownOptions: {
       output: {
         advancedChunks: {
-          groups: [{ name: "react", test: /node_modules\/react/ }],
+          groups: [
+            { name: "react", test: /node_modules\/react/ },
+            { name: "react-dom", test: /node_modules\/react-dom/ },
+            {
+              name: "react-query",
+              test: /node_modules\/@tanstack\/react-query/,
+            },
+            { name: "lib", test: /lib/ },
+          ],
         },
       },
     },
