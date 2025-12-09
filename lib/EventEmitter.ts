@@ -30,7 +30,30 @@ export interface ScopeSubscription {
   unsubscribe: () => void;
 }
 
-export class EventEmitter<EventMap extends Record<string, any>> {
+interface EventEmitterBase {
+  on<K extends keyof EventsMap>(
+    key: K,
+    listener: Listener<EventsMap[K]>
+  ): () => void;
+  off<K extends keyof EventsMap>(
+    key: K,
+    listener: Listener<EventsMap[K]>
+  ): void;
+  emit<K extends keyof EventsMap>(key: K, payload: EventsMap[K]): void;
+  createScope(options: CreateScopeOptions): ScopedEmitter<EventsMap>;
+  onScope(listener: Listener<ScopeEvent>): () => void;
+  onScopeStart(
+    handler: (
+      scopeId: string,
+      subscribeToScope: (listener: (event: ScopeEvent) => void) => () => void,
+      firstEvent: ScopeEvent
+    ) => void
+  ): () => void;
+}
+
+class EventEmitter<EventMap extends Record<string, any>>
+  implements EventEmitterBase
+{
   private listeners: Partial<Record<keyof EventMap, Set<Listener<any>>>> = {};
   private scopeListeners: Set<Listener<ScopeEvent>> = new Set();
   private scopeSubscribers: Map<string, Set<(event: ScopeEvent) => void>> =
@@ -319,8 +342,33 @@ export interface EventsMap {
     scopeId: string;
   };
 }
+class NullEventEmitter<EventMap extends Record<string, any>>
+  implements EventEmitterBase
+{
+  on(): () => void {
+    return () => {};
+  }
+  off(): void {}
+  emit(): void {}
+  createScope(): ScopedEmitter<EventsMap> {
+    return {
+      scopeId: "",
+      parentScopeId: undefined,
+      emit: () => {},
+      createChildScope: () => this.createScope(),
+    };
+  }
+  onScope(): () => void {
+    return () => {};
+  }
+  onScopeStart(): () => void {
+    return () => {};
+  }
+}
 
-export const eventEmitter = new EventEmitter<EventsMap>();
+export const eventEmitter = import.meta.env.DEV
+  ? new EventEmitter<EventsMap>()
+  : new NullEventEmitter<EventsMap>();
 
 function generateScopeId(): string {
   return `${Math.random().toString(36)}-${Date.now().toString(36)}`;

@@ -1,11 +1,4 @@
-import { use } from "react";
-import {
-  QueryClient,
-  QueryProvider,
-  useMutation,
-  useQuery,
-  params,
-} from "lib/react";
+import { lazy, use } from "react";
 import { MovieList, MovieCard, SearchBox } from "../shared";
 import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
@@ -15,6 +8,12 @@ import {
   updateMovieRatingMutation,
 } from "../../queries";
 
+const { QueryProvider, useMutation, useQuery, params, QueryClient } =
+  await import("lib/react");
+const LazyDevtools = lazy(() =>
+  import("lib/devtools").then((d) => ({ default: d.QueryDevtools }))
+);
+
 const queryClient = new QueryClient({ graph: appGraph });
 
 export default function CustomLibraryTab({
@@ -22,7 +21,7 @@ export default function CustomLibraryTab({
   onFormStateChange,
   api,
   devtools,
-}: TabProps<{}>) {
+}: TabProps) {
   return (
     <QueryProvider queryClient={queryClient} context={{ api }}>
       <CustomLibraryTabContent
@@ -31,6 +30,7 @@ export default function CustomLibraryTab({
         onFormStateChange={onFormStateChange}
         devtools={devtools}
       />
+      {devtools && <LazyDevtools />}
     </QueryProvider>
   );
 }
@@ -38,11 +38,7 @@ export default function CustomLibraryTab({
 /**
  * Custom library tab component - demonstrates the custom query library implementation
  */
-function CustomLibraryTabContent({
-  formState,
-  onFormStateChange,
-  devtools: Devtools,
-}: TabProps<{}>) {
+function CustomLibraryTabContent({ formState, onFormStateChange }: TabProps) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
 
@@ -69,8 +65,6 @@ function CustomLibraryTabContent({
           ))}
         </MovieList>
       </div>
-
-      {Devtools && <Devtools />}
     </div>
   );
 }

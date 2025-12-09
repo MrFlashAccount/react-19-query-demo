@@ -1,11 +1,9 @@
 import type { MovieApi } from "../../api/types";
 
-export interface TabProps<
-  DevtoolsProps extends Record<string, unknown> = Record<string, unknown>
-> {
+export interface TabProps {
   formState: FormData;
   onFormStateChange: (formData: FormData) => void;
-  devtools: React.ComponentType<DevtoolsProps> | null;
+  devtools: boolean;
   api: MovieApi;
 }
 

@@ -24,11 +24,6 @@ export default defineConfig({
           groups: [
             { name: "react", test: /node_modules\/react/ },
             { name: "react-dom", test: /node_modules\/react-dom/ },
-            {
-              name: "react-query",
-              test: /node_modules\/@tanstack\/react-query/,
-            },
-            { name: "lib", test: /lib/ },
           ],
         },
       },

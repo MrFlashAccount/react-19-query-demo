@@ -7,11 +7,7 @@ import {
   useDebugValue,
 } from "react";
 import { QueryClient, type QueryClientContext } from "../QueryClient";
-import {
-  type EventEmitter,
-  type EventsMap,
-  eventEmitter,
-} from "../EventEmitter";
+import { eventEmitter } from "../EventEmitter";
 import { type DependencyGraph } from "../DependencyGraph";
 import { useDebugFormattedQuery } from "../devtools/useDebugFormattedQuery";
 
@@ -32,8 +28,6 @@ export const QueryContext = createContext<QueryContextValue | null>(null);
  */
 export type QueryProviderProps = {
   context?: QueryClientContext;
-  /** Optional event emitter for debugging */
-  eventEmitter?: EventEmitter<EventsMap>;
 } & (
   | { queryClient: QueryClient; graph?: never }
   | { queryClient?: never; graph: DependencyGraph }

@@ -9,14 +9,6 @@ const LazyTanStackQueryTab = lazy(
 const LazyCustomLibraryTab = lazy(
   () => import("./components/CustomLibraryTab")
 );
-const ReactQueryDevtoolsProduction = lazy(() =>
-  import("@tanstack/react-query-devtools/build/modern/production.js").then(
-    (d) => ({ default: d.ReactQueryDevtools })
-  )
-);
-const CustomLibraryDevtools = lazy(() =>
-  import("lib/devtools").then((d) => ({ default: d.QueryDevtools }))
-);
 const LazyLagRadar = lazy(() =>
   import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar }))
 );
@@ -74,11 +66,7 @@ export default function App() {
             case "custom":
               return (
                 <LazyCustomLibraryTab
-                  devtools={
-                    formState.get("showDevtools") === "true"
-                      ? CustomLibraryDevtools
-                      : null
-                  }
+                  devtools={formState.get("showDevtools") === "true"}
                   formState={formState}
                   onFormStateChange={updateFormState}
                   api={api}
@@ -87,11 +75,7 @@ export default function App() {
             case "tanstack":
               return (
                 <LazyTanStackQueryTab
-                  devtools={
-                    formState.get("showDevtools") === "true"
-                      ? ReactQueryDevtoolsProduction
-                      : null
-                  }
+                  devtools={formState.get("showDevtools") === "true"}
                   formState={formState}
                   onFormStateChange={updateFormState}
                   api={api}

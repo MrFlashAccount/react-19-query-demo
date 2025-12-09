@@ -29,7 +29,6 @@ export { Mutation } from "./Mutation";
 
 // Event system
 export {
-  EventEmitter,
   eventEmitter,
   type EventsMap,
   type ScopedEmitter,

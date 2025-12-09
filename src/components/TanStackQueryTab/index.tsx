@@ -1,25 +1,33 @@
-import {
+import { MovieList, SearchBox, MovieCard } from "../shared";
+import type { Movie, MovieApi } from "../../api/types";
+import type { TabProps } from "../shared/types";
+import { lazy } from "react";
+
+const {
   QueryClient,
   QueryClientProvider,
   useMutation,
   useQuery,
   useQueryClient,
   useSuspenseQuery,
-} from "@tanstack/react-query";
-import { MovieList, SearchBox, MovieCard } from "../shared";
-import type { Movie, MovieApi } from "../../api/types";
-import type { TabProps } from "../shared/types";
+} = await import("@tanstack/react-query");
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { gcTime: 0 } },
 });
+
+const ReactQueryDevtoolsProduction = lazy(() =>
+  import("@tanstack/react-query-devtools/build/modern/production.js").then(
+    (d) => ({ default: d.ReactQueryDevtools })
+  )
+);
 
 export default function TanStackQueryTab({
   formState,
   onFormStateChange,
   devtools,
   api,
-}: TabProps<{ client: QueryClient }>) {
+}: TabProps) {
   return (
     <QueryClientProvider client={queryClient}>
       <TanStackQueryTabContent
@@ -28,6 +36,7 @@ export default function TanStackQueryTab({
         api={api}
         devtools={devtools}
       />
+      {devtools && <ReactQueryDevtoolsProduction client={queryClient} />}
     </QueryClientProvider>
   );
 }
@@ -36,8 +45,7 @@ function TanStackQueryTabContent({
   formState,
   onFormStateChange,
   api,
-  devtools: Devtools,
-}: TabProps<{ client: QueryClient }>) {
+}: TabProps) {
   const searchQuery = String(formState.get("searchQuery") ?? "");
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
@@ -66,8 +74,6 @@ function TanStackQueryTabContent({
           ))}
         </MovieList>
       </div>
-
-      {Devtools && <Devtools client={queryClient} />}
     </div>
   );
 }
