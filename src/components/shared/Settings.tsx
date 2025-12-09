@@ -100,6 +100,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
             </label>
             <div className="flex items-center gap-2">
               <input
+                key={"range" + movieLimit}
                 id="movie-limit"
                 name="movieLimit"
                 type="range"
@@ -109,6 +110,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
                 className="flex-1 h-2 bg-gray-200 rounded-4xl [corner-shape:superellipse(1.33)] appearance-none cursor-pointer accent-black min-w-0"
               />
               <input
+                key={"number-input" + movieLimit}
                 name="movieLimit"
                 type="number"
                 min={MIN_LIMIT}

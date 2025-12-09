@@ -67,9 +67,13 @@ export function SearchBox({ formState, onFormStateChange }: SearchBoxProps) {
           </div>
 
           <input
-            type="text"
+            type="search"
             defaultValue={searchQuery}
             name="searchQuery"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
             placeholder="Search by title, director, genre, or tags..."
             className="w-full pl-10 pr-4 py-2.5 md:pl-12 md:pr-5 md:py-3 text-base md:text-base border border-gray-200 rounded-4xl [corner-shape:superellipse(1.33)] focus:outline-none focus:border-black transition-all duration-200 placeholder-gray-400"
           />
