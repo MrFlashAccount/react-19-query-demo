@@ -14,15 +14,19 @@ export function TabSelector({
   const tabChangeRef = useRef<"custom" | "tanstack" | null>(null);
 
   const handleTabChange = (tab: "custom" | "tanstack") => {
+    if (tabChangeRef.current === tab) {
+      return;
+    }
     tabChangeRef.current = tab;
 
     onTabChange("unset");
 
-    setTimeout(() => {
+    startTransition(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
       startTransition(() => {
         onTabChange(tab);
       });
-    }, 100);
+    });
   };
 
   return (
