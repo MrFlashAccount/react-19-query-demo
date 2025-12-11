@@ -1,6 +1,7 @@
 import { use, useMemo } from "react";
 import type { QueryClient } from "../QueryClient";
 import { QueryContext } from "../react/QueryProvider";
+import { StatusIcons } from "./constants";
 
 export function useDebugFormattedQuery(queryClient?: QueryClient) {
   const client = queryClient ?? use(QueryContext)?.queryClient;
@@ -29,27 +30,27 @@ export function useDebugFormattedQuery(queryClient?: QueryClient) {
     );
     const staleQueries = allQueries.filter((query) => query.isStale());
     return {
-      "🔍 total": {
+      [`${StatusIcons.total} total`]: {
         count: allQueries.length,
         queries: allQueries,
       },
-      "🕛 stale": {
+      [`${StatusIcons.stale} stale`]: {
         count: staleQueries.length,
         queries: staleQueries,
       },
-      "📲 pending": {
+      [`${StatusIcons.pending} pending`]: {
         count: pendingQueries.length,
         queries: pendingQueries,
       },
-      "🔄 fetching": {
+      [`${StatusIcons.fetching} fetching`]: {
         count: fetchingQueries.length,
         queries: fetchingQueries,
       },
-      "✅ fulfilled": {
+      [`${StatusIcons.fulfilled} fulfilled`]: {
         count: fulfilledQueries.length,
         queries: fulfilledQueries,
       },
-      "❌ rejected": {
+      [`${StatusIcons.rejected} rejected`]: {
         count: rejectedQueries.length,
         queries: rejectedQueries,
       },

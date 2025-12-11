@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQueryContext } from "./QueryProvider";
-import { SERIALIZED_PARAMS_SYMBOL, type UseQueryOptions } from "./useQuery";
-import { noop } from "../utils";
+import { type UseQueryOptions } from "./useQuery";
+import { getSerializedParams, noop } from "../utils";
 
 export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
   const { queryClient } = useQueryContext();
@@ -10,7 +10,7 @@ export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
     const queryInstance = queryClient.addQueryRaw(
       query.query,
       query.params,
-      query.params[SERIALIZED_PARAMS_SYMBOL],
+      getSerializedParams(query.params),
       { prefetch: true }
     );
 

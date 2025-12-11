@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "type-check": "tsgo --noEmit",
+    "type-check": "tsgo --noEmit --isolatedDeclarations",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui"

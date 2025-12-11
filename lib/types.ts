@@ -43,3 +43,51 @@ export function isBrand<Value, Type extends string>(
 ): value is BrandValue<Value, Type> {
   return nominalBrand(nominal) === valueBrand(value);
 }
+
+export namespace brand {
+  /**
+   * Creates a generic branding function with a fixed brand name.
+   * The value type remains generic at call site.
+   *
+   * Usage:
+   * ```ts
+   * const Id = brand.generic<"Id">();
+   * const stringId = Id("abc");  // BrandValue<"abc", "Id">
+   * const numberId = Id(123);    // BrandValue<123, "Id">
+   * ```
+   */
+  export function generic<const Type extends string>() {
+    const brandSymbol = Symbol();
+    const fn = <T>(value: T): BrandValue<T, Type> => {
+      return value as BrandValue<T, Type>;
+    };
+
+    Object.defineProperty(fn, "$$brand", {
+      value: brandSymbol,
+      writable: false,
+      enumerable: false,
+      configurable: false,
+    });
+
+    return fn;
+  }
+
+  /**
+   * Type-level generic brand. Creates a branded type alias.
+   *
+   * Usage:
+   * ```ts
+   * type Id<T> = brand.Generic<"Id", T>;
+   * type StringId = Id<string>;  // BrandValue<string, "Id">
+   * ```
+   */
+  export type Generic<Type extends string, T> = BrandValue<T, Type>;
+
+  /**
+   * Extracts the branded return type from a Nominal function.
+   * Usage: `type MyType = brand.infer<typeof myBrandedValue>`
+   */
+  export type infer<T> = T extends Nominal<infer V, infer Type>
+    ? BrandValue<V, Type>
+    : never;
+}

@@ -2,9 +2,9 @@ import type {
   Context,
   MutationDefinition,
   OptimisticUpdateTarget,
-  QueryDefinition,
-} from "./DependencyGraph";
-import { eventEmitter } from "./EventEmitter";
+  IInvalidatable,
+} from "./nodes/mutation";
+import { tracer, type Span } from "./tracing";
 import { Retrier, type RetryConfig } from "./Retrier";
 import { exponentialBackoff } from "./utils";
 import { QueryPromise } from "./QueryPromise";
@@ -21,8 +21,8 @@ export interface MutationState<TResult> {
 interface MutationEnvironment<TParams = unknown> {
   context: Context;
   invalidate: (
-    queryDefinition: QueryDefinition<unknown, unknown>,
-    parentScopeId?: string
+    queryDefinition: IInvalidatable,
+    parentSpan?: Span
   ) => Promise<void>;
   applyOptimisticUpdates: (
     optimisticUpdate: OptimisticUpdateTarget<TParams, unknown>
@@ -39,7 +39,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
   private retrier: Retrier;
   private mutationFn: (
     params: TParams,
-    parentScopeId: string
+    parentSpan: Span
   ) => QueryPromise<TResult>;
 
   constructor(
@@ -79,31 +79,15 @@ export class Mutation<TParams = unknown, TResult = unknown> {
 
   private createMutationFn(): (
     params: TParams,
-    parentScopeId: string
+    parentSpan: Span
   ) => QueryPromise<TResult> {
-    return (params: TParams, parentScopeId: string) => {
-      const executionScope = eventEmitter.createScope({ parentScopeId });
+    return (params: TParams, parentSpan: Span) => {
       return this.retrier.execute(() => {
         return this.mutationDefinition.config
           .mutationFn(params, this.environment.context)
           .then(async (result) => {
-            executionScope.emit("mutation:execution:success", {
-              variables: { params },
-              data: result,
-            });
-            await this.invalidateDependencies(
-              params,
-              result,
-              executionScope.scopeId
-            );
+            await this.invalidateDependencies(params, result, parentSpan);
             return result;
-          })
-          .catch((error) => {
-            executionScope.emit("mutation:execution:error", {
-              variables: { params },
-              error,
-            });
-            throw error;
           })
           .finally(() => {
             this.retrier.pause();
@@ -113,86 +97,96 @@ export class Mutation<TParams = unknown, TResult = unknown> {
   }
 
   mutate(params: TParams): QueryPromise<TResult> {
-    const scope = eventEmitter.createScope();
-    scope.emit("mutation:start", { variables: { params } });
-    const executionScope = scope.createChildScope();
-    executionScope.emit("mutation:execution:start", {
-      variables: { params },
+    // Create the main execution span
+    const span = tracer.startSpan("mutation:execute", {
+      variables: params,
     });
 
-    this.applyOptimisticUpdates(params, executionScope.scopeId);
+    this.applyOptimisticUpdates(params, span);
     this.retrier.resume();
 
-    return this.mutationFn(params, executionScope.scopeId);
+    const promise = this.mutationFn(params, span);
+
+    // End span on completion (non-blocking)
+    promise
+      .then((result) => {
+        span.success({ data: result });
+      })
+      .catch((error) => {
+        span.error(error);
+      });
+
+    return promise;
   }
 
   private async invalidateDependencies(
     params: TParams,
     result: TResult,
-    parentScopeId: string
+    parentSpan: Span
   ): Promise<void> {
-    const scope = eventEmitter.createScope({ parentScopeId });
     const invalidations = this.mutationDefinition.config.invalidates;
-    let invalidationTargets: QueryDefinition<any, any>[] = [];
-    if (invalidations) {
-      for (const invalidation of invalidations) {
-        if (typeof invalidation === "function") {
-          invalidationTargets.push(...invalidation(params, result));
+    if (!invalidations) return;
+
+    let invalidationTargets: IInvalidatable[] = [];
+
+    for (const invalidation of invalidations) {
+      if (typeof invalidation === "function") {
+        const targets = invalidation(params, result);
+        if (Array.isArray(targets)) {
+          invalidationTargets.push(...targets);
         } else {
-          invalidationTargets.push(invalidation);
+          invalidationTargets.push(targets);
         }
+      } else {
+        invalidationTargets.push(invalidation);
       }
+    }
 
-      const invalidationScope = scope.createChildScope();
-      const queries = invalidationTargets.map((idx) => `query:${idx}`);
-      invalidationScope.emit("mutation:invalidation:start", {
-        variables: { params },
-        queries,
-      });
+    if (invalidationTargets.length === 0) return;
 
+    const queries = invalidationTargets.map((target) => String(target));
+
+    // Create child span for invalidation
+    const span = parentSpan.child("mutation:invalidate", {
+      variables: params,
+      queries,
+    });
+
+    try {
       await Promise.all(
         invalidationTargets.map((queryDef) =>
-          this.environment.invalidate(queryDef, invalidationScope.scopeId)
+          this.environment.invalidate(queryDef, span)
         )
       );
-
-      invalidationScope.emit("mutation:invalidation:success", {
-        variables: { params },
-        queries,
-      });
+      span.success({ queries });
+    } catch (error) {
+      span.error(error, { queries });
+      throw error;
     }
   }
 
-  private applyOptimisticUpdates(params: TParams, parentScopeId: string): void {
-    const optimisticScope = eventEmitter.createScope({ parentScopeId });
-    optimisticScope.emit("mutation:optimistic:start", {
-      variables: { params },
+  private applyOptimisticUpdates(params: TParams, parentSpan: Span): void {
+    const optimisticUpdates = this.mutationDefinition.config.optimistic;
+    if (!optimisticUpdates) return;
+
+    // Create child span for optimistic updates
+    const span = parentSpan.child("mutation:optimistic", {
+      variables: params,
     });
 
-    const optimisticUpdates = this.mutationDefinition.config.optimistic;
     const ctx = this.environment.context;
-    if (optimisticUpdates) {
+
+    try {
       for (const optimisticUpdate of optimisticUpdates(params, ctx)) {
-        try {
-          optimisticScope.emit("mutation:optimistic:update", {
-            variables: { params },
-            optimisticUpdate,
-          });
-        } catch (error) {
-          optimisticScope.emit("mutation:optimistic:error", {
-            variables: { params },
-            error,
-          });
-        } finally {
-          optimisticScope.emit("mutation:optimistic:update:done", {
-            variables: { params },
-            optimisticUpdate,
-          });
-        }
+        span.event("update:applied", { update: optimisticUpdate });
+        // Type assertion needed due to generic parameter variance
+        this.environment.applyOptimisticUpdates(
+          optimisticUpdate as OptimisticUpdateTarget<unknown, unknown>
+        );
       }
+      span.success();
+    } catch (error) {
+      span.error(error);
     }
-    optimisticScope.emit("mutation:optimistic:done", {
-      variables: { params },
-    });
   }
 }

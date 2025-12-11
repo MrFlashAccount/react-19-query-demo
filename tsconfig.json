@@ -1,10 +1,14 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "esnext",
     "useDefineForClassFields": true,
     "lib": ["esnext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo",
+    "incremental": true,
 
     /* Bundler mode */
     "moduleResolution": "bundler",

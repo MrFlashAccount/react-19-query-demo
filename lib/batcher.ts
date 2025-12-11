@@ -4,16 +4,21 @@ export interface Batch {
   (callback: () => void): void;
 }
 
-export function createBatcher(): Batch {
+export interface BatchOptions {
+  batchMethod?: (callback: () => void) => void;
+}
+
+export function createBatcher(options: BatchOptions = {}): Batch {
+  const { batchMethod = queueMicrotask } = options;
   let isPending = false;
   let cbToExecute: () => void = noop;
 
-  return (callback: () => void) => {
+  return function batch(callback: () => void) {
     if (!isPending) {
       cbToExecute = callback;
       isPending = true;
 
-      queueMicrotask(() => {
+      batchMethod(() => {
         try {
           cbToExecute();
         } catch (error) {

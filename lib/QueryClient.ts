@@ -1,15 +1,14 @@
 import { Query } from "./Query";
 import { noop } from "./utils";
-import { eventEmitter } from "./EventEmitter";
+import { tracer, type Span } from "./tracing";
 import {
-  SerializedParams,
   type QueryDefinition,
-  type DependencyGraph,
-  getQueryInstanceKey,
   type Context,
   type QueryParams,
-  type MutationDefinition,
-} from "./DependencyGraph";
+} from "./nodes/query";
+import { type DependencyGraph } from "./DependencyGraph";
+import { type SerializedParams } from "./utils";
+import { type IInvalidatable, type MutationDefinition } from "./nodes/mutation";
 import { QueryCache } from "./QueryCache";
 import { Mutation } from "./Mutation";
 
@@ -29,7 +28,8 @@ export interface QueryClientOptions {
 export interface QueryClientContext extends Readonly<Context> {}
 
 export interface InvalidateOptions {
-  parentScopeId?: string;
+  /** Parent span for tracing */
+  parentSpan?: Span;
 }
 
 /**
@@ -153,11 +153,6 @@ export class QueryClient {
 
     const entry = new Query<QD, TParams, TData>(queryDefinition, params, {
       onRemove: () => {
-        const instanceKey = getQueryInstanceKey(params);
-        eventEmitter.emit("query:garbage-collect", {
-          key: instanceKey,
-        });
-
         this.handleQueryGarbageCollect(queryDefinition, params);
       },
       context: this.context,
@@ -212,12 +207,9 @@ export class QueryClient {
   ): Mutation<TParams, TResult> {
     return new Mutation(mutationDefinition, {
       context: this.context,
-      invalidate: (
-        queryDefinition: QueryDefinition<unknown, unknown>,
-        parentScopeId?: string
-      ) => {
+      invalidate: (queryDefinition: IInvalidatable, parentSpan?: Span) => {
         return this.invalidateQuery(queryDefinition, {
-          parentScopeId,
+          parentSpan,
         });
       },
       // TODO: Implement optimistic updates
@@ -295,35 +287,30 @@ export class QueryClient {
    * @param queryDefinition - The query definition to invalidate
    * @param options - Optional invalidation options
    */
-  async invalidateQuery<QD extends QueryDefinition>(
-    queryDefinition: QD,
+  async invalidateQuery(
+    queryDefinition: IInvalidatable,
     options: InvalidateOptions = {}
   ): Promise<void> {
-    const parentScopeId = options.parentScopeId;
-    const scope = eventEmitter.createScope();
     // Find all cache entries for this query definition
-    const queries = this._cache.findByDefinition<QD>(queryDefinition);
-    const invalidationScope = parentScopeId
-      ? scope.createChildScope(parentScopeId)
-      : scope;
+    // Type assertion: IInvalidatable is used to represent query definitions that can be invalidated
+    const queries = this._cache.findByDefinition(
+      queryDefinition as unknown as QueryDefinition
+    );
+    const queryKeys = queries.map((query) => query.serializedKey);
 
-    invalidationScope.emit("queries:invalidation:start", {
-      queries: queries.map((query) => query.serializedKey),
-    });
+    // Create span - either as child of parent or as root
+    const span = options.parentSpan
+      ? options.parentSpan.child("client:invalidation", { queries: queryKeys })
+      : tracer.startSpan("client:invalidation", { queries: queryKeys });
 
-    await Promise.all(
-      queries.map((query) => query.invalidate(invalidationScope.scopeId))
-    ).catch((error) => {
-      invalidationScope.emit("queries:invalidation:error", {
-        queries: queries.map((query) => query.serializedKey),
-        error,
-      });
+    try {
+      await Promise.all(queries.map((query) => query.invalidate(span)));
+
+      span.success({ queries: queryKeys });
+    } catch (error) {
+      span.error(error, { queries: queryKeys });
       throw error;
-    });
-
-    invalidationScope.emit("queries:invalidation:success", {
-      queries: queries.map((query) => query.serializedKey),
-    });
+    }
 
     const newInstance = this.clone();
     this.notifyChange(newInstance);
@@ -344,7 +331,7 @@ export class QueryClient {
     const query = this._cache.get<QD>(queryDefinition, params);
 
     if (query) {
-      await query.invalidate(options.parentScopeId);
+      await query.invalidate(options.parentSpan);
       const newInstance = this.clone();
       this.notifyChange(newInstance);
     }

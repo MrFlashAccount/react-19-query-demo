@@ -1,266 +1,296 @@
-import { eventEmitter, type ScopeEvent } from "../EventEmitter";
+import { noop } from "@tanstack/react-query";
+import {
+  tracer,
+  type TraceEvent,
+  type SpanStartEvent,
+  type SpanEndEvent,
+  type SpanEvent,
+} from "../tracing";
+import {
+  StatusIcons,
+  UIColors,
+  getCategoryColor,
+  getStatusColor,
+  getCategoryIcon,
+} from "./constants";
 
-interface ScopeTrace {
-  scopeId: string;
+/**
+ * Internal metrics for an active span
+ */
+interface SpanMetrics {
+  spanId: string;
+  parentSpanId?: string;
+  spanType: string;
+  startedAt: number;
+  payload: Record<string, unknown>;
   events: Array<{
-    eventName: string;
+    name: string;
     timestamp: number;
-    payload: any;
+    payload?: Record<string, unknown>;
   }>;
-  startTime: number;
 }
 
+export interface LoggerOptions {
+  /**
+   * Whether to show scope summaries when a scope completes
+   * @default true
+   */
+  showSummary?: boolean;
+  /**
+   * Whether to show payload details in logs
+   * @default true
+   */
+  showPayloadDetails?: boolean;
+  /**
+   * Whether to use console.group for nested logging
+   * @default true
+   */
+  useGrouping?: boolean;
+}
+
+/**
+ * Logger listens to trace events and logs them to the console.
+ * Useful for debugging during development.
+ */
 export class Logger {
-  private traces = new Map<string, ScopeTrace>();
-  private unsubscribe?: () => void;
+  private spans = new Map<string, SpanMetrics>();
+  private unsubscribe: () => void = noop;
+  private options: Required<LoggerOptions>;
 
-  public start() {
-    this.setupListeners();
-
-    return () => {
-      this.stop();
+  constructor(options: LoggerOptions = {}) {
+    this.options = {
+      showSummary: options.showSummary ?? true,
+      showPayloadDetails: options.showPayloadDetails ?? true,
+      useGrouping: options.useGrouping ?? true,
     };
   }
 
-  public stop() {
-    if (this.unsubscribe !== undefined) {
-      this.unsubscribe();
-      this.unsubscribe = undefined;
+  /**
+   * Start listening to trace events
+   */
+  start(): void {
+    if (this.unsubscribe !== noop) return;
+    this.unsubscribe = tracer.subscribe((event) => this.handleEvent(event));
+  }
+
+  /**
+   * Stop listening and clear all state
+   */
+  stop(): void {
+    this.unsubscribe();
+    this.unsubscribe = noop;
+    this.spans.clear();
+  }
+
+  /**
+   * Alias for start()
+   */
+  enable(): void {
+    this.start();
+  }
+
+  /**
+   * Alias for stop()
+   */
+  disable(): void {
+    this.stop();
+  }
+
+  /**
+   * Get current active spans (for debugging)
+   */
+  getActiveSpans(): SpanMetrics[] {
+    return Array.from(this.spans.values());
+  }
+
+  // ============================================
+  // EVENT HANDLING
+  // ============================================
+
+  private handleEvent(event: TraceEvent): void {
+    switch (event.kind) {
+      case "span:start":
+        this.handleSpanStart(event);
+        break;
+      case "span:end":
+        this.handleSpanEnd(event);
+        break;
+      case "span:event":
+        this.handleSpanEvent(event);
+        break;
     }
-
-    this.traces.clear();
   }
 
-  private setupListeners() {
-    this.unsubscribe = eventEmitter.onScopeStart(
-      (scopeId, subscribeToScope, firstEvent) => {
-        const trace: ScopeTrace = {
-          scopeId,
-          events: [],
-          startTime: performance.now(),
-        };
-        this.traces.set(scopeId, trace);
+  private handleSpanStart(event: SpanStartEvent): void {
+    const metrics: SpanMetrics = {
+      spanId: event.spanId,
+      parentSpanId: event.parentSpanId,
+      spanType: event.spanType,
+      startedAt: event.timestamp,
+      payload: event.payload,
+      events: [],
+    };
+    this.spans.set(event.spanId, metrics);
 
-        // Handle the first event
-        trace.events.push({
-          eventName: firstEvent.eventName,
-          timestamp: performance.now() - trace.startTime,
-          payload: firstEvent.payload,
-        });
-        this.logEvent(firstEvent, trace);
+    // Start a console group for this span
+    if (this.options.useGrouping) {
+      const [category, action] = event.spanType.split(":");
+      const icon = getCategoryIcon(category);
+      const color = getCategoryColor(category);
 
-        // Subscribe to subsequent events
-        subscribeToScope((event) => {
-          trace.events.push({
-            eventName: event.eventName,
-            timestamp: performance.now() - trace.startTime,
-            payload: event.payload,
-          });
-
-          // Log the event
-          this.logEvent(event, trace);
-
-          // Check if scope is complete
-          if (this.isScopeComplete(event.eventName)) {
-            this.logScopeSummary(trace);
-            this.traces.delete(scopeId);
-          }
-        });
-
-        // Check if the first event already completed the scope
-        if (this.isScopeComplete(firstEvent.eventName)) {
-          this.logScopeSummary(trace);
-          this.traces.delete(scopeId);
-        }
-      }
-    );
-  }
-
-  private isScopeComplete(eventName: string): boolean {
-    return (
-      eventName.endsWith(":success") ||
-      eventName.endsWith(":error") ||
-      eventName.endsWith(":pending")
-    );
-  }
-
-  private getEventCategory(eventName: string): string {
-    if (eventName.startsWith("query:")) return "Query";
-    if (eventName.startsWith("mutation:")) return "Mutation";
-    if (eventName.startsWith("function:")) return "Function";
-    if (eventName.startsWith("client:")) return "Client";
-    return "Unknown";
-  }
-
-  private getEventIcon(eventName: string): string {
-    if (eventName.includes("garbage-collect")) return "🗑️";
-    if (eventName.includes("stale")) return "⚠️";
-    if (eventName.includes("invalidation")) return "🔄";
-    if (eventName.endsWith(":start")) return "🚀";
-    if (eventName.endsWith(":success")) return "✅";
-    if (eventName.endsWith(":error")) return "❌";
-    if (eventName.endsWith(":pending")) return "⏳";
-    return "📌";
-  }
-
-  private getEventColor(eventName: string): string {
-    if (eventName.includes("garbage-collect")) return "#f87171"; // red
-    if (eventName.includes("stale")) return "#f59e0b"; // amber
-    if (eventName.includes("invalidation")) return "#06b6d4"; // cyan
-    if (eventName.endsWith(":start")) return "#3b82f6"; // blue
-    if (eventName.endsWith(":success")) return "#10b981"; // green
-    if (eventName.endsWith(":error")) return "#ef4444"; // red
-    if (eventName.endsWith(":pending")) return "#f59e0b"; // amber
-    return "#6b7280"; // gray
-  }
-
-  private logEvent(event: ScopeEvent, trace: ScopeTrace) {
-    const isFirstEvent = trace.events.length === 1;
-    const icon = this.getEventIcon(event.eventName);
-    const category = this.getEventCategory(event.eventName);
-    const color = this.getEventColor(event.eventName);
-    const currentEvent = trace.events[trace.events.length - 1];
-    const elapsedMs = currentEvent.timestamp;
-
-    if (isFirstEvent) {
-      console.group(
-        `%c${icon} ${category}`,
-        `color: ${color}; font-weight: bold;`
+      console.groupCollapsed(
+        `%c${icon} ${this.capitalize(category)} ${this.capitalize(action)}`,
+        `color: ${color.hex}; font-weight: bold;`
       );
     }
 
-    const timestamp = `+${elapsedMs.toFixed(2)}ms`;
+    // Log the start event
+    this.logSpanStart(event);
+  }
+
+  private handleSpanEnd(event: SpanEndEvent): void {
+    const metrics = this.spans.get(event.spanId);
+    if (!metrics) return;
+
+    const duration = event.timestamp - metrics.startedAt;
+
+    // Log the end event
+    this.logSpanEnd(event, duration);
+
+    // Log summary if enabled
+    if (this.options.showSummary) {
+      this.logSpanSummary(metrics, event, duration);
+    }
+
+    // End the console group
+    if (this.options.useGrouping) {
+      console.groupEnd();
+    }
+
+    this.spans.delete(event.spanId);
+  }
+
+  private handleSpanEvent(event: SpanEvent): void {
+    const metrics = this.spans.get(event.spanId);
+    if (!metrics) return;
+
+    const elapsed = event.timestamp - metrics.startedAt;
+    metrics.events.push({
+      name: event.name,
+      timestamp: elapsed,
+      payload: event.payload,
+    });
+
+    // Log the intermediate event
     console.log(
-      `%c${icon} ${event.eventName} %c${timestamp}`,
-      `color: ${color}; font-weight: bold;`,
-      `color: #9ca3af; font-size: 0.9em;`
+      `%c${StatusIcons.event} ${event.name} %c+${elapsed.toFixed(2)}ms`,
+      `color: ${UIColors.separator}; font-weight: bold;`,
+      `color: ${UIColors.timestamp}; font-size: 0.9em;`
     );
 
-    // Log payload details based on event type
-    this.logPayloadDetails(event.eventName, event.payload, elapsedMs);
+    if (this.options.showPayloadDetails && event.payload) {
+      console.log("  Details:", event.payload);
+    }
+  }
+
+  // ============================================
+  // LOGGING HELPERS
+  // ============================================
+
+  private logSpanStart(event: SpanStartEvent): void {
+    const [category] = event.spanType.split(":");
+    const color = getCategoryColor(category);
+
+    console.log(
+      `%c${StatusIcons.start} Started %c+0.00ms`,
+      `color: ${color.hex}; font-weight: bold;`,
+      `color: ${UIColors.timestamp}; font-size: 0.9em;`
+    );
+
+    if (this.options.showPayloadDetails) {
+      this.logPayloadDetails(event.spanType, event.payload);
+    }
+  }
+
+  private logSpanEnd(event: SpanEndEvent, duration: number): void {
+    const statusColor = getStatusColor(event.status);
+    const icon =
+      event.status === "success" ? StatusIcons.success : StatusIcons.error;
+    const statusLabel = event.status === "success" ? "Completed" : "Failed";
+
+    console.log(
+      `%c${icon} ${statusLabel} %c+${duration.toFixed(2)}ms`,
+      `color: ${statusColor.hex}; font-weight: bold;`,
+      `color: ${UIColors.timestamp}; font-size: 0.9em;`
+    );
+
+    if (event.status === "error" && event.error) {
+      console.error("  Error:", event.error);
+    }
+
+    if (this.options.showPayloadDetails && event.payload) {
+      console.log("  Result:", event.payload);
+    }
   }
 
   private logPayloadDetails(
-    eventName: string,
-    payload: any,
-    elapsedMs?: number
-  ) {
-    const durationLabel =
-      elapsedMs !== undefined && this.shouldLogDuration(eventName)
-        ? `${elapsedMs.toFixed(2)}ms`
-        : undefined;
+    spanType: string,
+    payload: Record<string, unknown>
+  ): void {
+    const [category] = spanType.split(":");
 
-    if (
-      eventName.includes("query:fetch") ||
-      eventName.includes("query:prefetch")
-    ) {
-      console.log("  Key:", payload.key);
-      if (durationLabel) {
-        console.log("  Duration:", durationLabel);
+    if (category === "query") {
+      if (payload.key !== undefined) {
+        console.log("  Key:", payload.key);
       }
-      if (payload.error) {
-        console.error("  Error:", payload.error);
-      }
-    } else if (eventName.includes("mutation")) {
-      if (eventName.includes("invalidation")) {
-        console.log("  Queries to invalidate:", payload.queries);
-        if (durationLabel) {
-          console.log("  Duration:", durationLabel);
-        }
-      } else {
+    } else if (category === "mutation") {
+      if (payload.variables !== undefined) {
         console.log("  Variables:", payload.variables);
-        if (durationLabel) {
-          console.log("  Duration:", durationLabel);
-        }
-        if (payload.data !== undefined) {
-          console.log("  Data:", payload.data);
-        }
-        if (payload.error) {
-          console.error("  Error:", payload.error);
-        }
       }
-    } else if (eventName.includes("function")) {
-      console.log("  Function:", payload.name);
-      console.log("  Arguments:", payload.args);
-      if (durationLabel) {
-        console.log("  Duration:", durationLabel);
+      if (payload.queries !== undefined) {
+        console.log("  Queries:", payload.queries);
       }
-      if (payload.result !== undefined) {
-        console.log("  Result:", payload.result);
+    } else if (category === "client") {
+      if (payload.queries !== undefined) {
+        console.log("  Queries:", payload.queries);
       }
-      if (payload.error) {
-        console.error("  Error:", payload.error);
-      }
-    } else if (eventName.includes("garbage-collect")) {
-      console.log("  Key:", payload.key);
     }
   }
 
-  private shouldLogDuration(eventName: string): boolean {
-    return eventName.endsWith(":success") || eventName.endsWith(":error");
-  }
-
-  private logScopeSummary(trace: ScopeTrace) {
-    const lastEvent = trace.events[trace.events.length - 1];
-    const totalDuration = lastEvent.timestamp;
-
+  private logSpanSummary(
+    metrics: SpanMetrics,
+    endEvent: SpanEndEvent,
+    duration: number
+  ): void {
     console.log(
       `%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      "color: #6b7280;"
+      `color: ${UIColors.separator};`
     );
-    console.log(`%cScope Summary`, "color: #6b7280; font-weight: bold;");
-    console.log(`  Total Events: ${trace.events.length}`);
-    console.log(`  Total Duration: ${totalDuration.toFixed(2)}ms`);
+    console.log(
+      `%cSpan Summary`,
+      `color: ${UIColors.separator}; font-weight: bold;`
+    );
+    console.log(`  Type: ${metrics.spanType}`);
+    console.log(`  Status: ${endEvent.status}`);
+    console.log(`  Duration: ${duration.toFixed(2)}ms`);
+    console.log(`  Events: ${metrics.events.length}`);
 
-    // Create a table of events
-    const tableData = trace.events.map((event) => ({
-      Event: event.eventName,
-      Timestamp: `${event.timestamp.toFixed(2)}ms`,
-      Details: this.getEventDetails(event.eventName, event.payload),
-    }));
-
-    console.table(tableData);
-    console.groupEnd();
-  }
-
-  private getEventDetails(eventName: string, payload: any): string {
-    if (eventName.includes("query")) {
-      return `Key: ${payload.key}`;
-    } else if (eventName.includes("mutation")) {
-      if (eventName.includes("invalidation")) {
-        return `Queries: ${payload.queries?.length || 0}`;
-      }
-      return `Variables: ${JSON.stringify(payload.variables)}`;
-    } else if (eventName.includes("function")) {
-      return `Function: ${payload.name}`;
-    }
-    return "-";
-  }
-
-  /**
-   * Enable the logger
-   */
-  enable() {
-    if (!this.unsubscribe) {
-      this.setupListeners();
+    if (metrics.events.length > 0) {
+      const tableData = metrics.events.map((event) => ({
+        Event: event.name,
+        Timestamp: `+${event.timestamp.toFixed(2)}ms`,
+        Details: event.payload ? JSON.stringify(event.payload) : "-",
+      }));
+      console.table(tableData);
     }
   }
 
-  /**
-   * Disable the logger
-   */
-  disable() {
-    if (this.unsubscribe) {
-      this.unsubscribe();
-      this.unsubscribe = undefined;
-    }
-    this.traces.clear();
-  }
+  // ============================================
+  // FORMATTING HELPERS
+  // ============================================
 
-  /**
-   * Get current active traces (for debugging)
-   */
-  getActiveTraces() {
-    return Array.from(this.traces.values());
+  private capitalize(value: string): string {
+    if (value.length === 0) return value;
+    return value.charAt(0).toUpperCase() + value.slice(1);
   }
 }

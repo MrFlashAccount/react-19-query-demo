@@ -2,13 +2,13 @@ import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
 import { createBatcher, type Batch } from "./batcher";
 import { exponentialBackoff } from "./utils";
-import { eventEmitter } from "./EventEmitter";
+import { tracer, type Span } from "./tracing";
 import {
   type Context,
   type QueryDefinition,
   type QueryFnContext,
   getQueryInstanceKey,
-} from "./DependencyGraph";
+} from "./nodes/query";
 import { QueryPromise } from "./QueryPromise";
 
 /**
@@ -205,55 +205,50 @@ export class Query<
 
   /**
    * Execute the query
+   * @param parentSpan - Optional parent span for tracing
    * @returns Promise that resolves with the query data
    */
-  async fetch(parentScopeId?: string): Promise<TData> {
-    const scope = eventEmitter.createScope({ parentScopeId });
-
-    scope.emit("query:fetch:start", { key: this.serializedKey });
+  async fetch(parentSpan?: Span): Promise<TData> {
+    const span = parentSpan
+      ? parentSpan.child("query:fetch", { key: this.serializedKey })
+      : tracer.startSpan("query:fetch", { key: this.serializedKey });
 
     try {
       this.retrier.resume();
       const data = await this.currentPromise;
       this.retrier.pause();
 
-      scope.emit("query:fetch:success", {
-        key: this.serializedKey,
-      });
-
+      span.success();
       return data;
     } catch (error) {
-      scope.emit("query:fetch:error", {
-        key: this.serializedKey,
-        error,
-      });
+      span.error(error);
       throw error;
     }
   }
 
   prefetch(): void {
-    const scope = eventEmitter.createScope();
-
     if (
       this.currentPromise.value != null ||
       this.currentPromise.fetchStatus === "fetching"
     ) {
-      scope.emit("query:prefetch:success", { key: this.serializedKey });
+      // Already have data or fetching - emit success immediately
+      const span = tracer.startSpan("query:prefetch", {
+        key: this.serializedKey,
+      });
+      span.success();
       return;
     }
 
     const now = Date.now();
     this.prefetchedAt = now;
 
-    scope.emit("query:prefetch:start", {
+    const span = tracer.startSpan("query:prefetch", {
       key: this.serializedKey,
     });
 
-    void this.fetch(scope.scopeId)
+    void this.fetch(span)
       .then(() => {
-        scope.emit("query:prefetch:success", {
-          key: this.serializedKey,
-        });
+        span.success();
 
         this.timerWheel.schedule(() => {
           this.prefetchedAt = undefined;
@@ -270,10 +265,7 @@ export class Query<
         }, PREFETCH_FRESHNESS_TIME);
       })
       .catch((error) => {
-        scope.emit("query:prefetch:error", {
-          key: this.serializedKey,
-          error,
-        });
+        span.error(error);
       });
   }
 
@@ -448,8 +440,9 @@ export class Query<
   /**
    * Invalidate the query by resetting its state to pending
    * This forces a refetch on next access
+   * @param parentSpan - Optional parent span for tracing
    */
-  invalidate(parentScopeId?: string): Promise<TData> {
+  invalidate(parentSpan?: Span): Promise<TData> {
     // Only invalidate if not static
     if (this.staleTime !== "static") {
       this.currentPromise.dataUpdatedAt = undefined;
@@ -461,7 +454,7 @@ export class Query<
         this.retrier.resume();
         this.currentPromise = this.createFetcher();
 
-        return this.fetch(parentScopeId);
+        return this.fetch(parentSpan);
       }
     }
 

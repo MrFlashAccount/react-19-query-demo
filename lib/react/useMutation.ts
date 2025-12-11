@@ -1,5 +1,5 @@
 import { useOptimistic, useTransition } from "react";
-import type { MutationDefinition } from "../DependencyGraph";
+import type { MutationDefinition } from "../nodes/mutation";
 import type { QueryPromise } from "../QueryPromise";
 import { useEvent } from "./useEvent";
 import { useQueryContext } from "./QueryProvider";

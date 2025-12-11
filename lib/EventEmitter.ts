@@ -277,17 +277,6 @@ export interface EventsMap {
   "query:garbage-collect": { key: string };
 
   // Mutation events
-  "mutation:start": { variables: unknown; scopeId: string };
-  "mutation:success": {
-    variables: unknown;
-    data: unknown;
-    scopeId: string;
-  };
-  "mutation:error": {
-    variables: unknown;
-    error: unknown;
-    scopeId: string;
-  };
   "mutation:execution:start": { variables: unknown; scopeId: string };
   "mutation:execution:success": {
     variables: unknown;
@@ -318,7 +307,6 @@ export interface EventsMap {
   };
   "mutation:notify:start": { scopeId: string };
   "mutation:notify:success": { scopeId: string };
-
   "mutation:optimistic:start": { variables: unknown; scopeId: string };
   "mutation:optimistic:update": {
     variables: unknown;

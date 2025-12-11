@@ -1,5 +1,5 @@
 import { useDebugValue, useEffect } from "react";
-import { noop } from "../utils";
+import { getSerializedParams, noop, type WithSerializedParams } from "../utils";
 import { useQueryContext } from "./QueryProvider";
 import type { QueryState } from "../Query";
 import type {
@@ -8,35 +8,10 @@ import type {
   RejectedQueryPromise,
 } from "../QueryPromise";
 import {
-  serializeParams,
   type QueryData,
   type QueryDefinition,
   type QueryParams,
-  type SerializedParams,
-} from "../DependencyGraph";
-
-export const SERIALIZED_PARAMS_SYMBOL = Symbol("serializedParams");
-
-type WithSerializedParams<TParams> = TParams & {
-  [SERIALIZED_PARAMS_SYMBOL]: SerializedParams;
-};
-
-export function params<const TParams>(
-  params: TParams
-): WithSerializedParams<TParams> {
-  if ((params as any)[SERIALIZED_PARAMS_SYMBOL] !== undefined) {
-    return params as WithSerializedParams<TParams>;
-  }
-
-  Object.defineProperty(params, SERIALIZED_PARAMS_SYMBOL, {
-    value: serializeParams(params),
-    writable: false,
-    enumerable: false,
-    configurable: false,
-  });
-
-  return params as WithSerializedParams<TParams>;
-}
+} from "../nodes/query";
 
 /**
  * Options for useQuery hook with parameters
@@ -128,7 +103,7 @@ export function useQuery<
   const query = queryClient.addQueryRaw<QD, TParams, TData>(
     queryDefinition,
     params,
-    params[SERIALIZED_PARAMS_SYMBOL],
+    getSerializedParams(params),
     { prefetch: true }
   );
 

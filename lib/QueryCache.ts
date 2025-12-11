@@ -1,10 +1,7 @@
 import type { Query } from "./Query";
-import type {
-  QueryDefinition,
-  QueryParams,
-  SerializedParams,
-} from "./DependencyGraph";
-import { serializeParams } from "./DependencyGraph";
+import type { QueryDefinition, QueryParams } from "./nodes/query";
+import { serializeParams, type SerializedParams } from "./utils";
+import type { ICacheable } from "./nodes/types";
 
 /**
  * Query instances for a specific definition, indexed by serialized parameters
