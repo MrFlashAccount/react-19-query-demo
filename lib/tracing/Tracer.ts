@@ -4,11 +4,9 @@ import type {
   TraceEvent,
   TraceListener,
   LibrarySpanType,
-  SpanStartEvent,
-  SpanEndEvent,
-  SpanEvent,
+  NoopSpanType,
 } from "./types";
-import { noopcb } from "../utils";
+import { noop, noopcb } from "../utils";
 
 /**
  * Internal state for an active span
@@ -89,29 +87,31 @@ class TracerImpl<T extends SpanTypePattern = LibrarySpanType> {
 
     // Emit start event
     this.emit({
-      kind: "span:start",
+      kind: "start",
       spanId,
       parentSpanId,
       spanType,
       payload,
       timestamp,
-    } as SpanStartEvent<T>);
+    });
 
     let ended = false;
 
-    const span: Span = {
+    const span: Span<T> = {
+      spanType,
       spanId,
       parentSpanId,
 
       event: (name: string, eventPayload?: Record<string, unknown>) => {
         if (ended || !this.hasListeners()) return;
         this.emit({
-          kind: "span:event",
+          kind: "event",
           spanId,
           name,
+          parentSpanId,
           payload: eventPayload,
           timestamp: performance.now(),
-        } as SpanEvent);
+        });
       },
 
       success: (endPayload?: Record<string, unknown>) => {
@@ -119,12 +119,14 @@ class TracerImpl<T extends SpanTypePattern = LibrarySpanType> {
         ended = true;
         this.activeSpans.delete(spanId);
         this.emit({
-          kind: "span:end",
+          kind: "end",
           spanId,
           status: "success",
           payload: endPayload,
+          parentSpanId,
           timestamp: performance.now(),
-        } as SpanEndEvent);
+          spanType,
+        });
       },
 
       error: (error: unknown, endPayload?: Record<string, unknown>) => {
@@ -132,13 +134,15 @@ class TracerImpl<T extends SpanTypePattern = LibrarySpanType> {
         ended = true;
         this.activeSpans.delete(spanId);
         this.emit({
-          kind: "span:end",
+          kind: "end",
           spanId,
           status: "error",
           error,
           payload: endPayload,
+          parentSpanId,
           timestamp: performance.now(),
-        } as SpanEndEvent);
+          spanType,
+        });
       },
 
       child: <CT extends SpanTypePattern>(
@@ -157,12 +161,13 @@ class TracerImpl<T extends SpanTypePattern = LibrarySpanType> {
   }
 
   private createNoOpSpan(): Span {
-    const noOpSpan: Span = {
+    const noOpSpan: Span<NoopSpanType> = {
+      spanType: ":",
       spanId: "",
       parentSpanId: undefined,
-      event: () => {},
-      success: () => {},
-      error: () => {},
+      event: noop,
+      success: noop,
+      error: noop,
       child: () => noOpSpan,
     };
     return noOpSpan;
@@ -187,12 +192,13 @@ class TracerImpl<T extends SpanTypePattern = LibrarySpanType> {
  * Null tracer that does nothing - used in production builds
  */
 class NullTracer<T extends SpanTypePattern = LibrarySpanType> {
-  private noOpSpan: Span = {
+  private noOpSpan: Span<NoopSpanType> = {
+    spanType: ":",
     spanId: "",
     parentSpanId: undefined,
-    event: () => {},
-    success: () => {},
-    error: () => {},
+    event: noop,
+    success: noop,
+    error: noop,
     child: () => this.noOpSpan,
   };
 
@@ -228,7 +234,7 @@ export interface Tracer<T extends SpanTypePattern = LibrarySpanType> {
  * In production, returns a null tracer that does nothing.
  * In development, returns a full tracer implementation.
  */
-export function createTracer<
+function createTracer<
   T extends SpanTypePattern = LibrarySpanType
 >(): Tracer<T> {
   if (import.meta.env.DEV) {

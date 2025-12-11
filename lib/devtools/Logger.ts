@@ -13,6 +13,7 @@ import {
   getStatusColor,
   getCategoryIcon,
 } from "./constants";
+import { Batcher } from "./Batcher";
 
 /**
  * Internal metrics for an active span
@@ -56,6 +57,13 @@ export class Logger {
   private spans = new Map<string, SpanMetrics>();
   private unsubscribe: () => void = noop;
   private options: Required<LoggerOptions>;
+  private batcher = new Batcher<TraceEvent>({
+    onFlush: (events) => {
+      events.forEach((event) => {
+        this.handleEvent(event);
+      });
+    },
+  });
 
   constructor(options: LoggerOptions = {}) {
     this.options = {
@@ -70,7 +78,12 @@ export class Logger {
    */
   start(): void {
     if (this.unsubscribe !== noop) return;
-    this.unsubscribe = tracer.subscribe((event) => this.handleEvent(event));
+    this.unsubscribe = tracer.subscribe((event) => {
+      this.batcher.push(event);
+      if (event.kind === "end" && event.parentSpanId === undefined) {
+        this.batcher.flush();
+      }
+    });
   }
 
   /**
@@ -109,13 +122,13 @@ export class Logger {
 
   private handleEvent(event: TraceEvent): void {
     switch (event.kind) {
-      case "span:start":
+      case "start":
         this.handleSpanStart(event);
         break;
-      case "span:end":
+      case "end":
         this.handleSpanEnd(event);
         break;
-      case "span:event":
+      case "event":
         this.handleSpanEvent(event);
         break;
     }
@@ -214,8 +227,7 @@ export class Logger {
 
   private logSpanEnd(event: SpanEndEvent, duration: number): void {
     const statusColor = getStatusColor(event.status);
-    const icon =
-      event.status === "success" ? StatusIcons.success : StatusIcons.error;
+    const icon = StatusIcons[event.status];
     const statusLabel = event.status === "success" ? "Completed" : "Failed";
 
     console.log(
@@ -225,11 +237,11 @@ export class Logger {
     );
 
     if (event.status === "error" && event.error) {
-      console.error("  Error:", event.error);
+      console.error("   Error:", event.error);
     }
 
     if (this.options.showPayloadDetails && event.payload) {
-      console.log("  Result:", event.payload);
+      console.log("   Result:", event.payload);
     }
   }
 
@@ -262,18 +274,15 @@ export class Logger {
     endEvent: SpanEndEvent,
     duration: number
   ): void {
-    console.log(
-      `%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `color: ${UIColors.separator};`
-    );
-    console.log(
+    console.groupCollapsed(
       `%cSpan Summary`,
       `color: ${UIColors.separator}; font-weight: bold;`
     );
-    console.log(`  Type: ${metrics.spanType}`);
-    console.log(`  Status: ${endEvent.status}`);
-    console.log(`  Duration: ${duration.toFixed(2)}ms`);
-    console.log(`  Events: ${metrics.events.length}`);
+    console.log(`Type: ${metrics.spanType}`);
+    console.log(`Status: ${StatusIcons[endEvent.status]} ${endEvent.status}`);
+    console.log(`Duration: ${duration.toFixed(2)}ms`);
+    console.log(`Events: ${metrics.events.length}`);
+    console.groupEnd();
 
     if (metrics.events.length > 0) {
       const tableData = metrics.events.map((event) => ({

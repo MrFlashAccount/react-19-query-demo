@@ -10,6 +10,7 @@ export type {
   TraceEvent,
   Span,
   TraceListener,
+  NoopSpanType,
 } from "./types";
 
-export { tracer, createTracer, type Tracer } from "./Tracer";
+export { tracer, type Tracer } from "./Tracer";

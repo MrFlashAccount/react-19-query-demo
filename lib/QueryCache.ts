@@ -10,20 +10,7 @@ type ParamMap = Map<string, Query<any, any>>;
 
 /**
  * Unified query cache using query definitions as direct references.
- *
  * Structure: QueryDefinition → Serialized Params → Query Instance
- *
- * This eliminates the need for:
- * - Query keys (array-based)
- * - Definition indices
- * - Manual key management
- *
- * Benefits:
- * - Direct reference lookup (no index indirection)
- * - Type-safe query access through definitions
- * - Efficient invalidation by definition (all param combinations)
- * - O(1) lookup by definition + params
- * - Automatic parameter serialization
  *
  * @example
  * ```typescript

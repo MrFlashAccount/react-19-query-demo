@@ -49,7 +49,6 @@ export {
 // Tracing system
 export {
   tracer,
-  createTracer,
   type Tracer,
   type Span,
   type SpanTypePattern,

@@ -12,7 +12,7 @@ export interface ColorDefinition {
   /** Chrome DevTools performance panel color name */
   devtools: string;
   /** Hex color for console styling */
-  hex: string;
+  hex: `#${string}`;
 }
 
 /**
@@ -81,9 +81,9 @@ export const UIColors = {
  */
 export const CategoryIcons = {
   query: "🔍",
-  mutation: "✏️",
+  mutation: "⚛️",
   client: "🗄️",
-  default: "📦",
+  default: "🐐",
 } as const;
 
 /**

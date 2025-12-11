@@ -37,10 +37,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     | number
     | ((failureCount: number, error: unknown) => number);
   private retrier: Retrier;
-  private mutationFn: (
-    params: TParams,
-    parentSpan: Span
-  ) => QueryPromise<TResult>;
+  private mutationFn: (params: TParams) => QueryPromise<TResult>;
 
   constructor(
     mutationDefinition: MutationDefinition<TParams, TResult>,
@@ -77,17 +74,32 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     };
   }
 
-  private createMutationFn(): (
-    params: TParams,
-    parentSpan: Span
-  ) => QueryPromise<TResult> {
-    return (params: TParams, parentSpan: Span) => {
+  private createMutationFn(): (params: TParams) => QueryPromise<TResult> {
+    return (params: TParams) => {
+      // Create the main execution span
+      const span = tracer.startSpan("mutation:execute", {
+        variables: params,
+      });
+
+      this.applyOptimisticUpdates(params, span);
+
       return this.retrier.execute(() => {
+        const executeSpan = span.child("mutation:mutate", {
+          variables: params,
+        });
+
         return this.mutationDefinition.config
           .mutationFn(params, this.environment.context)
           .then(async (result) => {
-            await this.invalidateDependencies(params, result, parentSpan);
+            executeSpan.success({ data: result });
+            await this.invalidateDependencies(params, result, span);
+            span.success({ data: result });
             return result;
+          })
+          .catch((error) => {
+            executeSpan.error(error);
+            span.error(error);
+            throw error;
           })
           .finally(() => {
             this.retrier.pause();
@@ -97,26 +109,8 @@ export class Mutation<TParams = unknown, TResult = unknown> {
   }
 
   mutate(params: TParams): QueryPromise<TResult> {
-    // Create the main execution span
-    const span = tracer.startSpan("mutation:execute", {
-      variables: params,
-    });
-
-    this.applyOptimisticUpdates(params, span);
     this.retrier.resume();
-
-    const promise = this.mutationFn(params, span);
-
-    // End span on completion (non-blocking)
-    promise
-      .then((result) => {
-        span.success({ data: result });
-      })
-      .catch((error) => {
-        span.error(error);
-      });
-
-    return promise;
+    return this.mutationFn(params);
   }
 
   private async invalidateDependencies(

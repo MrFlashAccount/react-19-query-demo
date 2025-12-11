@@ -4,8 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "pnpm run \"/dev:.*/\"",
+    "dev:watch": "vite",
+    "dev:sw": "vite build --config vite.config.sw.ts --watch",
+    "build": "pnpm run build:sw && vite build",
+    "build:sw": "vite build --config vite.config.sw.ts",
     "type-check": "tsgo --noEmit --isolatedDeclarations",
     "preview": "vite preview",
     "test": "vitest",

@@ -1,12 +1,9 @@
-// ============================================
-// SPAN TYPE DEFINITIONS
-// ============================================
-
 /**
  * Enforce "category:action" pattern for span types.
  * This ensures all span types follow a consistent naming convention.
  */
 export type SpanTypePattern = `${string}:${string}`;
+export type NoopSpanType = ":";
 
 /**
  * Query-related span types
@@ -18,6 +15,7 @@ export type QuerySpanType = "query:fetch" | "query:prefetch";
  */
 export type MutationSpanType =
   | "mutation:execute"
+  | "mutation:mutate"
   | "mutation:invalidate"
   | "mutation:optimistic";
 
@@ -30,7 +28,11 @@ export type ClientSpanType = "client:invalidation";
  * All library-defined span types.
  * Users can extend this by using the generic Tracer with their own types.
  */
-export type LibrarySpanType = QuerySpanType | MutationSpanType | ClientSpanType;
+export type LibrarySpanType =
+  | QuerySpanType
+  | MutationSpanType
+  | ClientSpanType
+  | NoopSpanType;
 
 // ============================================
 // TRACE EVENT TYPES
@@ -41,9 +43,9 @@ export type LibrarySpanType = QuerySpanType | MutationSpanType | ClientSpanType;
  * @template T - The span type pattern (defaults to any valid pattern)
  */
 export interface SpanStartEvent<T extends SpanTypePattern = SpanTypePattern> {
-  readonly kind: "span:start";
+  readonly kind: "start";
   readonly spanId: string;
-  readonly parentSpanId?: string;
+  readonly parentSpanId: string | undefined;
   readonly spanType: T;
   readonly payload: Record<string, unknown>;
   readonly timestamp: number;
@@ -53,10 +55,12 @@ export interface SpanStartEvent<T extends SpanTypePattern = SpanTypePattern> {
  * Event emitted when a span ends.
  * Status is either "success" or "error" - no "pending" state.
  */
-export interface SpanEndEvent {
-  readonly kind: "span:end";
+export interface SpanEndEvent<T extends SpanTypePattern = SpanTypePattern> {
+  readonly kind: "end";
   readonly spanId: string;
+  readonly parentSpanId: string | undefined;
   readonly status: "success" | "error";
+  readonly spanType: T;
   readonly error?: unknown;
   readonly payload?: Record<string, unknown>;
   readonly timestamp: number;
@@ -66,8 +70,9 @@ export interface SpanEndEvent {
  * Intermediate event emitted during a span's lifetime.
  */
 export interface SpanEvent {
-  readonly kind: "span:event";
+  readonly kind: "event";
   readonly spanId: string;
+  readonly parentSpanId: string | undefined;
   readonly name: string;
   readonly payload?: Record<string, unknown>;
   readonly timestamp: number;
@@ -90,7 +95,10 @@ export type TraceEvent<T extends SpanTypePattern = SpanTypePattern> =
  * A handle to an active span.
  * Provides methods to record events and end the span.
  */
-export interface Span {
+export interface Span<T extends SpanTypePattern = SpanTypePattern> {
+  /** Type of the span */
+  readonly spanType: T;
+
   /** Unique identifier for this span */
   readonly spanId: string;
 

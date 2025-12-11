@@ -4,15 +4,6 @@ const DEFAULT_LIMIT = 500;
 const decoder = new TextDecoder();
 let worker: Worker | null = null;
 
-// Register custom Service Worker for API interception
-if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-  navigator.serviceWorker
-    .register("/movieApi.service-worker.js", { scope: "/" })
-    .catch((error) => {
-      console.error("Failed to register service worker:", error);
-    });
-}
-
 async function getWorker(): Promise<Worker> {
   if (worker == null) {
     worker = await import("./movieApi.worker.ts?worker").then(
@@ -59,7 +50,6 @@ function sendWorkerMessage<T>(
   return new Promise(async (resolve, reject) => {
     const worker = await getWorker();
     const id = `${Date.now()}-${Math.random()}`;
-    const startRequest = performance.now();
 
     const messageHandler = (event: MessageEvent<WorkerResponse>) => {
       if (event.data.id !== id) {
@@ -67,87 +57,12 @@ function sendWorkerMessage<T>(
       }
 
       worker.removeEventListener("message", messageHandler);
-      const endRequest = performance.now();
-
-      performance.measure(`${type} Request Time`, {
-        start: startRequest,
-        end: endRequest,
-        detail: {
-          devtools: {
-            track: `${type}`,
-            properties: [
-              ["ID", id],
-              ["Type", type],
-              ["Payload", JSON.stringify(payload)],
-            ],
-            color: "primary",
-            trackGroup: "API Calls",
-          },
-        },
-      });
 
       if (event.data.type === "error") {
         reject(new Error(event.data.error));
       } else {
-        let start = performance.now();
         const jsonString = decoder.decode(event.data.data);
-        let end = performance.now();
-        performance.measure(`${type} Response Decoding`, {
-          start,
-          end,
-          detail: {
-            devtools: {
-              track: `${type}`,
-              trackGroup: "API Calls",
-              properties: [
-                ["ID", id],
-                ["Type", type],
-                ["Payload", JSON.stringify(payload)],
-              ],
-              color: "primary",
-            },
-          },
-        });
-
-        start = performance.now();
         const parsed = JSON.parse(jsonString);
-        end = performance.now();
-        performance.measure(`${type} Response Parsing`, {
-          start,
-          end,
-          detail: {
-            devtools: {
-              track: `${type}`,
-              trackGroup: "API Calls",
-              properties: [
-                ["ID", id],
-                ["Type", type],
-                ["Payload", JSON.stringify(payload)],
-              ],
-              color: "primary",
-            },
-          },
-        });
-
-        const totalEnd = performance.now();
-        performance.measure(`${type} Total Time`, {
-          start: startRequest,
-          end: totalEnd,
-          detail: {
-            devtools: {
-              track: `${type}`,
-              trackGroup: "API Calls",
-              properties: [
-                ["ID", id],
-                ["Type", type],
-                ["Payload", JSON.stringify(payload)],
-                ["Time", totalEnd - startRequest],
-              ],
-              color: "primary",
-            },
-          },
-        });
-
         resolve(parsed as T);
       }
     };

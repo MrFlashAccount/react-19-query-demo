@@ -7,7 +7,6 @@ import {
   useDebugValue,
 } from "react";
 import { QueryClient, type QueryClientContext } from "../QueryClient";
-import { eventEmitter } from "../EventEmitter";
 import { type DependencyGraph } from "../DependencyGraph";
 import { useDebugFormattedQuery } from "../devtools/useDebugFormattedQuery";
 
@@ -61,7 +60,6 @@ export function QueryProvider(props: QueryProviderProps) {
 function useQueryProviderFactory(props: QueryProviderProps) {
   const [queryClient, setQueryClient] = useState(() => {
     const onChange = (newInstance: QueryClient) => {
-      eventEmitter.emit("client:change", { client: newInstance });
       startTransition(() => {
         setQueryClient(newInstance);
       });

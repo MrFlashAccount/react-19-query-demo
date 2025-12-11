@@ -1,5 +1,5 @@
-import { useState, Suspense, lazy } from "react";
-import { Loader, TabSelector } from "./components/shared";
+import { useState, lazy } from "react";
+import { TabSelector } from "./components/shared";
 import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
 import type { MovieApi } from "./api/types";
 
@@ -47,7 +47,7 @@ export default function App() {
   };
 
   return (
-    <Suspense fallback={<Loader />}>
+    <>
       <div className="min-h-screen bg-white">
         {/* Header */}
         <div className="text-center pt-12 mb-12 md:pt-16 md:mb-12">
@@ -94,6 +94,6 @@ export default function App() {
         })()}
       </div>
       {showLagRadar && <LazyLagRadar />}
-    </Suspense>
+    </>
   );
 }

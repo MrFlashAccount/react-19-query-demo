@@ -5,7 +5,9 @@ import {
   type SpanEndEvent,
   type SpanEvent,
 } from "../tracing";
-import { StatusIcons, getDevtoolsColor } from "./constants";
+import { noop } from "../utils";
+import { Batcher } from "./Batcher";
+import { StatusIcons, getCategoryIcon, getDevtoolsColor } from "./constants";
 
 /**
  * Internal metrics for an active span
@@ -66,8 +68,15 @@ export interface MeasurerOptions {
  */
 export class Measurer {
   private spans = new Map<string, SpanMetrics>();
-  private unsubscribe?: () => void;
+  private unsubscribe: () => void = noop;
   private options: Required<MeasurerOptions>;
+  private batcher = new Batcher<TraceEvent<any>>({
+    onFlush: (events) => {
+      events.forEach((event) => {
+        this.handleEvent(event);
+      });
+    },
+  });
 
   constructor(options: MeasurerOptions = {}) {
     this.options = {
@@ -82,16 +91,24 @@ export class Measurer {
    * Start listening to trace events
    */
   start(): void {
-    if (this.unsubscribe) return;
-    this.unsubscribe = tracer.subscribe((event) => this.handleEvent(event));
+    if (this.unsubscribe !== noop) return;
+
+    this.unsubscribe = tracer.subscribe((event) => {
+      this.batcher.push(event);
+      // If the span is the last event of a root span, flush the batcher
+      if (event.kind === "end" && event.parentSpanId === undefined) {
+        this.batcher.flush();
+      }
+    });
   }
 
   /**
    * Stop listening and clear all state
    */
   stop(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
+    this.unsubscribe();
+    this.batcher.flushSync();
+    this.unsubscribe = noop;
     this.spans.clear();
   }
 
@@ -137,20 +154,15 @@ export class Measurer {
     return Array.from(this.spans.values());
   }
 
-  // ============================================
-  // EVENT HANDLING - No string parsing needed!
-  // ============================================
-
   private handleEvent(event: TraceEvent): void {
-    // Simple switch on discriminated union - no string parsing!
     switch (event.kind) {
-      case "span:start":
+      case "start":
         this.handleSpanStart(event);
         break;
-      case "span:end":
+      case "end":
         this.handleSpanEnd(event);
         break;
-      case "span:event":
+      case "event":
         this.handleSpanEvent(event);
         break;
     }
@@ -186,13 +198,12 @@ export class Measurer {
       try {
         const duration = event.timestamp - metrics.startTime;
         const [category, action] = metrics.spanType.split(":");
-        const icon =
-          event.status === "success" ? StatusIcons.success : StatusIcons.error;
+        const icon = getCategoryIcon(category);
         const label = this.formatLabel(category, action, metrics.payload);
 
         performance.measure(`${icon} ${label}`, {
-          start: metrics.startMark,
-          end: endMark,
+          start: metrics.startTime,
+          end: event.timestamp,
           detail: {
             devtools: this.buildDevtoolsDetail(
               event.status,
@@ -288,7 +299,7 @@ export class Measurer {
     action: string,
     payload: Record<string, unknown>
   ): string {
-    const base = `${this.capitalize(category)} ${this.capitalize(action)}`;
+    const base = `${this.capitalize(category)} • ${this.capitalize(action)}`;
 
     // Add key if present (common for queries)
     if (payload.key !== undefined) {
