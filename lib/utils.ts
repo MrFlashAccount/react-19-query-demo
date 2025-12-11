@@ -1,5 +1,6 @@
-export function noop(..._args: any[]): void {}
-export async function noopAsync(..._args: any[]): Promise<void> {}
+export const noop = (..._args: any[]) => {};
+export const noopcb = () => noop;
+export const noopAsync = async (..._args: any[]) => {};
 
 /**
  * Exponential backoff formula:
@@ -14,5 +15,5 @@ export function exponentialBackoff(
   attempts: number,
   max: number = Infinity
 ): number {
-  return Math.min(base * Math.pow(2, attempts - 1), max);
+  return Math.min(base * 2 ** (attempts - 1), max);
 }

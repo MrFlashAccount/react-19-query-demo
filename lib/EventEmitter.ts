@@ -1,3 +1,5 @@
+import { noop, noopcb } from "./utils";
+
 export type Listener<T> = (payload: T) => void;
 
 export interface CreateScopeOptions {
@@ -40,7 +42,7 @@ interface EventEmitterBase {
     listener: Listener<EventsMap[K]>
   ): void;
   emit<K extends keyof EventsMap>(key: K, payload: EventsMap[K]): void;
-  createScope(options: CreateScopeOptions): ScopedEmitter<EventsMap>;
+  createScope(options?: CreateScopeOptions): ScopedEmitter<EventsMap>;
   onScope(listener: Listener<ScopeEvent>): () => void;
   onScopeStart(
     handler: (
@@ -51,44 +53,53 @@ interface EventEmitterBase {
   ): () => void;
 }
 
-class EventEmitter<EventMap extends Record<string, any>>
-  implements EventEmitterBase
-{
-  private listeners: Partial<Record<keyof EventMap, Set<Listener<any>>>> = {};
-  private scopeListeners: Set<Listener<ScopeEvent>> = new Set();
-  private scopeSubscribers: Map<string, Set<(event: ScopeEvent) => void>> =
-    new Map();
-  private scopeParents: Map<string, string | undefined> = new Map();
+function eventEmitterFactory<
+  EventMap extends Record<string, any>
+>(): EventEmitterBase {
+  const listeners: Partial<Record<keyof EventMap, Set<Listener<any>>>> = {};
+  const scopeListeners: Set<Listener<ScopeEvent>> = new Set();
+  const scopeSubscribers: Map<
+    string,
+    Set<(event: ScopeEvent) => void>
+  > = new Map();
+  const scopeParents: Map<string, string | undefined> = new Map();
 
-  on<K extends keyof EventMap>(
+  function hasListeners(): boolean {
+    return scopeListeners.size > 0 || scopeSubscribers.size > 0;
+  }
+
+  function on<K extends keyof EventMap>(
     key: K,
     listener: Listener<EventMap[K]>
   ): () => void {
-    if (!this.listeners[key]) {
-      this.listeners[key] = new Set();
+    if (!listeners[key]) {
+      listeners[key] = new Set();
     }
-    this.listeners[key]!.add(listener);
+    listeners[key]!.add(listener);
 
     return () => {
-      this.off(key, listener);
+      off(key, listener);
     };
   }
 
-  off<K extends keyof EventMap>(key: K, listener: Listener<EventMap[K]>): void {
-    this.listeners[key]?.delete(listener);
+  function off<K extends keyof EventMap>(
+    key: K,
+    listener: Listener<EventMap[K]>
+  ): void {
+    listeners[key]?.delete(listener);
   }
 
-  emit<K extends keyof EventMap>(key: K, payload: EventMap[K]): void {
-    if (!this.hasListeners()) {
+  function emit<K extends keyof EventMap>(key: K, payload: EventMap[K]): void {
+    if (!hasListeners()) {
       return;
     }
 
-    this.listeners[key]?.forEach((listener) => listener(payload));
+    listeners[key]?.forEach((listener) => listener(payload));
 
     // Also emit to scope listeners if scopeId is present
     if (payload && typeof payload === "object" && "scopeId" in payload) {
       const scopeId = (payload as any).scopeId;
-      const parentScopeId = this.scopeParents.get(scopeId);
+      const parentScopeId = scopeParents.get(scopeId);
       const scopeEvent: ScopeEvent = {
         scopeId,
         parentScopeId,
@@ -97,19 +108,21 @@ class EventEmitter<EventMap extends Record<string, any>>
       };
 
       // Emit to global scope listeners
-      this.scopeListeners.forEach((listener) => listener(scopeEvent));
+      scopeListeners.forEach((listener) => listener(scopeEvent));
 
       // Emit to scope-specific subscribers
-      const scopeListeners = this.scopeSubscribers.get(scopeId);
-      if (scopeListeners) {
-        scopeListeners.forEach((listener) => listener(scopeEvent));
+      const scopeSpecificListeners = scopeSubscribers.get(scopeId);
+      if (scopeSpecificListeners) {
+        scopeSpecificListeners.forEach((listener) => listener(scopeEvent));
       }
     }
   }
 
-  createScope(options: CreateScopeOptions = {}): ScopedEmitter<EventMap> {
+  function createScope(
+    options: CreateScopeOptions = {}
+  ): ScopedEmitter<EventMap> {
     const scopeId = generateScopeId();
-    this.scopeParents.set(scopeId, options.parentScopeId);
+    scopeParents.set(scopeId, options.parentScopeId);
 
     const createScopedEmitter = (
       id: string,
@@ -122,17 +135,16 @@ class EventEmitter<EventMap extends Record<string, any>>
           key: K,
           payload: Omit<EventMap[K], "scopeId">
         ) => {
-          this.emit(key, { ...payload, scopeId: id } as EventMap[K]);
+          emit(key, { ...payload, scopeId: id } as EventMap[K]);
         },
         createChildScope: (
           childOptions: Omit<CreateScopeOptions, "parentScopeId"> & {
             parentScopeId?: string;
           } = {}
-        ) => {
-          return this.createScope({
+        ) =>
+          createScope({
             parentScopeId: childOptions.parentScopeId ?? id,
-          });
-        },
+          }),
       };
     };
 
@@ -142,10 +154,10 @@ class EventEmitter<EventMap extends Record<string, any>>
   /**
    * Subscribe to all events across all scopes
    */
-  onScope(listener: Listener<ScopeEvent>): () => void {
-    this.scopeListeners.add(listener);
+  function onScope(listener: Listener<ScopeEvent>): () => void {
+    scopeListeners.add(listener);
     return () => {
-      this.scopeListeners.delete(listener);
+      scopeListeners.delete(listener);
     };
   }
 
@@ -171,7 +183,7 @@ class EventEmitter<EventMap extends Record<string, any>>
    * });
    * ```
    */
-  onScopeStart(
+  function onScopeStart(
     handler: (
       scopeId: string,
       subscribeToScope: (listener: (event: ScopeEvent) => void) => () => void,
@@ -188,21 +200,21 @@ class EventEmitter<EventMap extends Record<string, any>>
         // Create a subscription function for this specific scope
         const subscribeToScope = (listener: (event: ScopeEvent) => void) => {
           // Create a Set for this scope if it doesn't exist
-          if (!this.scopeSubscribers.has(event.scopeId)) {
-            this.scopeSubscribers.set(event.scopeId, new Set());
+          if (!scopeSubscribers.has(event.scopeId)) {
+            scopeSubscribers.set(event.scopeId, new Set());
           }
 
-          const scopeListeners = this.scopeSubscribers.get(event.scopeId)!;
-          scopeListeners.add(listener);
+          const scopeSpecificListeners = scopeSubscribers.get(event.scopeId)!;
+          scopeSpecificListeners.add(listener);
 
           // Return unsubscribe function
           return () => {
-            scopeListeners.delete(listener);
+            scopeSpecificListeners.delete(listener);
             // Clean up empty sets
-            if (scopeListeners.size === 0) {
-              this.scopeSubscribers.delete(event.scopeId);
+            if (scopeSpecificListeners.size === 0) {
+              scopeSubscribers.delete(event.scopeId);
               activeScopeIds.delete(event.scopeId);
-              this.scopeParents.delete(event.scopeId);
+              scopeParents.delete(event.scopeId);
             }
           };
         };
@@ -212,18 +224,23 @@ class EventEmitter<EventMap extends Record<string, any>>
       }
     };
 
-    this.scopeListeners.add(scopeListener);
+    scopeListeners.add(scopeListener);
 
     // Return cleanup function
     return () => {
-      this.scopeListeners.delete(scopeListener);
+      scopeListeners.delete(scopeListener);
       activeScopeIds.clear();
     };
   }
 
-  private hasListeners(): boolean {
-    return this.scopeListeners.size > 0 || this.scopeSubscribers.size > 0;
-  }
+  return {
+    on,
+    off,
+    emit,
+    createScope,
+    onScope,
+    onScopeStart,
+  };
 }
 
 export interface EventsMap {
@@ -322,53 +339,31 @@ export interface EventsMap {
 
   // QueryClient events
   "client:change": { client: any };
-
-  // Generic function execution events
-  "function:pending": {
-    name: string;
-    args: any[];
-    scopeId: string;
-  };
-  "function:success": {
-    name: string;
-    args: any[];
-    result: any;
-    scopeId: string;
-  };
-  "function:error": {
-    name: string;
-    args: any[];
-    error: unknown;
-    scopeId: string;
-  };
 }
-class NullEventEmitter<EventMap extends Record<string, any>>
-  implements EventEmitterBase
-{
-  on(): () => void {
-    return () => {};
-  }
-  off(): void {}
-  emit(): void {}
-  createScope(): ScopedEmitter<EventsMap> {
+function nullEmitterFactory<
+  EventMap extends Record<string, any>
+>(): EventEmitterBase {
+  function createScope(): ScopedEmitter<EventMap> {
     return {
       scopeId: "",
       parentScopeId: undefined,
-      emit: () => {},
-      createChildScope: () => this.createScope(),
+      emit: noop,
+      createChildScope: createScope,
     };
   }
-  onScope(): () => void {
-    return () => {};
-  }
-  onScopeStart(): () => void {
-    return () => {};
-  }
+  return {
+    on: noopcb,
+    off: noop,
+    emit: noop,
+    createScope,
+    onScope: noopcb,
+    onScopeStart: noopcb,
+  };
 }
 
 export const eventEmitter = import.meta.env.DEV
-  ? new EventEmitter<EventsMap>()
-  : new NullEventEmitter<EventsMap>();
+  ? eventEmitterFactory<EventsMap>()
+  : nullEmitterFactory<EventsMap>();
 
 function generateScopeId(): string {
   return `${Math.random().toString(36)}-${Date.now().toString(36)}`;

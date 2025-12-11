@@ -148,6 +148,6 @@ export class QueryPromise<TData> {
   }
 
   get [Symbol.toStringTag]() {
-    return "Promise";
+    return "QueryPromise";
   }
 }
