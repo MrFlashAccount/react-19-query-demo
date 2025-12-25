@@ -32,9 +32,14 @@ export interface QueryDefinition<TParams = unknown, TData = unknown> {
 export type AnyQueryDefinition = QueryDefinition<any, any>;
 
 export type QueryFn<QD extends AnyQueryDefinition> = QD["config"]["queryFn"];
-export type QueryFnResult<QD extends AnyQueryDefinition> = ReturnType<QueryFn<QD>>;
-export type QueryParams<QD extends AnyQueryDefinition> = Parameters<QueryFn<QD>>[0];
-export type QueryData<QD extends AnyQueryDefinition> = QueryFnResult<QD> extends Promise<infer T> ? T : never;
+export type QueryFnResult<QD extends AnyQueryDefinition> = ReturnType<
+  QueryFn<QD>
+>;
+export type QueryParams<QD extends AnyQueryDefinition> = Parameters<
+  QueryFn<QD>
+>[0];
+export type QueryData<QD extends AnyQueryDefinition> =
+  QueryFnResult<QD> extends Promise<infer T> ? T : never;
 
 /**
  * Creates a query definition that can be registered in a dependency graph.

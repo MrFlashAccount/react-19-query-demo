@@ -66,12 +66,14 @@ export class QueryClient {
   private graph: DependencyGraph;
   private onChange: (newInstance: QueryClient) => void;
   private context: Readonly<QueryClientContext>;
+  private eventTarget: EventTarget;
 
   constructor(options: QueryClientOptions) {
     this.graph = options.graph;
     this._cache = options.cache || new QueryCache();
     this.onChange = options.onChange ?? noop;
     this.context = options.context ?? ({} as Readonly<QueryClientContext>);
+    this.eventTarget = new EventTarget();
   }
 
   getContext(): typeof this.context {
@@ -126,6 +128,14 @@ export class QueryClient {
   }
 
   /**
+   * Signal that React's commit phase has completed.
+   * Executes and clears all pending commit listeners.
+   */
+  commit(): void {
+    this.eventTarget.dispatchEvent(new CustomEvent("commit"));
+  }
+
+  /**
    * Add a query instance to the cache. If an instance with the same definition + params
    * already exists, returns the existing instance.
    *
@@ -156,6 +166,7 @@ export class QueryClient {
         this.handleQueryGarbageCollect(queryDefinition, params);
       },
       context: this.context,
+      commitTarget: this.eventTarget,
     });
 
     this._cache.set(queryDefinition, params, entry);
@@ -191,6 +202,7 @@ export class QueryClient {
         this.handleQueryGarbageCollect(queryDefinition, params);
       },
       context: this.context,
+      commitTarget: this.eventTarget,
     });
 
     this._cache.set(queryDefinition, params, entry);

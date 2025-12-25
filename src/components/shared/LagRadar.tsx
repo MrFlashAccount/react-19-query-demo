@@ -29,13 +29,13 @@ export function LagRadar() {
 
     window.visualViewport?.addEventListener(
       "resize",
-      handleVisualViewportChange
+      handleVisualViewportChange,
     );
 
     return () =>
       window.visualViewport?.removeEventListener(
         "visualviewportchange",
-        handleVisualViewportChange
+        handleVisualViewportChange,
       );
   }, []);
 

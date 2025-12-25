@@ -1,6 +1,6 @@
 import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
-import { createBatcher, type Batch } from "./batcher";
+import { createOncePerTick, type OncePerTick } from "./batcher";
 import { exponentialBackoff } from "./utils";
 import { tracer, type Span } from "./tracing";
 import {
@@ -10,6 +10,7 @@ import {
   getQueryInstanceKey,
 } from "./nodes/query";
 import { QueryPromise } from "./QueryPromise";
+import { Batcher } from "./devtools/Batcher";
 
 /**
  * Query state tracking
@@ -32,6 +33,7 @@ export interface QueryState<TData> {
 interface QueryEnvironment {
   onRemove: () => void;
   context: Context;
+  commitTarget: EventTarget;
 }
 
 const PREFETCH_FRESHNESS_TIME = 1000 * 5; // 5 seconds
@@ -56,11 +58,13 @@ export class Query<
 
   // Retrier
   private retrier: Retrier;
-  private batch: Batch;
+  private oncePerTick: OncePerTick;
+  private batcher: Batcher<() => void>;
 
   // Promise tracking
   private currentPromise: QueryPromise<TData>;
   private environment: QueryEnvironment;
+  private abortController: AbortController;
 
   // Resolved options from the definition
   private readonly gcTime: number;
@@ -91,7 +95,14 @@ export class Query<
     this.params = params;
     this.environment = environment;
     this.timerWheel = timerWheel;
-    this.batch = createBatcher();
+    this.oncePerTick = createOncePerTick();
+    this.batcher = new Batcher<() => void>({
+      onFlush: (callbacks) => {
+        for (const callback of callbacks) {
+          callback();
+        }
+      },
+    });
 
     // Generate cache key from definition + params
     this.serializedKeyValue = getQueryInstanceKey(params);
@@ -110,9 +121,11 @@ export class Query<
       retry: this.retry,
       retryDelay: this.retryDelay,
     });
+    this.abortController = new AbortController();
 
     this.retrier.pause();
     this.currentPromise = this.createFetcher();
+    this.startObservingCommitEffects(this.abortController.signal);
   }
 
   /**
@@ -188,15 +201,12 @@ export class Query<
     // Create new promise with retrier (before notifying to ensure deduplication)
     const promise = this.retrier
       .execute(({ signal }) => {
-        this.notifySubscribers();
-
         const ctx: QueryFnContext = { ...this.environment.context, signal };
 
         // Call queryFn with params from definition
         return this.queryDefinition.config.queryFn(this.params, ctx);
       }, QueryPromise)
       .finally(() => {
-        this.notifySubscribers();
         this.scheduleGC();
       }) as QueryPromise<TData>;
 
@@ -209,9 +219,10 @@ export class Query<
    * @returns Promise that resolves with the query data
    */
   async fetch(parentSpan?: Span): Promise<TData> {
+    const spanParams = { key: this.serializedKey };
     const span = parentSpan
-      ? parentSpan.child("query:fetch", { key: this.serializedKey })
-      : tracer.startSpan("query:fetch", { key: this.serializedKey });
+      ? parentSpan.child("query:fetch", spanParams)
+      : tracer.startSpan("query:fetch", spanParams);
 
     try {
       this.retrier.resume();
@@ -231,11 +242,6 @@ export class Query<
       this.currentPromise.value != null ||
       this.currentPromise.fetchStatus === "fetching"
     ) {
-      // Already have data or fetching - emit success immediately
-      const span = tracer.startSpan("query:prefetch", {
-        key: this.serializedKey,
-      });
-      span.success();
       return;
     }
 
@@ -250,19 +256,24 @@ export class Query<
       .then(() => {
         span.success();
 
-        this.timerWheel.schedule(() => {
-          this.prefetchedAt = undefined;
+        // Defer timer start until after the commit phase.
+        // This prevents false-positive warnings when fetch completes
+        // before React finishes its render phase in concurrent mode.
+        this.batcher.push(() => {
+          this.timerWheel.schedule(() => {
+            if (this.subscribers.size > 0 || this.prefetchedAt === undefined) {
+              return;
+            }
 
-          if (this.subscribers.size > 0) {
-            return;
-          }
+            this.prefetchedAt = undefined;
 
-          if (import.meta.env.DEV) {
-            console.warn(`Query with key ${this.serializedKey} was prefetched but not used 
-            within a few seconds.
+            if (import.meta.env.DEV) {
+              console.warn(`⚠️ Query with key ${this.serializedKey} was prefetched but not used 
+            within a few seconds after the commit event.
             Please make sure the key is in use and it is preloaded intentionally`);
-          }
-        }, PREFETCH_FRESHNESS_TIME);
+            }
+          }, PREFETCH_FRESHNESS_TIME);
+        });
       })
       .catch((error) => {
         span.error(error);
@@ -317,14 +328,19 @@ export class Query<
       }
     }
 
-    // Batcher caches the `isStale` value on the first call,
+    if (this.prefetchedAt != null) {
+      this.prefetchedAt = undefined;
+    }
+
+    // oncePerTick caches the `isStale` value on the first call,
     // And keep it until the execution of the callback.
     // So we're sure we cached the value in the beginning of the task,
     // this makes multiple calls of subscribe keep the same value of `isStale`.
     // So we don't refetch the query if it wasn't stale when the first call of subscribe was made.
-    this.batch(() => {
+    this.oncePerTick(() => {
       if (isStale && this.currentPromise.status === "fulfilled") {
-        void this.createFetcher();
+        this.currentPromise = this.createFetcher();
+        void this.fetch();
       }
     });
 
@@ -361,6 +377,14 @@ export class Query<
     }
   }
 
+  private startObservingCommitEffects(abortSignal: AbortSignal): void {
+    this.environment.commitTarget.addEventListener(
+      "commit",
+      () => this.batcher.flush(),
+      { signal: abortSignal }
+    );
+  }
+
   /**
    * Get the number of active subscribers
    */
@@ -370,6 +394,7 @@ export class Query<
 
   remove(): boolean {
     this.environment.onRemove();
+    this.abortController.abort();
     this.retrier.reset();
     this.cancelGC();
 

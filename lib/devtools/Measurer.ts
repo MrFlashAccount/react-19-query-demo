@@ -7,7 +7,7 @@ import {
 } from "../tracing";
 import { noop } from "../utils";
 import { Batcher } from "./Batcher";
-import { StatusIcons, getCategoryIcon, getDevtoolsColor } from "./constants";
+import { getCategoryIcon, getDevtoolsColor } from "./constants";
 
 /**
  * Internal metrics for an active span

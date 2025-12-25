@@ -1,4 +1,4 @@
-import { createBatcher } from "../batcher";
+import { createOncePerTick } from "../batcher";
 /**
  * Options for configuring a Batcher instance
  */
@@ -29,8 +29,8 @@ export interface BatcherOptions<T> {
 export class Batcher<T> {
   private items: T[] = [];
   private readonly onFlush: (items: T[]) => void;
-  private readonly batcher = createBatcher({
-    batchMethod: requestIdleCallback,
+  private readonly oncePerTick = createOncePerTick({
+    tickMethod: requestIdleCallback ?? setTimeout,
   });
 
   constructor(options: BatcherOptions<T>) {
@@ -59,7 +59,7 @@ export class Batcher<T> {
 
     const itemsToFlush = this.items;
     this.clear();
-    this.batcher(() => this.onFlush(itemsToFlush));
+    this.oncePerTick(() => this.onFlush(itemsToFlush));
   }
 
   /**

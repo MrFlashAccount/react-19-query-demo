@@ -5,6 +5,7 @@ import {
   use,
   startTransition,
   useDebugValue,
+  useEffect,
 } from "react";
 import { QueryClient, type QueryClientContext } from "../QueryClient";
 import { type DependencyGraph } from "../DependencyGraph";
@@ -58,7 +59,7 @@ export function QueryProvider(props: QueryProviderProps) {
 }
 
 function useQueryProviderFactory(props: QueryProviderProps) {
-  const [queryClient, setQueryClient] = useState(() => {
+  const [queryClient, setQueryClient] = useState<QueryClient>(() => {
     const onChange = (newInstance: QueryClient) => {
       startTransition(() => {
         setQueryClient(newInstance);
@@ -79,20 +80,19 @@ function useQueryProviderFactory(props: QueryProviderProps) {
 
   queryClient.setOptions({ context: props.context });
 
-  if (import.meta.env.DEV) {
-    useDebugValue(useDebugFormattedQuery(queryClient));
-  }
+  useEffect(() => {
+    queryClient.commit();
+  }, [queryClient]);
 
   return queryClient;
 }
 
 export function useQueryContext(): QueryContextValue {
   const context = use(QueryContext);
+
   if (!context) {
     throw new Error("useQueryContext must be used within a QueryProvider");
   }
-  if (import.meta.env.DEV) {
-    useDebugValue(useDebugFormattedQuery(context.queryClient));
-  }
+
   return context;
 }

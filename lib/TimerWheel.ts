@@ -1,4 +1,4 @@
-import { createBatcher } from "./batcher";
+import { createOncePerTick } from "./batcher";
 
 /**
  * Timer entry in the heap
@@ -49,7 +49,7 @@ export class TimerWheel {
   private timerIndexMap: Map<number, number> = new Map();
   /** Next timer ID */
   private nextTimerId: number = 1;
-  private batch = createBatcher();
+  private oncePerTick = createOncePerTick();
 
   /** Timeout handle for the next scheduled timer */
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -82,7 +82,7 @@ export class TimerWheel {
     // Add to heap
     this.heapPush(entry);
 
-    this.batch(() => {
+    this.oncePerTick(() => {
       // Reschedule immediately
       this.reschedule();
     });
@@ -105,7 +105,7 @@ export class TimerWheel {
     // Remove from heap
     this.heapRemove(index);
 
-    this.batch(() => {
+    this.oncePerTick(() => {
       // Reschedule immediately
       this.reschedule();
     });
@@ -181,7 +181,7 @@ export class TimerWheel {
 
     // Reschedule if there are more timers
     if (this.heap.length > 0) {
-      this.batch(() => {
+      this.oncePerTick(() => {
         this.reschedule();
       });
     }

@@ -1,17 +1,12 @@
-import { useCallback, useRef, type RefObject } from "react";
-
-function useSyncRef<T>(value: T): RefObject<T> {
-  const ref = useRef<T>(value);
-  if (ref.current !== value) {
-    ref.current = value;
-  }
-  return ref;
-}
+import { useCallback, useRef } from "react";
 
 const emptyArray: Readonly<never[]> = [];
 
 export function useEvent<T extends (...args: any[]) => any>(cb: T): T {
-  const ref = useSyncRef(cb);
+  const ref = useRef<T>(cb);
+  if (ref.current !== cb) {
+    ref.current = cb;
+  }
   return useCallback(
     (...args: Parameters<T>) => ref.current(...args),
     emptyArray

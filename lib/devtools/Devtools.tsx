@@ -1,6 +1,8 @@
-import { useEffect } from "react";
+import { useDebugValue, useEffect } from "react";
 import { Logger } from "./Logger";
 import { Measurer } from "./Measurer";
+import { useQueryContext } from "../react/QueryProvider";
+import { useDebugFormattedQuery } from "./useDebugFormattedQuery";
 
 export interface QueryLoggerProps {
   logger?: Logger;
@@ -34,6 +36,10 @@ export function QueryDevtools({
   disableLogger = false,
   disableMeasurer = false,
 }: QueryDevtoolsProps) {
+  const { queryClient } = useQueryContext();
+
+  useDebugValue(useDebugFormattedQuery(queryClient));
+
   return (
     <>
       {!disableMeasurer && <QueryPerformanceTracker />}
