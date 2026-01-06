@@ -4,12 +4,10 @@ import {
   useState,
   use,
   startTransition,
-  useDebugValue,
   useEffect,
 } from "react";
 import { QueryClient, type QueryClientContext } from "../QueryClient";
 import { type DependencyGraph } from "../DependencyGraph";
-import { useDebugFormattedQuery } from "../devtools/useDebugFormattedQuery";
 
 /**
  * Context value for the query provider

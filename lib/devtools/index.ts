@@ -1,4 +1,3 @@
-export { QueryDevtools } from "./Devtools";
-export { Logger } from "./Logger";
-export { Measurer } from "./Measurer";
+export { QueryDevtools, QueryLogger, QueryPerformanceTracker, QueryFlameGraph } from "./Devtools";
+export type { QueryDevtoolsProps, QueryLoggerProps, QueryPerformanceTrackerProps } from "./Devtools";
 export { useDebugFormattedQuery } from "./useDebugFormattedQuery";

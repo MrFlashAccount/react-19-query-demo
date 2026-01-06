@@ -98,7 +98,7 @@ export class Retrier {
    * @returns Promise that resolves with the function result or rejects after all retries
    */
   async execute<T, R extends PromiseConstructor<T> = PromiseConstructor<T>>(
-    fn: (props: { signal: AbortSignal }) => Promise<T>,
+    fn: (props: { signal: AbortSignal; attempt: number }) => Promise<T>,
     promiseConstructor?: R
   ): Promise<T> {
     // Cancel any previous execution by updating the current execution ID
@@ -142,7 +142,9 @@ export class Retrier {
         const PromiseCtor = (promiseConstructor ??
           Promise) as PromiseConstructor<T>;
         return await new PromiseCtor((resolve, reject) => {
-          fn({ signal: abortSignal }).then(resolve).catch(reject);
+          fn({ signal: abortSignal, attempt: failureCount + 1 })
+            .then(resolve)
+            .catch(reject);
         });
       } catch (error) {
         // Check if we should retry

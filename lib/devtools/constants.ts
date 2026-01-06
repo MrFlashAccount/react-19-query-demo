@@ -63,14 +63,6 @@ export const StatusColors = {
   },
 } as const satisfies Record<string, ColorDefinition>;
 
-/**
- * UI colors - used for secondary UI elements
- */
-export const UIColors = {
-  timestamp: "#9ca3af", // gray-400
-  separator: "#6b7280", // gray-500
-  muted: "#9ca3af", // gray-400
-} as const;
 
 // ============================================
 // ICON DEFINITIONS
@@ -100,6 +92,8 @@ export const StatusIcons = {
   total: "🔍",
   fulfilled: "✅",
   rejected: "❌",
+  invalidate: "🗑️",
+  rollback: "🔄",
 } as const;
 
 /**
@@ -137,10 +131,17 @@ export function getStatusColor(status: string): ColorDefinition {
 /**
  * Get category icon by category name
  */
-export function getCategoryIcon(category: string): string {
+export function getCategoryIcon(category: string, status?: string): string {
+  if (status) {
+    if (status in StatusIcons) {
+      return StatusIcons[status as keyof typeof StatusIcons];
+    }
+  }
+
   if (category in CategoryIcons) {
     return CategoryIcons[category as keyof typeof CategoryIcons];
   }
+
   return CategoryIcons.default;
 }
 

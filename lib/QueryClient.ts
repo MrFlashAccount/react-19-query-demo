@@ -1,6 +1,6 @@
 import { Query } from "./Query";
 import { noop } from "./utils";
-import { tracer, type Span } from "./tracing";
+import { tracer, tracePromise, type ISpan } from "./tracing";
 import {
   type QueryDefinition,
   type Context,
@@ -29,7 +29,7 @@ export interface QueryClientContext extends Readonly<Context> {}
 
 export interface InvalidateOptions {
   /** Parent span for tracing */
-  parentSpan?: Span;
+  parentSpan?: ISpan;
 }
 
 /**
@@ -219,7 +219,7 @@ export class QueryClient {
   ): Mutation<TParams, TResult> {
     return new Mutation(mutationDefinition, {
       context: this.context,
-      invalidate: (queryDefinition: IInvalidatable, parentSpan?: Span) => {
+      invalidate: (queryDefinition: IInvalidatable, parentSpan?: ISpan) => {
         return this.invalidateQuery(queryDefinition, {
           parentSpan,
         });
@@ -311,18 +311,21 @@ export class QueryClient {
     const queryKeys = queries.map((query) => query.serializedKey);
 
     // Create span - either as child of parent or as root
+    const payload = { queries: queryKeys };
     const span = options.parentSpan
-      ? options.parentSpan.child("client:invalidation", { queries: queryKeys })
-      : tracer.startSpan("client:invalidation", { queries: queryKeys });
+      ? options.parentSpan.child({
+          name: "🔄 Invalidate Client",
+          payload,
+          meta: { color: "tertiary" },
+        })
+      : tracer.startSpan("🔄 Invalidate Client", payload, {
+          color: "tertiary",
+        });
 
-    try {
-      await Promise.all(queries.map((query) => query.invalidate(span)));
-
-      span.success({ queries: queryKeys });
-    } catch (error) {
-      span.error(error, { queries: queryKeys });
-      throw error;
-    }
+    await tracePromise(
+      Promise.all(queries.map((query) => query.invalidate(span))),
+      span
+    );
 
     const newInstance = this.clone();
     this.notifyChange(newInstance);

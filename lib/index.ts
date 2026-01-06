@@ -37,25 +37,3 @@ export { TimerWheel, timerWheel, type TimerWheelOptions } from "./TimerWheel";
 
 export { Query, type QueryState } from "./Query";
 export { Mutation } from "./Mutation";
-
-// Event system (deprecated - use tracing instead)
-export {
-  eventEmitter,
-  type EventsMap,
-  type ScopedEmitter,
-  type ScopeEvent,
-} from "./EventEmitter";
-
-// Tracing system
-export {
-  tracer,
-  type Tracer,
-  type Span,
-  type SpanTypePattern,
-  type LibrarySpanType,
-  type TraceEvent,
-  type SpanStartEvent,
-  type SpanEndEvent,
-  type SpanEvent,
-  type TraceListener,
-} from "./tracing";

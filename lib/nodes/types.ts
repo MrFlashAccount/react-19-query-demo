@@ -1,11 +1,12 @@
-import type { Span } from "../tracing";
+import type { ISpan } from "../tracing";
 
 export interface Context {
   [key: string]: unknown;
 }
 
 export interface IInvalidatable {
-  invalidate(parentSpan?: Span): Promise<void>;
+  invalidate(parentSpan?: ISpan): Promise<void>;
+  toString(): string;
 }
 
 // TODO: Implement optimistic updates

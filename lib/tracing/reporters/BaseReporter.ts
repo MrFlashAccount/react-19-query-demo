@@ -1,0 +1,178 @@
+import { noop } from "../../utils";
+import { Batcher } from "../Batcher";
+import type {
+  IEventReceiver,
+  TraceEvent,
+  SpanStartEvent,
+  SpanEndEvent,
+  SpanEvent,
+} from "../types";
+import { IReporter, type BaseReporterOptions, type SpanMetrics } from "./types";
+
+/**
+ * Abstract base class for implementing reporters.
+ *
+ * Provides:
+ * - Lifecycle management (start/stop)
+ * - Optional batching of events
+ * - Span tracking utilities
+ * - Event dispatch to typed handlers
+ *
+ * @example
+ * ```typescript
+ * class MyReporter extends BaseReporter {
+ *   protected onSpanStart(event: SpanStartEvent): void {
+ *     console.log("Span started:", event.name);
+ *   }
+ *
+ *   protected onSpanEnd(event: SpanEndEvent): void {
+ *     console.log("Span ended:", event.span.spanId);
+ *   }
+ * }
+ *
+ * const reporter = new MyReporter(tracer);
+ * reporter.start();
+ * ```
+ */
+export abstract class BaseReporter
+  extends IReporter
+  implements IEventReceiver
+{
+  private unregister: () => void = noop;
+  private batcher?: Batcher<TraceEvent>;
+
+  private readonly options: Required<BaseReporterOptions>;
+  protected readonly spans = new Map<string, SpanMetrics>();
+
+  constructor(options: BaseReporterOptions = {}) {
+    super();
+
+    this.options = {
+      useBatching: options.useBatching ?? false,
+    };
+
+    if (this.options.useBatching) {
+      this.batcher = new Batcher<TraceEvent>({
+        process: (events) => {
+          events.forEach((event) => this.dispatchEvent(event));
+        },
+      });
+    }
+  }
+
+  /**
+   * Whether the reporter is currently receiving events.
+   */
+  get isActive(): boolean {
+    return this.unregister !== noop;
+  }
+
+  /**
+   * Start receiving trace events.
+   * No-op if already started.
+   */
+  start(): void {
+    if (this.isActive) return;
+    this.onStart();
+  }
+
+  /**
+   * Stop receiving trace events and cleanup.
+   * No-op if already stopped.
+   */
+  stop(): void {
+    if (!this.unregister) return;
+
+    // Flush any pending batched events
+    this.batcher?.flushSync();
+
+    this.unregister();
+    this.unregister = noop;
+    this.spans.clear();
+    this.onStop();
+  }
+
+  /**
+   * IEventReceiver implementation - called by Tracer.
+   */
+  handleEvent(event: TraceEvent): void {
+    if (this.batcher) {
+      this.batcher.push(event);
+      // Flush on root span end for timely reporting
+      if (event.kind === "end" && event.parentSpan === undefined) {
+        this.batcher.flush();
+      }
+    } else {
+      this.dispatchEvent(event);
+    }
+  }
+
+  protected onStart(): void {}
+  protected onStop(): void {}
+  protected onSpanStart(_event: SpanStartEvent): void {}
+  protected onSpanEnd(_event: SpanEndEvent): void {}
+  protected onSpanEvent(_event: SpanEvent): void {}
+
+  /**
+   * Track a span's start. Call from onSpanStart if you need
+   * to correlate start/end events.
+   */
+  protected trackSpanStart(event: SpanStartEvent): SpanMetrics {
+    const metrics: SpanMetrics = {
+      spanId: event.span.spanId,
+      parentSpanId: event.parentSpan?.spanId,
+      name: event.name,
+      startedAt: event.timestamp,
+      payload: event.payload,
+      events: [],
+    };
+    this.spans.set(event.span.spanId, metrics);
+    return metrics;
+  }
+
+  /**
+   * Get tracked metrics for a span.
+   * Returns undefined if span wasn't tracked or already ended.
+   */
+  protected getSpanMetrics(spanId: string): SpanMetrics | undefined {
+    return this.spans.get(spanId);
+  }
+
+  /**
+   * Stop tracking a span. Call from onSpanEnd.
+   * Returns the metrics if they existed.
+   */
+  protected untrackSpan(spanId: string): SpanMetrics | undefined {
+    const metrics = this.spans.get(spanId);
+    this.spans.delete(spanId);
+    return metrics;
+  }
+
+  /**
+   * Record an intermediate event on a tracked span.
+   */
+  protected recordSpanEvent(event: SpanEvent): void {
+    const metrics = this.spans.get(event.span.spanId);
+    if (!metrics) return;
+
+    metrics.events.push({
+      name: event.eventName,
+      timestamp: event.timestamp,
+      payload: event.payload,
+    });
+  }
+
+  private dispatchEvent(event: TraceEvent): void {
+    switch (event.kind) {
+      case "start":
+        this.onSpanStart(event);
+        break;
+      case "end":
+        this.onSpanEnd(event);
+        break;
+      case "event":
+        this.onSpanEvent(event);
+        break;
+    }
+  }
+}

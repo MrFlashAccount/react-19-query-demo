@@ -1,13 +1,22 @@
-type Nominal<Value, Type extends string> = (
+type Nominal<Value, Type extends string> = ((
   value: Value
-) => BrandValue<Value, Type>;
+) => BrandValue<Value, Type>) & { readonly type: BrandValue<Value, Type> };
 
 export function brand<Value, const Type extends string>(): Nominal<
   Value,
   Type
 > {
   const brand = Symbol();
-  function nominal<const S extends Value>(value: S): BrandValue<S, Type> {
+  function nominal<const S extends Value>(
+    value: S,
+    validator?: (value: unknown) => value is S
+  ): BrandValue<S, Type> {
+    if (validator && !validator(value)) {
+      throw new Error(
+        `Brand invariant violation: Invalid value for type ${value}`
+      );
+    }
+
     return value as unknown as BrandValue<S, Type>;
   }
 
@@ -18,7 +27,7 @@ export function brand<Value, const Type extends string>(): Nominal<
     configurable: false,
   });
 
-  return nominal;
+  return nominal as Nominal<Value, Type> & { type: Type };
 }
 
 function nominalBrand<Value, const Type extends string>(
@@ -35,7 +44,8 @@ type Brand<Type extends string> = {
   readonly $$brand: Type;
 };
 
-type BrandValue<Value, Type extends string> = Value & Brand<Type>;
+type BrandValue<Value, Type extends string> = Value &
+  Brand<Type> & { readonly type: Type };
 
 export function isBrand<Value, Type extends string>(
   nominal: Nominal<Value, Type>,
@@ -59,7 +69,7 @@ export namespace brand {
   export function generic<const Type extends string>() {
     const brandSymbol = Symbol();
     const fn = <T>(value: T): BrandValue<T, Type> => {
-      return value as BrandValue<T, Type>;
+      return value as unknown as BrandValue<T, Type>;
     };
 
     Object.defineProperty(fn, "$$brand", {

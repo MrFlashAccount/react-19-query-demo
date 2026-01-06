@@ -2,7 +2,7 @@ import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
 import { createOncePerTick, type OncePerTick } from "./batcher";
 import { exponentialBackoff } from "./utils";
-import { tracer, type Span } from "./tracing";
+import { tracer, tracePromise, type ISpan } from "./tracing";
 import {
   type Context,
   type QueryDefinition,
@@ -218,22 +218,21 @@ export class Query<
    * @param parentSpan - Optional parent span for tracing
    * @returns Promise that resolves with the query data
    */
-  async fetch(parentSpan?: Span): Promise<TData> {
-    const spanParams = { key: this.serializedKey };
+  async fetch(parentSpan?: ISpan): Promise<TData> {
+    const payload = { key: this.serializedKey };
     const span = parentSpan
-      ? parentSpan.child("query:fetch", spanParams)
-      : tracer.startSpan("query:fetch", spanParams);
+      ? parentSpan.child({
+          name: "🏃 Query: Fetch",
+          payload,
+          meta: { color: "primary" },
+        })
+      : tracer.startSpan("🏃 Query: Fetch", payload, { color: "primary" });
 
+    this.retrier.resume();
     try {
-      this.retrier.resume();
-      const data = await this.currentPromise;
+      return await tracePromise(this.currentPromise, span);
+    } finally {
       this.retrier.pause();
-
-      span.success();
-      return data;
-    } catch (error) {
-      span.error(error);
-      throw error;
     }
   }
 
@@ -248,36 +247,33 @@ export class Query<
     const now = Date.now();
     this.prefetchedAt = now;
 
-    const span = tracer.startSpan("query:prefetch", {
-      key: this.serializedKey,
-    });
+    const span = tracer.startSpan(
+      "🔜 Query: Prefetch",
+      { key: this.serializedKey },
+      { color: "primary" }
+    );
 
-    void this.fetch(span)
-      .then(() => {
-        span.success();
+    // tracePromise handles success/error on the span
+    void tracePromise(this.fetch(span), span).then(() => {
+      // Defer timer start until after the commit phase.
+      // This prevents false-positive warnings when fetch completes
+      // before React finishes its render phase in concurrent mode.
+      this.batcher.push(() => {
+        this.timerWheel.schedule(() => {
+          if (this.subscribers.size > 0 || this.prefetchedAt === undefined) {
+            return;
+          }
 
-        // Defer timer start until after the commit phase.
-        // This prevents false-positive warnings when fetch completes
-        // before React finishes its render phase in concurrent mode.
-        this.batcher.push(() => {
-          this.timerWheel.schedule(() => {
-            if (this.subscribers.size > 0 || this.prefetchedAt === undefined) {
-              return;
-            }
+          this.prefetchedAt = undefined;
 
-            this.prefetchedAt = undefined;
-
-            if (import.meta.env.DEV) {
-              console.warn(`⚠️ Query with key ${this.serializedKey} was prefetched but not used 
+          if (import.meta.env.DEV) {
+            console.warn(`⚠️ Query with key ${this.serializedKey} was prefetched but not used 
             within a few seconds after the commit event.
             Please make sure the key is in use and it is preloaded intentionally`);
-            }
-          }, PREFETCH_FRESHNESS_TIME);
-        });
-      })
-      .catch((error) => {
-        span.error(error);
+          }
+        }, PREFETCH_FRESHNESS_TIME);
       });
+    });
   }
 
   async enshureData(): Promise<TData> {
@@ -467,7 +463,7 @@ export class Query<
    * This forces a refetch on next access
    * @param parentSpan - Optional parent span for tracing
    */
-  invalidate(parentSpan?: Span): Promise<TData> {
+  invalidate(parentSpan?: ISpan): Promise<TData> {
     // Only invalidate if not static
     if (this.staleTime !== "static") {
       this.currentPromise.dataUpdatedAt = undefined;
@@ -505,5 +501,9 @@ export class Query<
 
   refetch(): void {
     void this.fetch();
+  }
+
+  toString(): string {
+    return `Query(${this.serializedKey}, ${this.currentPromise.fetchStatus}, ${this.currentPromise.status})`;
   }
 }

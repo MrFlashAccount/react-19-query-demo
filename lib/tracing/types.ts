@@ -1,116 +1,94 @@
-/**
- * Enforce "category:action" pattern for span types.
- * This ensures all span types follow a consistent naming convention.
- */
-export type SpanTypePattern = `${string}:${string}`;
-export type NoopSpanType = ":";
+export type SpanState = "inactive" | "running" | "ended";
 
-/**
- * Query-related span types
- */
-export type QuerySpanType = "query:fetch" | "query:prefetch";
+export type Color =
+  | "primary"
+  | "primary-light"
+  | "primary-dark"
+  | "secondary"
+  | "secondary-light"
+  | "secondary-dark"
+  | "tertiary"
+  | "tertiary-light"
+  | "tertiary-dark"
+  | "error";
 
-/**
- * Mutation-related span types
- */
-export type MutationSpanType =
-  | "mutation:execute"
-  | "mutation:mutate"
-  | "mutation:invalidate"
-  | "mutation:optimistic";
-
-/**
- * Client-level span types
- */
-export type ClientSpanType = "client:invalidation";
-
-/**
- * All library-defined span types.
- * Users can extend this by using the generic Tracer with their own types.
- */
-export type LibrarySpanType =
-  | QuerySpanType
-  | MutationSpanType
-  | ClientSpanType
-  | NoopSpanType;
-
-// ============================================
-// TRACE EVENT TYPES
-// ============================================
-
-/**
- * Event emitted when a span starts.
- * @template T - The span type pattern (defaults to any valid pattern)
- */
-export interface SpanStartEvent<T extends SpanTypePattern = SpanTypePattern> {
-  readonly kind: "start";
-  readonly spanId: string;
-  readonly parentSpanId: string | undefined;
-  readonly spanType: T;
-  readonly payload: Record<string, unknown>;
-  readonly timestamp: number;
+export interface ISpanMeta {
+  description?: string;
+  color?: Color;
 }
 
-/**
- * Event emitted when a span ends.
- * Status is either "success" or "error" - no "pending" state.
- */
-export interface SpanEndEvent<T extends SpanTypePattern = SpanTypePattern> {
-  readonly kind: "end";
-  readonly spanId: string;
-  readonly parentSpanId: string | undefined;
-  readonly status: "success" | "error";
-  readonly spanType: T;
-  readonly error?: unknown;
-  readonly payload?: Record<string, unknown>;
-  readonly timestamp: number;
+export interface ISpanOptions {
+  name: string;
+  payload?: Record<string, unknown>;
+  parentSpan: ISpan | undefined;
+  meta?: ISpanMeta;
+  emit: (event: TraceEvent) => void;
 }
 
+export interface ISpanChildOptions {
+  name: string;
+  payload?: Record<string, unknown>;
+  meta?: ISpanMeta;
+}
+
+export type Serializable =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | { [key: string]: Serializable }
+  | Serializable[];
+
+export type ISpanPayload = Serializable;
+
 /**
- * Intermediate event emitted during a span's lifetime.
+ * A handle to a span.
+ * Provides methods to control lifecycle and record events.
  */
-export interface SpanEvent {
-  readonly kind: "event";
-  readonly spanId: string;
-  readonly parentSpanId: string | undefined;
+export interface ISpan extends Disposable {
+  /** Display name of the span */
   readonly name: string;
-  readonly payload?: Record<string, unknown>;
-  readonly timestamp: number;
-}
-
-/**
- * Union of all trace event types.
- * @template T - The span type pattern for start events
- */
-export type TraceEvent<T extends SpanTypePattern = SpanTypePattern> =
-  | SpanStartEvent<T>
-  | SpanEndEvent
-  | SpanEvent;
-
-// ============================================
-// SPAN HANDLE (returned to user)
-// ============================================
-
-/**
- * A handle to an active span.
- * Provides methods to record events and end the span.
- */
-export interface Span<T extends SpanTypePattern = SpanTypePattern> {
-  /** Type of the span */
-  readonly spanType: T;
 
   /** Unique identifier for this span */
   readonly spanId: string;
 
-  /** Parent span ID if this is a child span */
-  readonly parentSpanId?: string;
+  /** Current state of the span */
+  readonly state: SpanState;
+
+  /** Parent span if this is a child span */
+  readonly parentSpan: ISpan | undefined;
+
+  /** Payload data passed when span was created */
+  readonly payload: Record<string, unknown>;
+
+  /** Metadata for display purposes */
+  readonly meta: ISpanMeta;
+
+  /** Timestamp when span was started (-1 if not started) */
+  readonly startTime: number;
+
+  /** Timestamp when span ended (-1 if not ended) */
+  readonly endTime: number;
+
+  /** Serialized payload */
+  readonly serializedPayload: string;
+
+  /** Duration of the span in milliseconds */
+  readonly duration: number;
+
+  /**
+   * Start the span. Must be called before any other operations.
+   * No-op if already started or ended.
+   */
+  start(): void;
 
   /**
    * Record an intermediate event within this span.
-   * @param name - Name of the event
+   * @param eventName - Name of the event
    * @param payload - Optional payload data
    */
-  event(name: string, payload?: Record<string, unknown>): void;
+  event(eventName: string, payload?: Record<string, unknown>): void;
 
   /**
    * End the span with a successful status.
@@ -127,19 +105,153 @@ export interface Span<T extends SpanTypePattern = SpanTypePattern> {
 
   /**
    * Create a child span nested under this span.
-   * @param spanType - The type of the child span
-   * @param payload - Optional payload data for the child span
-   * @returns A new Span handle for the child
+   * Child is created in inactive state - must call start() separately.
+   * @param options - Options for the child span
+   * @returns A new ISpan handle for the child
    */
-  child<T extends SpanTypePattern>(
-    spanType: T,
-    payload?: Record<string, unknown>
-  ): Span;
+  child(options: ISpanChildOptions): ISpan;
+}
+
+// ============================================
+// TRACE EVENT TYPES
+// ============================================
+
+/**
+ * Event emitted when a span starts.
+ * Contains the span instance and parent span reference.
+ */
+export interface SpanStartEvent {
+  readonly kind: "start";
+  /** The span that started */
+  readonly span: ISpan;
+  /** Parent span (undefined for root spans) */
+  readonly parentSpan: ISpan | undefined;
+  /** Name of the span */
+  readonly name: string;
+  /** Payload data passed at creation */
+  readonly payload: Record<string, unknown>;
+  /** Timestamp when span started */
+  readonly timestamp: number;
 }
 
 /**
- * Listener function type for trace events.
+ * Base fields shared by all span end events.
  */
-export type TraceListener<T extends SpanTypePattern = SpanTypePattern> = (
-  event: TraceEvent<T>
-) => void;
+interface SpanEndEventBase {
+  readonly kind: "end";
+  /** The span that ended */
+  readonly span: ISpan;
+  /** Parent span (undefined for root spans) */
+  readonly parentSpan: ISpan | undefined;
+  /** Optional end payload */
+  readonly payload?: Record<string, unknown>;
+  /** Timestamp when span ended */
+  readonly timestamp: number;
+}
+
+/**
+ * Event emitted when a span ends successfully.
+ */
+export interface SpanSuccessEvent extends SpanEndEventBase {
+  readonly status: "success";
+}
+
+/**
+ * Event emitted when a span ends with an error.
+ */
+export interface SpanErrorEvent extends SpanEndEventBase {
+  readonly status: "error";
+  /** The error that caused the span to fail */
+  readonly error: unknown;
+}
+
+/**
+ * Event emitted when a span ends.
+ * Discriminated union based on status.
+ */
+export type SpanEndEvent = SpanSuccessEvent | SpanErrorEvent;
+
+/**
+ * Intermediate event emitted during a span's lifetime.
+ */
+export interface SpanEvent {
+  readonly kind: "event";
+  /** The span this event belongs to */
+  readonly span: ISpan;
+  /** Parent span (undefined for root spans) */
+  readonly parentSpan: ISpan | undefined;
+  /** Name of the event */
+  readonly eventName: string;
+  /** Optional event payload */
+  readonly payload?: Record<string, unknown>;
+  /** Timestamp of the event */
+  readonly timestamp: number;
+}
+
+/**
+ * Union of all trace event types.
+ */
+export type TraceEvent = SpanStartEvent | SpanEndEvent | SpanEvent;
+
+// ============================================
+// REPORTER INTERFACE
+// ============================================
+
+/**
+ * Interface for objects that can receive trace events.
+ * This is the minimal contract that Tracer requires.
+ */
+export interface IEventReceiver {
+  /**
+   * Called by Tracer when a trace event occurs.
+   * @param event - The trace event (start, end, or intermediate event)
+   */
+  handleEvent(event: TraceEvent): void;
+}
+
+export interface ITracerOptions {
+  reporters?: IEventReceiver[];
+}
+
+/**
+ * Tracer interface - common shape for both implementations
+ */
+export interface ITracer {
+  /**
+   * Register a reporter to receive trace events.
+   * @param receiver - Object implementing IEventReceiver
+   * @returns Unregister function to remove the reporter
+   */
+  addReporter(receiver: IEventReceiver): () => void;
+
+  /**
+   * Delete a reporter from the tracer.
+   * @param receiver - Object implementing IEventReceiver
+   */
+  deleteReporter(receiver: IEventReceiver): void;
+
+  /**
+   * Check if any reporters are registered.
+   */
+  hasReporters(): boolean;
+
+  /**
+   * Create a new span without starting it.
+   * Call span.start() when ready to begin tracing.
+   */
+  createSpan(
+    name: string,
+    payload?: Record<string, unknown>,
+    meta?: ISpanMeta
+  ): ISpan;
+
+  /**
+   * Create and start a new span immediately.
+   * Convenience method equivalent to createSpan + start.
+   */
+  startSpan(
+    name: string,
+    payload?: Record<string, unknown>,
+    meta?: ISpanMeta
+  ): ISpan;
+}

@@ -4,7 +4,7 @@ import type {
   OptimisticUpdateTarget,
   IInvalidatable,
 } from "./nodes/mutation";
-import { tracer, type Span } from "./tracing";
+import { tracer, tracePromise, type ISpan } from "./tracing";
 import { Retrier, type RetryConfig } from "./Retrier";
 import { exponentialBackoff } from "./utils";
 import { QueryPromise } from "./QueryPromise";
@@ -22,7 +22,7 @@ interface MutationEnvironment<TParams = unknown> {
   context: Context;
   invalidate: (
     queryDefinition: IInvalidatable,
-    parentSpan?: Span
+    parentSpan?: ISpan
   ) => Promise<void>;
   applyOptimisticUpdates: (
     optimisticUpdate: OptimisticUpdateTarget<TParams, unknown>
@@ -77,33 +77,42 @@ export class Mutation<TParams = unknown, TResult = unknown> {
   private createMutationFn(): (params: TParams) => QueryPromise<TResult> {
     return (params: TParams) => {
       // Create the main execution span
-      const span = tracer.startSpan("mutation:execute", {
-        variables: params,
-      });
+      const span = tracer.startSpan(
+        "⚛️ Mutation: Execute",
+        { key: params, variables: params },
+        { color: "primary" }
+      );
 
       this.applyOptimisticUpdates(params, span);
 
-      return this.retrier.execute(() => {
-        const executeSpan = span.child("mutation:mutate", {
-          variables: params,
+      return this.retrier.execute(({ attempt }) => {
+        const mutateSpan = span.child({
+          name: `🏃 Mutation: Mutate (Attempt ${attempt})`,
+          payload: { variables: params, attempt },
+          meta: { color: "secondary" },
         });
 
-        return this.mutationDefinition.config
+        const mutationPromise = this.mutationDefinition.config
           .mutationFn(params, this.environment.context)
           .then(async (result) => {
-            executeSpan.success({ data: result });
-            await this.invalidateDependencies(params, result, span);
-            span.success({ data: result });
+            await this.invalidateDependencies(params, result, mutateSpan);
             return result;
-          })
-          .catch((error) => {
-            executeSpan.error(error);
-            span.error(error);
-            throw error;
           })
           .finally(() => {
             this.retrier.pause();
           });
+
+        // tracePromise handles success/error for both spans
+        return tracePromise(mutationPromise, mutateSpan).then(
+          (result) => {
+            span.success({ data: result });
+            return result;
+          },
+          (error) => {
+            span.error(error);
+            throw error;
+          }
+        );
       }, QueryPromise) as QueryPromise<TResult>;
     };
   }
@@ -116,12 +125,12 @@ export class Mutation<TParams = unknown, TResult = unknown> {
   private async invalidateDependencies(
     params: TParams,
     result: TResult,
-    parentSpan: Span
+    parentSpan: ISpan
   ): Promise<void> {
     const invalidations = this.mutationDefinition.config.invalidates;
     if (!invalidations) return;
 
-    let invalidationTargets: IInvalidatable[] = [];
+    const invalidationTargets: IInvalidatable[] = [];
 
     for (const invalidation of invalidations) {
       if (typeof invalidation === "function") {
@@ -141,38 +150,37 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     const queries = invalidationTargets.map((target) => String(target));
 
     // Create child span for invalidation
-    const span = parentSpan.child("mutation:invalidate", {
-      variables: params,
-      queries,
+    const span = parentSpan.child({
+      name: "🔄 Mutation: Invalidate",
+      payload: { variables: params, queries },
+      meta: { color: "tertiary" },
     });
 
-    try {
-      await Promise.all(
+    await tracePromise(
+      Promise.all(
         invalidationTargets.map((queryDef) =>
           this.environment.invalidate(queryDef, span)
         )
-      );
-      span.success({ queries });
-    } catch (error) {
-      span.error(error, { queries });
-      throw error;
-    }
+      ),
+      span
+    );
   }
 
-  private applyOptimisticUpdates(params: TParams, parentSpan: Span): void {
+  private applyOptimisticUpdates(params: TParams, parentSpan: ISpan): void {
     const optimisticUpdates = this.mutationDefinition.config.optimistic;
     if (!optimisticUpdates) return;
 
     // Create child span for optimistic updates
-    const span = parentSpan.child("mutation:optimistic", {
-      variables: params,
+    const span = parentSpan.child({
+      name: "🤞 Apply Optimistic Updates",
+      payload: { variables: params },
+      meta: { color: "tertiary" },
     });
 
     const ctx = this.environment.context;
 
     try {
       for (const optimisticUpdate of optimisticUpdates(params, ctx)) {
-        span.event("update:applied", { update: optimisticUpdate });
         // Type assertion needed due to generic parameter variance
         this.environment.applyOptimisticUpdates(
           optimisticUpdate as OptimisticUpdateTarget<unknown, unknown>
