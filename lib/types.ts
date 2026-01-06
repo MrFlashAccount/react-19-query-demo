@@ -47,11 +47,24 @@ type Brand<Type extends string> = {
 type BrandValue<Value, Type extends string> = Value &
   Brand<Type> & { readonly type: Type };
 
+type GenericNominal<Type extends string> = {
+  <T>(value: T): BrandValue<T, Type>;
+  readonly $$brand: symbol;
+};
+
 export function isBrand<Value, Type extends string>(
   nominal: Nominal<Value, Type>,
   value: unknown
-): value is BrandValue<Value, Type> {
-  return nominalBrand(nominal) === valueBrand(value);
+): value is BrandValue<Value, Type>;
+export function isBrand<Type extends string>(
+  nominal: GenericNominal<Type>,
+  value: unknown
+): value is BrandValue<unknown, Type>;
+export function isBrand(
+  nominal: Nominal<any, any> | GenericNominal<any>,
+  value: unknown
+): boolean {
+  return nominalBrand(nominal as Nominal<any, any>) === valueBrand(value);
 }
 
 export namespace brand {
@@ -66,7 +79,7 @@ export namespace brand {
    * const numberId = Id(123);    // BrandValue<123, "Id">
    * ```
    */
-  export function generic<const Type extends string>() {
+  export function generic<const Type extends string>(): GenericNominal<Type> {
     const brandSymbol = Symbol();
     const fn = <T>(value: T): BrandValue<T, Type> => {
       return value as unknown as BrandValue<T, Type>;
@@ -79,7 +92,7 @@ export namespace brand {
       configurable: false,
     });
 
-    return fn;
+    return fn as GenericNominal<Type>;
   }
 
   /**
