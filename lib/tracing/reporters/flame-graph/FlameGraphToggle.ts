@@ -1,3 +1,4 @@
+import { flameGraphState } from "./state";
 import { CSS_VARS, toggle, shadow } from "./styles";
 import { css, html } from "./utilities";
 
@@ -73,7 +74,7 @@ export class FlameGraphToggle extends HTMLElement {
 
     this.button = this.shadowRoot.querySelector("button");
     this.button?.addEventListener("click", () => {
-      this.dispatchEvent(new CustomEvent("toggle", { bubbles: true }));
+      flameGraphState.open();
     });
   }
 

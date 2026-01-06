@@ -287,26 +287,6 @@ export class FlameGraphDialog extends HTMLElement {
     this.dispatchEvent(new CustomEvent("close", { bubbles: true }));
   }
 
-  get open(): boolean {
-    return flameGraphState.store.getKey("isOpen");
-  }
-
-  get isPipMode(): boolean {
-    return flameGraphState.store.getKey("isPipMode");
-  }
-
-  set recording(value: boolean) {
-    if (value) {
-      flameGraphState.startRecording();
-    } else {
-      flameGraphState.stopRecording();
-    }
-  }
-
-  get recording(): boolean {
-    return flameGraphState.store.getKey("isRecording");
-  }
-
   get popover() {
     return this.getAttribute("popover") ?? "manual";
   }

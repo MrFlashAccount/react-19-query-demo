@@ -78,7 +78,9 @@ export class FlameGraphDialogContent extends HTMLElement {
   private subscribeToState() {
     // Subscribe to spans/pendingSpans for count display
     this.unsubs.push(
-      flameGraphState.subscribe("spans", () => this.updateSpansCount())
+      flameGraphState.subscribe<FlameGraphSpan[]>("spans", (spans) =>
+        this.updateSpansCount(spans.length)
+      )
     );
 
     // Subscribe to viewState.zoom for zoom display
@@ -149,8 +151,7 @@ export class FlameGraphDialogContent extends HTMLElement {
     });
   }
 
-  private updateSpansCount() {
-    const count = flameGraphState.spanCount;
+  private updateSpansCount(count: number) {
     drawScheduler.schedule(() => {
       if (this.spansCountEl) {
         this.spansCountEl.textContent = `${count} span${
