@@ -15,7 +15,8 @@ type ContextProvider<T> = {
   get(): T | undefined;
 };
 
-// @ts-expect-error - AsyncContext is a proposal, not in lib types
+// @ts-expect-error - AsyncContext is a proposal, not in lib types yet
+//                    See: https://github.com/tc39/proposal-async-context
 if (typeof AsyncContext === "undefined" || !AsyncContext.Variable) {
   throw new Error(
     "AsyncContext.Variable not available. " +
@@ -25,7 +26,7 @@ if (typeof AsyncContext === "undefined" || !AsyncContext.Variable) {
 
 function createContextProvider<T>(): ContextProvider<T> {
   // @ts-expect-error
-  const ctx = new AsyncContext.Variable<T>();
+  const ctx = new AsyncContчext.Variable<T>();
   return {
     run: (value, fn) => ctx.run(value, fn),
     get: () => ctx.get(),
@@ -99,14 +100,14 @@ export function traced<T extends AnyFn>(
   meta?: ISpanMeta,
   payload?: Record<string, unknown>
 ): T {
-  const wrapped = function (this: any, ...args: Parameters<T>): ReturnType<T> {
+  function withSpan(this: any, ...args: Parameters<T>): ReturnType<T> {
     const span = createSpan(name, meta, payload);
     return runWithSpan(span, () =>
       executeWithSpan(span, () => fn.apply(this, args))
     );
-  };
+  }
 
-  return wrapped as T;
+  return withSpan as T;
 }
 
 /**

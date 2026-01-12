@@ -3,16 +3,16 @@
  * Works in any environment without async context dependencies.
  */
 
-import type { ISpan, ISpanMeta, ISpanOptions } from "./types";
+import { SpanId, type ISpan, type ISpanMeta, type ISpanOptions } from "./types";
 import { tracer } from "./index";
 import { type AnyFn, executeWithSpan, createTracedDecorator } from "./shared";
+import { isBrand } from "../types";
 
 /**
  * Type guard to check if value is an ISpan (duck-typed).
  * Checks for spanId string property - fast and compact.
  */
-export const isSpan = (v: unknown): v is ISpan =>
-  typeof (v as any)?.spanId === "string";
+export const isSpan = (v: unknown): v is ISpan => isBrand(SpanId, v);
 
 // ============================================
 // Internal Helpers
@@ -62,25 +62,21 @@ const createSpan = (
  * await fetchUser("123", parentSpan); // child span
  */
 export function traced<T extends AnyFn>(
-  fn: T,
+  fn: (span: ISpan, ...args: Parameters<T>) => ReturnType<T>,
   name: string,
   payload: Record<string, unknown> = {},
   meta?: ISpanMeta
 ): T {
-  const wrapped = function (this: any, ...args: Parameters<T>): ReturnType<T> {
+  function withSpan(this: any, ...args: Parameters<T>): ReturnType<T> {
     const parent = extractParentSpan(args);
     const span = createSpan(name, meta, payload, parent);
     return executeWithSpan(span, (span) => {
       span.start();
-      // If parent is provided(as a last argument), replace the last argument with the span
-      if (parent !== undefined) {
-        args[args.length - 1] = span;
-      }
-      return fn.apply(this, args);
+      return fn(span, ...args);
     });
-  };
+  }
 
-  return wrapped as T;
+  return withSpan as T;
 }
 
 /**
@@ -110,9 +106,9 @@ export const Traced = createTracedDecorator(traced);
  * const result = await tracePromise(fetch("/api"), span);
  */
 export function tracePromise<T>(
-  promise: Promise<T>,
+  promise: PromiseLike<T>,
   spanOrSpanOptions: ISpan | ISpanOptions
-): Promise<T> {
+): PromiseLike<T> {
   const span = isSpan(spanOrSpanOptions)
     ? spanOrSpanOptions
     : tracer.startSpan(

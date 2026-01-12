@@ -61,8 +61,8 @@ function TanStackQueryTabContent({
       <SearchBox formState={formState} onFormStateChange={onFormStateChange} />
       {/* Results */}
       <div className="w-full max-w-6xl">
-        <MovieList moviesAmount={movies.length}>
-          {movies.map((movie) => (
+        <MovieList movies={movies}>
+          {(movie) => (
             <MovieCardTanStack
               key={movie.id}
               movie={movie}
@@ -71,7 +71,7 @@ function TanStackQueryTabContent({
               searchQuery={searchQuery}
               movieLimit={movieLimit}
             />
-          ))}
+          )}
         </MovieList>
       </div>
     </div>

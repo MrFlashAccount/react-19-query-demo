@@ -1,12 +1,13 @@
 import { noopcb } from "../utils";
-import type {
-  ISpan,
-  ISpanChildOptions,
-  ISpanMeta,
-  ITracer,
-  IEventReceiver,
-  SpanState,
-  ITracerOptions,
+import {
+  type ISpan,
+  type ISpanChildOptions,
+  type ISpanMeta,
+  type ITracer,
+  type IEventReceiver,
+  type SpanState,
+  type ITracerOptions,
+  SpanId,
 } from "./types";
 
 const nullMeta: ISpanMeta = { description: "", color: "primary" };
@@ -16,7 +17,7 @@ const nullMeta: ISpanMeta = { description: "", color: "primary" };
  */
 class NullSpan implements ISpan {
   readonly name = "";
-  readonly spanId = "";
+  readonly spanId = SpanId("-");
   get state(): SpanState {
     return "inactive";
   }

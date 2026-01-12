@@ -1,4 +1,10 @@
-import type { SpanStartEvent, SpanEndEvent, SpanEvent, Color } from "../types";
+import type {
+  SpanStartEvent,
+  SpanEndEvent,
+  SpanEvent,
+  Color,
+  SpanId,
+} from "../types";
 import { BaseReporter } from "./BaseReporter";
 
 const colorToHex: Record<Color, `#${string}`> = {
@@ -69,7 +75,7 @@ export interface LoggerReporterOptions {
  */
 export class LoggerReporter extends BaseReporter {
   private readonly loggerOptions: Required<LoggerReporterOptions>;
-  private readonly spanDepths = new Map<string, number>();
+  private readonly spanDepths = new Map<SpanId, number>();
 
   constructor(options: LoggerReporterOptions = {}) {
     super({ useBatching: true });

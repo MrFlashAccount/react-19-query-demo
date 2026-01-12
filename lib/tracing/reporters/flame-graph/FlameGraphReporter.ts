@@ -8,7 +8,7 @@ import "./FlameGraphDialog";
 
 import type { FlameGraphToggle } from "./FlameGraphToggle";
 import type { FlameGraphDialog } from "./FlameGraphDialog";
-import { flameGraphState } from "./state";
+import { flameGraphState, selectors } from "./state";
 
 /**
  * FlameGraphReporter renders spans as a flame graph using Web Components.
@@ -114,19 +114,19 @@ export class FlameGraphReporter extends BaseReporter {
   }
 
   protected onSpanStart(event: SpanStartEvent): void {
-    if (!flameGraphState.store.getKey("isRecording")) return;
+    if (!flameGraphState.getState().isRecording) return;
     this.handleSpanStartInternal(event);
   }
 
   protected onSpanEnd(event: SpanEndEvent): void {
-    if (!flameGraphState.store.getKey("isRecording")) return;
+    if (!flameGraphState.getState().isRecording) return;
     this.handleSpanEndInternal(event);
   }
 
   private subscribeToState(): void {
     // Sync toggle button with recording state
     this.unsubs.push(
-      flameGraphState.subscribe<boolean>("isRecording", (isRecording) => {
+      flameGraphState.subscribe(selectors.isRecording, (isRecording) => {
         if (this.toggleButton) {
           this.toggleButton.recording = isRecording;
         }
@@ -136,7 +136,7 @@ export class FlameGraphReporter extends BaseReporter {
 
   private setupToggleEvents(): void {
     this.toggleButton?.addEventListener("toggle", () => {
-      if (flameGraphState.store.getKey("isOpen")) {
+      if (flameGraphState.getState().isOpen) {
         flameGraphState.close();
       } else {
         flameGraphState.open();
@@ -175,7 +175,7 @@ export class FlameGraphReporter extends BaseReporter {
 
   private handleSpanEndInternal(event: SpanEndEvent): void {
     const spanId = event.span.spanId;
-    const pending = flameGraphState.store.getKey("pendingSpans").get(spanId);
+    const pending = flameGraphState.getState().pendingSpans.get(spanId);
     if (!pending || pending.startTime === undefined) return;
 
     const span: FlameGraphSpan = {
@@ -196,8 +196,7 @@ export class FlameGraphReporter extends BaseReporter {
   }
 
   private updateTimeRange(): void {
-    const spans = flameGraphState.store.getKey("spans");
-    const pendingSpans = flameGraphState.store.getKey("pendingSpans");
+    const { spans, pendingSpans } = flameGraphState.getState();
 
     if (spans.length === 0 && pendingSpans.size === 0) {
       flameGraphState.setTimeRange({ minTime: 0, maxTime: 0 });
@@ -229,7 +228,7 @@ export class FlameGraphReporter extends BaseReporter {
 
   // Public API
   get recording(): boolean {
-    return flameGraphState.store.getKey("isRecording");
+    return flameGraphState.getState().isRecording;
   }
 
   startRecording(): void {
@@ -246,7 +245,7 @@ export class FlameGraphReporter extends BaseReporter {
   }
 
   getSpans(): readonly FlameGraphSpan[] {
-    return flameGraphState.store.getKey("spans");
+    return flameGraphState.getState().spans;
   }
 
   showPanel(): void {

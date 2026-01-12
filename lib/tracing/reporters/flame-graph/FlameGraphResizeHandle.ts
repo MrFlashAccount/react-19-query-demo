@@ -50,8 +50,9 @@ export interface ResizeEventDetail {
 export class FlameGraphResizeHandle extends HTMLElement {
   private isDragging = false;
   private lastY = 0;
-  private rafId: number | null = null;
+  private rafId = -1;
   private pendingDelta = 0;
+  private unmountAbortController = new AbortController();
 
   static get observedAttributes() {
     return ["position"];
@@ -63,12 +64,16 @@ export class FlameGraphResizeHandle extends HTMLElement {
   }
 
   connectedCallback() {
+    this.addEventListener("pointerdown", this.handlePointerDown, {
+      passive: true,
+      signal: this.unmountAbortController.signal,
+    });
     this.render();
-    this.setupEventListeners();
   }
 
   disconnectedCallback() {
-    this.cleanup();
+    this.unmountAbortController.abort();
+    this.cancelAnimationFrame();
   }
 
   private render() {
@@ -81,13 +86,8 @@ export class FlameGraphResizeHandle extends HTMLElement {
     `;
   }
 
-  private setupEventListeners() {
-    this.addEventListener("pointerdown", this.handlePointerDown);
-  }
-
   private handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    e.preventDefault();
 
     this.isDragging = true;
     this.lastY = e.clientY;
@@ -95,9 +95,18 @@ export class FlameGraphResizeHandle extends HTMLElement {
     this.setAttribute("active", "");
     this.setPointerCapture(e.pointerId);
 
-    document.addEventListener("pointermove", this.handlePointerMove);
-    document.addEventListener("pointerup", this.handlePointerUp);
-    document.addEventListener("pointercancel", this.handlePointerUp);
+    document.addEventListener("pointermove", this.handlePointerMove, {
+      passive: true,
+      signal: this.unmountAbortController.signal,
+    });
+    document.addEventListener("pointerup", this.handlePointerUp, {
+      passive: true,
+      signal: this.unmountAbortController.signal,
+    });
+    document.addEventListener("pointercancel", this.handlePointerUp, {
+      passive: true,
+      signal: this.unmountAbortController.signal,
+    });
 
     this.dispatchEvent(new CustomEvent("resizestart", { bubbles: true }));
   };
@@ -134,20 +143,14 @@ export class FlameGraphResizeHandle extends HTMLElement {
     document.removeEventListener("pointerup", this.handlePointerUp);
     document.removeEventListener("pointercancel", this.handlePointerUp);
 
-    // Flush any pending delta
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
+    // Cancel any pending animation frame
+    this.cancelAnimationFrame();
 
     if (this.pendingDelta !== 0) {
       this.dispatchEvent(
         new CustomEvent<ResizeEventDetail>("resize", {
           bubbles: true,
-          detail: {
-            deltaY: this.pendingDelta,
-            clientY: this.lastY,
-          },
+          detail: { deltaY: this.pendingDelta, clientY: this.lastY },
         })
       );
       this.pendingDelta = 0;
@@ -156,15 +159,11 @@ export class FlameGraphResizeHandle extends HTMLElement {
     this.dispatchEvent(new CustomEvent("resizeend", { bubbles: true }));
   };
 
-  private cleanup() {
-    if (this.rafId !== null) {
+  private cancelAnimationFrame() {
+    if (this.rafId !== -1) {
       cancelAnimationFrame(this.rafId);
-      this.rafId = null;
+      this.rafId = -1;
     }
-    this.removeEventListener("pointerdown", this.handlePointerDown);
-    document.removeEventListener("pointermove", this.handlePointerMove);
-    document.removeEventListener("pointerup", this.handlePointerUp);
-    document.removeEventListener("pointercancel", this.handlePointerUp);
   }
 }
 

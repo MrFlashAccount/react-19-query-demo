@@ -1,4 +1,4 @@
-import { CSS_VARS, BUTTON_STYLES } from "./styles";
+import { CSS_VARS, BUTTON_STYLES, RESET_CASCADE } from "./styles";
 import { css, html } from "./utilities";
 import { flameGraphState } from "./state";
 
@@ -7,6 +7,7 @@ const STYLES = css`
   ${BUTTON_STYLES}
 
   :host {
+    ${RESET_CASCADE}
     display: contents;
   }
 `;
@@ -31,7 +32,9 @@ export class FlameGraphClearButton extends HTMLElement {
       <button>🧹 Clear</button>
     `;
 
-    this.shadowRoot.querySelector("button")!.addEventListener("click", this.handleClick);
+    this.shadowRoot
+      .querySelector("button")!
+      .addEventListener("click", this.handleClick);
   }
 
   private handleClick = () => {
@@ -40,4 +43,3 @@ export class FlameGraphClearButton extends HTMLElement {
 }
 
 customElements.define("flame-graph-clear-button", FlameGraphClearButton);
-

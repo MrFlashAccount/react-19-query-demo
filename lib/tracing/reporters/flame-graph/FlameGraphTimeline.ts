@@ -7,7 +7,7 @@ import type {
   DrawMessage,
 } from "./timeline.worker";
 import { drawScheduler } from "./DrawScheduler";
-import { flameGraphState } from "./state";
+import { flameGraphState, selectors } from "./state";
 
 const STYLES = css`
   ${CSS_VARS}
@@ -58,8 +58,12 @@ export class FlameGraphTimeline extends HTMLElement {
   }
 
   private subscribeToState() {
-    this.unsubs.push(flameGraphState.subscribe("timeRange", () => this.draw()));
-    this.unsubs.push(flameGraphState.subscribe("viewState", () => this.draw()));
+    this.unsubs.push(
+      flameGraphState.subscribe(selectors.timeRange, () => this.draw())
+    );
+    this.unsubs.push(
+      flameGraphState.subscribe(selectors.viewState, () => this.draw())
+    );
   }
 
   private render() {
@@ -126,8 +130,7 @@ export class FlameGraphTimeline extends HTMLElement {
   private executeDraw() {
     if (!this.worker || !this.workerReady) return;
 
-    const timeRange = flameGraphState.store.getKey("timeRange");
-    const viewState = flameGraphState.store.getKey("viewState");
+    const { timeRange, viewState } = flameGraphState.getState();
 
     this.worker.postMessage({
       type: "draw",

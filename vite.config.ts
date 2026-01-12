@@ -9,18 +9,7 @@ export default defineConfig({
     tailwindcss(),
     react({
       babel: {
-        plugins: [
-          "babel-plugin-react-compiler",
-          [
-            "./lib/tracing/babel-plugin/explicit-parent",
-            {
-              tracingModule: "@lib/tracing/helpers",
-              tracedFn: "traced",
-              exclude: /node_modules|\.test\.|\.spec\.|\/lib\/tracing\//,
-              minStatements: 2,
-            },
-          ],
-        ],
+        plugins: ["babel-plugin-react-compiler"],
       },
     }),
   ],
@@ -28,12 +17,13 @@ export default defineConfig({
     alias: {
       "lib/react": path.resolve(__dirname, "lib/react"),
       "lib/devtools": path.resolve(__dirname, "lib/devtools/index.ts"),
+      "@lib/tracing/helpers": path.resolve(__dirname, "lib/tracing/helpers.ts"),
       "@lib/tracing": path.resolve(__dirname, "lib/tracing"),
     },
   },
   worker: { format: "es" },
   build: {
-    sourcemap: true,
+    sourcemap: false,
     rolldownOptions: {
       output: {
         advancedChunks: {

@@ -1,5 +1,5 @@
 import { serializePayload } from "../utils";
-import type {
+import {
   TraceEvent,
   ISpan,
   SpanStartEvent,
@@ -11,6 +11,7 @@ import type {
   ITracer,
   IEventReceiver,
   ITracerOptions,
+  SpanId,
 } from "./types";
 
 type SpanState = "inactive" | "running" | "ended";
@@ -23,7 +24,7 @@ const defaultMeta: ISpanMeta = { description: "", color: "primary" };
  */
 export class Span implements ISpan {
   private _state: SpanState = "inactive";
-  private readonly _spanId: string;
+  private readonly _spanId: SpanId;
   private readonly _name: string;
   private readonly _payload: Record<string, unknown>;
   private readonly _parentSpan: ISpan | undefined;
@@ -49,7 +50,7 @@ export class Span implements ISpan {
     return Math.max(0, this._endTime - this._startTime);
   }
 
-  get spanId(): string {
+  get spanId(): SpanId {
     return this._spanId;
   }
 
@@ -186,8 +187,10 @@ export class Span implements ISpan {
     this.emitEvent(event);
   }
 
-  private generateId(): string {
-    return `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+  private generateId(): SpanId {
+    return SpanId(
+      `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
+    );
   }
 
   [Symbol.dispose](): void {

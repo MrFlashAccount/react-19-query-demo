@@ -54,15 +54,15 @@ function CustomLibraryTabContent({ formState, onFormStateChange }: TabProps) {
       <SearchBox formState={formState} onFormStateChange={onFormStateChange} />
 
       <div className="w-full max-w-6xl">
-        <MovieList moviesAmount={movies.length}>
-          {movies.map((movie) => (
+        <MovieList movies={movies}>
+          {(movie) => (
             <MovieCardCustom
               key={movie.id}
               movie={movie}
               searchQuery={searchQuery}
               movieLimit={movieLimit}
             />
-          ))}
+          )}
         </MovieList>
       </div>
     </div>

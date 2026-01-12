@@ -208,7 +208,7 @@ export const BUTTON_STYLES = css`
     font-size: 13px;
     font-family: var(--fg-font);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
   }
   button:hover {
     background: ${ui.surfaceHover};
@@ -310,5 +310,22 @@ export const PIP_STYLES = css`
     overflow: hidden;
     height: 100%;
     width: 100%;
+  }
+`;
+
+export const RESET_CASCADE = css`
+  all: unset;
+  box-sizing: border-box;
+  color: inherit;
+  font-family: inherit;
+
+  &::before,
+  &::after,
+  ::before,
+  ::after {
+    all: unset;
+    box-sizing: border-box;
+    color: inherit;
+    font-family: inherit;
   }
 `;

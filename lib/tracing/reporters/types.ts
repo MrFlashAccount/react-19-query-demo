@@ -1,12 +1,12 @@
-import type { SpanStartEvent, SpanEndEvent, SpanEvent } from "../types";
+import type { SpanStartEvent, SpanEndEvent, SpanEvent, SpanId } from "../types";
 
 /**
  * Internal metrics for tracking an active span within a reporter.
  * Common structure used by reporters that need to correlate start/end events.
  */
 export interface SpanMetrics {
-  spanId: string;
-  parentSpanId?: string;
+  spanId: SpanId;
+  parentSpanId?: SpanId | undefined;
   name: string;
   startedAt: number;
   payload: Record<string, unknown>;

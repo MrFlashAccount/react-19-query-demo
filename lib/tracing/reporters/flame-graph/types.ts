@@ -1,8 +1,8 @@
-import type { Color } from "../../types";
+import type { Color, SpanId } from "../../types";
 
 export interface FlameGraphSpan {
-  spanId: string;
-  parentSpanId?: string;
+  spanId: SpanId;
+  parentSpanId?: SpanId | undefined;
   name: string;
   startTime: number;
   endTime: number;

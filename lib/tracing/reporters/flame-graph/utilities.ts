@@ -256,3 +256,23 @@ function formatDuration(duration: Duration): string {
 function formatUnit(value: number, unit: Unit, shortUnit = true): string {
   return `${value}${shortUnit ? unit.shortUnit : unit.unit}`;
 }
+
+export function addEventListener<
+  T extends AbortSignal,
+  EventName extends "abort"
+>(
+  signal: T,
+  event: EventName,
+  listener: (event: AbortSignalEventMap[EventName]) => void
+): () => void;
+export function addEventListener<
+  T extends HTMLElement,
+  K extends keyof HTMLElementEventMap
+>(
+  el: T,
+  event: K,
+  listener: (event: HTMLElementEventMap[K]) => void
+): () => void {
+  el.addEventListener(event, listener);
+  return () => el.removeEventListener(event, listener);
+}

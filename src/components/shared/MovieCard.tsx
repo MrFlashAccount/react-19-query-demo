@@ -2,6 +2,7 @@ import { useState, useTransition } from "react";
 import type { Movie } from "../../api/types";
 import { StarIcon } from "../shared/StarIcon";
 import { useEvent } from "./useEvent";
+import { MOVIE_CARD_SIZE_CSS } from "./MovieList";
 
 /**
  * Movie card component using custom query library
@@ -25,7 +26,10 @@ export function MovieCard({
   const genres = movie.genres.join(", ") || "Unknown";
 
   return (
-    <div className="group bg-white border border-gray-100 rounded-4xl [corner-shape:superellipse(1.33)] overflow-hidden hover:border-black hover:shadow-lg flex flex-col sm:flex-row max-w-3xl mx-auto w-full">
+    <div
+      className="group bg-white border border-gray-100 rounded-4xl [corner-shape:superellipse(1.33)] overflow-hidden hover:border-black hover:shadow-lg flex flex-col sm:flex-row max-w-3xl mx-auto w-full"
+      style={{ height: MOVIE_CARD_SIZE_CSS }}
+    >
       {/* Movie Info */}
       <div className="p-3 sm:p-4 flex-1 flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">

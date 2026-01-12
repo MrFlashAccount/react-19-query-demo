@@ -1,3 +1,5 @@
+import { brand } from "../types";
+
 export type SpanState = "inactive" | "running" | "ended";
 
 export type Color =
@@ -41,6 +43,8 @@ export type Serializable =
   | Serializable[];
 
 export type ISpanPayload = Serializable;
+export const SpanId = brand<`${string}-${string}`, "SpanId">();
+export type SpanId = typeof SpanId.type;
 
 /**
  * A handle to a span.
@@ -51,7 +55,7 @@ export interface ISpan extends Disposable {
   readonly name: string;
 
   /** Unique identifier for this span */
-  readonly spanId: string;
+  readonly spanId: SpanId;
 
   /** Current state of the span */
   readonly state: SpanState;

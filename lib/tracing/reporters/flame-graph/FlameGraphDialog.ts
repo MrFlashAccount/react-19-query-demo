@@ -9,7 +9,7 @@ import "./FlameGraphRecordButton";
 import "./FlameGraphClearButton";
 import { css, getElement, html } from "./utilities";
 import { drawScheduler } from "./DrawScheduler";
-import { flameGraphState } from "./state";
+import { flameGraphState, selectors } from "./state";
 
 // TypeScript types for Document Picture-in-Picture API
 interface DocumentPictureInPictureOptions {
@@ -165,7 +165,7 @@ export class FlameGraphDialog extends HTMLElement {
   private subscribeToState() {
     // Subscribe to isOpen
     this.unsubs.push(
-      flameGraphState.subscribe<boolean>("isOpen", (isOpen) => {
+      flameGraphState.subscribe(selectors.isOpen, (isOpen) => {
         if (isOpen) {
           this.panel.classList.add("open");
           this.showPopover();
@@ -178,7 +178,7 @@ export class FlameGraphDialog extends HTMLElement {
 
     // Subscribe to height changes
     this.unsubs.push(
-      flameGraphState.subscribe<number>("height", (height) => {
+      flameGraphState.subscribe(selectors.height, (height) => {
         drawScheduler.schedule(() => {
           this.panel.style.height = `${height}px`;
         });
@@ -204,9 +204,7 @@ export class FlameGraphDialog extends HTMLElement {
             aria-modal="true"
             aria-labelledby="flame-graph-dialog-title"
             class="panel ${this.pipSupported ? "pip-supported" : ""}"
-            style="width: 100%; height: ${flameGraphState.store.getKey(
-              "height"
-            )}px;"
+            style="width: 100%; height: ${flameGraphState.getState().height}px;"
           >
             <flame-graph-resize-handle
               position="top"
@@ -264,8 +262,8 @@ export class FlameGraphDialog extends HTMLElement {
     this.shadowRoot
       ?.querySelector("flame-graph-resize-handle")
       ?.addEventListener("resize", ((e: CustomEvent<ResizeEventDetail>) => {
-        const currentHeight = flameGraphState.store.getKey("height");
-        const newHeight = Math.max(300, currentHeight - e.detail.deltaY);
+        const { height } = flameGraphState.getState();
+        const newHeight = Math.max(300, height - e.detail.deltaY);
         flameGraphState.setHeight(newHeight);
       }) as EventListener);
 

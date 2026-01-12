@@ -20,10 +20,4 @@ export type {
 } from "./types";
 
 // Utils
-export {
-  COLOR_PALETTE,
-  formatTime,
-  escapeHtml,
-  lightenColor,
-} from "./styles";
-
+export { COLOR_PALETTE, formatTime, escapeHtml, lightenColor } from "./styles";

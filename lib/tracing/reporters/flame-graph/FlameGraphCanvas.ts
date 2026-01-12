@@ -1,4 +1,9 @@
-import { COLOR_PALETTE, SELECTED_BORDER_COLOR, CSS_VARS } from "./styles";
+import {
+  COLOR_PALETTE,
+  SELECTED_BORDER_COLOR,
+  CSS_VARS,
+  RESET_CASCADE,
+} from "./styles";
 import type { FlameGraphSpan, ViewState } from "./types";
 import { css, getElement, html } from "./utilities";
 import CanvasWorker from "./canvas.worker?worker";
@@ -9,12 +14,15 @@ import type {
   UpdateSpansMessage,
 } from "./canvas.worker";
 import { drawScheduler } from "./DrawScheduler";
-import { flameGraphState } from "./state";
+import { flameGraphState, selectors } from "./state";
+import { SpanId } from "../../types";
 
 const STYLES = css`
   ${CSS_VARS}
 
   :host {
+    ${RESET_CASCADE}
+
     display: block;
     flex: 1;
     position: relative;
@@ -36,9 +44,10 @@ const STYLES = css`
   }
 
   .empty {
-    position: absolute;
-    inset: 0;
     display: flex;
+    flex: none;
+    height: 100%;
+    width: 100%;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -49,7 +58,6 @@ const STYLES = css`
 
   .empty-icon {
     font-size: 32px;
-    opacity: 0.5;
   }
 `;
 
@@ -64,11 +72,10 @@ const PAN_MARGIN_PX = 20;
 
 export class FlameGraphCanvas extends HTMLElement {
   private canvas: HTMLCanvasElement | null = null;
-  private worker: Worker | null = null;
+  private worker!: Worker;
   private resizeObserver: ResizeObserver | null = null;
   private emptyEl: HTMLElement | null = null;
   private workerReady = false;
-  private unsubs: Array<() => void> = [];
 
   // Canvas dimensions (CSS pixels)
   private canvasWidth = 0;
@@ -84,6 +91,7 @@ export class FlameGraphCanvas extends HTMLElement {
 
   private dpr = window.devicePixelRatio || 1;
   private rect!: DOMRectReadOnly;
+  private unmountAbortController = new AbortController();
 
   constructor() {
     super();
@@ -98,17 +106,14 @@ export class FlameGraphCanvas extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this.resizeObserver?.disconnect();
-    this.worker?.terminate();
-    document.removeEventListener("pointermove", this.handlePointerMove);
-    document.removeEventListener("pointerup", this.handlePointerUp);
-    this.unsubs.forEach((u) => u());
+    this.unmountAbortController.abort();
   }
 
   private subscribeToState() {
     // Subscribe to spans changes
-    this.unsubs.push(
-      flameGraphState.subscribe<FlameGraphSpan[]>("spans", (spans) => {
+    flameGraphState.subscribe(
+      selectors.spans,
+      (spans) => {
         if (this.worker && this.workerReady) {
           this.worker.postMessage({
             type: "updateSpans",
@@ -116,18 +121,21 @@ export class FlameGraphCanvas extends HTMLElement {
           } satisfies UpdateSpansMessage);
         }
         this.draw();
-      })
+      },
+      { signal: this.unmountAbortController.signal }
     );
-
-    // Subscribe to other state changes that trigger draw
-    this.unsubs.push(
-      flameGraphState.subscribe("pendingSpans", () => this.draw())
-    );
-    this.unsubs.push(
-      flameGraphState.subscribe("selectedSpanId", () => this.draw())
-    );
-    this.unsubs.push(flameGraphState.subscribe("timeRange", () => this.draw()));
-    this.unsubs.push(flameGraphState.subscribe("viewState", () => this.draw()));
+    flameGraphState.subscribe(selectors.pendingSpans, () => this.draw(), {
+      signal: this.unmountAbortController.signal,
+    });
+    flameGraphState.subscribe(selectors.selectedSpanId, () => this.draw(), {
+      signal: this.unmountAbortController.signal,
+    });
+    flameGraphState.subscribe(selectors.timeRange, () => this.draw(), {
+      signal: this.unmountAbortController.signal,
+    });
+    flameGraphState.subscribe(selectors.viewState, () => this.draw(), {
+      signal: this.unmountAbortController.signal,
+    });
   }
 
   private render() {
@@ -151,7 +159,15 @@ export class FlameGraphCanvas extends HTMLElement {
     this.canvas = getElement<HTMLCanvasElement>("canvas", this.shadowRoot);
 
     // Create worker using Vite's ?worker import
-    this.worker = new CanvasWorker();
+    const worker = new CanvasWorker();
+    this.worker = worker;
+    this.unmountAbortController.signal.addEventListener(
+      "abort",
+      () => {
+        worker.terminate();
+      },
+      { once: true }
+    );
 
     // Transfer canvas control to worker
     const offscreen = this.canvas.transferControlToOffscreen();
@@ -175,19 +191,48 @@ export class FlameGraphCanvas extends HTMLElement {
         }
       }
     });
+    this.unmountAbortController.signal.addEventListener(
+      "abort",
+      () => {
+        this.resizeObserver?.disconnect();
+      },
+      { once: true }
+    );
     this.rect = this.getBoundingClientRect();
-    this.resizeObserver.observe(this);
+    // this.resizeObserver.observe(this);
     this.resizeCanvas(this.rect);
   }
 
   private setupEventListeners() {
-    this.addEventListener("pointerdown", this.handlePointerDown);
-    this.addEventListener("wheel", this.handleWheel, { passive: false });
-    this.addEventListener("click", this.handleClick);
-    this.addEventListener("mousemove", this.handleMouseMoveForCursor);
+    this.addEventListener("pointerdown", this.handlePointerDown, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
 
-    document.addEventListener("pointermove", this.handlePointerMove);
-    document.addEventListener("pointerup", this.handlePointerUp);
+    this.addEventListener("wheel", this.handleWheel, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
+
+    this.addEventListener("click", this.handleClick, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
+
+    this.addEventListener("mousemove", this.handleMouseMoveForCursor, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
+
+    document.addEventListener("pointermove", this.handlePointerMove, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
+
+    document.addEventListener("pointerup", this.handlePointerUp, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
   }
 
   private handleMouseMoveForCursor = (e: MouseEvent) => {
@@ -201,7 +246,7 @@ export class FlameGraphCanvas extends HTMLElement {
 
   private handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    const viewState = flameGraphState.store.getKey("viewState");
+    const { viewState } = flameGraphState.getState();
     this.isDragging = true;
     this.hasDragged = false;
     this.dragStartX = e.clientX;
@@ -221,7 +266,7 @@ export class FlameGraphCanvas extends HTMLElement {
       this.hasDragged = true;
     }
 
-    const viewState = flameGraphState.store.getKey("viewState");
+    const { viewState } = flameGraphState.getState();
     const newViewState = this.clampViewState({
       ...viewState,
       offsetX: this.dragStartOffsetX + dx,
@@ -250,7 +295,7 @@ export class FlameGraphCanvas extends HTMLElement {
     const minZoom = availableWidth / rect.width;
     const maxZoom = 500;
 
-    const viewState = flameGraphState.store.getKey("viewState");
+    const { viewState } = flameGraphState.getState();
 
     // Calculate new zoom (clamped)
     const newZoom = Math.max(
@@ -298,7 +343,7 @@ export class FlameGraphCanvas extends HTMLElement {
   private clampViewState(state: ViewState): ViewState {
     const width = this.canvasWidth;
     const height = this.canvasHeight;
-    const timeRange = flameGraphState.store.getKey("timeRange");
+    const { timeRange } = flameGraphState.getState();
     const { minTime, maxTime } = timeRange;
     const totalDuration = maxTime - minTime;
 
@@ -320,7 +365,7 @@ export class FlameGraphCanvas extends HTMLElement {
     const minOffsetX = width - contentWidth - PAN_MARGIN_PX - PADDING_LEFT;
     offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, offsetX));
 
-    const maxDepth = flameGraphState.maxDepth;
+    const maxDepth = selectors.maxDepth(flameGraphState.getState());
 
     const contentHeight = (maxDepth + 1) * (ROW_HEIGHT + ROW_GAP);
     const maxOffsetY = PADDING_TOP;
@@ -331,14 +376,14 @@ export class FlameGraphCanvas extends HTMLElement {
   }
 
   private resizeCanvas(rect: DOMRectReadOnly) {
-    if (!this.canvas || !this.worker) return;
+    if (!this.canvas) return;
 
     this.canvasWidth = rect.width;
     this.canvasHeight = rect.height;
     this.rect = rect;
 
     drawScheduler.schedule(() => {
-      if (!this.canvas || !this.worker) return;
+      if (!this.canvas) return;
 
       this.canvas.style.width = `${rect.width}px`;
       this.canvas.style.height = `${rect.height}px`;
@@ -359,13 +404,10 @@ export class FlameGraphCanvas extends HTMLElement {
   }
 
   private executeDraw() {
-    if (!this.worker || !this.workerReady) return;
+    if (!this.workerReady) return;
 
-    const spans = flameGraphState.store.getKey("spans");
-    const pendingSpans = flameGraphState.store.getKey("pendingSpans");
-    const selectedSpanId = flameGraphState.store.getKey("selectedSpanId");
-    const timeRange = flameGraphState.store.getKey("timeRange");
-    const viewState = flameGraphState.store.getKey("viewState");
+    const { spans, pendingSpans, selectedSpanId, timeRange, viewState } =
+      flameGraphState.getState();
 
     const hasSpans = spans.length > 0 || pendingSpans.size > 0;
     if (this.emptyEl) {
@@ -393,12 +435,12 @@ export class FlameGraphCanvas extends HTMLElement {
     y: number
   ): FlameGraphSpan | Partial<FlameGraphSpan> | null {
     const width = this.canvasWidth;
-    const timeRange = flameGraphState.store.getKey("timeRange");
+    const { timeRange, viewState, spans, pendingSpans } =
+      flameGraphState.getState();
     const { minTime, maxTime } = timeRange;
     const totalDuration = maxTime - minTime;
     if (totalDuration === 0) return null;
 
-    const viewState = flameGraphState.store.getKey("viewState");
     const { offsetX, offsetY, zoom } = viewState;
     const effectiveOffsetX = offsetX + PADDING_LEFT;
     const effectiveOffsetY = offsetY + PADDING_TOP;
@@ -409,15 +451,12 @@ export class FlameGraphCanvas extends HTMLElement {
     const durationToWidth = (duration: number) =>
       (duration / totalDuration) * width * zoom;
 
-    const spans = flameGraphState.store.getKey("spans");
-    const pendingSpans = flameGraphState.store.getKey("pendingSpans");
-
     const currentTime = performance.now();
     const completedSpanIds = new Set(spans.map((s) => s.spanId));
 
     // Check pending spans first (they render on top)
     for (const [spanId, pending] of pendingSpans) {
-      if (completedSpanIds.has(spanId)) continue;
+      if (completedSpanIds.has(SpanId.unsafeCast(spanId))) continue;
       if (pending.startTime === undefined || pending.depth === undefined)
         continue;
 

@@ -1,6 +1,6 @@
 import { CSS_VARS, BUTTON_STYLES } from "./styles";
 import { css, html } from "./utilities";
-import { flameGraphState } from "./state";
+import { flameGraphState, selectors } from "./state";
 
 const STYLES = css`
   ${CSS_VARS}
@@ -40,7 +40,7 @@ export class FlameGraphRecordButton extends HTMLElement {
   private render() {
     if (!this.shadowRoot) return;
 
-    const isRecording = flameGraphState.store.getKey("isRecording");
+    const { isRecording } = flameGraphState.getState();
 
     this.shadowRoot.innerHTML = html`
       <style>
@@ -57,7 +57,7 @@ export class FlameGraphRecordButton extends HTMLElement {
 
   private subscribeToState() {
     this.unsubs.push(
-      flameGraphState.subscribe<boolean>("isRecording", (isRecording) => {
+      flameGraphState.subscribe(selectors.isRecording, (isRecording) => {
         if (!this.btn) return;
         this.btn.className = this.getClassName(isRecording);
         this.btn.textContent = this.getLabel(isRecording);

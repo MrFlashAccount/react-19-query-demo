@@ -1,6 +1,9 @@
 type Nominal<Value, Type extends string> = ((
   value: Value
-) => BrandValue<Value, Type>) & { readonly type: BrandValue<Value, Type> };
+) => BrandValue<Value, Type>) & {
+  readonly type: BrandValue<Value, Type>;
+  readonly unsafeCast: (value: unknown) => BrandValue<Value, Type>;
+};
 
 export function brand<Value, const Type extends string>(): Nominal<
   Value,
@@ -27,6 +30,13 @@ export function brand<Value, const Type extends string>(): Nominal<
     configurable: false,
   });
 
+  Object.defineProperty(nominal, "unsafeCast", {
+    value: (value: unknown) => value as BrandValue<Value, Type>,
+    writable: false,
+    enumerable: false,
+    configurable: false,
+  });
+
   return nominal as Nominal<Value, Type> & { type: Type };
 }
 
@@ -45,7 +55,7 @@ type Brand<Type extends string> = {
 };
 
 type BrandValue<Value, Type extends string> = Value &
-  Brand<Type> & { readonly type: Type };
+  Brand<Type> & { readonly type: Type; unsafeCast: (value: unknown) => Value };
 
 type GenericNominal<Type extends string> = {
   <T>(value: T): BrandValue<T, Type>;

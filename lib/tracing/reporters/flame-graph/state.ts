@@ -1,363 +1,388 @@
-import type { FlameGraphSpan, TimeRange, ViewState } from "./types";
+import type { SpanId } from "../../types";
+import type { FlameGraphSpan, TimeRange } from "./types";
+import { addEventListener } from "./utilities";
 
-type Listener<V> = (value: V) => void;
+type SetStateAction<T> = Partial<T> | ((state: T) => Partial<T>);
+type StateListener<T> = (state: T, prevState: T) => void;
+type Selector<T, U> = (state: T) => U;
+type EqualityFn<T> = (a: T, b: T) => boolean;
 
-export class Store<T extends object> {
-  private state: T;
-  private listeners = new Map<string, Set<Listener<unknown>>>();
-
-  constructor(private defaultState: T) {
-    this.state = { ...defaultState };
-  }
-
-  // Get value at dot path (e.g., "viewState.zoom")
-  get<V = unknown>(path: string): V {
-    return this.getAtPath(this.state, path) as V;
-  }
-
-  // Get top-level key with type safety
-  getKey<K extends keyof T>(key: K): T[K] {
-    return this.state[key];
-  }
-
-  getSnapshot(): Readonly<T> {
-    return this.state;
-  }
-
-  // Set value at path
-  set(path: string, value: unknown): void {
-    const prev = this.getAtPath(this.state, path);
-    if (this.isEqual(prev, value)) return;
-
-    this.state = this.setAtPath(this.state, path, value);
-    this.notifyPath(path, value, prev);
-  }
-
-  // Set top-level key (optimized, type-safe)
-  setKey<K extends keyof T>(key: K, value: T[K]): void {
-    const prev = this.state[key];
-    if (this.isEqual(prev, value)) return;
-
-    this.state = { ...this.state, [key]: value };
-    this.notifyPath(key as string, value, prev);
-  }
-
-  // Batch update multiple top-level properties
-  update(partial: Partial<T>): void {
-    const changed: Array<{ key: string; value: unknown; prev: unknown }> = [];
-
-    for (const key of Object.keys(partial)) {
-      const value = partial[key as keyof T];
-      const prev = this.state[key as keyof T];
-      if (!this.isEqual(prev, value)) {
-        changed.push({ key, value, prev });
-      }
-    }
-
-    if (changed.length === 0) return;
-
-    this.state = { ...this.state, ...partial };
-    for (const { key, value, prev } of changed) {
-      this.notifyPath(key, value, prev);
-    }
-  }
-
-  // Subscribe to path changes (supports deep paths like "viewState.zoom")
-  subscribe<V = unknown>(path: string, listener: Listener<V>): () => void {
-    if (!this.listeners.has(path)) {
-      this.listeners.set(path, new Set());
-    }
-
-    this.listeners.get(path)!.add(listener as Listener<unknown>);
-
-    return () => {
-      this.listeners.get(path)?.delete(listener as Listener<unknown>);
-    };
-  }
-
-  // Subscribe to multiple paths
-  subscribeMany(
-    paths: string[],
-    listener: (values: Record<string, unknown>) => void
-  ): () => void {
-    const unsubs = paths.map((path) =>
-      this.subscribe(path, () => {
-        const values: Record<string, unknown> = {};
-        for (const p of paths) {
-          values[p] = this.getAtPath(this.state, p);
-        }
-        listener(values);
-      })
-    );
-    return () => unsubs.forEach((u) => u());
-  }
-
-  // Reset to default state
-  reset(): void {
-    const prev = this.state;
-    this.state = { ...this.defaultState };
-    for (const key of Object.keys(prev)) {
-      const k = key as keyof T;
-      if (!this.isEqual(prev[k], this.state[k])) {
-        this.notifyPath(key, this.state[k], prev[k]);
-      }
-    }
-  }
-
-  // Internal: get value at dot-separated path
-  private getAtPath(obj: unknown, path: string): unknown {
-    const keys = path.split(".");
-    let current = obj;
-    for (const key of keys) {
-      if (current == null || typeof current !== "object") return undefined;
-      current = (current as Record<string, unknown>)[key];
-    }
-    return current;
-  }
-
-  // Internal: immutable set at path
-  private setAtPath<O extends object>(obj: O, path: string, value: unknown): O {
-    const keys = path.split(".");
-    if (keys.length === 1) {
-      return { ...obj, [keys[0]]: value };
-    }
-
-    const [first, ...rest] = keys;
-    const nested = (obj as Record<string, unknown>)[first];
-    return {
-      ...obj,
-      [first]: this.setAtPath(nested as object, rest.join("."), value),
-    };
-  }
-
-  // Notify listeners for path and child paths
-  private notifyPath(path: string, value: unknown, prev: unknown): void {
-    // Notify exact path listeners
-    const listeners = this.listeners.get(path);
-    if (listeners) {
-      for (const listener of listeners) {
-        listener(value);
-      }
-    }
-
-    // Notify child path listeners when parent changes (e.g., "viewState.zoom" when "viewState" changes)
-    if (typeof value === "object" && value !== null) {
-      for (const [listenerPath, pathListeners] of this.listeners) {
-        if (listenerPath.startsWith(path + ".") && pathListeners.size > 0) {
-          const suffix = listenerPath.slice(path.length + 1);
-          const childValue = this.getAtPath(value, suffix);
-          const childPrev = this.getAtPath(prev, suffix);
-          if (!this.isEqual(childValue, childPrev)) {
-            for (const listener of pathListeners) {
-              listener(childValue);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  private isEqual(a: unknown, b: unknown): boolean {
-    if (a === b) return true;
-    if (a instanceof Map && b instanceof Map) {
-      if (a.size !== b.size) return false;
-      for (const [k, v] of a) {
-        if (!b.has(k) || b.get(k) !== v) return false;
-      }
-      return true;
-    }
-    if (Array.isArray(a) && Array.isArray(b)) {
-      return a.length === b.length && a === b;
-    }
-    if (typeof a === "object" && typeof b === "object" && a && b) {
-      const aKeys = Object.keys(a);
-      const bKeys = Object.keys(b);
-      if (aKeys.length !== bKeys.length) return false;
-      return aKeys.every(
-        (k) =>
-          (a as Record<string, unknown>)[k] ===
-          (b as Record<string, unknown>)[k]
-      );
-    }
-    return false;
-  }
+export interface SubscribeOptions<U> {
+  equalityFn?: EqualityFn<U>;
+  fireImmediately?: boolean;
+  signal?: AbortSignal;
 }
 
-export interface FlameGraphState {
+export interface StoreApi<T> {
+  getState: () => T;
+  setState: (action: SetStateAction<T>, replace?: boolean) => void;
+  subscribe: {
+    (
+      listener: StateListener<T>,
+      options?: { signal?: AbortSignal }
+    ): () => void;
+    <U>(
+      selector: Selector<T, U>,
+      listener: (selected: U, prevSelected: U) => void,
+      options?: SubscribeOptions<U>
+    ): () => void;
+  };
+  getInitialState: () => T;
+  destroy: () => void;
+}
+
+export type StateCreator<T> = (
+  set: StoreApi<T>["setState"],
+  get: StoreApi<T>["getState"],
+  api: StoreApi<T>
+) => T;
+
+const defaultEqualityFn = <T>(a: T, b: T): boolean => {
+  if (a === b) return true;
+  if (a instanceof Map && b instanceof Map) {
+    if (a.size !== b.size) return false;
+    for (const [k, v] of a) {
+      if (!b.has(k) || b.get(k) !== v) return false;
+    }
+    return true;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a === b;
+  }
+  if (typeof a === "object" && typeof b === "object" && a && b) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every(
+      (k) =>
+        (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k]
+    );
+  }
+  return false;
+};
+
+export function createStore<T extends Record<string, unknown>>(
+  initialState: T | StateCreator<T>
+): StoreApi<T> {
+  const listeners = new Set<StateListener<T>>();
+  let state: T;
+  let initialStateValue: T;
+
+  const getState = () => state;
+  const getInitialState = () => initialStateValue;
+
+  const setState: StoreApi<T>["setState"] = (action, replace) => {
+    const prevState = state;
+    const partial = typeof action === "function" ? action(state) : action;
+
+    // Check if anything actually changed
+    const hasChanged = Object.keys(partial).some(
+      (key) =>
+        !defaultEqualityFn(partial[key as keyof T], prevState[key as keyof T])
+    );
+
+    if (!hasChanged) return;
+
+    state = replace ? (partial as T) : { ...state, ...partial };
+
+    for (const listener of listeners) {
+      listener(state, prevState);
+    }
+  };
+
+  // Overloaded subscribe: full state or with selector
+  const subscribe: StoreApi<T>["subscribe"] = <U>(
+    listenerOrSelector: StateListener<T> | Selector<T, U>,
+    maybeListenerOrOptions?:
+      | ((selected: U, prevSelected: U) => void)
+      | SubscribeOptions<U>,
+    options: SubscribeOptions<U> = {}
+  ): (() => void) => {
+    // Selector + listener case: second arg is a function
+    if (typeof maybeListenerOrOptions === "function") {
+      const selector = listenerOrSelector as Selector<T, U>;
+      const listener = maybeListenerOrOptions;
+      const equalityFn = options.equalityFn ?? defaultEqualityFn;
+      const defaultController = new AbortController();
+      const signal = options.signal ?? defaultController.signal;
+
+      let currentSlice = selector(state);
+
+      if (options.fireImmediately) {
+        listener(currentSlice, currentSlice);
+      }
+
+      const wrappedListener: StateListener<T> = (nextState, prevState) => {
+        const nextSlice = selector(nextState);
+        const prevSlice = selector(prevState);
+
+        if (!equalityFn(nextSlice, prevSlice)) {
+          const prev = currentSlice;
+          currentSlice = nextSlice;
+          listener(nextSlice, prev);
+        }
+      };
+
+      listeners.add(wrappedListener);
+      const cleanups = [
+        addEventListener(signal, "abort", () => {
+          listeners.delete(wrappedListener);
+          cleanups.forEach((cleanup) => cleanup());
+        }),
+        addEventListener(defaultController.signal, "abort", () => {
+          listeners.delete(wrappedListener);
+          cleanups.forEach((cleanup) => cleanup());
+        }),
+      ];
+      return () => {
+        defaultController.abort();
+        cleanups.forEach((cleanup) => cleanup());
+      };
+    }
+
+    // Simple listener case: no selector
+    const listener = listenerOrSelector as StateListener<T>;
+    const defaultController = new AbortController();
+    const signal = options.signal ?? defaultController.signal;
+    listeners.add(listener);
+    const cleanup = addEventListener(signal, "abort", () => {
+      listeners.delete(listener);
+      cleanup();
+    });
+
+    return () => {
+      defaultController.abort();
+      cleanup();
+    };
+  };
+
+  const destroy = () => listeners.clear();
+
+  const api: StoreApi<T> = {
+    getState,
+    setState,
+    subscribe,
+    getInitialState,
+    destroy,
+  };
+
+  // Initialize state
+  if (typeof initialState === "function") {
+    state = initialState(setState, getState, api);
+    initialStateValue = { ...state };
+  } else {
+    state = { ...initialState };
+    initialStateValue = { ...initialState };
+  }
+
+  return api;
+}
+
+// Selector helpers
+export const shallow = <T>(a: T, b: T): boolean => defaultEqualityFn(a, b);
+
+export interface FlameGraphViewState {
+  offsetX: number;
+  offsetY: number;
+  zoom: number;
+  isOpen: boolean;
+  isPipMode: boolean;
+  height: number;
+  detailsPanel: {
+    position: "bottom-right" | "bottom-left" | "top-right" | "top-left";
+    open: boolean;
+    height: number;
+    width: number;
+  };
+  canvas: {
+    width: number;
+    height: number;
+  };
+}
+
+export interface FlameGraphState extends Record<string, unknown> {
   spans: FlameGraphSpan[];
   pendingSpans: Map<string, Partial<FlameGraphSpan>>;
-  selectedSpanId: string | null;
+  selectedSpanId: SpanId | null;
   timeRange: TimeRange;
-  viewState: ViewState;
+  viewState: FlameGraphViewState;
   isRecording: boolean;
   isOpen: boolean;
   isPipMode: boolean;
   height: number;
 }
 
-const DEFAULT_STATE: FlameGraphState = {
+const INITIAL_STATE: FlameGraphState = {
   spans: [],
   pendingSpans: new Map(),
   selectedSpanId: null,
   timeRange: { minTime: 0, maxTime: 0 },
-  viewState: { offsetX: 0, offsetY: 0, zoom: 1 },
+  viewState: {
+    offsetX: 0,
+    offsetY: 0,
+    zoom: 1,
+    isOpen: false,
+    isPipMode: false,
+    height: 350,
+    detailsPanel: {
+      position: "bottom-right",
+      open: false,
+      height: 100,
+      width: 100,
+    },
+    canvas: { width: 1000, height: 1000 },
+  },
   isRecording: false,
   isOpen: false,
   isPipMode: false,
   height: 350,
 };
 
-class FlameGraphStateManager {
-  readonly store = new Store<FlameGraphState>(DEFAULT_STATE);
-
-  // Proxy common store methods
-  get = this.store.get.bind(this.store);
-  set = this.store.set.bind(this.store);
-  subscribe = this.store.subscribe.bind(this.store);
-  subscribeMany = this.store.subscribeMany.bind(this.store);
-  getSnapshot = this.store.getSnapshot.bind(this.store);
-
-  // === State API ===
-
-  // Spans
-  addSpan(span: FlameGraphSpan): void {
-    this.store.setKey("spans", [...this.store.getKey("spans"), span]);
-  }
-
-  addPendingSpan(spanId: string, partial: Partial<FlameGraphSpan>): void {
-    const next = new Map(this.store.getKey("pendingSpans"));
-    next.set(spanId, partial);
-    this.store.setKey("pendingSpans", next);
-  }
-
-  updatePendingSpan(spanId: string, partial: Partial<FlameGraphSpan>): void {
-    const pending = this.store.getKey("pendingSpans");
-    const existing = pending.get(spanId);
-    if (!existing) return;
-    const next = new Map(pending);
-    next.set(spanId, { ...existing, ...partial });
-    this.store.setKey("pendingSpans", next);
-  }
-
-  completePendingSpan(spanId: string, span: FlameGraphSpan): void {
-    const next = new Map(this.store.getKey("pendingSpans"));
-    next.delete(spanId);
-    this.store.update({
-      pendingSpans: next,
-      spans: [...this.store.getKey("spans"), span],
-    });
-  }
-
-  removePendingSpan(spanId: string): void {
-    const pending = this.store.getKey("pendingSpans");
-    if (!pending.has(spanId)) return;
-    const next = new Map(pending);
-    next.delete(spanId);
-    this.store.setKey("pendingSpans", next);
-  }
-
-  setHeight(height: number): void {
-    this.store.setKey("height", height);
-  }
-
-  // Selection
-  selectSpan(spanId: string | null): void {
-    this.store.setKey("selectedSpanId", spanId);
-  }
-
-  // View
-  setViewState(viewState: ViewState): void {
-    this.store.setKey("viewState", viewState);
-  }
-
-  setTimeRange(timeRange: TimeRange): void {
-    this.store.setKey("timeRange", timeRange);
-  }
-
-  // Recording
-  startRecording(): void {
-    this.clear();
-    this.store.setKey("isRecording", true);
-  }
-
-  stopRecording(): void {
-    this.store.setKey("isRecording", false);
-  }
-
-  toggleRecording(): boolean {
-    const next = !this.store.getKey("isRecording");
-    if (next) {
-      this.startRecording();
-    } else {
-      this.stopRecording();
-    }
-    return next;
-  }
-
-  // Dialog
-  open(): void {
-    this.store.setKey("isOpen", true);
-  }
-
-  close(): void {
-    this.store.update({
-      isOpen: false,
-      isPipMode: false,
-    });
-  }
-
-  // PiP
-  enterPip(): void {
-    this.store.setKey("isPipMode", true);
-  }
-
-  exitPip(): void {
-    this.store.setKey("isPipMode", false);
-  }
-
-  // Reset
-  clear(): void {
-    this.store.update({
-      spans: [],
-      pendingSpans: new Map(),
-      selectedSpanId: null,
-      timeRange: { minTime: 0, maxTime: 0 },
-      viewState: { offsetX: 0, offsetY: 0, zoom: 1 },
-    });
-  }
-
-  reset(): void {
-    this.store.reset();
-  }
-
-  // Computed getters
-  get spanCount(): number {
-    return (
-      this.store.getKey("spans").length + this.store.getKey("pendingSpans").size
-    );
-  }
-
-  get hasSpans(): boolean {
-    return this.spanCount > 0;
-  }
-
-  get zoomPercent(): number {
-    return Math.round(this.store.getKey("viewState").zoom * 100);
-  }
-
-  get maxDepth(): number {
+export const selectors = {
+  spans: (s: FlameGraphState) => s.spans,
+  pendingSpans: (s: FlameGraphState) => s.pendingSpans,
+  selectedSpanId: (s: FlameGraphState) => s.selectedSpanId,
+  timeRange: (s: FlameGraphState) => s.timeRange,
+  viewState: (s: FlameGraphState) => s.viewState,
+  isRecording: (s: FlameGraphState) => s.isRecording,
+  isOpen: (s: FlameGraphState) => s.isOpen,
+  isPipMode: (s: FlameGraphState) => s.isPipMode,
+  height: (s: FlameGraphState) => s.height,
+  zoom: (s: FlameGraphState) => s.viewState.zoom,
+  zoomPercent: (s: FlameGraphState) => Math.round(s.viewState.zoom * 100),
+  spanCount: (s: FlameGraphState) => s.spans.length + s.pendingSpans.size,
+  hasSpans: (s: FlameGraphState) => s.spans.length + s.pendingSpans.size > 0,
+  maxDepth: (s: FlameGraphState) => {
     let max = 0;
-    for (const span of this.store.getKey("spans")) {
+    for (const span of s.spans) {
       if (span.depth > max) max = span.depth;
     }
-    for (const [, pending] of this.store.getKey("pendingSpans")) {
+    for (const [, pending] of s.pendingSpans) {
       if (pending.depth !== undefined && pending.depth > max) {
         max = pending.depth;
       }
     }
     return max;
-  }
+  },
+} as const;
+
+function createActions(store: StoreApi<FlameGraphState>) {
+  const { getState, setState } = store;
+
+  return {
+    // Spans
+    addSpan(span: FlameGraphSpan) {
+      setState((s) => ({ spans: [...s.spans, span] }));
+    },
+
+    addPendingSpan(spanId: string, partial: Partial<FlameGraphSpan>) {
+      setState((s) => {
+        const next = new Map(s.pendingSpans);
+        next.set(spanId, partial);
+        return { pendingSpans: next };
+      });
+    },
+
+    updatePendingSpan(spanId: string, partial: Partial<FlameGraphSpan>) {
+      const { pendingSpans } = getState();
+      const existing = pendingSpans.get(spanId);
+      if (!existing) return;
+      const next = new Map(pendingSpans);
+      next.set(spanId, { ...existing, ...partial });
+      setState({ pendingSpans: next });
+    },
+
+    completePendingSpan(spanId: string, span: FlameGraphSpan) {
+      setState((s) => {
+        const next = new Map(s.pendingSpans);
+        next.delete(spanId);
+        return { pendingSpans: next, spans: [...s.spans, span] };
+      });
+    },
+
+    removePendingSpan(spanId: string) {
+      const { pendingSpans } = getState();
+      if (!pendingSpans.has(spanId)) return;
+      const next = new Map(pendingSpans);
+      next.delete(spanId);
+      setState({ pendingSpans: next });
+    },
+
+    // Selection
+    selectSpan(spanId: SpanId | null) {
+      setState({ selectedSpanId: spanId });
+    },
+
+    // View
+    setViewState(viewState: Partial<FlameGraphViewState>) {
+      setState((s) => ({
+        viewState: { ...s.viewState, ...viewState },
+      }));
+    },
+
+    setTimeRange(timeRange: TimeRange) {
+      setState({ timeRange });
+    },
+
+    setHeight(height: number) {
+      setState({ height });
+    },
+
+    // Recording
+    startRecording() {
+      setState({ ...INITIAL_STATE, isRecording: true });
+    },
+
+    stopRecording() {
+      setState({ isRecording: false });
+    },
+
+    toggleRecording(): boolean {
+      const next = !getState().isRecording;
+      if (next) {
+        setState({ ...INITIAL_STATE, isRecording: true });
+      } else {
+        setState({ isRecording: false });
+      }
+      return next;
+    },
+
+    // Dialog
+    open() {
+      setState({ isOpen: true });
+    },
+
+    close() {
+      setState({ isOpen: false, isPipMode: false });
+    },
+
+    // PiP
+    enterPip() {
+      setState({ isPipMode: true });
+    },
+
+    exitPip() {
+      setState({ isPipMode: false });
+    },
+
+    // Reset
+    clear() {
+      setState(INITIAL_STATE);
+    },
+
+    reset() {
+      setState(store.getInitialState(), true);
+    },
+  };
 }
 
-// Singleton instance
-export const flameGraphState = new FlameGraphStateManager();
+const store = createStore(() => INITIAL_STATE);
+const actions = createActions(store);
+
+// Public API: store + actions + selectors
+export const flameGraphState = {
+  getState: store.getState,
+  subscribe: store.subscribe,
+  ...actions,
+  selectors,
+};

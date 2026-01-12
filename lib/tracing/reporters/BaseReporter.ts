@@ -6,6 +6,7 @@ import type {
   SpanStartEvent,
   SpanEndEvent,
   SpanEvent,
+  SpanId,
 } from "../types";
 import { IReporter, type BaseReporterOptions, type SpanMetrics } from "./types";
 
@@ -34,15 +35,12 @@ import { IReporter, type BaseReporterOptions, type SpanMetrics } from "./types";
  * reporter.start();
  * ```
  */
-export abstract class BaseReporter
-  extends IReporter
-  implements IEventReceiver
-{
+export abstract class BaseReporter extends IReporter implements IEventReceiver {
   private unregister: () => void = noop;
   private batcher?: Batcher<TraceEvent>;
 
   private readonly options: Required<BaseReporterOptions>;
-  protected readonly spans = new Map<string, SpanMetrics>();
+  protected readonly spans = new Map<SpanId, SpanMetrics>();
 
   constructor(options: BaseReporterOptions = {}) {
     super();
@@ -134,7 +132,7 @@ export abstract class BaseReporter
    * Get tracked metrics for a span.
    * Returns undefined if span wasn't tracked or already ended.
    */
-  protected getSpanMetrics(spanId: string): SpanMetrics | undefined {
+  protected getSpanMetrics(spanId: SpanId): SpanMetrics | undefined {
     return this.spans.get(spanId);
   }
 
@@ -142,7 +140,7 @@ export abstract class BaseReporter
    * Stop tracking a span. Call from onSpanEnd.
    * Returns the metrics if they existed.
    */
-  protected untrackSpan(spanId: string): SpanMetrics | undefined {
+  protected untrackSpan(spanId: SpanId): SpanMetrics | undefined {
     const metrics = this.spans.get(spanId);
     this.spans.delete(spanId);
     return metrics;

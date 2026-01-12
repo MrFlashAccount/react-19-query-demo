@@ -8,7 +8,7 @@
  * - Depth filtering: skips spans outside visible vertical range
  */
 
-import type { Color } from "../../types";
+import { Color, SpanId } from "../../types";
 import type { FlameGraphSpan, TimeRange, ViewState } from "./types";
 import { ui, spanText, timeline } from "./styles";
 import { generateNiceTicks, MIN_TICK_SPACING, PADDING_LEFT } from "./utilities";
@@ -49,7 +49,7 @@ export interface DrawMessage {
   height: number;
   dpr: number;
   pendingSpans: Array<[string, Partial<FlameGraphSpan>]>;
-  selectedSpanId: string | null;
+  selectedSpanId: SpanId | null;
   timeRange: TimeRange;
   viewState: ViewState;
 }
@@ -172,7 +172,7 @@ class Span {
     effectiveOffsetY: number,
     viewportWidth: number,
     viewportHeight: number,
-    selectedSpanId: string | null
+    selectedSpanId: SpanId | null
   ): void {
     const rawX = timeToX(span.startTime);
     const y = span.depth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
@@ -254,7 +254,7 @@ class Span {
     viewportWidth: number,
     viewportHeight: number,
     currentTime: number,
-    selectedSpanId: string | null
+    selectedSpanId: SpanId | null
   ): void {
     if (pending.startTime === undefined || pending.depth === undefined) return;
 
@@ -460,7 +460,7 @@ class SpansStore {
     timeEnd: number,
     depthStart: number,
     depthEnd: number
-  ): Set<string> {
+  ): Set<SpanId> {
     const visible = this.queryVisible(timeStart, timeEnd, depthStart, depthEnd);
     return new Set(visible.map((s) => s.spanId));
   }
@@ -567,7 +567,7 @@ function draw(msg: DrawMessage): void {
   // Draw pending spans (skip completed ones)
   const currentTime = performance.now();
   for (const [spanId, pending] of pendingSpans) {
-    if (completedSpanIds.has(spanId)) continue;
+    if (completedSpanIds.has(SpanId.unsafeCast(spanId))) continue;
     if (pending.depth === undefined) continue;
     if (pending.depth < visibleDepthStart || pending.depth > visibleDepthEnd)
       continue;

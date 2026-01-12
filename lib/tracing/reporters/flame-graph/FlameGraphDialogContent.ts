@@ -2,7 +2,7 @@ import { CSS_VARS, ui } from "./styles";
 import type { FlameGraphSpan } from "./types";
 import { css, getElement, html } from "./utilities";
 import { drawScheduler } from "./DrawScheduler";
-import { flameGraphState } from "./state";
+import { flameGraphState, selectors } from "./state";
 
 // Import components to ensure they're registered
 import "./FlameGraphTimeline";
@@ -76,16 +76,16 @@ export class FlameGraphDialogContent extends HTMLElement {
   }
 
   private subscribeToState() {
-    // Subscribe to spans/pendingSpans for count display
+    // Subscribe to spans for count display
     this.unsubs.push(
-      flameGraphState.subscribe<FlameGraphSpan[]>("spans", (spans) =>
+      flameGraphState.subscribe(selectors.spans, (spans) =>
         this.updateSpansCount(spans.length)
       )
     );
 
     // Subscribe to viewState.zoom for zoom display
     this.unsubs.push(
-      flameGraphState.subscribe<number>("viewState.zoom", (zoom) => {
+      flameGraphState.subscribe(selectors.zoom, (zoom) => {
         drawScheduler.schedule(() => {
           if (this.zoomLevelEl) {
             this.zoomLevelEl.textContent = `Zoom: ${Math.round(zoom * 100)}%`;
@@ -96,7 +96,7 @@ export class FlameGraphDialogContent extends HTMLElement {
 
     // Subscribe to selectedSpanId for details panel
     this.unsubs.push(
-      flameGraphState.subscribe<string | null>("selectedSpanId", (spanId) => {
+      flameGraphState.subscribe(selectors.selectedSpanId, (spanId) => {
         if (spanId) {
           const span = this.findSpanById(spanId);
           if (span) {
@@ -112,8 +112,7 @@ export class FlameGraphDialogContent extends HTMLElement {
   private findSpanById(
     spanId: string
   ): FlameGraphSpan | Partial<FlameGraphSpan> | null {
-    const spans = flameGraphState.store.getKey("spans");
-    const pendingSpans = flameGraphState.store.getKey("pendingSpans");
+    const { spans, pendingSpans } = flameGraphState.getState();
 
     const found = spans.find((s) => s.spanId === spanId);
     if (found) return found;

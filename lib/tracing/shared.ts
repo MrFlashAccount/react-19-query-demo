@@ -14,7 +14,7 @@ export function executeWithSpan<T>(span: ISpan, fn: (span: ISpan) => T): T {
   try {
     const result = fn(span);
 
-    if (result instanceof Promise) {
+    if (isPromiseLike<T>(result)) {
       return result.then(
         (val) => {
           span.success();
@@ -52,4 +52,13 @@ export function createTracedDecorator(
       return descriptor;
     };
   };
+}
+
+function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "then" in value &&
+    typeof (value as PromiseLike<T>).then === "function"
+  );
 }
