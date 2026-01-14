@@ -1,12 +1,12 @@
-import { CSS_VARS, BUTTON_STYLES, ui } from "./styles";
+import { CSS_VARS, HOST_STYLES, theme } from "./styles";
 import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
 import type { FlameGraphDialogContent } from "./FlameGraphDialogContent";
+import type { Position } from "./types";
+import { addEventListener } from "./utilities";
 
 // Import components to ensure they're registered
 import "./FlameGraphDialogContent";
 import "./FlameGraphResizeHandle";
-import "./FlameGraphRecordButton";
-import "./FlameGraphClearButton";
 import { css, getElement, html } from "./utilities";
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
@@ -30,14 +30,28 @@ declare global {
 }
 
 const STYLES = css`
-  ${CSS_VARS}
-  ${BUTTON_STYLES}
+  ${HOST_STYLES}
 
   flame-graph-resize-handle {
     position: absolute;
+  }
+
+  flame-graph-resize-handle[position="top"] {
     top: 0;
     left: 0;
     right: 0;
+  }
+
+  flame-graph-resize-handle[position="left"] {
+    top: 0;
+    left: 0;
+    bottom: 0;
+  }
+
+  flame-graph-resize-handle[position="right"] {
+    top: 0;
+    right: 0;
+    bottom: 0;
   }
 
   .layout-isolated {
@@ -61,13 +75,6 @@ const STYLES = css`
 
   .panel {
     position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    height: 350px;
-    min-height: 300px;
-    max-height: 80vh;
     margin: 0;
     padding: 0;
     border: none;
@@ -76,7 +83,6 @@ const STYLES = css`
       var(--fg-bg-primary) 0%,
       var(--fg-bg-secondary) 100%
     );
-    border-radius: var(--fg-radius-xl) var(--fg-radius-xl) 0 0;
     flex-direction: column;
     overflow: clip;
     font-family: var(--fg-font);
@@ -86,58 +92,54 @@ const STYLES = css`
     pointer-events: auto;
   }
 
+  /* Position: bottom */
+  .panel.position-bottom {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: ${theme.radius.xl}px ${theme.radius.xl}px 0 0;
+  }
+
+  /* Position: left */
+  .panel.position-left {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    border-radius: 0 ${theme.radius.xl}px ${theme.radius.xl}px 0;
+  }
+
+  /* Position: right */
+  .panel.position-right {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: ${theme.radius.xl}px 0 0 ${theme.radius.xl}px;
+  }
+
   .panel.resizing {
-    will-change: height;
+    will-change: height, width;
   }
 
   .panel.open {
     display: flex;
   }
 
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    background: ${ui.surfaceActive};
-    border-bottom: 1px solid var(--fg-border);
-    flex-shrink: 0;
-  }
-
-  .title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--fg-text);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .controls {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-
-  .pip-btn {
-    display: none;
-  }
-
-  .pip-supported .pip-btn {
-    display: inline-flex;
-  }
-
   flame-graph-dialog-content {
     flex: 1;
     min-height: 0;
+    min-width: 0;
+    overflow: hidden;
   }
 `;
 
 export class FlameGraphDialog extends HTMLElement {
+  shadowRoot!: ShadowRoot;
   private panel!: HTMLDivElement;
   private content!: FlameGraphDialogContent;
-  private pipSupported = false;
+  private resizeHandle!: HTMLElement;
   private unsubs: Array<() => void> = [];
+  private resizeObserver: ResizeObserver | null = null;
 
   static get observedAttributes() {
     return ["popover"];
@@ -145,7 +147,7 @@ export class FlameGraphDialog extends HTMLElement {
 
   constructor() {
     super();
-    this.attachShadow({ mode: "open" });
+    this.shadowRoot = this.attachShadow({ mode: "open" });
   }
 
   connectedCallback() {
@@ -155,11 +157,45 @@ export class FlameGraphDialog extends HTMLElement {
     this.subscribeToState();
     this.style.all = "unset";
     this.style.colorScheme = "dark";
-    this.pipSupported = "documentPictureInPicture" in window;
   }
 
   disconnectedCallback() {
     this.unsubs.forEach((u) => u());
+    this.resizeObserver?.disconnect();
+  }
+
+  /**
+   * Apply calculated layout to the dialog panel.
+   * All sizing/positioning comes from the layout state.
+   */
+  private applyLayoutToPanel(
+    layout: ReturnType<typeof selectors.dialogLayout>
+  ) {
+    this.panel.style.width = `${layout.width}px`;
+    this.panel.style.height = `${layout.height}px`;
+    this.panel.style.top = layout.position.top;
+    this.panel.style.left = layout.position.left;
+    this.panel.style.right = layout.position.right;
+    this.panel.style.bottom = layout.position.bottom;
+  }
+
+  private updatePanelPosition(position: Position) {
+    if (!this.panel || !this.resizeHandle) return;
+
+    // Remove old position classes
+    this.panel.classList.remove(
+      "position-bottom",
+      "position-left",
+      "position-right"
+    );
+    // Add new position class
+    this.panel.classList.add(`position-${position}`);
+
+    // Update resize handle position
+    this.resizeHandle.setAttribute(
+      "position",
+      selectors.getHandlePosition(position)
+    );
   }
 
   private subscribeToState() {
@@ -176,18 +212,29 @@ export class FlameGraphDialog extends HTMLElement {
       })
     );
 
-    // Subscribe to height changes
+    // Subscribe to dialog position changes (for CSS class updates)
     this.unsubs.push(
-      flameGraphState.subscribe(selectors.height, (height) => {
+      flameGraphState.subscribe(selectors.dialogPosition, (position) => {
         drawScheduler.schedule(() => {
-          this.panel.style.height = `${height}px`;
+          this.updatePanelPosition(position);
+        });
+      })
+    );
+
+    // Single subscription to calculated layout - applies all sizing
+    this.unsubs.push(
+      flameGraphState.subscribe(selectors.dialogLayout, (layout) => {
+        drawScheduler.schedule(() => {
+          this.applyLayoutToPanel(layout);
         });
       })
     );
   }
 
   private render() {
-    if (!this.shadowRoot) return;
+    const layout = selectors.dialogLayout(flameGraphState.getState());
+    const orientation = selectors.dialogPosition(flameGraphState.getState());
+    const resizeHandlePosition = selectors.getHandlePosition(orientation);
 
     this.shadowRoot.innerHTML = html`
       <style>
@@ -203,35 +250,12 @@ export class FlameGraphDialog extends HTMLElement {
             role="dialog"
             aria-modal="true"
             aria-labelledby="flame-graph-dialog-title"
-            class="panel ${this.pipSupported ? "pip-supported" : ""}"
-            style="width: 100%; height: ${flameGraphState.getState().height}px;"
+            class="panel position-${orientation}"
+            style="width: ${layout.width}px; height: ${layout.height}px;"
           >
             <flame-graph-resize-handle
-              position="top"
+              position="${resizeHandlePosition}"
             ></flame-graph-resize-handle>
-            <div class="header">
-              <div class="title" id="flame-graph-dialog-title">
-                🔥 Flame Graph
-              </div>
-              <div class="controls">
-                <flame-graph-record-button></flame-graph-record-button>
-                <flame-graph-clear-button></flame-graph-clear-button>
-                <button
-                  class="pip-btn icon-only"
-                  data-action="pip"
-                  aria-label="Picture in Picture"
-                >
-                  📌
-                </button>
-                <button
-                  class="icon-only"
-                  data-action="close"
-                  aria-label="minimize"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
             <flame-graph-dialog-content></flame-graph-dialog-content>
           </div>
         </foreignObject>
@@ -239,10 +263,14 @@ export class FlameGraphDialog extends HTMLElement {
     `;
 
     this.panel = getElement(".panel", this.shadowRoot);
-    this.content = getElement(
+    this.resizeHandle = getElement(
+      "flame-graph-resize-handle",
+      this.shadowRoot
+    );
+    this.content = getElement<FlameGraphDialogContent>(
       "flame-graph-dialog-content",
       this.shadowRoot
-    ) as FlameGraphDialogContent;
+    );
   }
 
   private handleClick = (e: Event) => {
@@ -256,16 +284,30 @@ export class FlameGraphDialog extends HTMLElement {
 
   private setupEventListeners() {
     // Button controls
-    this.shadowRoot?.addEventListener("click", this.handleClick);
+    this.shadowRoot.addEventListener("click", this.handleClick);
+    addEventListener(
+      window,
+      "resize",
+      () => {
+        flameGraphState.onResizeWindow();
+      },
+      { passive: true }
+    );
 
     // Resize handle
-    this.shadowRoot
-      ?.querySelector("flame-graph-resize-handle")
-      ?.addEventListener("resize", ((e: CustomEvent<ResizeEventDetail>) => {
-        const { height } = flameGraphState.getState();
-        const newHeight = Math.max(300, height - e.detail.deltaY);
-        flameGraphState.setHeight(newHeight);
-      }) as EventListener);
+    this.resizeHandle.addEventListener(
+      "resize",
+      (e) => {
+        const detail = e.detail as unknown as ResizeEventDetail;
+        const layout = selectors.dialogLayout(flameGraphState.getState());
+
+        flameGraphState.resizeDialog(
+          layout.width - detail.deltaX,
+          layout.height - detail.deltaY
+        );
+      },
+      { passive: true }
+    );
 
     // Content events bubble up
     this.content?.addEventListener("spanselect", ((e: CustomEvent) => {

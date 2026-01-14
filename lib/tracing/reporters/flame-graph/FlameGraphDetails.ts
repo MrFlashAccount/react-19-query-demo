@@ -1,62 +1,67 @@
 import {
-  CSS_VARS,
   BUTTON_STYLES,
   formatTime,
   escapeHtml,
   details,
+  TYPOGRAPHY_STYLES,
+  HOST_STYLES,
 } from "./styles";
-import type { FlameGraphSpan, TimeRange } from "./types";
 import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
 import "./FlameGraphResizeHandle";
-import { css, html } from "./utilities";
-import { drawScheduler } from "./DrawScheduler";
+import { css, getElement, html } from "./utilities";
+import { flameGraphState, selectors } from "./state";
 
 const STYLES = css`
-  ${CSS_VARS}
+  ${HOST_STYLES}
   ${BUTTON_STYLES}
   
   :host {
-    display: none;
+    display: flex;
     flex-direction: column;
-    flex-shrink: 0;
     background: var(--fg-bg-overlay);
-    border-top: 1px solid var(--fg-border);
     font-size: 12px;
     color: var(--fg-text);
-    height: 160px;
-    min-height: 80px;
-    max-height: 50vh;
     position: relative;
     font-family: var(--fg-font);
-  }
-
-  :host([visible]) {
-    display: flex;
+    box-sizing: border-box;
+    overflow: hidden;
   }
 
   flame-graph-resize-handle {
     position: absolute;
+  }
+
+  /* Resize handle positions based on data-position */
+  :host([data-position="bottom"]) flame-graph-resize-handle {
     top: 0;
     left: 0;
     right: 0;
   }
 
-  flame-graph-resize-handle .handle {
-    width: 32px;
-    height: 3px;
+  :host([data-position="left"]) flame-graph-resize-handle {
+    top: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  :host([data-position="right"]) flame-graph-resize-handle {
+    top: 0;
+    left: 0;
+    bottom: 0;
   }
 
   .header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    padding: 10px 16px 8px;
+    align-items: center;
+    padding: 4px 4px 4px 16px;
     background: ${details.headerBg};
     border-bottom: 1px solid var(--fg-border-subtle);
     flex-shrink: 0;
   }
 
   .title {
+    ${TYPOGRAPHY_STYLES}
     font-size: 14px;
     font-weight: 600;
     color: ${details.labelKey};
@@ -75,7 +80,7 @@ const STYLES = css`
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 8px 16px;
   }
 
@@ -137,26 +142,58 @@ const STYLES = css`
 `;
 
 export class FlameGraphDetails extends HTMLElement {
-  private _span: Partial<FlameGraphSpan> | null = null;
-  private _timeRange: TimeRange = { minTime: 0, maxTime: 0 };
-  private currentHeight = 160;
-
-  static get observedAttributes() {
-    return ["visible"];
-  }
+  shadowRoot!: ShadowRoot;
+  private resizeHandle!: HTMLElement;
+  private unsubAbortController = new AbortController();
 
   constructor() {
     super();
-    this.attachShadow({ mode: "open" });
+    this.shadowRoot = this.attachShadow({ mode: "open" });
   }
 
   connectedCallback() {
     this.render();
-    this.setupEventListeners();
+    this.subscribeToState();
   }
 
   disconnectedCallback() {
-    // Cleanup handled by resize handle component
+    this.unsubAbortController.abort();
+  }
+
+  private subscribeToState() {
+    flameGraphState.subscribe(
+      selectors.detailsLayout,
+      () => {
+        this.updateContent();
+      },
+      { signal: this.unsubAbortController.signal }
+    );
+
+    flameGraphState.subscribe(
+      selectors.detailsPosition,
+      () => {
+        this.updateContent();
+      },
+      {
+        signal: this.unsubAbortController.signal,
+      }
+    );
+
+    flameGraphState.subscribe(
+      selectors.detailsVisible,
+      () => {
+        this.updateContent();
+      },
+      { signal: this.unsubAbortController.signal }
+    );
+
+    flameGraphState.subscribe(
+      selectors.selectedSpan,
+      () => {
+        this.updateContent();
+      },
+      { signal: this.unsubAbortController.signal }
+    );
   }
 
   private render() {
@@ -165,22 +202,16 @@ export class FlameGraphDetails extends HTMLElement {
     this.updateContent();
   }
 
-  private setupEventListeners() {
-    // Resize events handled in updateContent after element is created
-  }
-
   private updateContent() {
-    if (!this.shadowRoot || !this._span) return;
-
-    const span = this._span;
+    const span = selectors.selectedSpan(flameGraphState.getState());
+    const timeRange = selectors.timeRange(flameGraphState.getState());
+    if (!span) return;
     const isPending = span.endTime === undefined || span.duration === undefined;
     const relativeStart =
-      span.startTime !== undefined
-        ? span.startTime - this._timeRange.minTime
-        : 0;
+      span.startTime !== undefined ? span.startTime - timeRange.minTime : 0;
     const relativeEnd = isPending
       ? null
-      : (span.endTime as number) - this._timeRange.minTime;
+      : (span.endTime as number) - timeRange.minTime;
 
     const statusText = isPending ? "In Progress" : span.status ?? "unknown";
     const statusClass = isPending
@@ -194,11 +225,17 @@ export class FlameGraphDetails extends HTMLElement {
         ? JSON.stringify(span.payload, null, 2)
         : null;
 
+    const position = selectors.detailsPosition(flameGraphState.getState());
+    const handlePosition = selectors.getHandlePosition(position);
+
+    // TODO: use patching instead of innerHTML
     this.shadowRoot.innerHTML = html`
       <style>
         ${STYLES}
       </style>
-      <flame-graph-resize-handle position="top"></flame-graph-resize-handle>
+      <flame-graph-resize-handle
+        position="${handlePosition}"
+      ></flame-graph-resize-handle>
       <div class="header">
         <div class="title">${escapeHtml(span.name ?? "Unknown")}</div>
         <button class="icon-only close-btn" part="close">✕</button>
@@ -239,48 +276,31 @@ export class FlameGraphDetails extends HTMLElement {
       </div>
     `;
 
-    // Bind events
-    this.shadowRoot
-      .querySelector(".close-btn")
-      ?.addEventListener("click", () => this.hide());
+    this.resizeHandle = getElement(
+      "flame-graph-resize-handle",
+      this.shadowRoot
+    );
+    getElement(".close-btn", this.shadowRoot).addEventListener("click", () => {
+      flameGraphState.setDetailsVisible(false);
+    });
 
-    this.shadowRoot
-      .querySelector("flame-graph-resize-handle")
-      ?.addEventListener("resize", ((e: CustomEvent<ResizeEventDetail>) => {
-        const newHeight = Math.max(
-          80,
-          Math.min(
-            window.innerHeight * 0.5,
-            this.currentHeight - e.detail.deltaY
-          )
-        );
-        this.currentHeight = newHeight;
-        drawScheduler.schedule(() => {
-          this.style.height = `${newHeight}px`;
-        });
-      }) as EventListener);
-  }
+    this.resizeHandle.addEventListener("resize", (e) => {
+      const detail = e.detail as unknown as ResizeEventDetail;
+      const layout = selectors.detailsLayout(flameGraphState.getState());
+      const position = selectors.detailsPosition(flameGraphState.getState());
 
-  // Public API
-  show(span: Partial<FlameGraphSpan>) {
-    this._span = span;
-    this.setAttribute("visible", "");
-    this.updateContent();
-  }
+      // Delta sign depends on handle position:
+      // - details bottom (handle top): drag up = -deltaY = bigger height
+      // - details left (handle right): drag right = +deltaX = bigger width
+      // - details right (handle left): drag left = -deltaX = bigger width
+      const widthDelta = position === "left" ? detail.deltaX : -detail.deltaX;
+      const heightDelta = -detail.deltaY;
 
-  hide() {
-    this.removeAttribute("visible");
-    this._span = null;
-    this.dispatchEvent(new CustomEvent("close", { bubbles: true }));
-  }
-
-  set timeRange(value: TimeRange) {
-    this._timeRange = value;
-    if (this._span) this.updateContent();
-  }
-
-  get span(): Partial<FlameGraphSpan> | null {
-    return this._span;
+      flameGraphState.resizeDetails(
+        layout.width + widthDelta,
+        layout.height + heightDelta
+      );
+    });
   }
 }
 

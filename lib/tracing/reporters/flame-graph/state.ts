@@ -1,185 +1,17 @@
-import type { SpanId } from "../../types";
-import type { FlameGraphSpan, TimeRange } from "./types";
-import { addEventListener } from "./utilities";
-
-type SetStateAction<T> = Partial<T> | ((state: T) => Partial<T>);
-type StateListener<T> = (state: T, prevState: T) => void;
-type Selector<T, U> = (state: T) => U;
-type EqualityFn<T> = (a: T, b: T) => boolean;
-
-export interface SubscribeOptions<U> {
-  equalityFn?: EqualityFn<U>;
-  fireImmediately?: boolean;
-  signal?: AbortSignal;
-}
-
-export interface StoreApi<T> {
-  getState: () => T;
-  setState: (action: SetStateAction<T>, replace?: boolean) => void;
-  subscribe: {
-    (
-      listener: StateListener<T>,
-      options?: { signal?: AbortSignal }
-    ): () => void;
-    <U>(
-      selector: Selector<T, U>,
-      listener: (selected: U, prevSelected: U) => void,
-      options?: SubscribeOptions<U>
-    ): () => void;
-  };
-  getInitialState: () => T;
-  destroy: () => void;
-}
-
-export type StateCreator<T> = (
-  set: StoreApi<T>["setState"],
-  get: StoreApi<T>["getState"],
-  api: StoreApi<T>
-) => T;
-
-const defaultEqualityFn = <T>(a: T, b: T): boolean => {
-  if (a === b) return true;
-  if (a instanceof Map && b instanceof Map) {
-    if (a.size !== b.size) return false;
-    for (const [k, v] of a) {
-      if (!b.has(k) || b.get(k) !== v) return false;
-    }
-    return true;
-  }
-  if (Array.isArray(a) && Array.isArray(b)) {
-    return a.length === b.length && a === b;
-  }
-  if (typeof a === "object" && typeof b === "object" && a && b) {
-    const aKeys = Object.keys(a);
-    const bKeys = Object.keys(b);
-    if (aKeys.length !== bKeys.length) return false;
-    return aKeys.every(
-      (k) =>
-        (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k]
-    );
-  }
-  return false;
-};
-
-export function createStore<T extends Record<string, unknown>>(
-  initialState: T | StateCreator<T>
-): StoreApi<T> {
-  const listeners = new Set<StateListener<T>>();
-  let state: T;
-  let initialStateValue: T;
-
-  const getState = () => state;
-  const getInitialState = () => initialStateValue;
-
-  const setState: StoreApi<T>["setState"] = (action, replace) => {
-    const prevState = state;
-    const partial = typeof action === "function" ? action(state) : action;
-
-    // Check if anything actually changed
-    const hasChanged = Object.keys(partial).some(
-      (key) =>
-        !defaultEqualityFn(partial[key as keyof T], prevState[key as keyof T])
-    );
-
-    if (!hasChanged) return;
-
-    state = replace ? (partial as T) : { ...state, ...partial };
-
-    for (const listener of listeners) {
-      listener(state, prevState);
-    }
-  };
-
-  // Overloaded subscribe: full state or with selector
-  const subscribe: StoreApi<T>["subscribe"] = <U>(
-    listenerOrSelector: StateListener<T> | Selector<T, U>,
-    maybeListenerOrOptions?:
-      | ((selected: U, prevSelected: U) => void)
-      | SubscribeOptions<U>,
-    options: SubscribeOptions<U> = {}
-  ): (() => void) => {
-    // Selector + listener case: second arg is a function
-    if (typeof maybeListenerOrOptions === "function") {
-      const selector = listenerOrSelector as Selector<T, U>;
-      const listener = maybeListenerOrOptions;
-      const equalityFn = options.equalityFn ?? defaultEqualityFn;
-      const defaultController = new AbortController();
-      const signal = options.signal ?? defaultController.signal;
-
-      let currentSlice = selector(state);
-
-      if (options.fireImmediately) {
-        listener(currentSlice, currentSlice);
-      }
-
-      const wrappedListener: StateListener<T> = (nextState, prevState) => {
-        const nextSlice = selector(nextState);
-        const prevSlice = selector(prevState);
-
-        if (!equalityFn(nextSlice, prevSlice)) {
-          const prev = currentSlice;
-          currentSlice = nextSlice;
-          listener(nextSlice, prev);
-        }
-      };
-
-      listeners.add(wrappedListener);
-      const cleanups = [
-        addEventListener(signal, "abort", () => {
-          listeners.delete(wrappedListener);
-          cleanups.forEach((cleanup) => cleanup());
-        }),
-        addEventListener(defaultController.signal, "abort", () => {
-          listeners.delete(wrappedListener);
-          cleanups.forEach((cleanup) => cleanup());
-        }),
-      ];
-      return () => {
-        defaultController.abort();
-        cleanups.forEach((cleanup) => cleanup());
-      };
-    }
-
-    // Simple listener case: no selector
-    const listener = listenerOrSelector as StateListener<T>;
-    const defaultController = new AbortController();
-    const signal = options.signal ?? defaultController.signal;
-    listeners.add(listener);
-    const cleanup = addEventListener(signal, "abort", () => {
-      listeners.delete(listener);
-      cleanup();
-    });
-
-    return () => {
-      defaultController.abort();
-      cleanup();
-    };
-  };
-
-  const destroy = () => listeners.clear();
-
-  const api: StoreApi<T> = {
-    getState,
-    setState,
-    subscribe,
-    getInitialState,
-    destroy,
-  };
-
-  // Initialize state
-  if (typeof initialState === "function") {
-    state = initialState(setState, getState, api);
-    initialStateValue = { ...state };
-  } else {
-    state = { ...initialState };
-    initialStateValue = { ...initialState };
-  }
-
-  return api;
-}
-
-// Selector helpers
-export const shallow = <T>(a: T, b: T): boolean => defaultEqualityFn(a, b);
+import type { SpanId, SpanState } from "../../types";
+import type {
+  FlameGraphSpan,
+  TimeRange,
+  LayoutConfig,
+  LayoutResult,
+  GridConfig,
+  ComponentDimensions,
+  Position,
+  HandlePosition,
+} from "./types";
+import { LAYOUT_CONSTANTS } from "./types";
+import { clamp } from "./utilities";
+import { createStore, type StoreApi } from "./store";
 
 export interface FlameGraphViewState {
   offsetX: number;
@@ -198,11 +30,12 @@ export interface FlameGraphViewState {
     width: number;
     height: number;
   };
+  layout: LayoutConfig;
+  calculatedLayout: LayoutResult;
 }
 
 export interface FlameGraphState extends Record<string, unknown> {
   spans: FlameGraphSpan[];
-  pendingSpans: Map<string, Partial<FlameGraphSpan>>;
   selectedSpanId: SpanId | null;
   timeRange: TimeRange;
   viewState: FlameGraphViewState;
@@ -212,36 +45,294 @@ export interface FlameGraphState extends Record<string, unknown> {
   height: number;
 }
 
-const INITIAL_STATE: FlameGraphState = {
-  spans: [],
-  pendingSpans: new Map(),
-  selectedSpanId: null,
-  timeRange: { minTime: 0, maxTime: 0 },
-  viewState: {
-    offsetX: 0,
-    offsetY: 0,
-    zoom: 1,
+const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
+  dialogPosition: "bottom",
+  detailsPosition: "bottom",
+  dialogWidth: LAYOUT_CONSTANTS.DEFAULT_DIALOG_WIDTH,
+  dialogHeight: LAYOUT_CONSTANTS.DEFAULT_DIALOG_HEIGHT,
+  detailsWidth: LAYOUT_CONSTANTS.DEFAULT_DETAILS_WIDTH,
+  detailsHeight: LAYOUT_CONSTANTS.DEFAULT_DETAILS_HEIGHT,
+  detailsVisible: false,
+};
+
+function getInitialState(): FlameGraphState {
+  const containerWidth = 1000;
+  const containerHeight = 1000;
+  const layout = calculateLayout(
+    containerWidth,
+    containerHeight,
+    DEFAULT_LAYOUT_CONFIG
+  );
+  return {
+    spans: [],
+    selectedSpanId: null,
+    timeRange: { minTime: 0, maxTime: 0 },
+    viewState: {
+      offsetX: 0,
+      offsetY: 0,
+      zoom: 1,
+      isOpen: false,
+      isPipMode: false,
+      height: 350,
+      detailsPanel: {
+        position: "bottom-right",
+        open: false,
+        height: 100,
+        width: 100,
+      },
+      canvas: { width: 1000, height: 1000 },
+      layout: DEFAULT_LAYOUT_CONFIG,
+      calculatedLayout: layout,
+    },
+    isRecording: false,
     isOpen: false,
     isPipMode: false,
     height: 350,
-    detailsPanel: {
-      position: "bottom-right",
-      open: false,
-      height: 100,
-      width: 100,
+  };
+}
+
+/**
+ * Calculate layout dimensions for all flame graph components.
+ * Single source of truth for all sizing and positioning.
+ * Returns exact px values and CSS Grid configuration.
+ */
+export function calculateLayout(
+  containerWidth: number,
+  containerHeight: number,
+  config: LayoutConfig
+): LayoutResult {
+  const {
+    dialogPosition,
+    detailsPosition,
+    dialogWidth,
+    dialogHeight,
+    detailsWidth,
+    detailsHeight,
+    detailsVisible,
+  } = config;
+
+  const {
+    HEADER_HEIGHT,
+    TIMELINE_HEIGHT,
+    STATUS_BAR_HEIGHT,
+    MIN_CANVAS_WIDTH,
+    MIN_CANVAS_HEIGHT,
+    MIN_DIALOG_WIDTH,
+    MIN_DIALOG_HEIGHT,
+    MIN_DETAILS_WIDTH,
+    MIN_DETAILS_HEIGHT,
+  } = LAYOUT_CONSTANTS;
+
+  const windowWidth = document.body.clientWidth;
+  const windowHeight = document.body.clientWidth;
+  const maxDialogWidth = Math.trunc(
+    Math.min(windowWidth * 0.9, containerWidth)
+  );
+  const maxDialogHeight = Math.trunc(
+    Math.min(windowHeight * 0.9, containerHeight)
+  );
+
+  // Calculate dialog dimensions and CSS position based on dialogPosition
+  let dialogW: number;
+  let dialogH: number;
+  let dialogPos: { top: string; left: string; right: string; bottom: string };
+
+  switch (dialogPosition) {
+    case "left":
+      dialogW = clamp(dialogWidth, MIN_DIALOG_WIDTH, maxDialogWidth);
+      dialogH = windowHeight;
+      dialogPos = { top: "0", left: "0", right: "auto", bottom: "0" };
+      break;
+    case "right":
+      dialogW = clamp(dialogWidth, MIN_DIALOG_WIDTH, maxDialogWidth);
+      dialogH = windowHeight;
+      dialogPos = { top: "0", left: "auto", right: "0", bottom: "0" };
+      break;
+    case "bottom":
+    default:
+      dialogW = windowWidth;
+      dialogH = clamp(dialogHeight, MIN_DIALOG_HEIGHT, maxDialogHeight);
+      dialogPos = { top: "auto", left: "0", right: "0", bottom: "0" };
+      break;
+  }
+
+  // Fixed heights
+  const headerH = HEADER_HEIGHT;
+  const timelineH = TIMELINE_HEIGHT;
+  const statusBarH = STATUS_BAR_HEIGHT;
+
+  // Content area height (between timeline and status bar)
+  const contentH = dialogH - headerH - timelineH - statusBarH;
+
+  // Calculate canvas and details dimensions based on detailsPosition
+  let canvasW: number;
+  let canvasH: number;
+  let detailsW: number;
+  let detailsH: number;
+  let grid: GridConfig;
+
+  if (!detailsVisible) {
+    // No details - canvas takes full content area
+    canvasW = dialogW;
+    canvasH = Math.max(MIN_CANVAS_HEIGHT, contentH);
+    detailsW = 0;
+    detailsH = 0;
+
+    grid = {
+      templateAreas: `'header' 'timeline' 'canvas' 'statusbar'`,
+      templateColumns: [dialogW],
+      templateRows: [headerH, timelineH, canvasH, statusBarH],
+    };
+  } else {
+    // Details visible - layout depends on detailsPosition
+    const effectiveDetailsW = Math.max(
+      MIN_DETAILS_WIDTH,
+      Math.min(detailsWidth, dialogW * 0.5)
+    );
+    const effectiveDetailsH = Math.max(
+      MIN_DETAILS_HEIGHT,
+      Math.min(detailsHeight, contentH * 0.5)
+    );
+
+    switch (detailsPosition) {
+      case "left":
+        // Details on left spans timeline+canvas rows, timeline above canvas on right
+        detailsW = effectiveDetailsW;
+        detailsH = contentH + timelineH;
+        canvasW = Math.max(MIN_CANVAS_WIDTH, dialogW - detailsW);
+        canvasH = contentH;
+
+        grid = {
+          templateAreas: `'header header' 'details timeline' 'details canvas' 'statusbar statusbar'`,
+          templateColumns: [detailsW, canvasW],
+          templateRows: [headerH, timelineH, canvasH, statusBarH],
+        };
+        break;
+
+      case "right":
+        // Details on right spans timeline+canvas rows, timeline above canvas on left
+        detailsW = effectiveDetailsW;
+        detailsH = contentH + timelineH;
+        canvasW = Math.max(MIN_CANVAS_WIDTH, dialogW - detailsW);
+        canvasH = contentH;
+
+        grid = {
+          templateAreas: `'header header' 'timeline details' 'canvas details' 'statusbar statusbar'`,
+          templateColumns: [canvasW, detailsW],
+          templateRows: [headerH, timelineH, canvasH, statusBarH],
+        };
+        break;
+
+      case "bottom":
+      default:
+        detailsW = dialogW;
+        detailsH = effectiveDetailsH;
+        canvasW = dialogW;
+        canvasH = Math.max(MIN_CANVAS_HEIGHT, contentH - detailsH);
+
+        grid = {
+          templateAreas: `'header' 'timeline' 'canvas' 'details' 'statusbar'`,
+          templateColumns: [dialogW],
+          templateRows: [headerH, timelineH, canvasH, detailsH, statusBarH],
+        };
+        break;
+    }
+  }
+
+  // Calculate top positions (vertical stacking within dialog)
+  const headerTop = 0;
+  const timelineTop = headerTop + headerH;
+  const contentTop = timelineTop + timelineH;
+  const statusBarTop = dialogH - statusBarH;
+
+  // Calculate canvas, timeline, and details left/top based on position
+  let canvasLeft = 0;
+  let canvasTop = contentTop;
+  let detailsLeft = 0;
+  let detailsTop = contentTop;
+  let timelineLeft = 0;
+  let timelineW = dialogW;
+
+  if (detailsVisible) {
+    switch (detailsPosition) {
+      case "left":
+        // Details on left (spans timeline+canvas rows), timeline+canvas on right
+        detailsLeft = 0;
+        detailsTop = timelineTop;
+        canvasLeft = detailsW;
+        canvasTop = contentTop;
+        timelineLeft = detailsW;
+        timelineW = canvasW;
+        break;
+      case "right":
+        // Timeline+canvas on left, details on right (spans timeline+canvas rows)
+        canvasLeft = 0;
+        canvasTop = contentTop;
+        detailsLeft = canvasW;
+        detailsTop = timelineTop;
+        timelineLeft = 0;
+        timelineW = canvasW;
+        break;
+      case "bottom":
+      default:
+        // Timeline full width, canvas above, details below
+        canvasLeft = 0;
+        canvasTop = contentTop;
+        detailsLeft = 0;
+        detailsTop = contentTop + canvasH;
+        timelineLeft = 0;
+        timelineW = dialogW;
+        break;
+    }
+  }
+
+  return {
+    dialog: {
+      left: 0,
+      top: 0,
+      width: dialogW,
+      height: dialogH,
+      position: dialogPos,
     },
-    canvas: { width: 1000, height: 1000 },
-  },
-  isRecording: false,
-  isOpen: false,
-  isPipMode: false,
-  height: 350,
-};
+    grid,
+    header: { left: 0, top: headerTop, width: dialogW, height: headerH },
+    timeline: {
+      left: timelineLeft,
+      top: timelineTop,
+      width: timelineW,
+      height: timelineH,
+    },
+    canvas: {
+      left: canvasLeft,
+      top: canvasTop,
+      width: canvasW,
+      height: canvasH,
+    },
+    details: {
+      left: detailsLeft,
+      top: detailsTop,
+      width: detailsW,
+      height: detailsH,
+      visible: detailsVisible,
+    },
+    statusBar: {
+      left: 0,
+      top: statusBarTop,
+      width: dialogW,
+      height: statusBarH,
+    },
+  };
+}
 
 export const selectors = {
   spans: (s: FlameGraphState) => s.spans,
-  pendingSpans: (s: FlameGraphState) => s.pendingSpans,
+  hasSpans: (s: FlameGraphState) => s.spans.length > 0,
   selectedSpanId: (s: FlameGraphState) => s.selectedSpanId,
+  selectedSpan: (s: FlameGraphState) => {
+    const selectedSpanId = selectors.selectedSpanId(s);
+    if (!selectedSpanId) return null;
+    return s.spans.find((span) => span.spanId === selectedSpanId) ?? null;
+  },
   timeRange: (s: FlameGraphState) => s.timeRange,
   viewState: (s: FlameGraphState) => s.viewState,
   isRecording: (s: FlameGraphState) => s.isRecording,
@@ -249,20 +340,55 @@ export const selectors = {
   isPipMode: (s: FlameGraphState) => s.isPipMode,
   height: (s: FlameGraphState) => s.height,
   zoom: (s: FlameGraphState) => s.viewState.zoom,
+  offsetX: (s: FlameGraphState) => s.viewState.offsetX,
+  offsetY: (s: FlameGraphState) => s.viewState.offsetY,
+  /** Pan/zoom state for rendering - only triggers on zoom/offset changes */
+  panZoom: (s: FlameGraphState) => ({
+    zoom: s.viewState.zoom,
+    offsetX: s.viewState.offsetX,
+    offsetY: s.viewState.offsetY,
+  }),
   zoomPercent: (s: FlameGraphState) => Math.round(s.viewState.zoom * 100),
-  spanCount: (s: FlameGraphState) => s.spans.length + s.pendingSpans.size,
-  hasSpans: (s: FlameGraphState) => s.spans.length + s.pendingSpans.size > 0,
+  spanCount: (s: FlameGraphState) => s.spans.length,
   maxDepth: (s: FlameGraphState) => {
     let max = 0;
     for (const span of s.spans) {
       if (span.depth > max) max = span.depth;
     }
-    for (const [, pending] of s.pendingSpans) {
-      if (pending.depth !== undefined && pending.depth > max) {
-        max = pending.depth;
-      }
-    }
     return max;
+  },
+  layout: (s: FlameGraphState) => s.viewState.layout,
+  calculatedLayout: (s: FlameGraphState) => s.viewState.calculatedLayout,
+  timelineLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.timeline,
+  canvasLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.canvas,
+  detailsLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.details,
+  statusBarLayout: (s: FlameGraphState) =>
+    s.viewState.calculatedLayout.statusBar,
+  gridLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.grid,
+  headerLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.header,
+  dialogLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.dialog,
+  dialogPosition: (s: FlameGraphState) => s.viewState.layout.dialogPosition,
+  dialogWidth: (s: FlameGraphState) => s.viewState.layout.dialogWidth,
+  dialogHeight: (s: FlameGraphState) => s.viewState.layout.dialogHeight,
+  detailsPosition: (s: FlameGraphState) => s.viewState.layout.detailsPosition,
+  detailsWidth: (s: FlameGraphState) => s.viewState.layout.detailsWidth,
+  detailsHeight: (s: FlameGraphState) => s.viewState.layout.detailsHeight,
+  detailsVisible: (s: FlameGraphState) => s.viewState.layout.detailsVisible,
+  layoutToDOMRect: (dimensions: ComponentDimensions) => {
+    const { left, top, width, height } = dimensions;
+    return new DOMRectReadOnly(left, top, width, height);
+  },
+  getHandlePosition: (position: Position): HandlePosition => {
+    switch (position) {
+      case "left":
+        return "right";
+      case "right":
+        return "left";
+      case "bottom":
+        return "top";
+      default:
+        return "bottom";
+    }
   },
 } as const;
 
@@ -275,42 +401,47 @@ function createActions(store: StoreApi<FlameGraphState>) {
       setState((s) => ({ spans: [...s.spans, span] }));
     },
 
-    addPendingSpan(spanId: string, partial: Partial<FlameGraphSpan>) {
+    /** Start a span (adds with status: "running") */
+    startSpan(span: FlameGraphSpan) {
       setState((s) => {
-        const next = new Map(s.pendingSpans);
-        next.set(spanId, partial);
-        return { pendingSpans: next };
+        // Prevent duplicate spans
+        if (s.spans.some((existing) => existing.spanId === span.spanId)) {
+          return s;
+        }
+        return { spans: [...s.spans, { ...span, status: "running" }] };
       });
     },
 
-    updatePendingSpan(spanId: string, partial: Partial<FlameGraphSpan>) {
-      const { pendingSpans } = getState();
-      const existing = pendingSpans.get(spanId);
-      if (!existing) return;
-      const next = new Map(pendingSpans);
-      next.set(spanId, { ...existing, ...partial });
-      setState({ pendingSpans: next });
+    /** End a running span (updates status and duration) */
+    endSpan(spanId: SpanId, endTime: number, status: SpanState = "success") {
+      setState((s) => ({
+        spans: s.spans.map(
+          (span): FlameGraphSpan =>
+            span.spanId === spanId
+              ? { ...span, endTime, duration: endTime - span.startTime, status }
+              : span
+        ),
+      }));
     },
 
-    completePendingSpan(spanId: string, span: FlameGraphSpan) {
-      setState((s) => {
-        const next = new Map(s.pendingSpans);
-        next.delete(spanId);
-        return { pendingSpans: next, spans: [...s.spans, span] };
-      });
-    },
-
-    removePendingSpan(spanId: string) {
-      const { pendingSpans } = getState();
-      if (!pendingSpans.has(spanId)) return;
-      const next = new Map(pendingSpans);
-      next.delete(spanId);
-      setState({ pendingSpans: next });
+    /** Remove a span by ID */
+    removeSpan(spanId: SpanId) {
+      setState((s) => ({
+        spans: s.spans.filter((span) => span.spanId !== spanId),
+      }));
     },
 
     // Selection
     selectSpan(spanId: SpanId | null) {
-      setState({ selectedSpanId: spanId });
+      const showDetails = spanId !== null;
+      setState((s) => ({
+        selectedSpanId: spanId,
+        viewState: {
+          ...s.viewState,
+          layout: { ...s.viewState.layout, detailsVisible: showDetails },
+        },
+      }));
+      this.recalculateLayout();
     },
 
     // View
@@ -330,7 +461,8 @@ function createActions(store: StoreApi<FlameGraphState>) {
 
     // Recording
     startRecording() {
-      setState({ ...INITIAL_STATE, isRecording: true });
+      setState({ isRecording: true });
+      this.clearRecording();
     },
 
     stopRecording() {
@@ -340,9 +472,9 @@ function createActions(store: StoreApi<FlameGraphState>) {
     toggleRecording(): boolean {
       const next = !getState().isRecording;
       if (next) {
-        setState({ ...INITIAL_STATE, isRecording: true });
+        this.startRecording();
       } else {
-        setState({ isRecording: false });
+        this.stopRecording();
       }
       return next;
     },
@@ -366,17 +498,129 @@ function createActions(store: StoreApi<FlameGraphState>) {
     },
 
     // Reset
-    clear() {
-      setState(INITIAL_STATE);
+    clearRecording() {
+      setState({
+        spans: [],
+        selectedSpanId: null,
+        timeRange: { minTime: 0, maxTime: 0 },
+      });
     },
 
     reset() {
       setState(store.getInitialState(), true);
     },
+
+    onResizeWindow() {
+      this.recalculateLayout();
+    },
+
+    // Layout
+    setDialogPosition(position: Position) {
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          layout: { ...s.viewState.layout, dialogPosition: position },
+        },
+      }));
+      this.recalculateLayout();
+    },
+
+    setDetailsPosition(position: Position) {
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          layout: { ...s.viewState.layout, detailsPosition: position },
+        },
+      }));
+      this.recalculateLayout();
+    },
+
+    resizeDialog(newWidth: number, newHeight: number) {
+      const orientation = selectors.dialogPosition(getState());
+      const nextLayout = () => {
+        if (orientation === "left" || orientation === "right") {
+          return {
+            dialogWidth: Math.max(LAYOUT_CONSTANTS.MIN_DIALOG_WIDTH, newWidth),
+          };
+        }
+        return {
+          dialogHeight: Math.max(LAYOUT_CONSTANTS.MIN_DIALOG_HEIGHT, newHeight),
+        };
+      };
+
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          layout: {
+            ...s.viewState.layout,
+            ...nextLayout(),
+          },
+        },
+      }));
+
+      this.recalculateLayout();
+    },
+
+    resizeDetails(newWidth: number, newHeight: number) {
+      const orientation = getState().viewState.layout.detailsPosition;
+      const nextLayout = () => {
+        if (orientation === "left" || orientation === "right") {
+          return {
+            detailsWidth: Math.max(
+              LAYOUT_CONSTANTS.MIN_DETAILS_WIDTH,
+              newWidth
+            ),
+          };
+        }
+        return {
+          detailsHeight: Math.max(
+            LAYOUT_CONSTANTS.MIN_DETAILS_HEIGHT,
+            newHeight
+          ),
+        };
+      };
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          layout: {
+            ...s.viewState.layout,
+            ...nextLayout(),
+          },
+        },
+      }));
+      this.recalculateLayout();
+    },
+
+    setDetailsVisible(visible: boolean) {
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          layout: { ...s.viewState.layout, detailsVisible: visible },
+        },
+      }));
+      this.recalculateLayout();
+    },
+
+    recalculateLayout() {
+      const layout = selectors.layout(getState());
+      const dialogWidth = selectors.dialogWidth(getState());
+      const dialogHeight = selectors.dialogHeight(getState());
+      const calculatedLayout = calculateLayout(
+        dialogWidth,
+        dialogHeight,
+        layout
+      );
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          calculatedLayout,
+        },
+      }));
+    },
   };
 }
 
-const store = createStore(() => INITIAL_STATE);
+const store = createStore(getInitialState);
 const actions = createActions(store);
 
 // Public API: store + actions + selectors

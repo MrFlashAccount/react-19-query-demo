@@ -1,44 +1,67 @@
-import { CSS_VARS, BUTTON_STYLES, RESET_CASCADE } from "./styles";
-import { css, html } from "./utilities";
-import { flameGraphState } from "./state";
+import { BUTTON_STYLES, RESET_CASCADE, HOST_STYLES } from "./styles";
+import { css, getElement, html } from "./utilities";
+import { flameGraphState, selectors, type FlameGraphState } from "./state";
 
 const STYLES = css`
-  ${CSS_VARS}
+  ${HOST_STYLES}
   ${BUTTON_STYLES}
 
   :host {
     ${RESET_CASCADE}
     display: contents;
   }
+
+  button.hidden {
+    display: none;
+  }
 `;
 
 export class FlameGraphClearButton extends HTMLElement {
+  shadowRoot!: ShadowRoot;
+  btn!: HTMLButtonElement;
+
   constructor() {
     super();
-    this.attachShadow({ mode: "open" });
+    this.shadowRoot = this.attachShadow({ mode: "open" });
   }
 
   connectedCallback() {
     this.render();
+    flameGraphState.subscribe(this.selectState, ({ isRecording, hasSpans }) => {
+      this.btn.className = this.getClassName(isRecording, hasSpans);
+    });
   }
 
   private render() {
-    if (!this.shadowRoot) return;
-
+    const { isRecording, hasSpans } = this.selectState(
+      flameGraphState.getState()
+    );
     this.shadowRoot.innerHTML = html`
       <style>
         ${STYLES}
       </style>
-      <button>🧹 Clear</button>
+      <button class="${this.getClassName(isRecording, hasSpans)}">
+        🧹 Clear
+      </button>
     `;
 
-    this.shadowRoot
-      .querySelector("button")!
-      .addEventListener("click", this.handleClick);
+    this.btn = getElement("button", this.shadowRoot);
+    this.btn.addEventListener("click", this.handleClick);
+  }
+
+  private getClassName(isRecording: boolean, hasSpans: boolean): string {
+    return `${isRecording || !hasSpans ? "hidden" : ""}`;
   }
 
   private handleClick = () => {
-    flameGraphState.clear();
+    flameGraphState.clearRecording();
+  };
+
+  private selectState = (state: FlameGraphState) => {
+    const isRecording = selectors.isRecording(state);
+    const hasSpans = selectors.hasSpans(state);
+
+    return { isRecording, hasSpans };
   };
 }
 

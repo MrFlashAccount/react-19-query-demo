@@ -1,13 +1,47 @@
-import { CSS_VARS, BUTTON_STYLES } from "./styles";
+import { CSS_VARS, BUTTON_STYLES, accent, HOST_STYLES } from "./styles";
 import { css, html } from "./utilities";
 import { flameGraphState, selectors } from "./state";
+
+/** Button state colors */
+export const button = {
+  record: {
+    bg: "oklch(0.63 0.24 27 / 0.15)",
+    bgHover: "oklch(0.63 0.24 27 / 0.25)",
+    border: "oklch(0.63 0.24 27 / 0.3)",
+    text: accent.errorLight,
+  },
+  stop: {
+    bg: "oklch(0.72 0.19 145 / 0.15)",
+    bgHover: "oklch(0.72 0.19 145 / 0.25)",
+    border: "oklch(0.72 0.19 145 / 0.3)",
+    text: accent.success,
+  },
+} as const;
 
 const STYLES = css`
   ${CSS_VARS}
   ${BUTTON_STYLES}
+  ${HOST_STYLES}
 
   :host {
     display: contents;
+  }
+
+  button.record {
+    background: ${button.record.bg};
+    border-color: ${button.record.border};
+    color: ${button.record.text};
+  }
+  button.record:hover {
+    background: ${button.record.bgHover};
+  }
+  button.stop {
+    background: ${button.stop.bg};
+    border-color: ${button.stop.border};
+    color: ${button.stop.text};
+  }
+  button.stop:hover {
+    background: ${button.stop.bgHover};
   }
 `;
 
@@ -40,7 +74,7 @@ export class FlameGraphRecordButton extends HTMLElement {
   private render() {
     if (!this.shadowRoot) return;
 
-    const { isRecording } = flameGraphState.getState();
+    const isRecording = selectors.isRecording(flameGraphState.getState());
 
     this.shadowRoot.innerHTML = html`
       <style>

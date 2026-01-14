@@ -12,9 +12,8 @@ import {
   IEventReceiver,
   ITracerOptions,
   SpanId,
+  type SpanState,
 } from "./types";
-
-type SpanState = "inactive" | "running" | "ended";
 
 const defaultMeta: ISpanMeta = { description: "", color: "primary" };
 
@@ -169,7 +168,7 @@ export class Span implements ISpan {
     }
 
     this._endTime = performance.now();
-    this._state = "ended";
+    this._state = status === "error" ? "error" : "success";
 
     const base = {
       kind: "end" as const,

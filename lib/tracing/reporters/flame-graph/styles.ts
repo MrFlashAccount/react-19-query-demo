@@ -10,6 +10,30 @@ const OklchColor = brand<
 
 type OklchColor = typeof OklchColor.type;
 
+export const theme = {
+  family: {
+    default: "ui-sans-serif, system-ui, sans-serif",
+    monospace: "ui-monospace, monospace",
+  },
+  size: {
+    default: 12,
+    small: 10,
+    large: 14,
+  },
+  weight: {
+    default: 400,
+    bold: 600,
+  },
+  radius: {
+    default: 8,
+    lg: 12,
+    xl: 16,
+  },
+  lineHeight: {
+    default: 1.5,
+  },
+} as const;
+
 export const colorPalette = {
   50: OklchColor("oklch(0.96 0 0)"), // #F2F2F2
   100: OklchColor("oklch(0.88 0 0)"), // #D9D9D9
@@ -72,21 +96,6 @@ export const accent = {
   selected: OklchColor("oklch(0.80 0.12 195)"), // Cyan for selection
 } as const satisfies Readonly<Record<string, OklchColor>>;
 
-/** Button state colors */
-export const button = {
-  record: {
-    bg: "oklch(0.63 0.24 27 / 0.15)",
-    bgHover: "oklch(0.63 0.24 27 / 0.25)",
-    border: "oklch(0.63 0.24 27 / 0.3)",
-    text: accent.errorLight,
-  },
-  stop: {
-    bg: "oklch(0.72 0.19 145 / 0.15)",
-    bgHover: "oklch(0.72 0.19 145 / 0.25)",
-    border: "oklch(0.72 0.19 145 / 0.3)",
-    text: accent.success,
-  },
-} as const;
 
 /** Timeline colors */
 export const timeline = {
@@ -182,53 +191,32 @@ export const CSS_VARS = css`
     --fg-surface-hover: ${ui.surfaceHover};
     --fg-surface-active: ${ui.surfaceActive};
     --fg-surface-subtle: ${ui.surfaceSubtle};
-
-    /* Fonts */
-    --fg-font: ui-sans-serif, system-ui, -apple-system, sans-serif;
-    --fg-font-mono: ui-monospace, monospace;
-
-    /* Radii */
-    --fg-radius: 8px;
-    --fg-radius-lg: 12px;
-    --fg-radius-xl: 16px;
   }
+`;
+
+export const TYPOGRAPHY_STYLES = css`
+  font-family: ${theme.family.default};
+  font-size: ${theme.size.default}px;
+  font-weight: ${theme.weight.default};
+  line-height: ${theme.lineHeight.default};
+  color: var(--fg-text);
+  text-box-trim: trim-both;
 `;
 
 /** Base button styles */
 export const BUTTON_STYLES = css`
   button {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border-radius: var(--fg-radius);
-    border: 1px solid ${ui.borderLight};
+    ${TYPOGRAPHY_STYLES}
+    padding: 2px 6px;
+    border-radius: ${theme.radius.default}px;
+    border: none;
     background: ${ui.surfaceActive};
-    color: var(--fg-text);
-    font-size: 13px;
-    font-family: var(--fg-font);
     cursor: pointer;
     transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
   }
   button:hover {
     background: ${ui.surfaceHover};
     border-color: ${ui.borderHover};
-  }
-  button.record {
-    background: ${button.record.bg};
-    border-color: ${button.record.border};
-    color: ${button.record.text};
-  }
-  button.record:hover {
-    background: ${button.record.bgHover};
-  }
-  button.stop {
-    background: ${button.stop.bg};
-    border-color: ${button.stop.border};
-    color: ${button.stop.text};
-  }
-  button.stop:hover {
-    background: ${button.stop.bgHover};
   }
   button.icon-only {
     padding: 6px 8px;
@@ -327,5 +315,13 @@ export const RESET_CASCADE = css`
     box-sizing: border-box;
     color: inherit;
     font-family: inherit;
+  }
+`;
+
+export const HOST_STYLES = css`
+  ${CSS_VARS}
+  :host {
+    ${RESET_CASCADE}
+    ${TYPOGRAPHY_STYLES}
   }
 `;

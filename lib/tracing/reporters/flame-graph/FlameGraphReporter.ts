@@ -71,7 +71,6 @@ export class FlameGraphReporter extends BaseReporter {
     this.dialog = document.createElement(
       "flame-graph-dialog"
     ) as FlameGraphDialog;
-    this.setupDialogEvents();
     this.container.appendChild(this.dialog);
 
     this.toggleButton = document.createElement(
@@ -104,6 +103,7 @@ export class FlameGraphReporter extends BaseReporter {
     this.container?.childNodes.forEach((child) => {
       child.remove();
     });
+    flameGraphState.reset();
     this.container = null;
     this.toggleButton = null;
     this.dialog = null;
@@ -144,14 +144,6 @@ export class FlameGraphReporter extends BaseReporter {
     });
   }
 
-  private setupDialogEvents(): void {
-    if (!this.dialog) return;
-
-    this.dialog.addEventListener("clear", () => {
-      this.clearData();
-    });
-  }
-
   private handleSpanStartInternal(event: SpanStartEvent): void {
     const parentDepth = event.parentSpan
       ? this.depthMap.get(event.parentSpan.spanId) ?? 0
@@ -160,11 +152,13 @@ export class FlameGraphReporter extends BaseReporter {
 
     this.depthMap.set(event.span.spanId, depth);
 
-    flameGraphState.addPendingSpan(event.span.spanId, {
+    flameGraphState.startSpan({
       spanId: event.span.spanId,
       parentSpanId: event.parentSpan?.spanId,
       name: event.name,
       startTime: event.timestamp,
+      endTime: event.timestamp,
+      duration: 0,
       depth,
       payload: event.payload,
       color: event.span.meta?.color,
@@ -174,31 +168,14 @@ export class FlameGraphReporter extends BaseReporter {
   }
 
   private handleSpanEndInternal(event: SpanEndEvent): void {
-    const spanId = event.span.spanId;
-    const pending = flameGraphState.getState().pendingSpans.get(spanId);
-    if (!pending || pending.startTime === undefined) return;
-
-    const span: FlameGraphSpan = {
-      spanId: pending.spanId!,
-      parentSpanId: pending.parentSpanId,
-      name: pending.name!,
-      startTime: pending.startTime,
-      endTime: event.timestamp,
-      duration: event.timestamp - pending.startTime,
-      depth: pending.depth!,
-      payload: pending.payload ?? {},
-      status: event.status,
-      color: pending.color,
-    };
-
-    flameGraphState.completePendingSpan(spanId, span);
+    flameGraphState.endSpan(event.span.spanId, event.timestamp, event.status);
     this.updateTimeRange();
   }
 
   private updateTimeRange(): void {
-    const { spans, pendingSpans } = flameGraphState.getState();
+    const { spans } = flameGraphState.getState();
 
-    if (spans.length === 0 && pendingSpans.size === 0) {
+    if (spans.length === 0) {
       flameGraphState.setTimeRange({ minTime: 0, maxTime: 0 });
       return;
     }
@@ -208,14 +185,10 @@ export class FlameGraphReporter extends BaseReporter {
 
     for (const span of spans) {
       minTime = Math.min(minTime, span.startTime);
-      maxTime = Math.max(maxTime, span.endTime);
-    }
-
-    for (const [, pending] of pendingSpans) {
-      if (pending.startTime !== undefined) {
-        minTime = Math.min(minTime, pending.startTime);
-        maxTime = Math.max(maxTime, performance.now());
-      }
+      // For running spans, use current time as maxTime
+      const spanEnd =
+        span.status === "running" ? performance.now() : span.endTime;
+      maxTime = Math.max(maxTime, spanEnd);
     }
 
     flameGraphState.setTimeRange({ minTime, maxTime });
@@ -223,7 +196,7 @@ export class FlameGraphReporter extends BaseReporter {
 
   private clearData(): void {
     this.depthMap.clear();
-    flameGraphState.clear();
+    flameGraphState.clearRecording();
   }
 
   // Public API

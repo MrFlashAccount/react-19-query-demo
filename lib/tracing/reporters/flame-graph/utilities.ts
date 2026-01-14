@@ -17,7 +17,7 @@ export const css = String.raw;
 export const html = String.raw;
 
 // Shared rendering constants
-export const MIN_TICK_SPACING = 90;
+export const MIN_TICK_SPACING = 110;
 export const PADDING_LEFT = 12;
 
 // Tick generation utilities
@@ -263,7 +263,17 @@ export function addEventListener<
 >(
   signal: T,
   event: EventName,
-  listener: (event: AbortSignalEventMap[EventName]) => void
+  listener: (event: AbortSignalEventMap[EventName]) => void,
+  options?: AddEventListenerOptions
+): () => void;
+export function addEventListener<
+  T extends Window,
+  K extends keyof WindowEventMap
+>(
+  el: T,
+  event: K,
+  listener: (event: WindowEventMap[K]) => void,
+  options?: AddEventListenerOptions
 ): () => void;
 export function addEventListener<
   T extends HTMLElement,
@@ -271,8 +281,13 @@ export function addEventListener<
 >(
   el: T,
   event: K,
-  listener: (event: HTMLElementEventMap[K]) => void
+  listener: (event: HTMLElementEventMap[K]) => void,
+  options?: AddEventListenerOptions
 ): () => void {
-  el.addEventListener(event, listener);
-  return () => el.removeEventListener(event, listener);
+  el.addEventListener(event, listener, options);
+  return () => el.removeEventListener(event, listener, options);
+}
+
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(value, max));
 }

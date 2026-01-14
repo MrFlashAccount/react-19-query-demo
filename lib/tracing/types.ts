@@ -1,6 +1,6 @@
 import { brand } from "../types";
 
-export type SpanState = "inactive" | "running" | "ended";
+export type SpanState = "inactive" | "running" | "success" | "error";
 
 export type Color =
   | "primary"

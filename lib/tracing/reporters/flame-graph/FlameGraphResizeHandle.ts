@@ -1,19 +1,25 @@
-import { CSS_VARS, ui } from "./styles";
+import { CSS_VARS, HOST_STYLES, ui } from "./styles";
 import { css, html } from "./utilities";
 
 const STYLES = css`
   ${CSS_VARS}
+  ${HOST_STYLES}
 
   :host {
     display: block;
     position: absolute;
+    background: transparent;
+    z-index: 10;
+    touch-action: none;
+  }
+
+  /* Vertical resize (top/bottom) */
+  :host([position="top"]),
+  :host([position="bottom"]) {
     left: 0;
     right: 0;
     height: 8px;
     cursor: ns-resize;
-    background: transparent;
-    z-index: 10;
-    touch-action: none;
   }
 
   :host([position="top"]) {
@@ -24,16 +30,45 @@ const STYLES = css`
     bottom: 0;
   }
 
+  /* Horizontal resize (left/right) */
+  :host([position="left"]),
+  :host([position="right"]) {
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+  }
+
+  :host([position="left"]) {
+    left: 0;
+  }
+
+  :host([position="right"]) {
+    right: 0;
+  }
+
   .handle {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 40px;
-    height: 4px;
     background: ${ui.handleDefault};
     border-radius: 2px;
     transition: background 0.15s;
+  }
+
+  /* Horizontal handle (for vertical resize) */
+  :host([position="top"]) .handle,
+  :host([position="bottom"]) .handle {
+    width: 40px;
+    height: 4px;
+  }
+
+  /* Vertical handle (for horizontal resize) */
+  :host([position="left"]) .handle,
+  :host([position="right"]) .handle {
+    width: 4px;
+    height: 40px;
   }
 
   :host(:hover) .handle,
@@ -43,15 +78,18 @@ const STYLES = css`
 `;
 
 export interface ResizeEventDetail {
+  deltaX: number;
   deltaY: number;
+  clientX: number;
   clientY: number;
 }
 
 export class FlameGraphResizeHandle extends HTMLElement {
   private isDragging = false;
+  private lastX = 0;
   private lastY = 0;
-  private rafId = -1;
-  private pendingDelta = 0;
+  private pendingDeltaX = 0;
+  private pendingDeltaY = 0;
   private unmountAbortController = new AbortController();
 
   static get observedAttributes() {
@@ -73,7 +111,6 @@ export class FlameGraphResizeHandle extends HTMLElement {
 
   disconnectedCallback() {
     this.unmountAbortController.abort();
-    this.cancelAnimationFrame();
   }
 
   private render() {
@@ -90,8 +127,10 @@ export class FlameGraphResizeHandle extends HTMLElement {
     if (e.button !== 0) return;
 
     this.isDragging = true;
+    this.lastX = e.clientX;
     this.lastY = e.clientY;
-    this.pendingDelta = 0;
+    this.pendingDeltaX = 0;
+    this.pendingDeltaY = 0;
     this.setAttribute("active", "");
     this.setPointerCapture(e.pointerId);
 
@@ -114,21 +153,26 @@ export class FlameGraphResizeHandle extends HTMLElement {
   private handlePointerMove = (e: PointerEvent) => {
     if (!this.isDragging) return;
 
+    const deltaX = e.clientX - this.lastX;
     const deltaY = e.clientY - this.lastY;
-    this.pendingDelta += deltaY;
+    this.pendingDeltaX += deltaX;
+    this.pendingDeltaY += deltaY;
+    this.lastX = e.clientX;
     this.lastY = e.clientY;
 
-    if (this.pendingDelta !== 0) {
+    if (this.pendingDeltaX !== 0 || this.pendingDeltaY !== 0) {
       this.dispatchEvent(
         new CustomEvent<ResizeEventDetail>("resize", {
-          bubbles: true,
           detail: {
-            deltaY: this.pendingDelta,
+            deltaX: this.pendingDeltaX,
+            deltaY: this.pendingDeltaY,
+            clientX: this.lastX,
             clientY: this.lastY,
           },
         })
       );
-      this.pendingDelta = 0;
+      this.pendingDeltaX = 0;
+      this.pendingDeltaY = 0;
     }
   };
 
@@ -143,28 +187,24 @@ export class FlameGraphResizeHandle extends HTMLElement {
     document.removeEventListener("pointerup", this.handlePointerUp);
     document.removeEventListener("pointercancel", this.handlePointerUp);
 
-    // Cancel any pending animation frame
-    this.cancelAnimationFrame();
-
-    if (this.pendingDelta !== 0) {
+    if (this.pendingDeltaX !== 0 || this.pendingDeltaY !== 0) {
       this.dispatchEvent(
         new CustomEvent<ResizeEventDetail>("resize", {
           bubbles: true,
-          detail: { deltaY: this.pendingDelta, clientY: this.lastY },
+          detail: {
+            deltaX: this.pendingDeltaX,
+            deltaY: this.pendingDeltaY,
+            clientX: this.lastX,
+            clientY: this.lastY,
+          },
         })
       );
-      this.pendingDelta = 0;
+      this.pendingDeltaX = 0;
+      this.pendingDeltaY = 0;
     }
 
     this.dispatchEvent(new CustomEvent("resizeend", { bubbles: true }));
   };
-
-  private cancelAnimationFrame() {
-    if (this.rafId !== -1) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = -1;
-    }
-  }
 }
 
 customElements.define("flame-graph-resize-handle", FlameGraphResizeHandle);

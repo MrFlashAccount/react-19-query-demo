@@ -1,16 +1,14 @@
-import { CSS_VARS } from "./styles";
-import { css, html } from "./utilities";
+import { CSS_VARS, HOST_STYLES } from "./styles";
+import { css, getElement, html } from "./utilities";
 import TimelineWorker from "./timeline.worker?worker";
-import type {
-  InitMessage,
-  ResizeMessage,
-  DrawMessage,
-} from "./timeline.worker";
+import type { InitMessage, DrawMessage } from "./timeline.worker";
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
+import type { TimeRange } from "./types";
 
 const STYLES = css`
   ${CSS_VARS}
+  ${HOST_STYLES}
 
   :host {
     display: block;
@@ -30,19 +28,16 @@ const STYLES = css`
 `;
 
 export class FlameGraphTimeline extends HTMLElement {
-  private canvas: HTMLCanvasElement | null = null;
+  public shadowRoot!: ShadowRoot;
+  private canvas!: HTMLCanvasElement;
   private worker: Worker | null = null;
-  private resizeObserver: ResizeObserver | null = null;
   private workerReady = false;
   private unsubs: Array<() => void> = [];
-
-  // Canvas dimensions (CSS pixels)
-  private canvasWidth = 0;
-  private canvasHeight = 0;
+  private dpr = window.devicePixelRatio || 1;
 
   constructor() {
     super();
-    this.attachShadow({ mode: "open" });
+    this.shadowRoot = this.attachShadow({ mode: "open" });
   }
 
   connectedCallback() {
@@ -52,7 +47,6 @@ export class FlameGraphTimeline extends HTMLElement {
   }
 
   disconnectedCallback() {
-    this.resizeObserver?.disconnect();
     this.worker?.terminate();
     this.unsubs.forEach((u) => u());
   }
@@ -61,23 +55,40 @@ export class FlameGraphTimeline extends HTMLElement {
     this.unsubs.push(
       flameGraphState.subscribe(selectors.timeRange, () => this.draw())
     );
+    // Fine-grained: only zoom/offset changes, not all viewState changes
     this.unsubs.push(
-      flameGraphState.subscribe(selectors.viewState, () => this.draw())
+      flameGraphState.subscribe(selectors.panZoom, () => this.draw())
+    );
+    this.unsubs.push(
+      flameGraphState.subscribe(selectors.timelineLayout, () =>
+        this.resizeCanvas()
+      )
     );
   }
 
   private render() {
-    if (!this.shadowRoot) return;
+    if (!this.shadowRoot) {
+      throw new Error("Shadow root not found");
+    }
+
+    const { width, height } = selectors.timelineLayout(
+      flameGraphState.getState()
+    );
+    const dpr = window.devicePixelRatio || 1;
     this.shadowRoot.innerHTML = html`
       <style>
         ${STYLES}
       </style>
-      <canvas></canvas>
+      <canvas
+        width=${width * dpr}
+        height=${height * dpr}
+        style="width: ${width}px; height: ${height}px;"
+      ></canvas>
     `;
   }
 
   private setupCanvas() {
-    this.canvas = this.shadowRoot?.querySelector("canvas") ?? null;
+    this.canvas = getElement("canvas", this.shadowRoot);
     if (!this.canvas) return;
 
     // Create worker using Vite's ?worker import
@@ -90,55 +101,54 @@ export class FlameGraphTimeline extends HTMLElement {
       [offscreen]
     );
     this.workerReady = true;
-
-    this.resizeObserver = new ResizeObserver(() => this.resizeCanvas());
-    this.resizeObserver.observe(this);
-
-    this.resizeCanvas();
   }
 
   private resizeCanvas() {
-    if (!this.canvas || !this.worker) return;
-
-    const rect = this.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-
-    this.canvasWidth = rect.width;
-    this.canvasHeight = rect.height;
-
     drawScheduler.schedule(() => {
-      if (!this.canvas || !this.worker) return;
+      if (this.worker === null) return;
 
-      this.canvas.style.width = `${rect.width}px`;
-      this.canvas.style.height = `${rect.height}px`;
+      const { width, height } = selectors.timelineLayout(
+        flameGraphState.getState()
+      );
+      const timeRange = selectors.timeRange(flameGraphState.getState());
+      const offsetX = selectors.offsetX(flameGraphState.getState());
+      const zoom = selectors.zoom(flameGraphState.getState());
 
-      this.worker.postMessage({
-        type: "resize",
-        width: rect.width,
-        height: rect.height,
-        dpr,
-      } satisfies ResizeMessage);
-
-      this.executeDraw();
+      this.executeDraw(width, height, timeRange, offsetX, zoom);
+      this.canvas.style.width = `${width}px`;
+      this.canvas.style.height = `${height}px`;
     });
   }
 
   draw() {
-    drawScheduler.schedule(() => this.executeDraw());
+    drawScheduler.schedule(() => {
+      const { width, height } = selectors.timelineLayout(
+        flameGraphState.getState()
+      );
+      const offsetX = selectors.offsetX(flameGraphState.getState());
+      const zoom = selectors.zoom(flameGraphState.getState());
+      const timeRange = selectors.timeRange(flameGraphState.getState());
+      return this.executeDraw(width, height, timeRange, offsetX, zoom);
+    });
   }
 
-  private executeDraw() {
+  private executeDraw(
+    width: number,
+    height: number,
+    timeRange: TimeRange,
+    offsetX: number,
+    zoom: number
+  ) {
     if (!this.worker || !this.workerReady) return;
-
-    const { timeRange, viewState } = flameGraphState.getState();
 
     this.worker.postMessage({
       type: "draw",
-      width: this.canvasWidth,
-      height: this.canvasHeight,
-      dpr: window.devicePixelRatio || 1,
+      width,
+      height,
+      dpr: this.dpr,
       timeRange,
-      viewState,
+      offsetX,
+      zoom,
     } satisfies DrawMessage);
   }
 }

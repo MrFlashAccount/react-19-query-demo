@@ -1,12 +1,12 @@
 import { flameGraphState } from "./state";
-import { CSS_VARS, toggle, shadow } from "./styles";
+import { CSS_VARS, toggle, shadow, HOST_STYLES } from "./styles";
 import { css, html } from "./utilities";
 
 const STYLES = css`
   ${CSS_VARS}
+  ${HOST_STYLES}
 
   :host {
-    all: unset;
     display: block;
     position: fixed;
   }

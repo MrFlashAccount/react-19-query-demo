@@ -22,30 +22,29 @@ export interface InitMessage {
   canvas: OffscreenCanvas;
 }
 
-export interface ResizeMessage {
-  type: "resize";
-  width: number;
-  height: number;
-  dpr: number;
-}
-
 export interface DrawMessage {
   type: "draw";
   width: number;
   height: number;
   dpr: number;
   timeRange: TimeRange;
-  viewState: ViewState;
+  offsetX: number;
+  zoom: number;
 }
 
-export type WorkerMessage = InitMessage | ResizeMessage | DrawMessage;
+export type WorkerMessage = InitMessage | DrawMessage;
 
 function draw(msg: DrawMessage): void {
   if (!ctx || !canvas) return;
 
-  const { width, height, dpr, timeRange, viewState } = msg;
+  const { width, height, dpr, timeRange, offsetX, zoom } = msg;
   const { minTime, maxTime } = timeRange;
   const totalDuration = maxTime - minTime;
+
+  if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+  }
 
   // Reset transform and clear
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -53,8 +52,6 @@ function draw(msg: DrawMessage): void {
   ctx.clearRect(0, 0, width, height);
 
   if (totalDuration === 0) return;
-
-  const { offsetX, zoom } = viewState;
 
   // Calculate visible time range
   const visibleDuration = totalDuration / zoom;
@@ -111,15 +108,13 @@ function draw(msg: DrawMessage): void {
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   const msg = e.data;
 
-  if (msg.type === "init") {
-    canvas = msg.canvas;
-    ctx = canvas.getContext("2d");
-  } else if (msg.type === "resize") {
-    if (canvas) {
-      canvas.width = msg.width * msg.dpr;
-      canvas.height = msg.height * msg.dpr;
-    }
-  } else if (msg.type === "draw") {
-    draw(msg);
+  switch (msg.type) {
+    case "init":
+      canvas = msg.canvas;
+      ctx = canvas.getContext("2d");
+      break;
+    case "draw":
+      draw(msg);
+      break;
   }
 };

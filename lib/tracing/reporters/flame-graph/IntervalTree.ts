@@ -18,10 +18,11 @@ export class IntervalTree {
   /**
    * Insert a span into the tree
    */
-  insert(span: FlameGraphSpan): void {
+  insert(span: FlameGraphSpan, maxTime: number): void {
     this.intervals.push({
       start: span.startTime,
-      end: span.startTime + span.duration,
+      // Running spans extend to maxTime
+      end: span.status === "running" ? maxTime : span.endTime,
       span,
     });
     this.sorted = false;
@@ -29,11 +30,13 @@ export class IntervalTree {
 
   /**
    * Build tree from array of spans (more efficient than individual inserts)
+   * @param maxTime - current maxTime for running spans to extend to
    */
-  build(spans: FlameGraphSpan[]): void {
+  build(spans: FlameGraphSpan[], maxTime: number): void {
     this.intervals = spans.map((span) => ({
       start: span.startTime,
-      end: span.startTime + span.duration,
+      // Running spans extend to maxTime
+      end: span.status === "running" ? maxTime : span.endTime,
       span,
     }));
     this.sorted = false;
