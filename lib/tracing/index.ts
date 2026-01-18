@@ -17,6 +17,8 @@ export type {
   Color,
 } from "./types";
 
+export { SpanBase } from "./types";
+
 // Re-export ISpan as Span for backwards compatibility
 export type { ISpan as Span } from "./types";
 

@@ -3,12 +3,19 @@
  * Optimized for flame graph virtualization - finds spans overlapping a time range
  */
 
+import type { SpanId } from "../../types";
 import type { FlameGraphSpan } from "./types";
 
 interface Interval {
   start: number;
   end: number;
+  adjustedDepth: number;
   span: FlameGraphSpan;
+}
+
+/** Interface for getting adjusted depth from LaneCalculator */
+interface DepthProvider {
+  getLayout(spanId: SpanId): { adjustedDepth: number } | undefined;
 }
 
 export class IntervalTree {
@@ -23,6 +30,7 @@ export class IntervalTree {
       start: span.startTime,
       // Running spans extend to maxTime
       end: span.status === "running" ? maxTime : span.endTime,
+      adjustedDepth: span.depth,
       span,
     });
     this.sorted = false;
@@ -37,14 +45,38 @@ export class IntervalTree {
       start: span.startTime,
       // Running spans extend to maxTime
       end: span.status === "running" ? maxTime : span.endTime,
+      adjustedDepth: span.depth,
       span,
     }));
     this.sorted = false;
   }
 
   /**
+   * Build tree with adjusted depths from LaneCalculator
+   * @param maxTime - current maxTime for running spans to extend to
+   * @param depthProvider - provides adjusted depths for each span
+   */
+  buildWithAdjustedDepths(
+    spans: FlameGraphSpan[],
+    maxTime: number,
+    depthProvider: DepthProvider
+  ): void {
+    this.intervals = spans.map((span) => {
+      const layout = depthProvider.getLayout(span.spanId);
+      return {
+        start: span.startTime,
+        end: span.status === "running" ? maxTime : span.endTime,
+        adjustedDepth: layout?.adjustedDepth ?? span.depth,
+        span,
+      };
+    });
+    this.sorted = false;
+  }
+
+  /**
    * Query spans that overlap with [start, end] time range
    * Optionally filter by depth range for full 2D virtualization
+   * Uses adjustedDepth for filtering when available
    */
   query(
     timeStart: number,
@@ -86,15 +118,16 @@ export class IntervalTree {
       // Check overlap: interval overlaps [timeStart, timeEnd] if:
       // interval.start <= timeEnd AND interval.end >= timeStart
       if (interval.end >= timeStart) {
-        const span = interval.span;
-
-        // Optional depth filtering
+        // Optional depth filtering using adjustedDepth
         if (depthStart !== undefined && depthEnd !== undefined) {
-          if (span.depth >= depthStart && span.depth <= depthEnd) {
-            result.push(span);
+          if (
+            interval.adjustedDepth >= depthStart &&
+            interval.adjustedDepth <= depthEnd
+          ) {
+            result.push(interval.span);
           }
         } else {
-          result.push(span);
+          result.push(interval.span);
         }
       }
     }

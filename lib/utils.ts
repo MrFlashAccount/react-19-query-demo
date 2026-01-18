@@ -1,4 +1,4 @@
-import { brand, isBrand } from "./types";
+import { brand } from "./types";
 
 export const noop = (..._args: any[]) => {};
 export const noopcb = () => noop;
@@ -72,8 +72,13 @@ export type WithSerializedParams<TParams> = brand.Generic<
 export function params<const TParams>(
   params: TParams
 ): WithSerializedParams<TParams> {
-  if (isBrand(WithSerializedParams, params)) {
-    return params;
+  // Already branded - return as-is
+  if (
+    typeof params === "object" &&
+    params !== null &&
+    SERIALIZED_PARAMS_SYMBOL in params
+  ) {
+    return params as unknown as WithSerializedParams<TParams>;
   }
 
   Object.defineProperty(params, SERIALIZED_PARAMS_SYMBOL, {

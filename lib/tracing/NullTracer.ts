@@ -1,6 +1,7 @@
 import { noopcb } from "../utils";
 import {
   type ISpan,
+  SpanBase,
   type ISpanChildOptions,
   type ISpanMeta,
   type ITracer,
@@ -15,7 +16,7 @@ const nullMeta: ISpanMeta = { description: "", color: "primary" };
 /**
  * No-op span used by NullTracer in production.
  */
-class NullSpan implements ISpan {
+class NullSpan extends SpanBase {
   readonly name = "";
   readonly spanId = SpanId("-");
   get state(): SpanState {

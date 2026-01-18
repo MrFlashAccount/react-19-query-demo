@@ -3,7 +3,7 @@
  * Handles off-main-thread rendering of timeline ticks
  */
 
-import type { TimeRange, ViewState } from "./types";
+import type { TimeRange } from "./types";
 import {
   format,
   generateNiceTicks,

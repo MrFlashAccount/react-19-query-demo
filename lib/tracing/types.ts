@@ -116,6 +116,31 @@ export interface ISpan extends Disposable {
   child(options: ISpanChildOptions): ISpan;
 }
 
+/**
+ * Abstract base class for all span implementations.
+ * Enforces ISpan contract and enables `instanceof` type checking.
+ * All span implementations MUST extend this class.
+ */
+export abstract class SpanBase implements ISpan {
+  abstract readonly name: string;
+  abstract readonly spanId: SpanId;
+  abstract readonly state: SpanState;
+  abstract readonly parentSpan: ISpan | undefined;
+  abstract readonly payload: Record<string, unknown>;
+  abstract readonly meta: ISpanMeta;
+  abstract readonly startTime: number;
+  abstract readonly endTime: number;
+  abstract readonly serializedPayload: string;
+  abstract readonly duration: number;
+
+  abstract start(): void;
+  abstract event(eventName: string, payload?: Record<string, unknown>): void;
+  abstract success(payload?: Record<string, unknown>): void;
+  abstract error(error: unknown, payload?: Record<string, unknown>): void;
+  abstract child(options: ISpanChildOptions): ISpan;
+  abstract [Symbol.dispose](): void;
+}
+
 // ============================================
 // TRACE EVENT TYPES
 // ============================================

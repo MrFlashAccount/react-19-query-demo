@@ -96,7 +96,6 @@ export const accent = {
   selected: OklchColor("oklch(0.80 0.12 195)"), // Cyan for selection
 } as const satisfies Readonly<Record<string, OklchColor>>;
 
-
 /** Timeline colors */
 export const timeline = {
   tickMark: OklchColor("oklch(0.45 0 0)"), // More visible tick marks

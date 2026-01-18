@@ -3,16 +3,20 @@
  * Works in any environment without async context dependencies.
  */
 
-import { SpanId, type ISpan, type ISpanMeta, type ISpanOptions } from "./types";
+import {
+  type ISpan,
+  type ISpanMeta,
+  type ISpanOptions,
+  SpanBase,
+} from "./types";
 import { tracer } from "./index";
 import { type AnyFn, executeWithSpan, createTracedDecorator } from "./shared";
-import { isBrand } from "../types";
 
 /**
- * Type guard to check if value is an ISpan (duck-typed).
- * Checks for spanId string property - fast and compact.
+ * Type guard to check if value is a span instance.
+ * Uses instanceof for reliable runtime type checking.
  */
-export const isSpan = (v: unknown): v is ISpan => isBrand(SpanId, v);
+export const isSpan = (v: unknown): v is ISpan => v instanceof SpanBase;
 
 // ============================================
 // Internal Helpers
@@ -105,10 +109,10 @@ export const Traced = createTracedDecorator(traced);
  * const span = tracer.startSpan("fetch", {}, { color: "primary" });
  * const result = await tracePromise(fetch("/api"), span);
  */
-export function tracePromise<T>(
-  promise: PromiseLike<T>,
+export function tracePromise<T, P extends PromiseLike<T>>(
+  promise: P,
   spanOrSpanOptions: ISpan | ISpanOptions
-): PromiseLike<T> {
+): P {
   const span = isSpan(spanOrSpanOptions)
     ? spanOrSpanOptions
     : tracer.startSpan(
@@ -126,7 +130,7 @@ export function tracePromise<T>(
       span.error(err);
       throw err;
     }
-  );
+  ) as P;
 }
 
 export function runInSpan<T>(

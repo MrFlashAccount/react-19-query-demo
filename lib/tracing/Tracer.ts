@@ -163,6 +163,7 @@ export class Span implements ISpan {
     payload?: Record<string, unknown>,
     error?: unknown
   ): void {
+    console.log("Span.end", status, payload, error);
     if (this._state !== "running") {
       return;
     }

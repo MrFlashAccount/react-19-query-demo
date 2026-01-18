@@ -1,4 +1,4 @@
-import { CSS_VARS, HOST_STYLES, theme } from "./styles";
+import { HOST_STYLES, theme } from "./styles";
 import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
 import type { FlameGraphDialogContent } from "./FlameGraphDialogContent";
 import type { Position } from "./types";
