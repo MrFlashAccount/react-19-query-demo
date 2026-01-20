@@ -32,7 +32,6 @@ export {
 
 export type {
   IReporter,
-  IReporterEventHandlers,
   BaseReporterOptions,
   SpanMetrics,
   LoggerReporterOptions,

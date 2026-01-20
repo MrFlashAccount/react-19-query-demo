@@ -1,5 +1,5 @@
 import { useDebugValue, useEffect } from "react";
-import { getSerializedParams, noop, type WithSerializedParams } from "../utils";
+import { noop } from "../utils";
 import { useQueryContext } from "./QueryProvider";
 import type { QueryState } from "../Query";
 import type {
@@ -23,7 +23,7 @@ export interface UseQueryOptions<
   /** The query definition */
   query: QD;
   /** The parameters for this query instance */
-  params: WithSerializedParams<TParams>;
+  params: TParams;
 }
 
 /**
@@ -100,10 +100,9 @@ export function useQuery<
   const { queryClient } = useQueryContext();
 
   // Add or get query instance from cache
-  const query = queryClient.addQueryRaw<QD, TParams, TData>(
+  const query = queryClient.addQuery<QD, TParams, TData>(
     queryDefinition,
     params,
-    getSerializedParams(params),
     { prefetch: true }
   );
 

@@ -4,7 +4,6 @@ import type {
   IEventReceiver,
   TraceEvent,
   SpanStartEvent,
-  SpanEndEvent,
   SpanEvent,
   SpanId,
 } from "../types";
@@ -52,7 +51,7 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
     if (this.options.useBatching) {
       this.batcher = new Batcher<TraceEvent>({
         process: (events) => {
-          events.forEach((event) => this.dispatchEvent(event));
+          this.processEvents(events);
         },
       });
     }
@@ -71,7 +70,6 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
    */
   start(): void {
     if (this.isActive) return;
-    this.onStart();
   }
 
   /**
@@ -87,7 +85,6 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
     this.unregister();
     this.unregister = noop;
     this.spans.clear();
-    this.onStop();
   }
 
   /**
@@ -101,15 +98,11 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
         this.batcher.flush();
       }
     } else {
-      this.dispatchEvent(event);
+      this.processEvents([event]);
     }
   }
 
-  protected onStart(): void {}
-  protected onStop(): void {}
-  protected onSpanStart(_event: SpanStartEvent): void {}
-  protected onSpanEnd(_event: SpanEndEvent): void {}
-  protected onSpanEvent(_event: SpanEvent): void {}
+  protected abstract processEvents(events: TraceEvent[]): void;
 
   /**
    * Track a span's start. Call from onSpanStart if you need
@@ -158,19 +151,5 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
       timestamp: event.timestamp,
       payload: event.payload,
     });
-  }
-
-  private dispatchEvent(event: TraceEvent): void {
-    switch (event.kind) {
-      case "start":
-        this.onSpanStart(event);
-        break;
-      case "end":
-        this.onSpanEnd(event);
-        break;
-      case "event":
-        this.onSpanEvent(event);
-        break;
-    }
   }
 }

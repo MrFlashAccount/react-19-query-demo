@@ -1,18 +1,15 @@
 import { useEffect } from "react";
 import { useQueryContext } from "./QueryProvider";
 import { type UseQueryOptions } from "./useQuery";
-import { getSerializedParams, noop } from "../utils";
+import { noop } from "../utils";
 
 export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
   const { queryClient } = useQueryContext();
 
   const queryInstances = queries.map((query) => {
-    const queryInstance = queryClient.addQueryRaw(
-      query.query,
-      query.params,
-      getSerializedParams(query.params),
-      { prefetch: true }
-    );
+    const queryInstance = queryClient.addQuery(query.query, query.params, {
+      prefetch: true,
+    });
 
     const queryState = queryInstance.getState();
     return {

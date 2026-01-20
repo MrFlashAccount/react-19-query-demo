@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./brand.ts",
+      "default": "./brand.ts"
+    },
+    "./types": {
+      "types": "./types.ts",
+      "default": "./types.ts"
+    }
+  }
+}

@@ -1,11 +1,6 @@
 // Core exports
 export { QueryCache } from "./QueryCache";
-export {
-  params,
-  getSerializedParams,
-  type WithSerializedParams,
-  exponentialBackoff,
-} from "./utils";
+export { exponentialBackoff } from "./utils";
 
 export { DependencyGraph } from "./DependencyGraph";
 export type {

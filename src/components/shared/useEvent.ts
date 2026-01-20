@@ -1,6 +1,12 @@
 import { useCallback, useRef, type RefObject } from "react";
+import * as React from "react";
 
-function useSyncRef<T>(value: T): RefObject<T> {
+const useEffectEvent =
+  /* @__PURE__ */ React.useEffectEvent ??
+  (React as any)["experimental_useEffectEvent"] ??
+  useCallback;
+
+function useLatest<T>(value: T): RefObject<T> {
   const ref = useRef<T>(value);
   if (ref.current !== value) {
     ref.current = value;
@@ -9,11 +15,15 @@ function useSyncRef<T>(value: T): RefObject<T> {
 }
 
 const emptyArray: Readonly<never[]> = [];
+const noop = () => {};
 
 export function useEvent<T extends (...args: any[]) => any>(cb: T): T {
-  const ref = useSyncRef(cb);
-  return useCallback(
-    (...args: Parameters<T>) => ref.current(...args),
-    emptyArray
-  ) as T;
+  const cbRef = useLatest(cb);
+  const dontCallInRenderGuard = useEffectEvent(noop);
+  return useCallback((...args: Parameters<T>) => {
+    if (import.meta.env.DEV) {
+      dontCallInRenderGuard();
+    }
+    return cbRef.current(...args);
+  }, emptyArray) as T;
 }

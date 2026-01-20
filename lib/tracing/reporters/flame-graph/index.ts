@@ -18,6 +18,7 @@ export type {
   ViewState,
   FlameGraphEvent,
 } from "./types";
+export type { SpanBufferViews } from "./SpanBuffer";
 
 // Utils
 export { COLOR_PALETTE, formatTime, escapeHtml, lightenColor } from "./styles";

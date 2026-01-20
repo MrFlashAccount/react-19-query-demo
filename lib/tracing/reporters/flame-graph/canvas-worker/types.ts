@@ -3,18 +3,21 @@
  */
 
 import type { Color, SpanId } from "../../../types";
-import type { FlameGraphSpan, TimeRange, ViewState } from "../types";
+import type { TimeRange, ViewState } from "../types";
+import type { SpanBufferDescriptor } from "../SpanBuffer";
 
 export interface InitMessage {
   type: "init";
   canvas: OffscreenCanvas;
   colorPalette: Record<Color, string>;
   selectedBorderColor: string;
+  spanBuffer: SpanBufferDescriptor;
 }
 
 export interface UpdateSpansMessage {
   type: "updateSpans";
-  spans: FlameGraphSpan[];
+  spanBuffer: SpanBufferDescriptor;
+  version: number;
 }
 
 export interface DrawMessage {
@@ -28,4 +31,3 @@ export interface DrawMessage {
 }
 
 export type WorkerMessage = InitMessage | UpdateSpansMessage | DrawMessage;
-

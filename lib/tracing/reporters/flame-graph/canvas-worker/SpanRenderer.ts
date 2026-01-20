@@ -3,8 +3,9 @@
  */
 
 import type { Color, SpanId } from "../../../types";
-import type { FlameGraphSpan } from "../types";
-import { ui, spanText, theme } from "../styles";
+import type { SpanBufferViews } from "../SpanBuffer";
+import { CODE_TO_COLOR, readSpanId, readSpanName } from "../SpanBuffer";
+import { theme } from "../styles";
 import { PADDING_LEFT } from "../utilities";
 import {
   ROW_HEIGHT,
@@ -35,7 +36,8 @@ export class SpanRenderer {
    * Handles both running and ended spans in single pass
    */
   draw(
-    span: FlameGraphSpan,
+    views: SpanBufferViews,
+    index: number,
     adjustedDepth: number,
     timeToX: (t: number) => number,
     durationToWidth: (d: number) => number,
@@ -45,10 +47,13 @@ export class SpanRenderer {
     selectedSpanId: SpanId | null,
     currentTime: number
   ): void {
-    const isRunning = span.status === "running";
-    const rawX = timeToX(span.startTime);
+    const status = views.status[index];
+    const isRunning = status === 1;
+    const rawX = timeToX(views.startTime[index]);
     const y = adjustedDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
-    const duration = isRunning ? currentTime - span.startTime : span.duration;
+    const duration = isRunning
+      ? currentTime - views.startTime[index]
+      : views.duration[index];
     const rawW = Math.max(durationToWidth(duration), MIN_SPAN_WIDTH);
     const h = ROW_HEIGHT;
 
@@ -61,9 +66,11 @@ export class SpanRenderer {
     )
       return;
 
-    const isSelected = span.spanId === selectedSpanId;
-    const baseColor = span.color
-      ? this.colorPalette[span.color]
+    const isSelected = readSpanId(views, index) === selectedSpanId;
+    const colorCode = views.color[index];
+    const color = CODE_TO_COLOR[colorCode as keyof typeof CODE_TO_COLOR];
+    const baseColor = color
+      ? this.colorPalette[color]
       : this.colorPalette.primary;
 
     const margin = SpanRenderer.MARGIN_PX;
@@ -78,7 +85,12 @@ export class SpanRenderer {
     const rightRadius = rightVisible ? SPAN_RADIUS : 0;
 
     // Pick style variants
-    const fillColor = this.getFillColor(span, baseColor, isSelected, isRunning);
+    const fillColor = this.getFillColor(
+      status,
+      baseColor,
+      isSelected,
+      isRunning
+    );
     const border = this.getBorderStyle(baseColor, isSelected, isRunning);
 
     // Draw background
@@ -113,10 +125,13 @@ export class SpanRenderer {
     if (border.dashed) this.ctx.setLineDash([]);
 
     // Draw text
-    const rightLabel = isRunning ? "⏳ In progress" : formatTime(span.duration);
+    const rightLabel = isRunning
+      ? "⏳ In progress"
+      : formatTime(views.duration[index]);
     const minRightSpace = isRunning ? 80 : 50;
     this.drawSpanText(
-      span,
+      views,
+      index,
       rawX,
       y,
       rawW,
@@ -128,7 +143,7 @@ export class SpanRenderer {
   }
 
   private getFillColor(
-    span: FlameGraphSpan,
+    status: number,
     baseColor: string,
     isSelected: boolean,
     isRunning: boolean
@@ -140,8 +155,7 @@ export class SpanRenderer {
         : baseColor + "88";
     }
 
-    const bgColor =
-      span.status === "error" ? this.colorPalette.error : baseColor;
+    const bgColor = status === 3 ? this.colorPalette.error : baseColor;
     return isSelected ? lightenColor(bgColor, 0.25) : bgColor;
   }
 
@@ -160,11 +174,12 @@ export class SpanRenderer {
     if (isRunning) {
       return { strokeStyle: baseColor, lineWidth: 1, dashed: true };
     }
-    return { strokeStyle: ui.borderLight, lineWidth: 1, dashed: false };
+    return { strokeStyle: theme.ui.borderLight, lineWidth: 1, dashed: false };
   }
 
   private drawSpanText(
-    span: FlameGraphSpan,
+    views: SpanBufferViews,
+    index: number,
     rawX: number,
     y: number,
     rawW: number,
@@ -205,18 +220,22 @@ export class SpanRenderer {
       : availableTextWidth;
 
     if (labelMaxWidth > 10) {
-      this.ctx.fillStyle = spanText.label;
+      this.ctx.fillStyle = theme.spanText.label;
       this.ctx.textAlign = "left";
-      const label = truncateText(this.ctx, span.name, labelMaxWidth);
+      const label = truncateText(
+        this.ctx,
+        readSpanName(views, index),
+        labelMaxWidth
+      );
       this.ctx.fillText(label, labelLeft, centerY);
     }
 
     if (showRight) {
-      this.ctx.fillStyle = spanText.duration;
+      this.ctx.fillStyle = theme.spanText.duration;
+      this.ctx.textAlign = "right";
       this.ctx.fillText(rightLabel, rightTextX, centerY);
     }
 
     this.ctx.restore();
   }
 }
-

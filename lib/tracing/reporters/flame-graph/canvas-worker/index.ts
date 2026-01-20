@@ -5,7 +5,8 @@
  */
 
 import type { Color, SpanId } from "../../../types";
-import type { FlameGraphSpan, TimeRange, ViewState } from "../types";
+import type { TimeRange, ViewState } from "../types";
+import type { SpanBufferDescriptor } from "../SpanBuffer";
 import type {
   WorkerMessage,
   InitMessage,
@@ -27,15 +28,20 @@ export interface InitParams {
   canvas: OffscreenCanvas;
   colorPalette: Record<Color, string>;
   selectedBorderColor: string;
+  spanBuffer: SpanBufferDescriptor;
 }
 
 /**
  * Message factories for creating typed worker messages
  */
 export const msg = {
-  updateSpans: (spans: FlameGraphSpan[]): UpdateSpansMessage => ({
+  updateSpans: (
+    spanBuffer: SpanBufferDescriptor,
+    version: number
+  ): UpdateSpansMessage => ({
     type: "updateSpans",
-    spans,
+    spanBuffer,
+    version,
   }),
 
   draw: (params: DrawParams): DrawMessage => ({
@@ -54,7 +60,7 @@ interface IPreInitCanvasWorkerClient {
 }
 
 interface ICanvasWorkerClientMethods {
-  updateSpans(spans: FlameGraphSpan[]): this;
+  updateSpans(spanBuffer: SpanBufferDescriptor, version: number): this;
   draw(params: DrawParams): this;
   terminate(): void;
 }
@@ -92,12 +98,15 @@ export class CanvasWorkerClient
     }
 
     this.worker.postMessage(
-      {
-        type: "init",
-        canvas: params.canvas,
-        colorPalette: params.colorPalette,
-        selectedBorderColor: params.selectedBorderColor,
-      } satisfies InitMessage,
+      [
+        {
+          type: "init",
+          canvas: params.canvas,
+          colorPalette: params.colorPalette,
+          selectedBorderColor: params.selectedBorderColor,
+          spanBuffer: params.spanBuffer,
+        } satisfies InitMessage,
+      ],
       transfer
     );
     this.isInitialized = true;
@@ -117,10 +126,22 @@ export class CanvasWorkerClient
    * Multiple messages are batched and processed together
    */
   send(...messages: WorkerMessage[]): void {
+    const pendingMessages =
+      this.isBatching && this.batchMessages.length > 0
+        ? [...this.batchMessages, ...messages]
+        : messages;
+
+    if (pendingMessages.length === 0) return;
+
     this.sendMessages(
-      messages,
+      pendingMessages,
       this.isBatching
     ) as unknown as IBatchingCanvasWorkerClient;
+
+    if (this.isBatching) {
+      this.isBatching = false;
+      this.batchMessages = [];
+    }
   }
 
   private sendMessages(
@@ -148,8 +169,8 @@ export class CanvasWorkerClient
   /**
    * Convenience: Update spans data in the worker
    */
-  updateSpans(spans: FlameGraphSpan[]) {
-    this.sendMessages([msg.updateSpans(spans)]);
+  updateSpans(spanBuffer: SpanBufferDescriptor, version: number) {
+    this.sendMessages([msg.updateSpans(spanBuffer, version)]);
     return this;
   }
 
@@ -179,4 +200,4 @@ export type {
   UpdateSpansMessage,
   DrawMessage,
 } from "./types";
-export type { FlameGraphSpan, TimeRange, ViewState } from "../types";
+export type { TimeRange, ViewState } from "../types";

@@ -1,4 +1,4 @@
-import { CSS_VARS, HOST_STYLES } from "./styles";
+import { RESET_CASCADE, theme } from "./styles";
 import { css, getElement, html } from "./utilities";
 import TimelineWorker from "./timeline.worker?worker";
 import type { InitMessage, DrawMessage } from "./timeline.worker";
@@ -7,15 +7,14 @@ import { flameGraphState, selectors } from "./state";
 import type { TimeRange } from "./types";
 
 const STYLES = css`
-  ${CSS_VARS}
-  ${HOST_STYLES}
-
   :host {
+    ${RESET_CASCADE}
+
     display: block;
     height: 28px;
     flex-shrink: 0;
-    background: var(--fg-bg-overlay);
-    border-bottom: 1px solid var(--fg-border-subtle);
+    background: ${theme.ui.bgOverlay};
+    border-bottom: 1px solid ${theme.ui.borderSubtle};
     position: relative;
     contain: content;
   }

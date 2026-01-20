@@ -1,20 +1,19 @@
 import {
   COLOR_PALETTE,
   SELECTED_BORDER_COLOR,
-  CSS_VARS,
   RESET_CASCADE,
+  theme,
 } from "./styles";
-import type { FlameGraphSpan, ViewState } from "./types";
+import type { ViewState } from "./types";
+import type { SpanBufferViews, SpanBufferDescriptor } from "./SpanBuffer";
+import { getSpanCount, readSpanId } from "./SpanBuffer";
 import { css, getElement, html } from "./utilities";
 import { CanvasWorkerClient } from "./canvas-worker";
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
-import { calculateSpanLayouts, type SpanLayout } from "./LaneCalculator";
-import type { SpanId } from "../../types";
+import { calculateSpanLayouts } from "./LaneCalculator";
 
 const STYLES = css`
-  ${CSS_VARS}
-
   :host {
     ${RESET_CASCADE}
 
@@ -46,8 +45,8 @@ const STYLES = css`
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: var(--fg-text-dim);
-    font-family: var(--fg-font);
+    color: ${theme.ui.textDim};
+    font-family: ${theme.family.default};
   }
 
   .empty-icon {
@@ -82,7 +81,8 @@ export class FlameGraphCanvas extends HTMLElement {
   private unmountAbortController = new AbortController();
 
   // Span layouts for hit testing (mirrors worker's calculation)
-  private spanLayouts = new Map<SpanId, SpanLayout>();
+  private spanLayouts: Int32Array<ArrayBufferLike> = new Int32Array(0);
+  private spanLayoutsCount = 0;
 
   constructor() {
     super();
@@ -103,9 +103,14 @@ export class FlameGraphCanvas extends HTMLElement {
   private subscribeToState() {
     // Subscribe to spans changes - send updateSpans + draw
     flameGraphState.subscribe(
-      selectors.spans,
-      (spans) => this.updateSpansAndDraw(spans),
-      { signal: this.unmountAbortController.signal }
+      (state) => ({
+        spanBuffer: state.spanBuffer,
+        spanVersion: state.spanVersion,
+      }),
+      ({ spanBuffer, spanVersion }) => {
+        this.updateSpansAndDraw(spanBuffer, spanVersion);
+      },
+      { signal: this.unmountAbortController.signal, fireImmediately: true }
     );
     flameGraphState.subscribe(
       selectors.hasSpans,
@@ -180,6 +185,10 @@ export class FlameGraphCanvas extends HTMLElement {
         canvas: offscreen,
         colorPalette: COLOR_PALETTE,
         selectedBorderColor: SELECTED_BORDER_COLOR,
+        spanBuffer: {
+          sab: flameGraphState.getState().spanBuffer.sab,
+          stringSab: flameGraphState.getState().spanBuffer.stringSab,
+        },
       },
       [offscreen]
     );
@@ -222,8 +231,8 @@ export class FlameGraphCanvas extends HTMLElement {
     const rect = this.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const span = this.findSpanAt(x, y);
-    this.style.cursor = span ? "pointer" : "grab";
+    const spanIndex = this.findSpanAt(x, y);
+    this.style.cursor = spanIndex !== null ? "pointer" : "grab";
   };
 
   private handlePointerDown = (e: PointerEvent) => {
@@ -313,12 +322,21 @@ export class FlameGraphCanvas extends HTMLElement {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const clickedSpan = this.findSpanAt(x, y);
-    flameGraphState.selectSpan(clickedSpan?.spanId ?? null);
+    const clickedIndex = this.findSpanAt(x, y);
+    flameGraphState.selectSpan(clickedIndex ?? null);
 
     this.dispatchEvent(
       new CustomEvent("spanselect", {
-        detail: clickedSpan,
+        detail:
+          clickedIndex == null
+            ? null
+            : {
+                index: clickedIndex,
+                spanId: readSpanId(
+                  flameGraphState.getState().spanBuffer,
+                  clickedIndex
+                ),
+              },
         bubbles: true,
       })
     );
@@ -327,7 +345,8 @@ export class FlameGraphCanvas extends HTMLElement {
   private clampViewState(state: ViewState): ViewState {
     const { width, height } =
       flameGraphState.getState().viewState.calculatedLayout.canvas;
-    const { timeRange, spans } = flameGraphState.getState();
+    const { spanBuffer, spanCount } = flameGraphState.getState();
+    const timeRange = selectors.timeRange(flameGraphState.getState());
     const { minTime, maxTime } = timeRange;
     const totalDuration = maxTime - minTime;
 
@@ -351,9 +370,9 @@ export class FlameGraphCanvas extends HTMLElement {
 
     // Use max adjusted depth from span layouts for proper scroll limits
     let maxAdjustedDepth = 0;
-    for (const span of spans) {
-      const layout = this.spanLayouts.get(span.spanId);
-      const adjustedDepth = layout?.adjustedDepth ?? span.depth;
+    for (let i = 0; i < spanCount; i++) {
+      const adjustedDepth =
+        i < this.spanLayoutsCount ? this.spanLayouts[i] : spanBuffer.depth[i];
       if (adjustedDepth > maxAdjustedDepth) {
         maxAdjustedDepth = adjustedDepth;
       }
@@ -373,20 +392,31 @@ export class FlameGraphCanvas extends HTMLElement {
     this.canvas.style.height = `${height}px`;
   }
 
-  private updateSpansAndDraw(spans: FlameGraphSpan[]) {
-    // Update span layouts for hit testing
-    this.spanLayouts = calculateSpanLayouts(spans);
+  private updateSpansAndDraw(spanBuffer: SpanBufferViews, version: number) {
+    const count = getSpanCount(spanBuffer);
+    const layouts = calculateSpanLayouts(spanBuffer, count);
+    this.spanLayouts = layouts.adjustedDepths;
+    this.spanLayoutsCount = layouts.count;
 
     drawScheduler.schedule(() => {
       const { width, height } = selectors.canvasLayout(
         flameGraphState.getState()
       );
-      const { selectedSpanId, timeRange, viewState } =
+      const { selectedSpanIndex, viewState, spanBuffer } =
         flameGraphState.getState();
+      const timeRange = selectors.timeRange(flameGraphState.getState());
+      const selectedSpanId =
+        selectedSpanIndex == null
+          ? null
+          : readSpanId(spanBuffer, selectedSpanIndex);
 
+      const bufferDescriptor: SpanBufferDescriptor = {
+        sab: spanBuffer.sab,
+        stringSab: spanBuffer.stringSab,
+      };
       this.canvasWorker
         .batch()
-        .updateSpans(spans)
+        .updateSpans(bufferDescriptor, version)
         .draw({
           width,
           height,
@@ -409,22 +439,37 @@ export class FlameGraphCanvas extends HTMLElement {
   }
 
   private executeDraw(width: number, height: number) {
-    const { selectedSpanId, timeRange, viewState } = flameGraphState.getState();
+    const { selectedSpanIndex, viewState, spanBuffer } =
+      flameGraphState.getState();
+    const timeRange = selectors.timeRange(flameGraphState.getState());
+    const selectedSpanId =
+      selectedSpanIndex == null
+        ? null
+        : readSpanId(spanBuffer, selectedSpanIndex);
 
     this.canvasWorker.draw({
       width,
       height,
       dpr: this.dpr,
       selectedSpanId,
-      timeRange,
-      viewState,
+      timeRange: {
+        minTime: timeRange.minTime,
+        maxTime: timeRange.maxTime,
+      },
+      viewState: {
+        offsetX: viewState.offsetX,
+        offsetY: viewState.offsetY,
+        zoom: viewState.zoom,
+      },
     });
   }
 
-  private findSpanAt(x: number, y: number): FlameGraphSpan | null {
-    const { viewState, timeRange, spans } = flameGraphState.getState();
+  private findSpanAt(x: number, y: number): number | null {
+    const { viewState, spanBuffer, spanCount } = flameGraphState.getState();
     const { width } = viewState.calculatedLayout.canvas;
-    const { minTime, maxTime } = timeRange;
+    const { minTime, maxTime } = selectors.timeRange(
+      flameGraphState.getState()
+    );
     const totalDuration = maxTime - minTime;
     if (totalDuration === 0) return null;
 
@@ -442,22 +487,23 @@ export class FlameGraphCanvas extends HTMLElement {
 
     // Check spans (running spans use currentTime for width)
     // Uses adjusted depths from lane calculator for proper hit testing
-    for (let i = spans.length - 1; i >= 0; i--) {
-      const span = spans[i];
-      const isRunning = span.status === "running";
-      const duration = isRunning ? currentTime - span.startTime : span.duration;
+    for (let i = spanCount - 1; i >= 0; i--) {
+      const isRunning = spanBuffer.status[i] === 1;
+      const duration = isRunning
+        ? currentTime - spanBuffer.startTime[i]
+        : spanBuffer.duration[i];
 
       // Use adjusted depth from span layouts
-      const layout = this.spanLayouts.get(span.spanId);
-      const adjustedDepth = layout?.adjustedDepth ?? span.depth;
+      const adjustedDepth =
+        i < this.spanLayoutsCount ? this.spanLayouts[i] : spanBuffer.depth[i];
 
-      const sx = timeToX(span.startTime);
+      const sx = timeToX(spanBuffer.startTime[i]);
       const sy = adjustedDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
       const sw = Math.max(durationToWidth(duration), MIN_SPAN_WIDTH);
       const sh = ROW_HEIGHT;
 
       if (x >= sx && x <= sx + sw && y >= sy && y <= sy + sh) {
-        return span;
+        return i;
       }
     }
 

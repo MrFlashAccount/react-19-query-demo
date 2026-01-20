@@ -17,8 +17,9 @@ export default defineConfig({
     alias: {
       "lib/react": path.resolve(__dirname, "lib/react"),
       "lib/devtools": path.resolve(__dirname, "lib/devtools/index.ts"),
-      "@lib/tracing/helpers": path.resolve(__dirname, "lib/tracing/helpers.ts"),
-      "@lib/tracing": path.resolve(__dirname, "lib/tracing"),
+      "lib/brand": path.resolve(__dirname, "lib/brand/brand.ts"),
+      "lib/tracing/helpers": path.resolve(__dirname, "lib/tracing/helpers.ts"),
+      "lib/tracing": path.resolve(__dirname, "lib/tracing"),
     },
   },
   worker: { format: "es" },
@@ -33,6 +34,13 @@ export default defineConfig({
           ],
         },
       },
+    },
+  },
+  server: {
+    // Required for SAB to work in the browser
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
     },
   },
 });

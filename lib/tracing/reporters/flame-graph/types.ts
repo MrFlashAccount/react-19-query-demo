@@ -2,15 +2,15 @@ import type { Color, SpanId, SpanState } from "../../types";
 
 export interface FlameGraphSpan {
   spanId: SpanId;
-  parentSpanId?: SpanId | undefined;
+  parentSpanId: SpanId | null;
   name: string;
   startTime: number;
   endTime: number;
   duration: number;
   depth: number;
-  payload: Record<string, unknown>;
-  status?: SpanState;
-  color?: Color;
+  status: SpanState;
+  color: Color;
+  payload?: Record<string, unknown>;
 }
 
 export interface FlameGraphReporterOptions {
@@ -114,4 +114,4 @@ export type FlameGraphEvent =
   | { type: "record-stop" }
   | { type: "clear" }
   | { type: "close" }
-  | { type: "span-select"; span: FlameGraphSpan | null };
+  | { type: "span-select"; spanIndex: number | null };

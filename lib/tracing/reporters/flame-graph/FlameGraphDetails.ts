@@ -2,7 +2,7 @@ import {
   BUTTON_STYLES,
   formatTime,
   escapeHtml,
-  details,
+  theme,
   TYPOGRAPHY_STYLES,
   HOST_STYLES,
 } from "./styles";
@@ -10,6 +10,7 @@ import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
 import "./FlameGraphResizeHandle";
 import { css, getElement, html } from "./utilities";
 import { flameGraphState, selectors } from "./state";
+import { drawScheduler } from "./DrawScheduler";
 
 const STYLES = css`
   ${HOST_STYLES}
@@ -18,11 +19,11 @@ const STYLES = css`
   :host {
     display: flex;
     flex-direction: column;
-    background: var(--fg-bg-overlay);
+    background: ${theme.ui.bgOverlay};
     font-size: 12px;
-    color: var(--fg-text);
+    color: ${theme.ui.text};
     position: relative;
-    font-family: var(--fg-font);
+    font-family: ${theme.family.default};
     box-sizing: border-box;
     overflow: hidden;
   }
@@ -55,16 +56,16 @@ const STYLES = css`
     justify-content: space-between;
     align-items: center;
     padding: 4px 4px 4px 16px;
-    background: ${details.headerBg};
-    border-bottom: 1px solid var(--fg-border-subtle);
+    background: ${theme.details.headerBg};
+    border-bottom: 1px solid ${theme.ui.borderSubtle};
     flex-shrink: 0;
   }
 
   .title {
-    ${TYPOGRAPHY_STYLES}
-    font-size: 14px;
-    font-weight: 600;
-    color: ${details.labelKey};
+    ${TYPOGRAPHY_STYLES({
+      fontWeight: theme.weight.bold,
+      color: theme.details.labelKey,
+    })}
     word-break: break-word;
   }
 
@@ -92,50 +93,50 @@ const STYLES = css`
 
   .label {
     font-size: 10px;
-    color: var(--fg-text-dim);
+    color: ${theme.ui.textDim};
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
 
   .value {
-    color: ${details.labelKey};
-    font-family: var(--fg-font-mono);
+    color: ${theme.details.labelKey};
+    font-family: ${theme.family.monospace};
   }
 
   .value.duration {
-    color: ${details.spanName};
+    color: ${theme.details.spanName};
     font-weight: 500;
   }
 
   .value.success {
-    color: var(--fg-success);
+    color: ${theme.accent.success};
   }
 
   .value.error {
-    color: ${details.errorStatus};
+    color: ${theme.details.errorStatus};
   }
 
   .payload {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px solid var(--fg-border);
+    border-top: 1px solid ${theme.ui.border};
   }
 
   .payload-title {
     font-size: 10px;
-    color: var(--fg-text-dim);
+    color: ${theme.ui.textDim};
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 6px;
   }
 
   .payload-content {
-    background: var(--fg-bg-overlay);
+    background: ${theme.ui.bgOverlay};
     border-radius: 6px;
     padding: 8px 10px;
-    font-family: var(--fg-font-mono);
+    font-family: ${theme.family.monospace};
     font-size: 11px;
-    color: ${details.labelValue};
+    color: ${theme.details.labelValue};
     word-break: break-word;
     white-space: pre-wrap;
   }
@@ -164,7 +165,7 @@ export class FlameGraphDetails extends HTMLElement {
     flameGraphState.subscribe(
       selectors.detailsLayout,
       () => {
-        this.updateContent();
+        this.draw();
       },
       { signal: this.unsubAbortController.signal }
     );
@@ -172,17 +173,15 @@ export class FlameGraphDetails extends HTMLElement {
     flameGraphState.subscribe(
       selectors.detailsPosition,
       () => {
-        this.updateContent();
+        this.draw();
       },
-      {
-        signal: this.unsubAbortController.signal,
-      }
+      { signal: this.unsubAbortController.signal }
     );
 
     flameGraphState.subscribe(
       selectors.detailsVisible,
       () => {
-        this.updateContent();
+        this.draw();
       },
       { signal: this.unsubAbortController.signal }
     );
@@ -190,10 +189,16 @@ export class FlameGraphDetails extends HTMLElement {
     flameGraphState.subscribe(
       selectors.selectedSpan,
       () => {
-        this.updateContent();
+        this.draw();
       },
       { signal: this.unsubAbortController.signal }
     );
+  }
+
+  private draw() {
+    drawScheduler.schedule(() => {
+      this.updateContent();
+    });
   }
 
   private render() {
@@ -206,7 +211,7 @@ export class FlameGraphDetails extends HTMLElement {
     const span = selectors.selectedSpan(flameGraphState.getState());
     const timeRange = selectors.timeRange(flameGraphState.getState());
     if (!span) return;
-    const isPending = span.endTime === undefined || span.duration === undefined;
+    const isPending = span.status === "running";
     const relativeStart =
       span.startTime !== undefined ? span.startTime - timeRange.minTime : 0;
     const relativeEnd = isPending

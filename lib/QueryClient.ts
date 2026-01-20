@@ -7,7 +7,6 @@ import {
   type QueryParams,
 } from "./nodes/query";
 import { type DependencyGraph } from "./DependencyGraph";
-import { type SerializedParams } from "./utils";
 import { type IInvalidatable, type MutationDefinition } from "./nodes/mutation";
 import { QueryCache } from "./QueryCache";
 import { Mutation } from "./Mutation";
@@ -156,42 +155,6 @@ export class QueryClient {
     const existingQuery = this._cache.get(queryDefinition, params) as
       | Query<QD, TParams, TData>
       | undefined;
-
-    if (existingQuery != null) {
-      return existingQuery;
-    }
-
-    const entry = new Query<QD, TParams, TData>(queryDefinition, params, {
-      onRemove: () => {
-        this.handleQueryGarbageCollect(queryDefinition, params);
-      },
-      context: this.context,
-      commitTarget: this.eventTarget,
-    });
-
-    this._cache.set(queryDefinition, params, entry);
-
-    if (options?.prefetch) {
-      entry.prefetch();
-    }
-
-    return entry;
-  }
-
-  addQueryRaw<
-    QD extends QueryDefinition<TParams, TData>,
-    TParams extends unknown = unknown,
-    TData extends unknown = unknown
-  >(
-    queryDefinition: QD,
-    params: TParams,
-    serializedParams: SerializedParams,
-    options?: { prefetch?: boolean }
-  ): Query<QD, TParams, TData> {
-    const existingQuery = this._cache.getRaw<QD, TParams, TData>(
-      queryDefinition,
-      serializedParams
-    );
 
     if (existingQuery != null) {
       return existingQuery;

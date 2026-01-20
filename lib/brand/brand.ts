@@ -1,21 +1,26 @@
 import type {
   Nominal,
   BrandValue,
-  GenericNominal,
   BrandOptions,
+  BrandValidator,
 } from "./types";
 import type { StandardSchemaV1 } from "./standard-schema";
 
-type ValidationResult<Value> = { ok: true; value: Value } | { ok: false };
+type ValidationResult<ValueType, BrandName> =
+  | { ok: true; value: BrandValue<ValueType, BrandName> }
+  | { ok: false };
 
-const normalizeStandardResult = <Value>(
-  result: StandardSchemaV1.Result<Value>
-): ValidationResult<Value> => {
+const normalizeStandardResult = <ValueType, BrandName>(
+  result: StandardSchemaV1.Result<ValueType>
+): ValidationResult<ValueType, BrandName> => {
   if (result && "issues" in result && result.issues != null) {
     return { ok: false };
   }
   if (result && "value" in result) {
-    return { ok: true, value: result.value as Value };
+    return {
+      ok: true,
+      value: result.value as BrandValue<ValueType, BrandName>,
+    };
   }
   return { ok: false };
 };
@@ -23,14 +28,47 @@ const normalizeStandardResult = <Value>(
 const invalidError = (value: unknown) =>
   new Error(`Brand invariant violation: Invalid value for type ${value}`);
 
-const getStandardValidator = <Value>(
-  value: StandardSchemaV1<unknown, Value>
+const getStandardValidator = <ValueType>(
+  value: StandardSchemaV1<unknown, ValueType>
 ) => {
   const standard = value?.["~standard"];
   if (!standard || typeof standard.validate !== "function") {
     return null;
   }
   return standard.validate.bind(standard);
+};
+
+const validateValue = <ValueType, BrandName>(
+  value: unknown,
+  validator?: BrandValidator<ValueType>
+): ValidationResult<ValueType, BrandName> => {
+  if (!validator) {
+    return { ok: true, value: value as BrandValue<ValueType, BrandName> };
+  }
+  if (typeof validator === "function") {
+    return validator(value)
+      ? { ok: true, value: value as BrandValue<ValueType, BrandName> }
+      : { ok: false };
+  }
+  const standardValidator = getStandardValidator(validator);
+  if (!standardValidator) {
+    return { ok: false };
+  }
+  try {
+    const standardResult = standardValidator(value);
+    if (
+      standardResult &&
+      typeof (standardResult as Promise<StandardSchemaV1.Result<ValueType>>)
+        .then === "function"
+    ) {
+      return { ok: false };
+    }
+    return normalizeStandardResult<ValueType, BrandName>(
+      standardResult as StandardSchemaV1.Result<ValueType>
+    );
+  } catch {
+    return { ok: false };
+  }
 };
 
 /**
@@ -45,59 +83,33 @@ const getStandardValidator = <Value>(
  * const userId = UserId("user-123"); // BrandValue<string, "UserId">
  * ```
  */
-export function brand<Value, const Type extends string>(
-  options: BrandOptions<Value> = {}
-): Nominal<Value, Type> {
+export function brand<ValueType = never, const BrandName = never>(
+  options: BrandOptions<ValueType> = {}
+): Nominal<ValueType, BrandName> {
   const { validator } = options;
 
-  const validateValue = (value: unknown): ValidationResult<Value> => {
-    if (!validator) {
-      return { ok: true, value: value as Value };
-    }
-    if (typeof validator === "function") {
-      return validator(value)
-        ? { ok: true, value: value as Value }
-        : { ok: false };
-    }
-    const standardValidator = getStandardValidator(validator);
-    if (!standardValidator) {
-      return { ok: false };
-    }
-    try {
-      const standardResult = standardValidator(value);
-      if (
-        standardResult &&
-        typeof (standardResult as Promise<StandardSchemaV1.Result<Value>>)
-          .then === "function"
-      ) {
-        return { ok: false };
-      }
-      return normalizeStandardResult<Value>(
-        standardResult as StandardSchemaV1.Result<Value>
-      );
-    } catch {
-      return { ok: false };
-    }
+  const is = <ValueType, BrandName>(
+    value: unknown
+  ): value is BrandValue<ValueType, BrandName> => {
+    return validateValue(value, validator).ok;
   };
 
-  const is = (value: unknown): value is BrandValue<Value, Type> => {
-    return validateValue(value).ok;
-  };
-
-  const to = (value: unknown): BrandValue<Value, Type> => {
-    const result = validateValue(value);
+  const to = (value: unknown) => {
+    const result = validateValue(value, validator);
     if (!result.ok) {
       throw invalidError(value);
     }
-    return result.value as BrandValue<Value, Type>;
+    return result.value as BrandValue<ValueType, BrandName>;
   };
 
-  function nominal<const S extends Value>(value: S): BrandValue<S, Type> {
-    return to(value) as BrandValue<S, Type>;
+  function nominal<const S extends ValueType>(
+    value: S
+  ): BrandValue<S, BrandName> {
+    return to(value) as BrandValue<S, BrandName>;
   }
 
   Object.defineProperty(nominal, "as", {
-    value: (value: unknown) => value as BrandValue<Value, Type>,
+    value: (value: unknown) => value as BrandValue<ValueType, BrandName>,
     writable: false,
     enumerable: false,
     configurable: false,
@@ -117,7 +129,7 @@ export function brand<Value, const Type extends string>(
     configurable: false,
   });
 
-  return nominal as Nominal<Value, Type>;
+  return nominal as unknown as Nominal<ValueType, BrandName>;
 }
 
 export namespace brand {
@@ -132,77 +144,9 @@ export namespace brand {
    * const numberId = Id(123);    // BrandValue<123, "Id">
    * ```
    */
-  export function generic<const Type extends string>(
-    options: BrandOptions<unknown> = {}
-  ): GenericNominal<Type> {
-    const { validator } = options;
-
-    const validateValue = (value: unknown): ValidationResult<unknown> => {
-      if (!validator) {
-        return { ok: true, value };
-      }
-      if (typeof validator === "function") {
-        return validator(value) ? { ok: true, value } : { ok: false };
-      }
-      const standardValidator = getStandardValidator(validator);
-      if (!standardValidator) {
-        return { ok: false };
-      }
-      try {
-        const standardResult = standardValidator(value);
-        if (
-          standardResult &&
-          typeof (standardResult as Promise<StandardSchemaV1.Result<unknown>>)
-            .then === "function"
-        ) {
-          return { ok: false };
-        }
-        return normalizeStandardResult<unknown>(
-          standardResult as StandardSchemaV1.Result<unknown>
-        );
-      } catch {
-        return { ok: false };
-      }
-    };
-
-    const is = (value: unknown): value is BrandValue<unknown, Type> => {
-      return validateValue(value).ok;
-    };
-
-    const to = (value: unknown): BrandValue<unknown, Type> => {
-      const result = validateValue(value);
-      if (!result.ok) {
-        throw invalidError(value);
-      }
-      return result.value as BrandValue<unknown, Type>;
-    };
-
-    const fn = <T>(value: T): BrandValue<T, Type> => {
-      return to(value) as BrandValue<T, Type>;
-    };
-
-    Object.defineProperty(fn, "as", {
-      value: (value: unknown) => value as BrandValue<unknown, Type>,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-
-    Object.defineProperty(fn, "is", {
-      value: is,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-
-    Object.defineProperty(fn, "to", {
-      value: to,
-      writable: false,
-      enumerable: false,
-      configurable: false,
-    });
-
-    return fn as GenericNominal<Type>;
+  export function generic<const BrandName = never>() {
+    return <const ValueType = never>(options: BrandOptions<ValueType> = {}) =>
+      brand<ValueType, BrandName>(options);
   }
 
   /**
@@ -214,5 +158,15 @@ export namespace brand {
    * type StringId = Id<string>;  // BrandValue<string, "Id">
    * ```
    */
-  export type Generic<Type extends string, T> = BrandValue<T, Type>;
+  export type Generic<BrandName, ValueType> = BrandValue<ValueType, BrandName>;
 }
+
+export type {
+  Brand,
+  BrandValue,
+  Nominal,
+  GenericNominal,
+  BrandOptions,
+  BrandValidator,
+} from "./types";
+export type { StandardSchemaV1 } from "./standard-schema";

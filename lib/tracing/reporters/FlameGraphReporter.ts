@@ -1,15 +1,12 @@
-import type { SpanStartEvent, SpanEndEvent } from "../../types";
-import { BaseReporter } from "../BaseReporter";
-import type { FlameGraphReporterOptions } from "./types";
-import type { SpanBufferViews } from "./SpanBuffer";
+import type { SpanStartEvent, SpanEndEvent, TraceEvent } from "../types";
+import { BaseReporter } from "./BaseReporter";
+import type { FlameGraphReporterOptions } from "./flame-graph/types";
+import type { SpanBufferViews } from "./flame-graph/SpanBuffer";
 
+import { flameGraphState } from "./flame-graph/state";
 // Import components to ensure registration
-import "./FlameGraphToggle";
-import "./FlameGraphDialog";
-
-import type { FlameGraphToggle } from "./FlameGraphToggle";
-import type { FlameGraphDialog } from "./FlameGraphDialog";
-import { flameGraphState, selectors } from "./state";
+import "./flame-graph/FlameGraphToggle";
+import "./flame-graph/FlameGraphDialog";
 
 /**
  * FlameGraphReporter renders spans as a flame graph using Web Components.
@@ -18,10 +15,7 @@ import { flameGraphState, selectors } from "./state";
 export class FlameGraphReporter extends BaseReporter {
   private depthMap = new Map<string, number>();
 
-  // Web components
-  private toggleButton: FlameGraphToggle | null = null;
-  private dialog: FlameGraphDialog | null = null;
-  private container: DocumentFragment | null = null;
+  private container: FlameGraphReporterElement | null = null;
 
   private readonly reporterOptions: Required<
     Omit<FlameGraphReporterOptions, "container">
@@ -66,29 +60,15 @@ export class FlameGraphReporter extends BaseReporter {
       mountTarget = document.body;
     }
 
-    this.container = document.createDocumentFragment();
+    this.container = document.createElement(
+      "flame-graph-reporter"
+    ) as FlameGraphReporterElement;
+    mountTarget.appendChild(this.container);
 
-    // Create dialog
-    this.dialog = document.createElement(
-      "flame-graph-dialog"
-    ) as FlameGraphDialog;
-    this.container.appendChild(this.dialog);
-
-    this.toggleButton = document.createElement(
-      "flame-graph-toggle"
-    ) as FlameGraphToggle;
-    this.toggleButton.setAttribute(
+    this.container.setAttribute(
       "position",
       this.reporterOptions.buttonPosition
     );
-    this.setupToggleEvents();
-    this.container.appendChild(this.toggleButton);
-
-    // Subscribe to state
-    this.subscribeToState();
-
-    // Mount
-    mountTarget.appendChild(this.container);
   }
 
   /**
@@ -101,17 +81,28 @@ export class FlameGraphReporter extends BaseReporter {
     }
     this.unsubs.forEach((u) => u());
     this.unsubs = [];
-    this.container?.childNodes.forEach((child) => {
-      child.remove();
-    });
+    this.container?.remove();
     flameGraphState.reset();
     this.container = null;
-    this.toggleButton = null;
-    this.dialog = null;
   }
 
   protected onStop(): void {
     this.clearData();
+  }
+
+  protected processEvents(events: TraceEvent[]): void {
+    events.forEach((event) => {
+      switch (event.kind) {
+        case "start":
+          this.onSpanStart(event);
+          break;
+        case "end":
+          this.onSpanEnd(event);
+          break;
+        default:
+          break;
+      }
+    });
   }
 
   protected onSpanStart(event: SpanStartEvent): void {
@@ -122,27 +113,6 @@ export class FlameGraphReporter extends BaseReporter {
   protected onSpanEnd(event: SpanEndEvent): void {
     if (!flameGraphState.getState().isRecording) return;
     this.handleSpanEndInternal(event);
-  }
-
-  private subscribeToState(): void {
-    // Sync toggle button with recording state
-    this.unsubs.push(
-      flameGraphState.subscribe(selectors.isRecording, (isRecording) => {
-        if (this.toggleButton) {
-          this.toggleButton.recording = isRecording;
-        }
-      })
-    );
-  }
-
-  private setupToggleEvents(): void {
-    this.toggleButton?.addEventListener("toggle", () => {
-      if (flameGraphState.getState().isOpen) {
-        flameGraphState.close();
-      } else {
-        flameGraphState.open();
-      }
-    });
   }
 
   private handleSpanStartInternal(event: SpanStartEvent): void {
@@ -163,39 +133,12 @@ export class FlameGraphReporter extends BaseReporter {
       depth,
       status: "running",
       payload: event.payload,
-      color: event.span.meta?.color,
+      color: event.span.meta?.color ?? "primary",
     });
-
-    this.updateTimeRange();
   }
 
   private handleSpanEndInternal(event: SpanEndEvent): void {
     flameGraphState.endSpan(event.span.spanId, event.timestamp, event.status);
-    this.updateTimeRange();
-  }
-
-  private updateTimeRange(): void {
-    const { spanBuffer, spanCount } = flameGraphState.getState();
-
-    if (spanCount === 0) {
-      flameGraphState.setTimeRange({ minTime: 0, maxTime: 0 });
-      return;
-    }
-
-    let minTime = Infinity;
-    let maxTime = -Infinity;
-
-    for (let i = 0; i < spanCount; i++) {
-      minTime = Math.min(minTime, spanBuffer.startTime[i]);
-      // For running spans, use current time as maxTime
-      const spanEnd =
-        spanBuffer.status[i] === 1
-          ? performance.now()
-          : spanBuffer.endTime[i];
-      maxTime = Math.max(maxTime, spanEnd);
-    }
-
-    flameGraphState.setTimeRange({ minTime, maxTime });
   }
 
   private clearData(): void {
@@ -237,3 +180,35 @@ export class FlameGraphReporter extends BaseReporter {
     flameGraphState.close();
   }
 }
+
+class FlameGraphReporterElement extends HTMLElement {
+  #shadowRoot = this.attachShadow({ mode: "open" });
+  #dialog = document.createElement("flame-graph-dialog");
+  #toggle = document.createElement("flame-graph-toggle");
+
+  static get observedAttributes() {
+    return ["position"];
+  }
+
+  attributeChangedCallback(name: string) {
+    if (name === "position") {
+      this.#toggle.setAttribute(
+        "position",
+        this.getAttribute("position") as
+          | "bottom-right"
+          | "bottom-left"
+          | "top-right"
+          | "top-left"
+      );
+    }
+  }
+
+  connectedCallback() {
+    const fragment = document.createDocumentFragment();
+    fragment.appendChild(this.#toggle);
+    fragment.appendChild(this.#dialog);
+    this.#shadowRoot.appendChild(fragment);
+  }
+}
+
+customElements.define("flame-graph-reporter", FlameGraphReporterElement);

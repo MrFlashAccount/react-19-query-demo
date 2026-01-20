@@ -1,88 +1,86 @@
 /**
- * Calculates lane assignments for parallel tasks
- * Non-overlapping root tasks share the same lane (greedy interval packing)
+ * Calculates lane assignments for parallel tasks.
+ * Root tasks are packed into lanes, and overlapping siblings at the same depth
+ * are further packed into sub-lanes to avoid vertical overlap.
  */
 
-import type { SpanId } from "../../types";
-import type { FlameGraphSpan } from "./types";
+import type { SpanBufferViews } from "./SpanBuffer";
+import { getSpanCount } from "./SpanBuffer";
 
 const LANE_GAP = 1; // 1 row of space between task lanes
 
-/**
- * Span layout data computed by calculateSpanLayouts
- */
 export interface SpanLayout {
   adjustedDepth: number;
   lane: number;
 }
 
-/**
- * Find the root task for a span by traversing up the parent chain
- */
-function findRoot(
-  span: FlameGraphSpan,
-  spanById: Map<SpanId, FlameGraphSpan>
-): SpanId {
-  let current = span;
-  while (current.parentSpanId) {
-    const parent = spanById.get(current.parentSpanId);
-    if (!parent) break;
-    current = parent;
-  }
-  return current.spanId;
+export interface SpanLayouts {
+  adjustedDepths: Int32Array;
+  lanes: Int32Array;
+  count: number;
 }
 
-/**
- * Calculate lane assignments for all spans
- * Groups by root task, assigns lanes using greedy packing
- * @returns Map of spanId to SpanLayout
- */
-export function calculateSpanLayouts(
-  spans: FlameGraphSpan[]
-): Map<SpanId, SpanLayout> {
-  const layouts = new Map<SpanId, SpanLayout>();
-
-  if (spans.length === 0) return layouts;
-
-  // 1. Find root tasks (spans with no parent)
-  const rootTasks: FlameGraphSpan[] = [];
-  const spanById = new Map<SpanId, FlameGraphSpan>();
-
-  for (const span of spans) {
-    spanById.set(span.spanId, span);
-    if (!span.parentSpanId) {
-      rootTasks.push(span);
+function findRootIndex(
+  index: number,
+  parentIndex: Int32Array,
+  rootByIndex: Int32Array
+): number {
+  let current = index;
+  const trail: number[] = [];
+  while (current >= 0 && parentIndex[current] >= 0) {
+    const cached = rootByIndex[current];
+    if (cached >= 0) {
+      current = cached;
+      break;
     }
+    trail.push(current);
+    current = parentIndex[current];
+  }
+  const root = current;
+  for (const node of trail) {
+    rootByIndex[node] = root;
+  }
+  return root;
+}
+
+export function calculateSpanLayouts(
+  views: SpanBufferViews,
+  count: number = getSpanCount(views)
+): SpanLayouts {
+  const adjustedDepths = new Int32Array(count);
+  const lanes = new Int32Array(count);
+  if (count === 0) return { adjustedDepths, lanes, count };
+
+  const rootByIndex = new Int32Array(count).fill(-1);
+  const rootTasks: number[] = [];
+
+  for (let i = 0; i < count; i++) {
+    if (views.parentIndex[i] < 0) rootTasks.push(i);
   }
 
-  // 2. Build task membership: spanId → rootId
-  const spanToRoot = new Map<SpanId, SpanId>();
-  for (const span of spans) {
-    const rootId = findRoot(span, spanById);
-    spanToRoot.set(span.spanId, rootId);
+  for (let i = 0; i < count; i++) {
+    rootByIndex[i] = findRootIndex(i, views.parentIndex, rootByIndex);
   }
 
-  // 3. Sort root tasks by startTime
-  rootTasks.sort((a, b) => a.startTime - b.startTime);
+  rootTasks.sort((a, b) => views.startTime[a] - views.startTime[b]);
 
-  // 4. Greedy lane assignment
-  // lanes[i] = array of {start, end} intervals in that lane
-  const lanes: Array<Array<{ start: number; end: number; taskId: SpanId }>> =
-    [];
-  const taskToLane = new Map<SpanId, number>();
+  const laneIntervals: Array<
+    Array<{ start: number; end: number; root: number }>
+  > = [];
+  const rootToLane = new Int32Array(count).fill(-1);
 
-  for (const task of rootTasks) {
-    // Use Infinity for running tasks so they don't overlap with anything after
-    const effectiveEnd = task.status === "running" ? Infinity : task.endTime;
-
-    // Find first lane where task fits (no overlap)
+  for (const rootIndex of rootTasks) {
+    const effectiveEnd =
+      views.status[rootIndex] === 1 ? Infinity : views.endTime[rootIndex];
     let assignedLane = -1;
-    for (let laneIdx = 0; laneIdx < lanes.length; laneIdx++) {
-      const lane = lanes[laneIdx];
+    for (let laneIdx = 0; laneIdx < laneIntervals.length; laneIdx++) {
+      const intervals = laneIntervals[laneIdx];
       let fits = true;
-      for (const interval of lane) {
-        // Check overlap: intervals overlap if start1 < end2 AND start2 < end1
-        if (task.startTime < interval.end && interval.start < effectiveEnd) {
+      for (const interval of intervals) {
+        if (
+          views.startTime[rootIndex] < interval.end &&
+          interval.start < effectiveEnd
+        ) {
           fits = false;
           break;
         }
@@ -92,93 +90,138 @@ export function calculateSpanLayouts(
         break;
       }
     }
-
-    // No fitting lane found, create new one
     if (assignedLane === -1) {
-      assignedLane = lanes.length;
-      lanes.push([]);
+      assignedLane = laneIntervals.length;
+      laneIntervals.push([]);
     }
-
-    lanes[assignedLane].push({
-      start: task.startTime,
+    laneIntervals[assignedLane].push({
+      start: views.startTime[rootIndex],
       end: effectiveEnd,
-      taskId: task.spanId,
+      root: rootIndex,
     });
-    taskToLane.set(task.spanId, assignedLane);
+    rootToLane[rootIndex] = assignedLane;
   }
 
-  // 5. Calculate max depth per lane (relative to root)
-  // Group spans by lane first
-  const spansPerLane: Map<number, FlameGraphSpan[]> = new Map();
-  for (const span of spans) {
-    const rootId = spanToRoot.get(span.spanId)!;
-    const lane = taskToLane.get(rootId) ?? 0;
-    if (!spansPerLane.has(lane)) {
-      spansPerLane.set(lane, []);
+  const spansByRoot = new Map<number, number[]>();
+  for (let i = 0; i < count; i++) {
+    const rootIndex = rootByIndex[i];
+    const list = spansByRoot.get(rootIndex);
+    if (list) {
+      list.push(i);
+    } else {
+      spansByRoot.set(rootIndex, [i]);
     }
-    spansPerLane.get(lane)!.push(span);
   }
 
-  // Calculate max relative depth per lane
-  const laneMaxDepth: number[] = [];
-  for (let laneIdx = 0; laneIdx < lanes.length; laneIdx++) {
-    const laneSpans = spansPerLane.get(laneIdx) ?? [];
+  const laneMaxRow: number[] = [];
+  for (let laneIdx = 0; laneIdx < laneIntervals.length; laneIdx++) {
+    laneMaxRow[laneIdx] = 0;
+  }
+
+  const subLaneByIndex = new Int32Array(count);
+
+  for (const [rootIndex, indices] of spansByRoot.entries()) {
+    const rootDepth = views.depth[rootIndex];
     let maxRelativeDepth = 0;
-    for (const span of laneSpans) {
-      const rootId = spanToRoot.get(span.spanId)!;
-      const root = spanById.get(rootId)!;
-      const relativeDepth = span.depth - root.depth;
-      if (relativeDepth > maxRelativeDepth) {
-        maxRelativeDepth = relativeDepth;
-      }
+    const spansByDepth: number[][] = [];
+
+    for (const index of indices) {
+      const relativeDepth = views.depth[index] - rootDepth;
+      if (!spansByDepth[relativeDepth]) spansByDepth[relativeDepth] = [];
+      spansByDepth[relativeDepth].push(index);
+      if (relativeDepth > maxRelativeDepth) maxRelativeDepth = relativeDepth;
     }
-    laneMaxDepth[laneIdx] = maxRelativeDepth;
+
+    const laneCounts = new Int32Array(maxRelativeDepth + 1);
+
+    for (let depth = 0; depth <= maxRelativeDepth; depth++) {
+      const depthSpans = spansByDepth[depth];
+      if (!depthSpans || depthSpans.length === 0) continue;
+
+      depthSpans.sort((a, b) => views.startTime[a] - views.startTime[b]);
+      const laneEnds: number[] = [];
+
+      for (const index of depthSpans) {
+        const start = views.startTime[index];
+        const effectiveEnd =
+          views.status[index] === 1 ? Infinity : views.endTime[index];
+        let assignedLane = -1;
+
+        for (let laneIdx = 0; laneIdx < laneEnds.length; laneIdx++) {
+          if (start >= laneEnds[laneIdx]) {
+            assignedLane = laneIdx;
+            break;
+          }
+        }
+
+        if (assignedLane === -1) {
+          assignedLane = laneEnds.length;
+          laneEnds.push(effectiveEnd);
+        } else {
+          laneEnds[assignedLane] = effectiveEnd;
+        }
+
+        subLaneByIndex[index] = assignedLane;
+      }
+
+      laneCounts[depth] = laneEnds.length;
+    }
+
+    const depthOffsets = new Int32Array(maxRelativeDepth + 1);
+    let currentOffset = 0;
+    for (let depth = 0; depth <= maxRelativeDepth; depth++) {
+      depthOffsets[depth] = currentOffset;
+      const lanesAtDepth = laneCounts[depth];
+      currentOffset += Math.max(1, lanesAtDepth);
+    }
+
+    const lane = rootToLane[rootIndex] ?? 0;
+    for (const index of indices) {
+      const relativeDepth = views.depth[index] - rootDepth;
+      const relativeRow = depthOffsets[relativeDepth] + subLaneByIndex[index];
+      adjustedDepths[index] = relativeRow;
+      lanes[index] = lane;
+      if (relativeRow > laneMaxRow[lane]) laneMaxRow[lane] = relativeRow;
+    }
   }
 
-  // 6. Calculate lane offsets (cumulative)
   const laneOffsets: number[] = [];
   let currentOffset = 0;
-  for (let laneIdx = 0; laneIdx < lanes.length; laneIdx++) {
+  for (let laneIdx = 0; laneIdx < laneIntervals.length; laneIdx++) {
     laneOffsets[laneIdx] = currentOffset;
-    // Next lane starts after this lane's max depth + 1 (for the row) + LANE_GAP
-    currentOffset += laneMaxDepth[laneIdx] + 1 + LANE_GAP;
+    currentOffset += laneMaxRow[laneIdx] + 1 + LANE_GAP;
   }
 
-  // 7. Store adjusted depth for each span
-  for (const span of spans) {
-    const rootId = spanToRoot.get(span.spanId)!;
-    const root = spanById.get(rootId)!;
-    const lane = taskToLane.get(rootId) ?? 0;
-    const relativeDepth = span.depth - root.depth;
-    const adjustedDepth = laneOffsets[lane] + relativeDepth;
-
-    layouts.set(span.spanId, {
-      adjustedDepth,
-      lane,
-    });
+  for (let i = 0; i < count; i++) {
+    const lane = lanes[i] ?? 0;
+    adjustedDepths[i] = laneOffsets[lane] + adjustedDepths[i];
   }
 
-  return layouts;
+  return { adjustedDepths, lanes, count };
 }
 
-/**
- * Stateful wrapper for worker that needs to cache spans
- * Uses calculateSpanLayouts internally
- */
 export class LaneCalculator {
-  private spanLayouts = new Map<SpanId, SpanLayout>();
-  private cachedSpans: FlameGraphSpan[] = [];
+  private adjustedDepths = new Int32Array(0);
+  private lanes = new Int32Array(0);
+  private count = 0;
 
-  getSpans(): FlameGraphSpan[] {
-    return this.cachedSpans;
+  calculate(views: SpanBufferViews): void {
+    const count = getSpanCount(views);
+    if (this.adjustedDepths.length < count) {
+      this.adjustedDepths = new Int32Array(count);
+      this.lanes = new Int32Array(count);
+    }
+    const layouts = calculateSpanLayouts(views, count);
+    this.adjustedDepths.set(layouts.adjustedDepths);
+    this.lanes.set(layouts.lanes);
+    this.count = count;
   }
 
-  getLayout(spanId: SpanId): SpanLayout | undefined {
-    return this.spanLayouts.get(spanId);
+  getAdjustedDepth(index: number): number {
+    return this.adjustedDepths[index] ?? 0;
   }
 
-  calculate(spans: FlameGraphSpan[]): void {
-    this.cachedSpans = spans;
-    this.spanLayouts = calculateSpanLayouts(spans);
+  getCount(): number {
+    return this.count;
   }
 }

@@ -1,4 +1,4 @@
-import { CSS_VARS, BUTTON_STYLES, accent, HOST_STYLES } from "./styles";
+import { BUTTON_STYLES, HOST_STYLES, theme } from "./styles";
 import { css, html } from "./utilities";
 import { flameGraphState, selectors } from "./state";
 
@@ -8,18 +8,17 @@ export const button = {
     bg: "oklch(0.63 0.24 27 / 0.15)",
     bgHover: "oklch(0.63 0.24 27 / 0.25)",
     border: "oklch(0.63 0.24 27 / 0.3)",
-    text: accent.errorLight,
+    text: theme.accent.errorLight,
   },
   stop: {
     bg: "oklch(0.72 0.19 145 / 0.15)",
     bgHover: "oklch(0.72 0.19 145 / 0.25)",
     border: "oklch(0.72 0.19 145 / 0.3)",
-    text: accent.success,
+    text: theme.accent.success,
   },
 } as const;
 
 const STYLES = css`
-  ${CSS_VARS}
   ${BUTTON_STYLES}
   ${HOST_STYLES}
 

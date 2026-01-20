@@ -10,7 +10,7 @@ import {
   MIN_TICK_SPACING,
   PADDING_LEFT,
 } from "./utilities";
-import { timeline } from "./styles";
+import { theme } from "./styles";
 
 // Worker state
 let canvas: OffscreenCanvas | null = null;
@@ -96,11 +96,11 @@ function draw(msg: DrawMessage): void {
     drawnLabels.add(label);
 
     // Tick mark
-    ctx.fillStyle = timeline.tickMark;
+    ctx.fillStyle = theme.timeline.tickMark;
     ctx.fillRect(Math.round(x), height - 6, 1, 6);
 
     // Label
-    ctx.fillStyle = timeline.tickLabel;
+    ctx.fillStyle = theme.timeline.tickLabel;
     ctx.fillText(label, x, height - 10);
   }
 }

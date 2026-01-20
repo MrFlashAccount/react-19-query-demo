@@ -16,7 +16,7 @@ const nullMeta: ISpanMeta = { description: "", color: "primary" };
 /**
  * No-op span used by NullTracer in production.
  */
-class NullSpan extends SpanBase {
+class NullSpan extends SpanBase implements ISpan {
   readonly name = "";
   readonly spanId = SpanId("-");
   get state(): SpanState {

@@ -8,8 +8,9 @@ import {
   updateMovieRatingMutation,
 } from "../../queries";
 
-const { QueryProvider, useMutation, useQuery, params, QueryClient } =
-  await import("lib/react");
+const { QueryProvider, useMutation, useQuery, QueryClient } = await import(
+  "lib/react"
+);
 const LazyDevtools = lazy(() =>
   import("lib/devtools").then((d) => ({ default: d.QueryDevtools }))
 );
@@ -44,7 +45,7 @@ function CustomLibraryTabContent({ formState, onFormStateChange }: TabProps) {
 
   const { promise } = useQuery({
     query: moviesQuery,
-    params: params({ searchQuery, movieLimit }),
+    params: { searchQuery, movieLimit },
   });
 
   const movies = use(promise);
@@ -90,7 +91,7 @@ function MovieCardCustom({
   // Subscribe to movies query just to add some overhead
   useQuery({
     query: moviesQuery,
-    params: params({ searchQuery, movieLimit }),
+    params: { searchQuery, movieLimit },
   });
 
   return (

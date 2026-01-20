@@ -3,9 +3,16 @@
  * Used by helpers.ts, asynccontext.ts, and node.ts.
  */
 
-import type { ISpan } from "./types";
+import type { ISpan, ISpanMeta } from "./types";
 
 export type AnyFn = (...args: any[]) => any;
+
+export type TracedOptions = {
+  name: string;
+  meta?: ISpanMeta;
+  payload?: Record<string, unknown>;
+  parentSpan?: ISpan;
+};
 
 /**
  * Execute a function within a span, handling sync/async and success/error.
@@ -39,7 +46,7 @@ export function executeWithSpan<T>(span: ISpan, fn: (span: ISpan) => T): T {
  * Create a Traced decorator from a traced HOF.
  */
 export function createTracedDecorator(
-  tracedFn: <T extends AnyFn>(fn: T, name: string, meta?: any) => T
+  tracedFn: <T extends AnyFn>(fn: T, options: TracedOptions) => AnyFn
 ) {
   return function Traced(name: string, meta?: any): MethodDecorator {
     return function (
@@ -47,8 +54,8 @@ export function createTracedDecorator(
       _propertyKey: string | symbol,
       descriptor: PropertyDescriptor
     ) {
-      const original = descriptor.value;
-      descriptor.value = tracedFn(original, name, meta);
+      const original = descriptor.value as AnyFn;
+      descriptor.value = tracedFn(original, { name, meta }) as AnyFn;
       return descriptor;
     };
   };

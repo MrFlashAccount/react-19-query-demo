@@ -3,7 +3,7 @@
  * Uses adjusted depths from LaneCalculator for proper windowing
  */
 
-import type { FlameGraphSpan } from "../types";
+import type { SpanBufferViews } from "../SpanBuffer";
 import { IntervalTree } from "../IntervalTree";
 import type { LaneCalculator } from "../LaneCalculator";
 
@@ -11,11 +11,11 @@ export class SpansIndex {
   private index = new IntervalTree();
 
   build(
-    spans: FlameGraphSpan[],
+    views: SpanBufferViews,
     maxTime: number,
     laneCalculator: LaneCalculator
   ): void {
-    this.index.buildWithAdjustedDepths(spans, maxTime, laneCalculator);
+    this.index.buildWithAdjustedDepths(views, maxTime, laneCalculator);
   }
 
   /**
@@ -27,8 +27,7 @@ export class SpansIndex {
     timeEnd: number,
     depthStart: number,
     depthEnd: number
-  ): FlameGraphSpan[] {
+  ): number[] {
     return this.index.query(timeStart, timeEnd, depthStart, depthEnd);
   }
 }
-

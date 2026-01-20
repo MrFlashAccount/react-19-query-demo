@@ -1,4 +1,4 @@
-import { CSS_VARS, BUTTON_STYLES, ui, HOST_STYLES } from "./styles";
+import { BUTTON_STYLES, HOST_STYLES, theme, TYPOGRAPHY_STYLES } from "./styles";
 import type { GridConfig, Position } from "./types";
 import { css, getElement, html } from "./utilities";
 import { drawScheduler } from "./DrawScheduler";
@@ -12,7 +12,6 @@ import "./FlameGraphRecordButton";
 import "./FlameGraphClearButton";
 
 const STYLES = css`
-  ${CSS_VARS}
   ${BUTTON_STYLES}
   ${HOST_STYLES}
 
@@ -37,8 +36,8 @@ const STYLES = css`
     align-items: center;
     justify-content: space-between;
     padding: 0 8px 0 16px;
-    background: ${ui.surfaceActive};
-    border-bottom: 1px solid var(--fg-border);
+    background: ${theme.ui.surfaceActive};
+    border-bottom: 1px solid ${theme.ui.border};
     box-sizing: border-box;
     overflow: hidden;
   }
@@ -60,9 +59,9 @@ const STYLES = css`
     grid-area: statusbar;
     padding: 0 16px;
     font-size: 11px;
-    color: var(--fg-text-muted);
-    background: ${ui.bgOverlay};
-    border-top: 1px solid var(--fg-border-subtle);
+    color: ${theme.ui.textMuted};
+    background: ${theme.ui.bgOverlay};
+    border-top: 1px solid ${theme.ui.borderSubtle};
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -71,13 +70,14 @@ const STYLES = css`
   }
 
   .title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--fg-text);
+    ${TYPOGRAPHY_STYLES({
+      fontSize: 14,
+      fontWeight: 600,
+      color: theme.ui.text,
+    })}
     display: flex;
     align-items: center;
     gap: 8px;
-    text-box-trim: trim-both;
   }
 
   .controls {
@@ -97,14 +97,14 @@ const STYLES = css`
     font-size: 10px;
     cursor: pointer;
     background: transparent;
-    border: 1px solid var(--fg-border-subtle);
+    border: 1px solid ${theme.ui.borderSubtle};
     border-radius: 4px;
-    color: var(--fg-text-dim);
+    color: ${theme.ui.textDim};
   }
 
   .details-position-btn:hover {
-    background: var(--fg-surface-hover);
-    color: var(--fg-text);
+    background: ${theme.ui.surfaceHover};
+    color: ${theme.ui.text};
   }
 `;
 
@@ -132,8 +132,8 @@ export class FlameGraphDialogContent extends HTMLElement {
   private subscribeToState() {
     // Subscribe to spans for count display
     this.unsubs.push(
-      flameGraphState.subscribe(selectors.spans, (spans) => {
-        this.updateSpansCount(spans.length);
+      flameGraphState.subscribe(selectors.spanCount, (count) => {
+        this.updateSpansCount(count);
       })
     );
 

@@ -8,7 +8,12 @@
 
 import type { ISpan, ISpanMeta } from "./types";
 import { tracer } from "./index";
-import { type AnyFn, executeWithSpan, createTracedDecorator } from "./shared";
+import {
+  type AnyFn,
+  type TracedOptions,
+  executeWithSpan,
+  createTracedDecorator,
+} from "./shared";
 
 type ContextProvider<T> = {
   run<R>(value: T | undefined, fn: () => R): R;
@@ -65,9 +70,10 @@ export function runWithSpan<R>(span: ISpan, fn: () => R): R {
 const createSpan = (
   name: string,
   meta?: ISpanMeta,
-  payload?: Record<string, unknown>
+  payload?: Record<string, unknown>,
+  parentSpan?: ISpan
 ): ISpan => {
-  const parent = getCurrentSpan();
+  const parent = parentSpan ?? getCurrentSpan();
   if (parent) {
     const child = parent.child({ name, payload, meta });
     child.start();
@@ -85,23 +91,18 @@ const createSpan = (
  * Parent span is automatically inherited from async context.
  *
  * @example
- * const fetchUser = traced(
- *   async (id: string) => api.get(`/users/${id}`),
- *   "fetchUser"
- * );
- *
- * runInSpan("parent", {}, async () => {
- *   await fetchUser("123"); // child of "parent"
+ * const fetchUser = traced(async (id: string) => api.get(`/users/${id}`), {
+ *   name: "fetchUser",
  * });
+ *
+ * runInSpan(async () => {
+ *   await fetchUser("123"); // child of "parent"
+ * }, { name: "parent" });
  */
-export function traced<T extends AnyFn>(
-  fn: T,
-  name: string,
-  meta?: ISpanMeta,
-  payload?: Record<string, unknown>
-): T {
+export function traced<T extends AnyFn>(fn: T, options: TracedOptions): T {
   function withSpan(this: any, ...args: Parameters<T>): ReturnType<T> {
-    const span = createSpan(name, meta, payload);
+    const { name, meta, payload, parentSpan } = options;
+    const span = createSpan(name, meta, payload, parentSpan);
     return runWithSpan(span, () =>
       executeWithSpan(span, () => fn.apply(this, args))
     );
@@ -129,18 +130,21 @@ export const Traced = createTracedDecorator(traced);
  * The span becomes the current span for all nested calls.
  *
  * @example
- * const result = await runInSpan("operation", { color: "primary" }, async () => {
+ * const result = await runInSpan(async () => {
  *   // getCurrentSpan() returns this span
  *   // Any traced() calls here will be children
  *   return await doWork();
- * });
+ * }, { name: "operation", meta: { color: "primary" } });
  */
 export function runInSpan<T>(
   fn: (span: ISpan) => T,
-  name: string,
-  meta?: ISpanMeta,
-  payload?: Record<string, unknown>
+  options: TracedOptions
 ): T {
-  const span = createSpan(name, meta, payload);
+  const span = createSpan(
+    options.name,
+    options.meta,
+    options.payload,
+    options.parentSpan
+  );
   return runWithSpan(span, () => executeWithSpan(span, () => fn(span)));
 }

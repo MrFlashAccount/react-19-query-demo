@@ -8,7 +8,7 @@
  * - Depth filtering: skips spans outside visible vertical range
  */
 
-import { timeline } from "../styles";
+import { theme } from "../styles";
 import {
   generateNiceTicks,
   MIN_TICK_SPACING,
@@ -24,6 +24,11 @@ import type {
   UpdateSpansMessage,
   DrawMessage,
 } from "./types";
+import {
+  attachSpanBuffer,
+  getSpanCount,
+  type SpanBufferViews,
+} from "../SpanBuffer";
 
 // Worker state
 let canvas: OffscreenCanvas | null = null;
@@ -31,6 +36,8 @@ let ctx: OffscreenCanvasRenderingContext2D | null = null;
 let spanRenderer: SpanRenderer | null = null;
 const spansIndex = new SpansIndex();
 const laneCalculator = new LaneCalculator();
+let spanViews: SpanBufferViews | null = null;
+let lastVersion = -1;
 
 function handleInit(msg: InitMessage): void {
   canvas = msg.canvas;
@@ -38,17 +45,32 @@ function handleInit(msg: InitMessage): void {
   spanRenderer = ctx
     ? new SpanRenderer(ctx, msg.colorPalette, msg.selectedBorderColor)
     : null;
+  spanViews = attachSpanBuffer(msg.spanBuffer.sab, msg.spanBuffer.stringSab);
+  lastVersion = -1;
 }
 
 function handleUpdateSpans(msg: UpdateSpansMessage): void {
-  laneCalculator.calculate(msg.spans);
+  if (
+    !spanViews ||
+    spanViews.sab !== msg.spanBuffer.sab ||
+    spanViews.stringSab !== msg.spanBuffer.stringSab
+  ) {
+    spanViews = attachSpanBuffer(msg.spanBuffer.sab, msg.spanBuffer.stringSab);
+  }
+  if (spanViews && msg.version !== lastVersion) {
+    laneCalculator.calculate(spanViews);
+    lastVersion = msg.version;
+  }
 }
 
 function handleDraw(msg: DrawMessage): void {
-  if (!ctx || !canvas || !spanRenderer) return;
+  if (!ctx || !canvas || !spanRenderer) {
+    throw new Error("Canvas not initialized");
+  }
 
   const { width, height, dpr, selectedSpanId, timeRange, viewState } = msg;
-  const spans = laneCalculator.getSpans();
+  if (!spanViews) return;
+  const spanCount = getSpanCount(spanViews);
 
   if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
     canvas.width = width * dpr;
@@ -62,10 +84,10 @@ function handleDraw(msg: DrawMessage): void {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, width, height);
 
-  if (totalDuration === 0 || spans.length === 0) return;
+  if (totalDuration === 0 || spanCount === 0) return;
 
   // Build index for viewport queries (pass maxTime for running spans)
-  spansIndex.build(spans, maxTime, laneCalculator);
+  spansIndex.build(spanViews, maxTime, laneCalculator);
 
   const { offsetX, offsetY, zoom } = viewState;
   const effectiveOffsetX = offsetX + PADDING_LEFT;
@@ -76,11 +98,13 @@ function handleDraw(msg: DrawMessage): void {
   const durationToWidth = (duration: number) =>
     (duration / totalDuration) * width * zoom;
 
-  // Calculate visible ranges for virtualization
-  const visibleDuration = totalDuration / zoom;
-  const timeOffset = (-offsetX / (width * zoom)) * totalDuration;
-  const visibleTimeStart = minTime + timeOffset;
-  const visibleTimeEnd = visibleTimeStart + visibleDuration;
+  // Calculate visible ranges for virtualization (use effective offset to match drawing)
+  const timePerPx = totalDuration / (width * zoom);
+  const overscanTime = timePerPx * 20;
+  const visibleTimeStart =
+    minTime + (0 - effectiveOffsetX) * timePerPx - overscanTime;
+  const visibleTimeEnd =
+    minTime + (width - effectiveOffsetX) * timePerPx + overscanTime;
 
   const visibleDepthStart = Math.max(
     0,
@@ -92,6 +116,7 @@ function handleDraw(msg: DrawMessage): void {
 
   // Draw vertical grid lines
   const targetTickCount = Math.max(2, Math.floor(width / MIN_TICK_SPACING));
+  const visibleDuration = Math.max(0, visibleTimeEnd - visibleTimeStart);
   const relativeStart = visibleTimeStart - minTime;
   const relativeEnd = visibleTimeEnd - minTime;
   const ticks = generateNiceTicks(
@@ -103,7 +128,7 @@ function handleDraw(msg: DrawMessage): void {
   const relativeTimeToX = (relativeTime: number) =>
     ((relativeTime - relativeStart) / visibleDuration) * width + PADDING_LEFT;
 
-  ctx.strokeStyle = timeline.gridLine;
+  ctx.strokeStyle = theme.timeline.gridLine;
   ctx.lineWidth = 1;
 
   for (const tick of ticks) {
@@ -125,12 +150,11 @@ function handleDraw(msg: DrawMessage): void {
 
   const currentTime = timeRange.maxTime;
 
-  for (const span of visibleSpans) {
-    const layout = laneCalculator.getLayout(span.spanId);
-    const adjustedDepth = layout?.adjustedDepth ?? span.depth;
-
+  for (const index of visibleSpans) {
+    const adjustedDepth = laneCalculator.getAdjustedDepth(index);
     spanRenderer.draw(
-      span,
+      spanViews,
+      index,
       adjustedDepth,
       timeToX,
       durationToWidth,
@@ -161,7 +185,7 @@ self.onmessage = (e: MessageEvent<WorkerMessage[]>) => {
   const data = e.data;
 
   if (!Array.isArray(data)) {
-    throw new Error("Expected array of messages");
+    throw new Error("Expected array of messages, got: " + JSON.stringify(data));
   }
 
   // Support array of messages for batching

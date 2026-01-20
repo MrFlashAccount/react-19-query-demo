@@ -1,4 +1,4 @@
-import type { SpanStartEvent, SpanEndEvent, SpanEvent, SpanId } from "../types";
+import type { SpanId, TraceEvent } from "../types";
 
 /**
  * Internal metrics for tracking an active span within a reporter.
@@ -18,19 +18,9 @@ export interface SpanMetrics {
 }
 
 /**
- * Optional event handler methods that reporters can implement.
- * These provide a cleaner API than handling raw TraceEvent switch statements.
- */
-export abstract class IReporterEventHandlers {
-  protected abstract onSpanStart?(event: SpanStartEvent): void;
-  protected abstract onSpanEnd?(event: SpanEndEvent): void;
-  protected abstract onSpanEvent?(event: SpanEvent): void;
-}
-
-/**
  * Full reporter interface with lifecycle methods.
  */
-export abstract class IReporter extends IReporterEventHandlers {
+export abstract class IReporter {
   /**
    * Start receiving trace events.
    * Registers the reporter with the tracer.
@@ -47,6 +37,12 @@ export abstract class IReporter extends IReporterEventHandlers {
    * Check if the reporter is currently active.
    */
   abstract get isActive(): boolean;
+
+  /**
+   * Process trace events.
+   * @param events - The trace events to process.
+   */
+  protected abstract processEvents(events: TraceEvent[]): void;
 }
 
 /**

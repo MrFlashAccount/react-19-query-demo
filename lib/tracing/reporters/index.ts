@@ -5,7 +5,7 @@ export { DevtoolsReporter } from "./DevtoolsReporter";
 export type { DevtoolsReporterOptions } from "./DevtoolsReporter";
 
 // Flame Graph (Web Components)
-export { FlameGraphReporter } from "./flame-graph";
+export { FlameGraphReporter } from "./FlameGraphReporter";
 export type {
   FlameGraphSpan,
   FlameGraphReporterOptions,
@@ -22,9 +22,4 @@ export {
   FlameGraphDialog,
 } from "./flame-graph";
 
-export type {
-  IReporter,
-  IReporterEventHandlers,
-  BaseReporterOptions,
-  SpanMetrics,
-} from "./types";
+export type { IReporter, BaseReporterOptions, SpanMetrics } from "./types";

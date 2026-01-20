@@ -1,3 +1,4 @@
+import { Batcher } from "../../Batcher";
 import { addEventListener } from "./utilities";
 
 type SetStateAction<T> = Partial<T> | ((state: T) => Partial<T>);
@@ -59,32 +60,50 @@ const defaultEqualityFn = <T>(a: T, b: T): boolean => {
   return false;
 };
 
+const unsetSymbol = Symbol("unset");
+
 export function createStore<T extends Record<string, unknown>>(
   initialState: T | StateCreator<T>
 ): StoreApi<T> {
   const listeners = new Set<StateListener<T>>();
   let state: T;
+  let prevState: T | typeof unsetSymbol = unsetSymbol;
   let initialStateValue: T;
+  const batcher = new Batcher<void>({
+    process: () => {
+      if (prevState === unsetSymbol) {
+        throw new Error("prevState is null");
+      }
+      for (const listener of listeners) {
+        listener(state, prevState);
+      }
+      prevState = unsetSymbol;
+    },
+    scheduler: "microtask",
+  });
 
   const getState = () => state;
   const getInitialState = () => initialStateValue;
 
   const setState: StoreApi<T>["setState"] = (action, replace) => {
-    const prevState = state;
+    const prevStateCopy = state;
     const partial = typeof action === "function" ? action(state) : action;
 
     // Check if anything actually changed
     const hasChanged = Object.keys(partial).some(
       (key) =>
-        !defaultEqualityFn(partial[key as keyof T], prevState[key as keyof T])
+        !defaultEqualityFn(
+          partial[key as keyof T],
+          prevStateCopy[key as keyof T]
+        )
     );
 
     if (!hasChanged) return;
 
     state = replace ? (partial as T) : { ...state, ...partial };
-
-    for (const listener of listeners) {
-      listener(state, prevState);
+    if (prevState === unsetSymbol) {
+      prevState = prevStateCopy;
+      batcher.flush({ force: true });
     }
   };
 

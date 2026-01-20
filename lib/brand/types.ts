@@ -1,43 +1,58 @@
+import type { StandardSchemaV1 } from "./standard-schema";
+
 /**
  * Brand symbol marker for nominal typing
  */
-export type Brand<Type extends string> = {
-  readonly $$brand: Type;
+export type Brand<BrandName> = {
+  readonly $$brand: BrandName;
 };
+
+export interface TypeMarker<Value, Type> {
+  readonly type: BrandValue<Value, Type>;
+}
 
 /**
  * A branded value combining the original value with brand metadata
  */
-export type BrandValue<Value, Type extends string> = Value & Brand<Type>;
+export type BrandValue<ValueType, BrandName> = ValueType & Brand<BrandName>;
 
-import type { StandardSchemaV1 } from "./standard-schema";
+export type BrandValidator<ValueType> =
+  | ((value: unknown) => value is ValueType)
+  | StandardSchemaV1<unknown, ValueType>;
 
-export type BrandValidator<Value> =
-  | ((value: unknown) => value is Value)
-  | StandardSchemaV1<unknown, Value>;
-
-export type BrandOptions<Value> = {
-  validator?: BrandValidator<Value>;
+export type BrandOptions<ValueType> = {
+  validator?: BrandValidator<ValueType>;
 };
+
+export interface BrandMethods<ValueType, BrandName> {
+  as: (value: unknown) => BrandValue<ValueType, BrandName>;
+  is: (value: unknown) => value is BrandValue<ValueType, BrandName>;
+  to: (value: unknown) => BrandValue<ValueType, BrandName>;
+}
 
 /**
  * Nominal type constructor - creates branded values of a fixed type
  */
-export type Nominal<Value, Type extends string> = ((
-  value: Value
-) => BrandValue<Value, Type>) & {
-  readonly type: BrandValue<Value, Type>;
-  as: (value: unknown) => BrandValue<Value, Type>;
-  is: (value: unknown) => value is BrandValue<Value, Type>;
-  to: (value: unknown) => BrandValue<Value, Type>;
-};
-
+export type Nominal<
+  ValueType = never,
+  BrandName = never
+> = ValidateBrandValueType<
+  ValueType,
+  BrandConstructor<ValueType, BrandName> &
+    BrandMethods<ValueType, BrandName> &
+    TypeMarker<ValueType, BrandName>
+>;
 /**
  * Generic nominal type - creates branded values with variable value types
  */
-export type GenericNominal<Type extends string> = {
-  <T>(value: T): BrandValue<T, Type>;
-  as: (value: unknown) => BrandValue<unknown, Type>;
-  is: (value: unknown) => value is BrandValue<unknown, Type>;
-  to: (value: unknown) => BrandValue<unknown, Type>;
-};
+export interface GenericNominal<BrandName> {
+  <ValueType>(): Nominal<ValueType, BrandName>;
+}
+
+export type BrandConstructor<ValueType = never, BrandName = never> = (
+  value: ValueType
+) => BrandValue<ValueType, BrandName>;
+
+type ValidateBrandValueType<ValueType, IfNormalType> = ValueType extends [never]
+  ? "Brand value type cannot be unset, please provide a value type"
+  : IfNormalType;

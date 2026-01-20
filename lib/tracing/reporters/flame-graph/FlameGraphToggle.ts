@@ -1,9 +1,8 @@
 import { flameGraphState } from "./state";
-import { CSS_VARS, toggle, shadow, HOST_STYLES } from "./styles";
+import { HOST_STYLES, theme } from "./styles";
 import { css, html } from "./utilities";
 
 const STYLES = css`
-  ${CSS_VARS}
   ${HOST_STYLES}
 
   :host {
@@ -16,11 +15,11 @@ const STYLES = css`
     height: 48px;
     border-radius: 50%;
     border: none;
-    background: ${toggle.bgGradient};
+    background: ${theme.toggle.bgGradient};
     color: white;
     font-size: 24px;
     cursor: pointer;
-    box-shadow: 0 4px 20px ${shadow.toggleGlow};
+    box-shadow: 0 4px 20px ${theme.shadow.toggleGlow};
     display: flex;
     align-items: center;
     justify-content: center;
@@ -35,7 +34,7 @@ const STYLES = css`
   }
 
   :host([recording]) button {
-    background: ${toggle.bgGradientRecord};
+    background: ${theme.toggle.bgGradientRecord};
   }
 `;
 

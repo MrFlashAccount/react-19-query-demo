@@ -1,4 +1,4 @@
-import { brand } from "./types";
+import { brand } from "lib/brand";
 
 export const noop = (..._args: any[]) => {};
 export const noopcb = () => noop;
@@ -29,7 +29,7 @@ export function exponentialBackoff(
  */
 
 export const SerializedParams = brand<string, "SerializedParams">();
-export type SerializedParams = brand.infer<typeof SerializedParams>;
+export type SerializedParams = ReturnType<typeof SerializedParams>;
 
 export function serializeParams(params: unknown): SerializedParams {
   if (params === undefined || params === null) {
@@ -59,47 +59,6 @@ export function serializeParams(params: unknown): SerializedParams {
       return value;
     })
   );
-}
-
-const SERIALIZED_PARAMS_SYMBOL = Symbol("serializedParams");
-
-export const WithSerializedParams = brand.generic<"WithSerializedParams">();
-export type WithSerializedParams<TParams> = brand.Generic<
-  "WithSerializedParams",
-  TParams
->;
-
-export function params<const TParams>(
-  params: TParams
-): WithSerializedParams<TParams> {
-  // Already branded - return as-is
-  if (
-    typeof params === "object" &&
-    params !== null &&
-    SERIALIZED_PARAMS_SYMBOL in params
-  ) {
-    return params as unknown as WithSerializedParams<TParams>;
-  }
-
-  Object.defineProperty(params, SERIALIZED_PARAMS_SYMBOL, {
-    value: serializeParams(params),
-    writable: false,
-    enumerable: false,
-    configurable: false,
-  });
-
-  return WithSerializedParams(params);
-}
-
-export function getSerializedParams<TParams>(
-  params: WithSerializedParams<TParams>
-): SerializedParams {
-  if (SERIALIZED_PARAMS_SYMBOL in params) {
-    return (params as any)[SERIALIZED_PARAMS_SYMBOL];
-  }
-
-  // This should never happen
-  throw new Error("Serialized params not found");
 }
 
 export function serializePayload(

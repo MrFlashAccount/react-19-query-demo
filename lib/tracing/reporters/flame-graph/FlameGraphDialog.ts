@@ -80,12 +80,12 @@ const STYLES = css`
     border: none;
     background: linear-gradient(
       180deg,
-      var(--fg-bg-primary) 0%,
-      var(--fg-bg-secondary) 100%
+      ${theme.ui.bgPrimary} 0%,
+      ${theme.ui.bgSecondary} 100%
     );
     flex-direction: column;
     overflow: clip;
-    font-family: var(--fg-font);
+    font-family: ${theme.family.default};
     overscroll-behavior: contain;
     display: none;
     contain: content;

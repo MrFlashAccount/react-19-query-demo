@@ -59,24 +59,18 @@ export function QueryPerformanceTracker({
 }
 
 export function QueryFlameGraph() {
-  const ref = useRef<HTMLDivElement>(null);
-
   useLayoutEffect(() => {
-    if (ref.current == null) return;
-
-    console.log("mounting flame graph", ref.current);
     const flameGraph = new FlameGraphReporter({});
-    flameGraph.mount(ref.current);
+    flameGraph.mount(document.body);
     const unregister = tracer.addReporter(flameGraph);
 
     return () => {
-      console.log("unmounting flame graph");
       flameGraph.unmount();
       unregister();
     };
   }, []);
 
-  return createPortal(<div ref={ref} />, document.body);
+  return null;
 }
 
 export interface QueryDevtoolsProps {
@@ -86,8 +80,8 @@ export interface QueryDevtoolsProps {
 }
 
 export function QueryDevtools({
-  disableLogger = false,
-  disablePerformanceTracker = false,
+  disableLogger = true,
+  disablePerformanceTracker = true,
   disableFlameGraph = false,
 }: QueryDevtoolsProps) {
   const { queryClient } = useQueryContext();

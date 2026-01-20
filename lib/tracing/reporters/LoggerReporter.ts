@@ -4,6 +4,7 @@ import type {
   SpanEvent,
   Color,
   SpanId,
+  TraceEvent,
 } from "../types";
 import { BaseReporter } from "./BaseReporter";
 
@@ -88,11 +89,23 @@ export class LoggerReporter extends BaseReporter {
     };
   }
 
-  protected override onStop(): void {
-    this.spanDepths.clear();
+  protected processEvents(events: TraceEvent[]): void {
+    events.forEach((event) => {
+      switch (event.kind) {
+        case "start":
+          this.onSpanStart(event);
+          break;
+        case "end":
+          this.onSpanEnd(event);
+          break;
+        case "event":
+          this.onSpanEvent(event);
+          break;
+      }
+    });
   }
 
-  protected onSpanStart(event: SpanStartEvent): void {
+  private onSpanStart(event: SpanStartEvent): void {
     this.trackSpanStart(event);
 
     // Calculate and store depth
@@ -123,7 +136,7 @@ export class LoggerReporter extends BaseReporter {
     this.logSpanStart(event, depth);
   }
 
-  protected onSpanEnd(event: SpanEndEvent): void {
+  private onSpanEnd(event: SpanEndEvent): void {
     const metrics = this.untrackSpan(event.span.spanId);
     const depth = this.spanDepths.get(event.span.spanId) ?? 1;
     this.spanDepths.delete(event.span.spanId);
@@ -142,7 +155,7 @@ export class LoggerReporter extends BaseReporter {
     }
   }
 
-  protected onSpanEvent(event: SpanEvent): void {
+  private onSpanEvent(event: SpanEvent): void {
     const metrics = this.getSpanMetrics(event.span.spanId);
     if (!metrics) return;
 

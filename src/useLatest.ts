@@ -1,6 +1,6 @@
 import { useRef } from "react";
 
-export function useSyncRef<V>(v: V) {
+export function useLatest<V>(v: V) {
   const ref = useRef(v);
 
   if (ref.current !== v) {

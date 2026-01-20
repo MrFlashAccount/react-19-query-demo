@@ -1,4 +1,10 @@
-import type { SpanStartEvent, SpanEndEvent, SpanEvent, Color } from "../types";
+import type {
+  SpanStartEvent,
+  SpanEndEvent,
+  SpanEvent,
+  Color,
+  TraceEvent,
+} from "../types";
 import { BaseReporter } from "./BaseReporter";
 import type { SpanMetrics } from "./types";
 
@@ -94,11 +100,26 @@ export class DevtoolsReporter extends BaseReporter {
     });
   }
 
-  protected onStop(): void {
-    this.devtoolsSpans.clear();
+  protected processEvents(events: TraceEvent[]): void {
+    events.forEach((event) => {
+      switch (event.kind) {
+        case "start":
+          this.onSpanStart(event);
+          break;
+
+        case "end":
+          this.onSpanEnd(event);
+          break;
+        case "event":
+          this.onSpanEvent(event);
+          break;
+        default:
+          break;
+      }
+    });
   }
 
-  protected onSpanStart(event: SpanStartEvent): void {
+  private onSpanStart(event: SpanStartEvent): void {
     const spanId = event.span.spanId;
     const markName = `${this.reporterOptions.prefix}:${spanId}:start`;
 

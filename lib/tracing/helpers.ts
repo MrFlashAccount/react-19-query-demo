@@ -1,34 +1,27 @@
 /**
- * Tracing helpers with explicit parent passing (last argument).
+ * Tracing helpers with explicit parent passing via options.
  * Works in any environment without async context dependencies.
  */
 
-import {
-  type ISpan,
-  type ISpanMeta,
-  type ISpanOptions,
-  SpanBase,
-} from "./types";
+import { SpanBase, type ISpan, type ISpanMeta } from "./types";
 import { tracer } from "./index";
-import { type AnyFn, executeWithSpan, createTracedDecorator } from "./shared";
+import {
+  type TracedOptions,
+  executeWithSpan,
+  createTracedDecorator,
+} from "./shared";
 
 /**
  * Type guard to check if value is a span instance.
  * Uses instanceof for reliable runtime type checking.
  */
-export const isSpan = (v: unknown): v is ISpan => v instanceof SpanBase;
+export const isSpan = (v: unknown): v is ISpan => {
+  return v instanceof SpanBase;
+};
 
 // ============================================
 // Internal Helpers
 // ============================================
-
-/**
- * Extract parent span from args if last arg is ISpan.
- */
-const extractParentSpan = (args: unknown[]): ISpan | undefined => {
-  const last = args[args.length - 1];
-  return isSpan(last) ? last : undefined;
-};
 
 /**
  * Create span - child if parent exists, root otherwise.
@@ -37,55 +30,51 @@ const createSpan = (
   name: string,
   meta: ISpanMeta | undefined,
   payload: Record<string, unknown> = {},
-  parent?: ISpan
+  parentSpan?: ISpan
 ): ISpan => {
-  if (parent) {
-    const child = parent.child({ name, payload, meta });
+  if (parentSpan) {
+    const child = parentSpan.child({ name, payload, meta });
     return child;
   }
   return tracer.startSpan(name, payload, meta);
 };
 
-// ============================================
+// ==========================================
 // HOF & Decorator
-// ============================================
+// ==========================================
 
 /**
  * HOF that wraps a function with span tracing.
- * If last arg is ISpan, creates child span; otherwise creates root span.
+ * Parent span is passed via options.parentSpan.
  * Handles both sync and async functions.
  *
  * @example
  * const fetchUser = traced(
- *   async (id: string, parent?: ISpan) => api.get(`/users/${id}`),
- *   "fetchUser",
- *   { color: "primary" }
+ *   async (span: ISpan, id: string) => api.get(`/users/${id}`),
+ *   { name: "fetchUser", meta: { color: "primary" } }
  * );
  *
- * await fetchUser("123");           // root span
- * await fetchUser("123", parentSpan); // child span
+ * await fetchUser("123"); // root span
  */
-export function traced<T extends AnyFn>(
-  fn: (span: ISpan, ...args: Parameters<T>) => ReturnType<T>,
-  name: string,
-  payload: Record<string, unknown> = {},
-  meta?: ISpanMeta
-): T {
-  function withSpan(this: any, ...args: Parameters<T>): ReturnType<T> {
-    const parent = extractParentSpan(args);
-    const span = createSpan(name, meta, payload, parent);
+export function traced<TArgs extends unknown[], TReturn>(
+  fn: (span: ISpan, ...args: TArgs) => TReturn,
+  options: TracedOptions
+): (...args: TArgs) => TReturn {
+  function withSpan(this: any, ...args: TArgs): TReturn {
+    const { name, payload = {}, meta, parentSpan } = options;
+    const span = createSpan(name, meta, payload, parentSpan);
     return executeWithSpan(span, (span) => {
       span.start();
       return fn(span, ...args);
     });
   }
 
-  return withSpan as T;
+  return withSpan;
 }
 
 /**
  * Method decorator that wraps method with span tracing.
- * If last arg is ISpan, creates child span; otherwise creates root span.
+ * Parent span is passed via options.parentSpan.
  *
  * @example
  * class UserService {
@@ -111,14 +100,15 @@ export const Traced = createTracedDecorator(traced);
  */
 export function tracePromise<T, P extends PromiseLike<T>>(
   promise: P,
-  spanOrSpanOptions: ISpan | ISpanOptions
+  spanOrSpanOptions: ISpan | TracedOptions
 ): P {
   const span = isSpan(spanOrSpanOptions)
     ? spanOrSpanOptions
-    : tracer.startSpan(
+    : createSpan(
         spanOrSpanOptions.name,
-        spanOrSpanOptions.payload,
-        spanOrSpanOptions.meta
+        spanOrSpanOptions.meta,
+        spanOrSpanOptions.payload ?? {},
+        spanOrSpanOptions.parentSpan
       );
   span.start();
   return promise.then(
@@ -135,9 +125,8 @@ export function tracePromise<T, P extends PromiseLike<T>>(
 
 export function runInSpan<T>(
   fn: (span: ISpan) => T,
-  name: string,
-  payload: Record<string, unknown> = {},
-  meta?: ISpanMeta
+  options: TracedOptions
 ): T {
-  return traced((span: ISpan) => fn(span), name, payload, meta) as T;
+  const withSpan = traced((span: ISpan) => fn(span), options);
+  return withSpan();
 }

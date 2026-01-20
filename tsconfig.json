@@ -24,8 +24,13 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
+      "*": ["./*"],
+      "lib/tracing": ["./lib/tracing/index.ts"],
+      "lib/tracing/helpers": ["./lib/tracing/helpers.ts"],
       "lib/react": ["./lib/react.ts"],
-      "lib/devtools": ["./lib/devtools/index.ts"]
+      "lib/devtools": ["./lib/devtools/index.ts"],
+      "lib/brand": ["./lib/brand/brand.ts"],
+      "lib/brand/*": ["./lib/brand/*.ts"]
     }
   },
   "include": ["src", "lib"]

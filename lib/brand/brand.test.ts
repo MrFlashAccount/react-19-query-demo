@@ -1,6 +1,7 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { brand } from "../brand";
-import type { BrandValue, StandardSchemaV1 } from "../brand";
+import { brand } from "./brand";
+import type { BrandValue } from "./types";
+import type { StandardSchemaV1 } from "./standard-schema";
 
 describe("brand", () => {
   describe("brand()", () => {
@@ -97,17 +98,17 @@ describe("brand", () => {
 
     it("should expose is/to/as helpers", () => {
       const Id = brand.generic<"Id">();
-      expect(Id.is).toBeTypeOf("function");
-      expect(Id.to).toBeTypeOf("function");
-      expect(Id.as).toBeTypeOf("function");
+      expect(Id<string>().is).toBeTypeOf("function");
+      expect(Id<number>()).toBeTypeOf("function");
+      expect(Id<string>().as).toBeTypeOf("function");
     });
 
     it("should brand values of any type", () => {
       const Id = brand.generic<"Id">();
 
-      const stringId = Id("abc");
-      const numberId = Id(123);
-      const objectId = Id({ key: "value" });
+      const stringId = Id<string>();
+      const numberId = Id<number>()(123);
+      const objectId = Id<{ key: string }>()({ key: "value" });
 
       expect(stringId).toBe("abc");
       expect(numberId).toBe(123);
@@ -116,7 +117,7 @@ describe("brand", () => {
 
     it("should preserve literal types", () => {
       const Literal = brand.generic<"Literal">();
-      const value = Literal("specific" as const);
+      const value = Literal<"specific">()("specific");
       expect(value).toBe("specific");
     });
 
@@ -131,7 +132,9 @@ describe("brand", () => {
               : { issues: [{ message: "Expected string" }] },
         },
       };
-      const Id = brand.generic<"Id">({ validator: schema });
+      const Id = brand.generic<"Id">()({
+        validator: schema,
+      });
 
       expect(Id.is("ok")).toBe(true);
       expect(Id.is(123)).toBe(false);
@@ -196,16 +199,16 @@ describe("brand types", () => {
     it("should accept any value type", () => {
       const Id = brand.generic<"Id">();
 
-      expectTypeOf(Id).toBeCallableWith("string");
-      expectTypeOf(Id).toBeCallableWith(123);
-      expectTypeOf(Id).toBeCallableWith({ obj: true });
+      expectTypeOf(Id<string>()).toBeCallableWith("string");
+      expectTypeOf(Id<number>()).toBeCallableWith(123);
+      expectTypeOf(Id<{ obj: boolean }>()).toBeCallableWith({ obj: true });
     });
 
     it("should infer value type from input", () => {
       const Id = brand.generic<"Id">();
 
-      const stringId = Id("test");
-      const numberId = Id(42);
+      const stringId = Id<string>()("abc");
+      const numberId = Id<number>()(123);
 
       expectTypeOf(stringId).toExtend<BrandValue<string, "Id">>();
       expectTypeOf(numberId).toExtend<BrandValue<number, "Id">>();

@@ -1,8 +1,7 @@
-import { CSS_VARS, HOST_STYLES, ui } from "./styles";
+import { HOST_STYLES, theme } from "./styles";
 import { css, html } from "./utilities";
 
 const STYLES = css`
-  ${CSS_VARS}
   ${HOST_STYLES}
 
   :host {
@@ -52,7 +51,7 @@ const STYLES = css`
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: ${ui.handleDefault};
+    background: ${theme.ui.handleDefault};
     border-radius: 2px;
     transition: background 0.15s;
   }
@@ -73,7 +72,7 @@ const STYLES = css`
 
   :host(:hover) .handle,
   :host([active]) .handle {
-    background: ${ui.handleHover};
+    background: ${theme.ui.handleHover};
   }
 `;
 

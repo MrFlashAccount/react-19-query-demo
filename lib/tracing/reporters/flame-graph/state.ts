@@ -12,6 +12,22 @@ import type {
 import { LAYOUT_CONSTANTS } from "./types";
 import { clamp } from "./utilities";
 import { createStore, type StoreApi } from "./store";
+import {
+  CODE_TO_COLOR,
+  CODE_TO_STATUS,
+  COLOR_TO_CODE,
+  DEFAULT_SPAN_CAPACITY,
+  DEFAULT_STRING_CAPACITY,
+  STATUS_TO_CODE,
+  bumpSpanVersion,
+  cloneSpanBuffer,
+  createSpanBuffer,
+  getSpanCount,
+  readSpanId,
+  readSpanName,
+  writeSpanId,
+  type SpanBufferViews,
+} from "./SpanBuffer";
 
 export interface FlameGraphViewState {
   offsetX: number;
@@ -35,9 +51,10 @@ export interface FlameGraphViewState {
 }
 
 export interface FlameGraphState extends Record<string, unknown> {
-  spans: FlameGraphSpan[];
-  selectedSpanId: SpanId | null;
-  timeRange: TimeRange;
+  spanBuffer: SpanBufferViews;
+  spanCount: number;
+  spanVersion: number;
+  selectedSpanIndex: number | null;
   viewState: FlameGraphViewState;
   isRecording: boolean;
   isOpen: boolean;
@@ -55,6 +72,99 @@ const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   detailsVisible: false,
 };
 
+let spanViews = createSpanBuffer(
+  DEFAULT_SPAN_CAPACITY,
+  DEFAULT_STRING_CAPACITY
+);
+let stringOffset = 0;
+const spanIdToIndex = new Map<SpanId, number>();
+const payloadByIndex = new Map<number, Record<string, unknown>>();
+
+function resetSpanStorage(): SpanBufferViews {
+  spanViews = createSpanBuffer(DEFAULT_SPAN_CAPACITY, DEFAULT_STRING_CAPACITY);
+  stringOffset = 0;
+  spanIdToIndex.clear();
+  payloadByIndex.clear();
+  return spanViews;
+}
+
+function ensureSpanCapacity(nameByteLength: number): void {
+  const count = getSpanCount(spanViews);
+  const needsCapacity = count >= spanViews.capacity;
+  const needsStrings =
+    stringOffset + nameByteLength > spanViews.stringBytes.length;
+  if (!needsCapacity && !needsStrings) return;
+  const nextCapacity = needsCapacity
+    ? Math.ceil(spanViews.capacity * 1.5)
+    : spanViews.capacity;
+  const nextStringCapacity = needsStrings
+    ? Math.max(spanViews.stringBytes.length * 2, stringOffset + nameByteLength)
+    : spanViews.stringBytes.length;
+  spanViews = cloneSpanBuffer(spanViews, nextCapacity, nextStringCapacity);
+}
+
+function appendSpan(span: FlameGraphSpan): number {
+  const nameBytes = new TextEncoder().encode(span.name);
+  ensureSpanCapacity(nameBytes.length);
+  const index = getSpanCount(spanViews);
+  spanViews.startTime[index] = span.startTime;
+  spanViews.endTime[index] = span.endTime;
+  spanViews.duration[index] = span.duration;
+  spanViews.depth[index] = span.depth;
+  spanViews.status[index] = STATUS_TO_CODE[span.status];
+  spanViews.color[index] = span.color ? COLOR_TO_CODE[span.color] : 0;
+  spanViews.parentIndex[index] =
+    span.parentSpanId != null ? spanIdToIndex.get(span.parentSpanId) ?? -1 : -1;
+  writeSpanId(spanViews, index, span.spanId);
+  spanViews.stringBytes.set(nameBytes, stringOffset);
+  spanViews.nameOff[index] = stringOffset;
+  spanViews.nameLen[index] = nameBytes.length;
+  stringOffset += nameBytes.length;
+  Atomics.store(spanViews.count, 0, index + 1);
+  bumpSpanVersion(spanViews);
+  spanIdToIndex.set(span.spanId, index);
+  if (span.payload) {
+    payloadByIndex.set(index, span.payload);
+  }
+  return index;
+}
+
+function updateSpanEnd(
+  spanId: SpanId,
+  endTime: number,
+  status: SpanState
+): void {
+  const index = spanIdToIndex.get(spanId);
+  if (index === undefined) return;
+  spanViews.endTime[index] = endTime;
+  spanViews.duration[index] = endTime - spanViews.startTime[index];
+  spanViews.status[index] = STATUS_TO_CODE[status];
+  bumpSpanVersion(spanViews);
+}
+
+function getSpanView(index: number | null): FlameGraphSpan | null {
+  if (index == null || index < 0) return null;
+  const count = getSpanCount(spanViews);
+  if (index >= count) return null;
+  const statusCode = spanViews.status[index] as keyof typeof CODE_TO_STATUS;
+  const colorCode = spanViews.color[index] as keyof typeof CODE_TO_COLOR;
+  return {
+    spanId: readSpanId(spanViews, index),
+    parentSpanId:
+      spanViews.parentIndex[index] >= 0
+        ? readSpanId(spanViews, spanViews.parentIndex[index])
+        : null,
+    name: readSpanName(spanViews, index),
+    startTime: spanViews.startTime[index],
+    endTime: spanViews.endTime[index],
+    duration: spanViews.duration[index],
+    depth: spanViews.depth[index],
+    status: CODE_TO_STATUS[statusCode],
+    color: CODE_TO_COLOR[colorCode],
+    payload: payloadByIndex.get(index),
+  };
+}
+
 function getInitialState(): FlameGraphState {
   const containerWidth = 1000;
   const containerHeight = 1000;
@@ -64,9 +174,10 @@ function getInitialState(): FlameGraphState {
     DEFAULT_LAYOUT_CONFIG
   );
   return {
-    spans: [],
-    selectedSpanId: null,
-    timeRange: { minTime: 0, maxTime: 0 },
+    spanBuffer: spanViews,
+    spanCount: getSpanCount(spanViews),
+    spanVersion: Atomics.load(spanViews.version, 0),
+    selectedSpanIndex: null,
     viewState: {
       offsetX: 0,
       offsetY: 0,
@@ -325,15 +436,39 @@ export function calculateLayout(
 }
 
 export const selectors = {
-  spans: (s: FlameGraphState) => s.spans,
-  hasSpans: (s: FlameGraphState) => s.spans.length > 0,
-  selectedSpanId: (s: FlameGraphState) => s.selectedSpanId,
-  selectedSpan: (s: FlameGraphState) => {
-    const selectedSpanId = selectors.selectedSpanId(s);
-    if (!selectedSpanId) return null;
-    return s.spans.find((span) => span.spanId === selectedSpanId) ?? null;
+  spanBuffer: (s: FlameGraphState) => s.spanBuffer,
+  spanCount: (s: FlameGraphState) => s.spanCount,
+  spanVersion: (s: FlameGraphState) => s.spanVersion,
+  hasSpans: (s: FlameGraphState) => s.spanCount > 0,
+  selectedSpanIndex: (s: FlameGraphState) => s.selectedSpanIndex,
+  selectedSpan: (s: FlameGraphState) => getSpanView(s.selectedSpanIndex),
+  timeRange: (s: FlameGraphState): TimeRange => {
+    const { spanBuffer, spanCount } = s;
+
+    if (spanCount === 0) {
+      return { minTime: 0, maxTime: 0 };
+    }
+
+    let minTime = Infinity;
+    let maxTime = -Infinity;
+    let hasRunningSpans = false;
+
+    for (let i = 0; i < spanCount; i++) {
+      minTime = Math.min(minTime, spanBuffer.startTime[i]);
+
+      if (hasRunningSpans) {
+        continue;
+      }
+      if (spanBuffer.status[i] === 1) {
+        hasRunningSpans = true;
+        maxTime = performance.now();
+      } else {
+        maxTime = Math.max(maxTime, spanBuffer.endTime[i]);
+      }
+    }
+
+    return { minTime, maxTime };
   },
-  timeRange: (s: FlameGraphState) => s.timeRange,
   viewState: (s: FlameGraphState) => s.viewState,
   isRecording: (s: FlameGraphState) => s.isRecording,
   isOpen: (s: FlameGraphState) => s.isOpen,
@@ -349,11 +484,13 @@ export const selectors = {
     offsetY: s.viewState.offsetY,
   }),
   zoomPercent: (s: FlameGraphState) => Math.round(s.viewState.zoom * 100),
-  spanCount: (s: FlameGraphState) => s.spans.length,
   maxDepth: (s: FlameGraphState) => {
+    const count = s.spanCount;
+    if (count === 0) return 0;
+    const buffer = s.spanBuffer;
     let max = 0;
-    for (const span of s.spans) {
-      if (span.depth > max) max = span.depth;
+    for (let i = 0; i < count; i++) {
+      if (buffer.depth[i] > max) max = buffer.depth[i];
     }
     return max;
   },
@@ -398,44 +535,48 @@ function createActions(store: StoreApi<FlameGraphState>) {
   return {
     // Spans
     addSpan(span: FlameGraphSpan) {
-      setState((s) => ({ spans: [...s.spans, span] }));
+      appendSpan(span);
+      setState({
+        spanBuffer: spanViews,
+        spanCount: getSpanCount(spanViews),
+        spanVersion: Atomics.load(spanViews.version, 0),
+      });
     },
 
     /** Start a span (adds with status: "running") */
     startSpan(span: FlameGraphSpan) {
-      setState((s) => {
-        // Prevent duplicate spans
-        if (s.spans.some((existing) => existing.spanId === span.spanId)) {
-          return s;
-        }
-        return { spans: [...s.spans, { ...span, status: "running" }] };
+      if (spanIdToIndex.has(span.spanId)) return;
+      appendSpan({ ...span, status: "running" });
+      setState({
+        spanBuffer: spanViews,
+        spanCount: getSpanCount(spanViews),
+        spanVersion: Atomics.load(spanViews.version, 0),
       });
     },
 
     /** End a running span (updates status and duration) */
     endSpan(spanId: SpanId, endTime: number, status: SpanState = "success") {
-      setState((s) => ({
-        spans: s.spans.map(
-          (span): FlameGraphSpan =>
-            span.spanId === spanId
-              ? { ...span, endTime, duration: endTime - span.startTime, status }
-              : span
-        ),
-      }));
+      updateSpanEnd(spanId, endTime, status);
+      setState({
+        spanVersion: Atomics.load(spanViews.version, 0),
+      });
     },
 
     /** Remove a span by ID */
     removeSpan(spanId: SpanId) {
-      setState((s) => ({
-        spans: s.spans.filter((span) => span.spanId !== spanId),
-      }));
+      // Append-only storage: span removal is not supported.
+      if (spanIdToIndex.has(spanId)) {
+        setState({
+          spanVersion: Atomics.load(spanViews.version, 0),
+        });
+      }
     },
 
     // Selection
-    selectSpan(spanId: SpanId | null) {
-      const showDetails = spanId !== null;
+    selectSpan(spanIndex: number | null) {
+      const showDetails = spanIndex !== null;
       setState((s) => ({
-        selectedSpanId: spanId,
+        selectedSpanIndex: spanIndex,
         viewState: {
           ...s.viewState,
           layout: { ...s.viewState.layout, detailsVisible: showDetails },
@@ -449,10 +590,6 @@ function createActions(store: StoreApi<FlameGraphState>) {
       setState((s) => ({
         viewState: { ...s.viewState, ...viewState },
       }));
-    },
-
-    setTimeRange(timeRange: TimeRange) {
-      setState({ timeRange });
     },
 
     setHeight(height: number) {
@@ -499,14 +636,17 @@ function createActions(store: StoreApi<FlameGraphState>) {
 
     // Reset
     clearRecording() {
+      resetSpanStorage();
       setState({
-        spans: [],
-        selectedSpanId: null,
-        timeRange: { minTime: 0, maxTime: 0 },
+        spanBuffer: spanViews,
+        spanCount: getSpanCount(spanViews),
+        spanVersion: Atomics.load(spanViews.version, 0),
+        selectedSpanIndex: null,
       });
     },
 
     reset() {
+      resetSpanStorage();
       setState(store.getInitialState(), true);
     },
 

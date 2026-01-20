@@ -13,6 +13,7 @@ import {
   ITracerOptions,
   SpanId,
   type SpanState,
+  SpanBase,
 } from "./types";
 
 const defaultMeta: ISpanMeta = { description: "", color: "primary" };
@@ -21,7 +22,7 @@ const defaultMeta: ISpanMeta = { description: "", color: "primary" };
  * Span represents a unit of work being traced.
  * Must be started explicitly after creation.
  */
-export class Span implements ISpan {
+export class Span extends SpanBase implements ISpan {
   private _state: SpanState = "inactive";
   private readonly _spanId: SpanId;
   private readonly _name: string;
@@ -33,6 +34,7 @@ export class Span implements ISpan {
   private _endTime: number = 0;
 
   constructor(options: ISpanOptions) {
+    super();
     this._name = options.name;
     this._parentSpan = options.parentSpan;
     this._payload = options.payload ?? {};
@@ -163,7 +165,6 @@ export class Span implements ISpan {
     payload?: Record<string, unknown>,
     error?: unknown
   ): void {
-    console.log("Span.end", status, payload, error);
     if (this._state !== "running") {
       return;
     }
