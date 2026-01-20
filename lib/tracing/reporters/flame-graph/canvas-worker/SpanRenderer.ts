@@ -196,8 +196,9 @@ export class SpanRenderer {
 
     const isLeftSticky = rawX < PADDING_LEFT;
     const isRightSticky = rawX + rawW > viewportWidth;
-    const leftPadding = isLeftSticky ? SPAN_PADDING_X_STICKY : SPAN_PADDING_X;
-    const rightPadding = isRightSticky ? SPAN_PADDING_X_STICKY : SPAN_PADDING_X;
+    // Use same padding on both sides when either is sticky for visual consistency
+    const padding =
+      isLeftSticky || isRightSticky ? SPAN_PADDING_X_STICKY : SPAN_PADDING_X;
 
     this.ctx.textBaseline = "middle";
     const centerY = y + h / 2;
@@ -207,9 +208,9 @@ export class SpanRenderer {
     this.ctx.rect(visibleLeft, y, visibleWidth, h);
     this.ctx.clip();
 
-    const labelLeft = visibleLeft + leftPadding;
-    const rightTextX = visibleRight - rightPadding;
-    const availableTextWidth = visibleWidth - leftPadding - rightPadding;
+    const labelLeft = visibleLeft + padding;
+    const rightTextX = visibleRight - padding;
+    const availableTextWidth = visibleWidth - padding * 2;
 
     this.ctx.font = `${theme.size.default}px ${theme.family.default}`;
     const rightTextWidth = this.ctx.measureText(rightLabel).width;
