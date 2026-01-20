@@ -15,8 +15,8 @@ const LazyLagRadar = lazy(() =>
   import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar }))
 );
 
-const STRESS_DEPTH = 6;
-const STRESS_BREADTH = 4;
+const STRESS_DEPTH = 1;
+const STRESS_BREADTH = 2;
 const STRESS_BRANCHES = 3;
 
 const sleep = (ms: number) =>
@@ -44,7 +44,7 @@ const runBranch = async (
     },
     {
       name: `stress:node:${path}`,
-      payload: { depth, breadth, path },
+      payload: { depth, breadth, path, parent: parent.payload },
       meta: { color: depth % 2 === 0 ? "secondary" : "tertiary" },
       parentSpan: parent,
     }
