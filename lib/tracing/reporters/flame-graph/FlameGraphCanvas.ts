@@ -357,16 +357,18 @@ export class FlameGraphCanvas extends HTMLElement {
     const zoom = Math.max(minZoom, Math.min(500, state.zoom));
 
     const isAtMinZoom = Math.abs(zoom - minZoom) < 0.001;
-    if (isAtMinZoom) {
-      return { offsetX: 0, offsetY: 0, zoom: minZoom };
-    }
 
     let { offsetX, offsetY } = state;
 
-    const contentWidth = width * zoom;
-    const maxOffsetX = PAN_MARGIN_PX;
-    const minOffsetX = width - contentWidth - PAN_MARGIN_PX - PADDING_LEFT;
-    offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, offsetX));
+    // At min zoom, lock horizontal offset; otherwise clamp to pan bounds
+    if (isAtMinZoom) {
+      offsetX = 0;
+    } else {
+      const contentWidth = width * zoom;
+      const maxOffsetX = PAN_MARGIN_PX;
+      const minOffsetX = width - contentWidth - PAN_MARGIN_PX - PADDING_LEFT;
+      offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, offsetX));
+    }
 
     // Use max adjusted depth from span layouts for proper scroll limits
     let maxAdjustedDepth = 0;
@@ -383,7 +385,7 @@ export class FlameGraphCanvas extends HTMLElement {
     const minOffsetY = Math.min(0, height - contentHeight - PADDING_TOP * 2);
     offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, offsetY));
 
-    return { offsetX, offsetY, zoom };
+    return { offsetX, offsetY, zoom: isAtMinZoom ? minZoom : zoom };
   }
 
   private resizeCanvas(width: number, height: number) {

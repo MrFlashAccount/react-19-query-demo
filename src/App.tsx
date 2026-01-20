@@ -15,9 +15,9 @@ const LazyLagRadar = lazy(() =>
   import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar }))
 );
 
-const STRESS_DEPTH = 2;
-const STRESS_BREADTH = 2;
-const STRESS_BRANCHES = 1;
+const STRESS_DEPTH = 6;
+const STRESS_BREADTH = 4;
+const STRESS_BRANCHES = 3;
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
