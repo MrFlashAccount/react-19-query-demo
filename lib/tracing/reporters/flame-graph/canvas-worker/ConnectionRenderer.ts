@@ -17,20 +17,20 @@ export interface ConnectionRenderOptions {
 }
 
 export class ConnectionRenderer {
-  private static readonly LINE_COLOR = theme.accent.selected;
-  private static readonly HIGHLIGHT_COLOR = theme.accent.primary;
-  private static readonly LINE_WIDTH = 1.5;
-  private static readonly HIGHLIGHT_WIDTH = 2.5;
+  private static readonly LINE_COLOR = theme.accent.secondary;
+  private static readonly HIGHLIGHT_COLOR = theme.accent.secondaryDark;
+  private static readonly LINE_WIDTH = 2;
   private static readonly DOT_RADIUS = 4;
 
   constructor(private ctx: OffscreenCanvasRenderingContext2D) {}
 
   /**
-   * Draw connection lines between parent and child spans
+   * Draw connection lines between parent and child spans (virtualized)
+   * Only draws connections for visible spans
    */
   draw(
     views: SpanBufferViews,
-    count: number,
+    visibleSpans: number[],
     adjustedDepths: Int32Array,
     parentIndices: Int32Array,
     timeToX: (t: number) => number,
@@ -38,13 +38,14 @@ export class ConnectionRenderer {
     effectiveOffsetY: number,
     viewportWidth: number,
     viewportHeight: number,
-    selectedSpanId: SpanId | null,
-    currentTime: number
+    selectedSpanId: SpanId | null
   ): void {
-    // Find selected span index
+    if (visibleSpans.length === 0) return;
+
+    // Find selected span index (only search visible spans)
     let selectedIndex = -1;
     if (selectedSpanId !== null) {
-      for (let i = 0; i < count; i++) {
+      for (const i of visibleSpans) {
         if (readSpanId(views, i) === selectedSpanId) {
           selectedIndex = i;
           break;
@@ -52,83 +53,86 @@ export class ConnectionRenderer {
       }
     }
 
-    // Build set of spans to highlight (selected + ancestors + descendants)
+    // Build set of spans to highlight (selected + ancestors within visible)
     const highlightSet = new Set<number>();
     if (selectedIndex >= 0) {
-      // Add ancestors
+      // Add ancestors (traverse up, may go outside visible set)
       let current = selectedIndex;
       while (current >= 0) {
         highlightSet.add(current);
         current = parentIndices[current];
       }
-      // Add descendants
-      this.addDescendants(selectedIndex, parentIndices, count, highlightSet);
+      // Add visible descendants
+      this.addVisibleDescendants(
+        selectedIndex,
+        parentIndices,
+        visibleSpans,
+        highlightSet
+      );
     }
 
     // Draw non-highlighted connections first (subtle)
+    this.ctx.fillStyle = ConnectionRenderer.LINE_COLOR;
     this.ctx.strokeStyle = ConnectionRenderer.LINE_COLOR;
     this.ctx.lineWidth = ConnectionRenderer.LINE_WIDTH;
-    this.ctx.globalAlpha = 0.4;
+    this.ctx.globalAlpha = 1;
 
-    for (let i = 0; i < count; i++) {
-      const parentIdx = parentIndices[i];
+    for (const childIdx of visibleSpans) {
+      const parentIdx = parentIndices[childIdx];
       if (parentIdx < 0) continue;
-      if (highlightSet.has(i) && highlightSet.has(parentIdx)) continue;
+      if (highlightSet.has(childIdx) && highlightSet.has(parentIdx)) continue;
 
       this.drawConnection(
         views,
         parentIdx,
-        i,
+        childIdx,
         adjustedDepths,
         timeToX,
         durationToWidth,
         effectiveOffsetY,
         viewportWidth,
-        viewportHeight,
-        currentTime,
-        false
+        viewportHeight
       );
     }
 
-    this.ctx.globalAlpha = 1;
-
     // Draw highlighted connections on top
     if (highlightSet.size > 0) {
+      this.ctx.fillStyle = ConnectionRenderer.HIGHLIGHT_COLOR;
       this.ctx.strokeStyle = ConnectionRenderer.HIGHLIGHT_COLOR;
-      this.ctx.lineWidth = ConnectionRenderer.HIGHLIGHT_WIDTH;
+      this.ctx.lineWidth = ConnectionRenderer.LINE_WIDTH;
 
-      for (let i = 0; i < count; i++) {
-        const parentIdx = parentIndices[i];
+      for (const childIdx of visibleSpans) {
+        const parentIdx = parentIndices[childIdx];
         if (parentIdx < 0) continue;
-        if (!highlightSet.has(i) || !highlightSet.has(parentIdx)) continue;
+        if (!highlightSet.has(childIdx) || !highlightSet.has(parentIdx))
+          continue;
 
         this.drawConnection(
           views,
           parentIdx,
-          i,
+          childIdx,
           adjustedDepths,
           timeToX,
           durationToWidth,
           effectiveOffsetY,
           viewportWidth,
-          viewportHeight,
-          currentTime,
-          true
+          viewportHeight
         );
       }
     }
   }
 
-  private addDescendants(
+  private addVisibleDescendants(
     index: number,
     parentIndices: Int32Array,
-    count: number,
+    visibleSpans: number[],
     result: Set<number>
   ): void {
-    for (let i = 0; i < count; i++) {
+    // Only check visible spans for descendants
+    for (const i of visibleSpans) {
       if (parentIndices[i] === index) {
         result.add(i);
-        this.addDescendants(i, parentIndices, count, result);
+        this.addVisibleDescendants(i, parentIndices, visibleSpans, result);
       }
     }
   }
@@ -142,9 +146,7 @@ export class ConnectionRenderer {
     _durationToWidth: (d: number) => number,
     effectiveOffsetY: number,
     viewportWidth: number,
-    viewportHeight: number,
-    _currentTime: number,
-    isHighlighted: boolean
+    viewportHeight: number
   ): void {
     const parentDepth = adjustedDepths[parentIdx];
     const childDepth = adjustedDepths[childIdx];
@@ -155,13 +157,23 @@ export class ConnectionRenderer {
     const childX = timeToX(views.startTime[childIdx]);
     const childY = childDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
 
-    // Parent: exit from BOTTOM of span (near left edge)
-    const parentConnectX = parentX + 8;
-    const parentConnectY = parentY + ROW_HEIGHT;
-
-    // Child: enter from LEFT side (vertically centered)
-    const childConnectX = childX;
+    // Child: enter from LEFT edge (vertically centered)
+    const childConnectX = childX + 1;
     const childConnectY = childY + ROW_HEIGHT / 2;
+
+    // Determine connection style based on child offset
+    const childOffset = childX - parentX;
+    const isParabolic = childOffset < 10;
+
+    // Parent connection point depends on child offset:
+    // - Small offset: connect from LEFT edge of parent (same as child style)
+    // - Large offset: connect from BOTTOM, near child's X (direct vertical)
+    const parentConnectX = isParabolic
+      ? parentX // Left edge, same as child
+      : childX - 16; // Bottom, slightly left of child
+    const parentConnectY = isParabolic
+      ? parentY + ROW_HEIGHT / 2 // Vertically centered (same as child)
+      : parentY + ROW_HEIGHT + 1; // Below span, clear rounded corner
 
     // Skip if completely outside viewport
     const minX = Math.min(parentConnectX, childConnectX) - 20;
@@ -173,45 +185,48 @@ export class ConnectionRenderer {
       return;
     }
 
-    // Draw connection line with smooth bezier curve
     this.ctx.beginPath();
-
-    // Start from parent bottom
     this.ctx.moveTo(parentConnectX, parentConnectY);
 
-    // Calculate control points for smooth curve
     const verticalDist = childConnectY - parentConnectY;
-    const horizontalOffset = Math.min(
-      25,
-      Math.abs(childConnectX - parentConnectX) * 0.3 + 12
-    );
 
-    // Use cubic bezier for smooth curve
-    this.ctx.bezierCurveTo(
-      parentConnectX,
-      parentConnectY + verticalDist * 0.5, // First control - below parent
-      childConnectX - horizontalOffset,
-      childConnectY, // Second control - left of child
-      childConnectX,
-      childConnectY // End at child left side
-    );
+    if (isParabolic) {
+      // Parabolic curve for left-side to left-side connections
+      // Arc goes left then curves down to child
+      const arcWidth = Math.max(15, verticalDist * 0.3);
+      this.ctx.bezierCurveTo(
+        parentConnectX - arcWidth,
+        parentConnectY + verticalDist * 0.3, // Control 1: left and slightly down
+        childConnectX - arcWidth,
+        childConnectY - verticalDist * 0.3, // Control 2: left and slightly up from child
+        childConnectX,
+        childConnectY
+      );
+    } else {
+      // Simple vertical curve for bottom connections
+      // Almost straight down with slight ease into child
+      this.ctx.quadraticCurveTo(
+        parentConnectX,
+        childConnectY, // Control: straight down to child's Y
+        childConnectX,
+        childConnectY
+      );
+    }
 
     this.ctx.stroke();
 
-    // Draw dots at connection points
-    if (isHighlighted) {
-      const dotRadius = ConnectionRenderer.DOT_RADIUS;
-      this.ctx.fillStyle = ConnectionRenderer.HIGHLIGHT_COLOR;
+    // Draw tiny dots at both ends (always visible)
+    const dotRadius = ConnectionRenderer.DOT_RADIUS;
+    this.ctx.fillStyle = ConnectionRenderer.HIGHLIGHT_COLOR;
 
-      // Dot at parent bottom
-      this.ctx.beginPath();
-      this.ctx.arc(parentConnectX, parentConnectY, dotRadius, 0, Math.PI * 2);
-      this.ctx.fill();
+    // Dot at parent
+    this.ctx.beginPath();
+    this.ctx.arc(parentConnectX, parentConnectY, dotRadius, 0, Math.PI * 2);
+    this.ctx.fill();
 
-      // Dot at child left
-      this.ctx.beginPath();
-      this.ctx.arc(childConnectX, childConnectY, dotRadius, 0, Math.PI * 2);
-      this.ctx.fill();
-    }
+    // Dot at child
+    this.ctx.beginPath();
+    this.ctx.arc(childConnectX, childConnectY, dotRadius, 0, Math.PI * 2);
+    this.ctx.fill();
   }
 }

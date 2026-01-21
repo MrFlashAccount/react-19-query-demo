@@ -94,6 +94,7 @@ export class FlameGraphCanvas extends HTMLElement {
   // Span layouts for hit testing (mirrors worker's calculation)
   private spanLayouts: Int32Array<ArrayBufferLike> = new Int32Array(0);
   private spanLayoutsCount = 0;
+  private maxAdjustedDepth = 0;
 
   constructor() {
     super();
@@ -349,7 +350,6 @@ export class FlameGraphCanvas extends HTMLElement {
   private clampViewState(state: ViewState): ViewState {
     const globalState = flameGraphState.getState();
     const { width, height } = globalState.viewState.calculatedLayout.canvas;
-    const { spanBuffer, spansCount } = globalState;
     const totalDuration = selectors.totalDuration(globalState);
 
     if (totalDuration === 0 || width === 0) return state;
@@ -373,17 +373,7 @@ export class FlameGraphCanvas extends HTMLElement {
       offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, offsetX));
     }
 
-    // Use max adjusted depth from span layouts for proper scroll limits
-    let maxAdjustedDepth = 0;
-    for (let i = 0; i < spansCount; i++) {
-      const adjustedDepth =
-        i < this.spanLayoutsCount ? this.spanLayouts[i] : spanBuffer.depth[i];
-      if (adjustedDepth > maxAdjustedDepth) {
-        maxAdjustedDepth = adjustedDepth;
-      }
-    }
-
-    const contentHeight = (maxAdjustedDepth + 1) * (ROW_HEIGHT + ROW_GAP);
+    const contentHeight = (this.maxAdjustedDepth + 1) * (ROW_HEIGHT + ROW_GAP);
     const maxOffsetY = PADDING_TOP;
     const minOffsetY = Math.min(0, height - contentHeight - PADDING_TOP * 2);
     offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, offsetY));
@@ -400,6 +390,15 @@ export class FlameGraphCanvas extends HTMLElement {
     const layouts = calculateSpanLayouts(spanBuffer, count);
     this.spanLayouts = layouts.adjustedDepths;
     this.spanLayoutsCount = layouts.count;
+
+    // Cache max adjusted depth once for scroll limits
+    let maxDepth = 0;
+    for (let i = 0; i < count; i++) {
+      if (layouts.adjustedDepths[i] > maxDepth) {
+        maxDepth = layouts.adjustedDepths[i];
+      }
+    }
+    this.maxAdjustedDepth = maxDepth;
 
     drawScheduler.schedule(() => {
       const { width, height } = selectors.canvasLayout(

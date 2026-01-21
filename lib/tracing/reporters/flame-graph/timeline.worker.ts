@@ -73,7 +73,7 @@ function draw(msg: DrawMessage): void {
   );
 
   // Setup drawing context
-  ctx.font = theme.family.default;
+  ctx.font = `${theme.size.default}px ${theme.family.default}`;
   ctx.textAlign = "center";
 
   // Relative time to X coordinate conversion (with padding offset)

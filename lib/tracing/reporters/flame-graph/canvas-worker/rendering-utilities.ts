@@ -2,6 +2,8 @@
  * Low-level canvas rendering utilities
  */
 
+import { CODE_TO_COLOR, type SpanBufferViews } from "../SpanBuffer";
+
 /**
  * Lighten a hex color by a given amount (0-1)
  */

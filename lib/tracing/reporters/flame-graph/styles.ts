@@ -105,8 +105,8 @@ export const theme = (() => {
 
   /** Span text colors (for labels on colored backgrounds) */
   const spanText = {
-    label: OklchColor("oklch(1 0 0 / 0.95)"), // Primary label
-    duration: OklchColor("oklch(1 0 0 / 0.6)"), // Secondary duration
+    label: OklchColor("oklch(1 0 0)"), // Primary label
+    duration: OklchColor("oklch(1 0 0)"), // Secondary duration
   } as const satisfies Readonly<Record<string, OklchColor>>;
 
   /** Shadow colors */

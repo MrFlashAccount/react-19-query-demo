@@ -97,28 +97,39 @@ function handleDraw(msg: DrawMessage): void {
     (duration / totalDuration) * width * zoom;
 
   // Calculate visible ranges for virtualization (use effective offset to match drawing)
+  // Overscan: 10px for connections (parentConnectX = childX - 10)
   const timePerPx = totalDuration / (width * zoom);
-  const overscanTime = timePerPx * 20;
+  const overscanPx = 10;
+  const overscanTime = timePerPx * overscanPx;
   const visibleTimeStart =
     minTime + (0 - effectiveOffsetX) * timePerPx - overscanTime;
   const visibleTimeEnd =
     minTime + (width - effectiveOffsetX) * timePerPx + overscanTime;
 
+  const depthOverscan = 1; // 1 row for connections from parent above
   const visibleDepthStart = Math.max(
     0,
-    Math.floor((-offsetY - PADDING_TOP) / (ROW_HEIGHT + ROW_GAP))
+    Math.floor((-offsetY - PADDING_TOP) / (ROW_HEIGHT + ROW_GAP)) -
+      depthOverscan
   );
-  const visibleDepthEnd = Math.ceil(
-    (height - offsetY) / (ROW_HEIGHT + ROW_GAP)
-  );
+  const visibleDepthEnd =
+    Math.ceil((height - offsetY) / (ROW_HEIGHT + ROW_GAP)) + depthOverscan;
 
   const currentTime = timeRange.maxTime;
 
-  // Draw connection lines (behind spans)
+  // Query visible spans (includes overscan for connection rendering)
+  const visibleSpans = spansIndex.queryVisible(
+    visibleTimeStart,
+    visibleTimeEnd,
+    visibleDepthStart,
+    visibleDepthEnd
+  );
+
+  // Draw connection lines (behind spans) - only for visible spans
   if (connectionRenderer) {
     connectionRenderer.draw(
       spanViews,
-      spanCount,
+      visibleSpans,
       laneCalculator.getAdjustedDepths(),
       laneCalculator.getParentIndices(),
       timeToX,
@@ -126,18 +137,9 @@ function handleDraw(msg: DrawMessage): void {
       effectiveOffsetY,
       width,
       height,
-      selectedSpanId,
-      currentTime
+      selectedSpanId
     );
   }
-
-  // Query and draw visible spans
-  const visibleSpans = spansIndex.queryVisible(
-    visibleTimeStart,
-    visibleTimeEnd,
-    visibleDepthStart,
-    visibleDepthEnd
-  );
 
   for (const index of visibleSpans) {
     const adjustedDepth = laneCalculator.getAdjustedDepth(index);

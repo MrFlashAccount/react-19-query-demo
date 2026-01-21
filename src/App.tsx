@@ -16,9 +16,9 @@ const LazyLagRadar = lazy(() =>
 );
 
 const STRESS_DEPTH = 6;
-const STRESS_BREADTH = 5;
+const STRESS_BREADTH = 3;
 const STRESS_BRANCHES = 1;
-const STRESS_TASKS = 5;
+const STRESS_TASKS = 25;
 
 // Total invocations: branches * (breadth^(depth+1) - 1) / (breadth - 1) + 2 (root + tail) * STRESS_TASKS
 const TOTAL_INVOCATIONS =
