@@ -30,7 +30,10 @@ declare global {
 }
 
 const STYLES = css`
-  ${HOST_STYLES}
+  ${HOST_STYLES({ contain: false })}
+  :host {
+    color-scheme: dark;
+  }
 
   flame-graph-resize-handle {
     position: absolute;
@@ -155,8 +158,6 @@ export class FlameGraphDialog extends HTMLElement {
     this.render();
     this.setupEventListeners();
     this.subscribeToState();
-    this.style.all = "unset";
-    this.style.colorScheme = "dark";
   }
 
   disconnectedCallback() {

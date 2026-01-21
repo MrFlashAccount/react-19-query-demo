@@ -1,4 +1,9 @@
-import type { SpanStartEvent, SpanEndEvent, TraceEvent } from "../types";
+import type {
+  SpanStartEvent,
+  SpanEndEvent,
+  TraceEvent,
+  SpanId,
+} from "../types";
 import { BaseReporter } from "./BaseReporter";
 import type { FlameGraphReporterOptions } from "./flame-graph/types";
 import type { SpanBufferViews } from "./flame-graph/SpanBuffer";
@@ -13,7 +18,7 @@ import "./flame-graph/FlameGraphDialog";
  * Extends BaseReporter for consistent lifecycle and event handling.
  */
 export class FlameGraphReporter extends BaseReporter {
-  private depthMap = new Map<string, number>();
+  private depthMap = new Map<SpanId, number>();
 
   private container: FlameGraphReporterElement | null = null;
 
@@ -55,7 +60,7 @@ export class FlameGraphReporter extends BaseReporter {
 
     if (!mountTarget) {
       console.warn(
-        `[FlameGraphReporter] Container not found: ${containerOption}. Falling back to floating mode.`
+        `[FlameGraphReporter] Container not found: ${containerOption}. Falling back to document body.`
       );
       mountTarget = document.body;
     }

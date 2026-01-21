@@ -43,7 +43,7 @@ export type Serializable =
   | Serializable[];
 
 export type ISpanPayload = Serializable;
-export const SpanId = brand<`${string}-${string}`, "SpanId">();
+export const SpanId = brand<bigint, "SpanId">();
 export type SpanId = typeof SpanId.type;
 
 /**

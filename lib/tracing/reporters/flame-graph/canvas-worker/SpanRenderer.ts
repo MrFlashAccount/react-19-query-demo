@@ -14,13 +14,14 @@ import {
   SPAN_RADIUS,
   SPAN_PADDING_X,
   SPAN_PADDING_X_STICKY,
+  MIN_SPAN_TEXT_VISIBLE_WIDTH,
 } from "./constants";
 import {
   lightenColor,
   formatTime,
   roundRectAsymmetric,
   truncateText,
-} from "./rendering";
+} from "./rendering-utilities";
 
 export class SpanRenderer {
   private static readonly MARGIN_PX = 2;
@@ -53,7 +54,7 @@ export class SpanRenderer {
     const y = adjustedDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
     const duration = isRunning
       ? currentTime - views.startTime[index]
-      : views.duration[index];
+      : views.endTime[index] - views.startTime[index];
     const rawW = Math.max(durationToWidth(duration), MIN_SPAN_WIDTH);
     const h = ROW_HEIGHT;
 
@@ -127,7 +128,7 @@ export class SpanRenderer {
     // Draw text
     const rightLabel = isRunning
       ? "⏳ In progress"
-      : formatTime(views.duration[index]);
+      : formatTime(views.endTime[index] - views.startTime[index]);
     const minRightSpace = isRunning ? 80 : 50;
     this.drawSpanText(
       views,
@@ -192,13 +193,25 @@ export class SpanRenderer {
     const visibleRight = Math.min(rawX + rawW, viewportWidth);
     const visibleWidth = visibleRight - visibleLeft;
 
-    if (visibleWidth <= 30) return;
+    // Skip text for small spans (width < 50px)
+    if (visibleWidth < MIN_SPAN_TEXT_VISIBLE_WIDTH) return;
 
     const isLeftSticky = rawX < PADDING_LEFT;
     const isRightSticky = rawX + rawW > viewportWidth;
     // Use same padding on both sides when either is sticky for visual consistency
     const padding =
       isLeftSticky || isRightSticky ? SPAN_PADDING_X_STICKY : SPAN_PADDING_X;
+
+    const availableTextWidth = visibleWidth - padding * 2;
+
+    this.ctx.font = `${theme.size.default}px ${theme.family.default}`;
+
+    // Skip if less than 3 characters of name would fit
+    const name = readSpanName(views, index);
+    if (name.length >= 3) {
+      const minTextWidth = this.ctx.measureText(name.slice(0, 3) + "…").width;
+      if (availableTextWidth < minTextWidth) return;
+    }
 
     this.ctx.textBaseline = "middle";
     const centerY = y + h / 2;
@@ -210,9 +223,7 @@ export class SpanRenderer {
 
     const labelLeft = visibleLeft + padding;
     const rightTextX = visibleRight - padding;
-    const availableTextWidth = visibleWidth - padding * 2;
 
-    this.ctx.font = `${theme.size.default}px ${theme.family.default}`;
     const rightTextWidth = this.ctx.measureText(rightLabel).width;
 
     const showRight = availableTextWidth > minRightSpace + 20;
@@ -223,11 +234,7 @@ export class SpanRenderer {
     if (labelMaxWidth > 10) {
       this.ctx.fillStyle = theme.spanText.label;
       this.ctx.textAlign = "left";
-      const label = truncateText(
-        this.ctx,
-        readSpanName(views, index),
-        labelMaxWidth
-      );
+      const label = truncateText(this.ctx, name, labelMaxWidth);
       this.ctx.fillText(label, labelLeft, centerY);
     }
 

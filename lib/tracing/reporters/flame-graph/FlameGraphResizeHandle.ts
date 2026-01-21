@@ -2,7 +2,7 @@ import { HOST_STYLES, theme } from "./styles";
 import { css, html } from "./utilities";
 
 const STYLES = css`
-  ${HOST_STYLES}
+  ${HOST_STYLES()}
 
   :host {
     display: block;

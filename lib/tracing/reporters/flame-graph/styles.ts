@@ -1,6 +1,7 @@
 import { brand } from "lib/brand";
 import type { Color } from "../../types";
 import { css } from "./utilities";
+import type { CSSProperties } from "react";
 
 const OklchColor = brand<
   | `oklch(${number} ${number} ${number})`
@@ -259,15 +260,6 @@ export const RESIZE_HANDLE_STYLES = css`
 // UTILITY FUNCTIONS
 // =============================================================================
 
-/** Lighten a hex color */
-export function lightenColor(hex: string, percent: number): string {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const r = Math.min(255, Math.floor((num >> 16) + 255 * percent));
-  const g = Math.min(255, Math.floor(((num >> 8) & 0x00ff) + 255 * percent));
-  const b = Math.min(255, Math.floor((num & 0x0000ff) + 255 * percent));
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-}
-
 /** Format time in human-readable format */
 export function formatTime(ms: number): string {
   if (ms < 1) return `${(ms * 1000).toFixed(0)}µs`;
@@ -317,10 +309,14 @@ export const RESET_CASCADE = css`
   }
 `;
 
-export const HOST_STYLES = css`
+export const HOST_STYLES = ({
+  contain = "content",
+}: {
+  contain?: CSSProperties["contain"] | false;
+} = {}) => css`
   :host {
-      ${RESET_CASCADE}
-      ${TYPOGRAPHY_STYLES()}
+    ${RESET_CASCADE}
+    ${TYPOGRAPHY_STYLES()}
+    ${contain !== false && `contain: ${contain};`}
   }
 `;
-  

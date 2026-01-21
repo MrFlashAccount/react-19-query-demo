@@ -6,8 +6,8 @@ export interface FlameGraphSpan {
   name: string;
   startTime: number;
   endTime: number;
-  duration: number;
   depth: number;
+  duration: number;
   status: SpanState;
   color: Color;
   payload?: Record<string, unknown>;
@@ -94,7 +94,7 @@ export interface LayoutConfig {
 /** Constant heights for layout calculation */
 export const LAYOUT_CONSTANTS = {
   HEADER_HEIGHT: 36,
-  TIMELINE_HEIGHT: 28,
+  TIMELINE_HEADER_HEIGHT: 28, // Fixed header part of timeline (ticks/labels)
   STATUS_BAR_HEIGHT: 32,
   MIN_CANVAS_HEIGHT: 100,
   MIN_CANVAS_WIDTH: 200,
@@ -115,3 +115,15 @@ export type FlameGraphEvent =
   | { type: "clear" }
   | { type: "close" }
   | { type: "span-select"; spanIndex: number | null };
+
+export const MIN_VISIBLE_DURATION_MS = 1;
+/**
+ * Maximum zoom level that is still considered safe to render
+ * and keep the numbers within SMI
+ */
+export const MAX_SAFE_ZOOM = 500_000;
+
+/** Canvas padding and pan margin constants */
+export const CANVAS_PADDING_LEFT = 12;
+export const CANVAS_PADDING_RIGHT = 12;
+export const CANVAS_PAN_MARGIN_PX = 20;

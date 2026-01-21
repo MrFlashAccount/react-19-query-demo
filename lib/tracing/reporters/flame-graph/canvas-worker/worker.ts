@@ -8,14 +8,10 @@
  * - Depth filtering: skips spans outside visible vertical range
  */
 
-import { theme } from "../styles";
-import {
-  generateNiceTicks,
-  MIN_TICK_SPACING,
-  PADDING_LEFT,
-} from "../utilities";
+import { PADDING_LEFT } from "../utilities";
 import { LaneCalculator } from "../LaneCalculator";
 import { SpanRenderer } from "./SpanRenderer";
+import { ConnectionRenderer } from "./ConnectionRenderer";
 import { SpansIndex } from "./SpansIndex";
 import { ROW_HEIGHT, ROW_GAP, PADDING_TOP } from "./constants";
 import type {
@@ -26,7 +22,7 @@ import type {
 } from "./types";
 import {
   attachSpanBuffer,
-  getSpanCount,
+  getSpansCount,
   type SpanBufferViews,
 } from "../SpanBuffer";
 
@@ -34,6 +30,7 @@ import {
 let canvas: OffscreenCanvas | null = null;
 let ctx: OffscreenCanvasRenderingContext2D | null = null;
 let spanRenderer: SpanRenderer | null = null;
+let connectionRenderer: ConnectionRenderer | null = null;
 const spansIndex = new SpansIndex();
 const laneCalculator = new LaneCalculator();
 let spanViews: SpanBufferViews | null = null;
@@ -45,6 +42,7 @@ function handleInit(msg: InitMessage): void {
   spanRenderer = ctx
     ? new SpanRenderer(ctx, msg.colorPalette, msg.selectedBorderColor)
     : null;
+  connectionRenderer = ctx ? new ConnectionRenderer(ctx) : null;
   spanViews = attachSpanBuffer(msg.spanBuffer.sab, msg.spanBuffer.stringSab);
   lastVersion = -1;
 }
@@ -70,7 +68,7 @@ function handleDraw(msg: DrawMessage): void {
 
   const { width, height, dpr, selectedSpanId, timeRange, viewState } = msg;
   if (!spanViews) return;
-  const spanCount = getSpanCount(spanViews);
+  const spanCount = getSpansCount(spanViews);
 
   if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
     canvas.width = width * dpr;
@@ -114,30 +112,23 @@ function handleDraw(msg: DrawMessage): void {
     (height - offsetY) / (ROW_HEIGHT + ROW_GAP)
   );
 
-  // Draw vertical grid lines
-  const targetTickCount = Math.max(2, Math.floor(width / MIN_TICK_SPACING));
-  const visibleDuration = Math.max(0, visibleTimeEnd - visibleTimeStart);
-  const relativeStart = visibleTimeStart - minTime;
-  const relativeEnd = visibleTimeEnd - minTime;
-  const ticks = generateNiceTicks(
-    Math.max(0, relativeStart),
-    relativeEnd,
-    targetTickCount
-  );
+  const currentTime = timeRange.maxTime;
 
-  const relativeTimeToX = (relativeTime: number) =>
-    ((relativeTime - relativeStart) / visibleDuration) * width + PADDING_LEFT;
-
-  ctx.strokeStyle = theme.timeline.gridLine;
-  ctx.lineWidth = 1;
-
-  for (const tick of ticks) {
-    const x = Math.round(relativeTimeToX(tick)) + 0.5;
-    if (x < PADDING_LEFT || x > width) continue;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, height);
-    ctx.stroke();
+  // Draw connection lines (behind spans)
+  if (connectionRenderer) {
+    connectionRenderer.draw(
+      spanViews,
+      spanCount,
+      laneCalculator.getAdjustedDepths(),
+      laneCalculator.getParentIndices(),
+      timeToX,
+      durationToWidth,
+      effectiveOffsetY,
+      width,
+      height,
+      selectedSpanId,
+      currentTime
+    );
   }
 
   // Query and draw visible spans
@@ -147,8 +138,6 @@ function handleDraw(msg: DrawMessage): void {
     visibleDepthStart,
     visibleDepthEnd
   );
-
-  const currentTime = timeRange.maxTime;
 
   for (const index of visibleSpans) {
     const adjustedDepth = laneCalculator.getAdjustedDepth(index);

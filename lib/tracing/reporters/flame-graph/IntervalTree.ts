@@ -4,7 +4,7 @@
  */
 
 import type { SpanBufferViews } from "./SpanBuffer";
-import { getSpanCount } from "./SpanBuffer";
+import { getSpansCount } from "./SpanBuffer";
 
 interface Interval {
   start: number;
@@ -25,12 +25,11 @@ export class IntervalTree {
   build(
     views: SpanBufferViews,
     maxTime: number,
-    count: number = getSpanCount(views)
+    count: number = getSpansCount(views)
   ): void {
     this.intervals = [];
     for (let i = 0; i < count; i++) {
-      const end =
-        views.status[i] === 1 ? maxTime : views.endTime[i];
+      const end = views.status[i] === 1 ? maxTime : views.endTime[i];
       this.intervals.push({
         start: views.startTime[i],
         end,
@@ -45,12 +44,11 @@ export class IntervalTree {
     views: SpanBufferViews,
     maxTime: number,
     depthProvider: DepthProvider,
-    count: number = getSpanCount(views)
+    count: number = getSpansCount(views)
   ): void {
     this.intervals = [];
     for (let i = 0; i < count; i++) {
-      const end =
-        views.status[i] === 1 ? maxTime : views.endTime[i];
+      const end = views.status[i] === 1 ? maxTime : views.endTime[i];
       this.intervals.push({
         start: views.startTime[i],
         end,

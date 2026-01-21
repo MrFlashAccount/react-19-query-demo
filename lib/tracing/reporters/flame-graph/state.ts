@@ -9,7 +9,14 @@ import type {
   Position,
   HandlePosition,
 } from "./types";
-import { LAYOUT_CONSTANTS } from "./types";
+import {
+  LAYOUT_CONSTANTS,
+  MIN_VISIBLE_DURATION_MS,
+  MAX_SAFE_ZOOM,
+  CANVAS_PADDING_LEFT,
+  CANVAS_PADDING_RIGHT,
+  CANVAS_PAN_MARGIN_PX,
+} from "./types";
 import { clamp } from "./utilities";
 import { createStore, type StoreApi } from "./store";
 import {
@@ -22,7 +29,10 @@ import {
   bumpSpanVersion,
   cloneSpanBuffer,
   createSpanBuffer,
-  getSpanCount,
+  encoder,
+  encodeName,
+  getSpansCount,
+  readDuration,
   readSpanId,
   readSpanName,
   writeSpanId,
@@ -52,7 +62,7 @@ export interface FlameGraphViewState {
 
 export interface FlameGraphState extends Record<string, unknown> {
   spanBuffer: SpanBufferViews;
-  spanCount: number;
+  spansCount: number;
   spanVersion: number;
   selectedSpanIndex: number | null;
   viewState: FlameGraphViewState;
@@ -77,19 +87,26 @@ let spanViews = createSpanBuffer(
   DEFAULT_STRING_CAPACITY
 );
 let stringOffset = 0;
-const spanIdToIndex = new Map<SpanId, number>();
+let startingSpanId: SpanId | null = null;
 const payloadByIndex = new Map<number, Record<string, unknown>>();
+
+/** Convert spanId to buffer index using sequential ID scheme */
+function spanIdToIndex(spanId: SpanId): number | undefined {
+  if (startingSpanId === null) return undefined;
+  const index = Number(spanId - startingSpanId);
+  return index >= 0 && index < getSpansCount(spanViews) ? index : undefined;
+}
 
 function resetSpanStorage(): SpanBufferViews {
   spanViews = createSpanBuffer(DEFAULT_SPAN_CAPACITY, DEFAULT_STRING_CAPACITY);
   stringOffset = 0;
-  spanIdToIndex.clear();
+  startingSpanId = null;
   payloadByIndex.clear();
   return spanViews;
 }
 
 function ensureSpanCapacity(nameByteLength: number): void {
-  const count = getSpanCount(spanViews);
+  const count = getSpansCount(spanViews);
   const needsCapacity = count >= spanViews.capacity;
   const needsStrings =
     stringOffset + nameByteLength > spanViews.stringBytes.length;
@@ -104,25 +121,26 @@ function ensureSpanCapacity(nameByteLength: number): void {
 }
 
 function appendSpan(span: FlameGraphSpan): number {
-  const nameBytes = new TextEncoder().encode(span.name);
-  ensureSpanCapacity(nameBytes.length);
-  const index = getSpanCount(spanViews);
+  const nameByteLength = encoder.encode(span.name).length;
+  ensureSpanCapacity(nameByteLength);
+  const index = getSpansCount(spanViews);
+
+  // Track starting spanId for index calculation
+  if (startingSpanId === null) {
+    startingSpanId = span.spanId;
+  }
+
   spanViews.startTime[index] = span.startTime;
   spanViews.endTime[index] = span.endTime;
-  spanViews.duration[index] = span.duration;
   spanViews.depth[index] = span.depth;
   spanViews.status[index] = STATUS_TO_CODE[span.status];
   spanViews.color[index] = span.color ? COLOR_TO_CODE[span.color] : 0;
   spanViews.parentIndex[index] =
-    span.parentSpanId != null ? spanIdToIndex.get(span.parentSpanId) ?? -1 : -1;
+    span.parentSpanId != null ? spanIdToIndex(span.parentSpanId) ?? -1 : -1;
   writeSpanId(spanViews, index, span.spanId);
-  spanViews.stringBytes.set(nameBytes, stringOffset);
-  spanViews.nameOff[index] = stringOffset;
-  spanViews.nameLen[index] = nameBytes.length;
-  stringOffset += nameBytes.length;
+  stringOffset = encodeName(spanViews, index, span.name, stringOffset);
   Atomics.store(spanViews.count, 0, index + 1);
   bumpSpanVersion(spanViews);
-  spanIdToIndex.set(span.spanId, index);
   if (span.payload) {
     payloadByIndex.set(index, span.payload);
   }
@@ -134,17 +152,16 @@ function updateSpanEnd(
   endTime: number,
   status: SpanState
 ): void {
-  const index = spanIdToIndex.get(spanId);
+  const index = spanIdToIndex(spanId);
   if (index === undefined) return;
   spanViews.endTime[index] = endTime;
-  spanViews.duration[index] = endTime - spanViews.startTime[index];
   spanViews.status[index] = STATUS_TO_CODE[status];
   bumpSpanVersion(spanViews);
 }
 
 function getSpanView(index: number | null): FlameGraphSpan | null {
   if (index == null || index < 0) return null;
-  const count = getSpanCount(spanViews);
+  const count = getSpansCount(spanViews);
   if (index >= count) return null;
   const statusCode = spanViews.status[index] as keyof typeof CODE_TO_STATUS;
   const colorCode = spanViews.color[index] as keyof typeof CODE_TO_COLOR;
@@ -157,7 +174,7 @@ function getSpanView(index: number | null): FlameGraphSpan | null {
     name: readSpanName(spanViews, index),
     startTime: spanViews.startTime[index],
     endTime: spanViews.endTime[index],
-    duration: spanViews.duration[index],
+    duration: readDuration(spanViews, index),
     depth: spanViews.depth[index],
     status: CODE_TO_STATUS[statusCode],
     color: CODE_TO_COLOR[colorCode],
@@ -166,17 +183,12 @@ function getSpanView(index: number | null): FlameGraphSpan | null {
 }
 
 function getInitialState(): FlameGraphState {
-  const containerWidth = 1000;
-  const containerHeight = 1000;
-  const layout = calculateLayout(
-    containerWidth,
-    containerHeight,
-    DEFAULT_LAYOUT_CONFIG
-  );
+  const layout = calculateLayout(DEFAULT_LAYOUT_CONFIG);
   return {
     spanBuffer: spanViews,
-    spanCount: getSpanCount(spanViews),
+    spansCount: getSpansCount(spanViews),
     spanVersion: Atomics.load(spanViews.version, 0),
+    totalSpansRecorded: 0,
     selectedSpanIndex: null,
     viewState: {
       offsetX: 0,
@@ -207,11 +219,7 @@ function getInitialState(): FlameGraphState {
  * Single source of truth for all sizing and positioning.
  * Returns exact px values and CSS Grid configuration.
  */
-export function calculateLayout(
-  containerWidth: number,
-  containerHeight: number,
-  config: LayoutConfig
-): LayoutResult {
+export function calculateLayout(config: LayoutConfig): LayoutResult {
   const {
     dialogPosition,
     detailsPosition,
@@ -224,7 +232,7 @@ export function calculateLayout(
 
   const {
     HEADER_HEIGHT,
-    TIMELINE_HEIGHT,
+    TIMELINE_HEADER_HEIGHT,
     STATUS_BAR_HEIGHT,
     MIN_CANVAS_WIDTH,
     MIN_CANVAS_HEIGHT,
@@ -234,14 +242,10 @@ export function calculateLayout(
     MIN_DETAILS_HEIGHT,
   } = LAYOUT_CONSTANTS;
 
-  const windowWidth = document.body.clientWidth;
-  const windowHeight = document.body.clientWidth;
-  const maxDialogWidth = Math.trunc(
-    Math.min(windowWidth * 0.9, containerWidth)
-  );
-  const maxDialogHeight = Math.trunc(
-    Math.min(windowHeight * 0.9, containerHeight)
-  );
+  const windowWidth = document.documentElement.clientWidth;
+  const windowHeight = document.documentElement.clientHeight;
+  const maxDialogWidth = Math.trunc(windowWidth * 0.9);
+  const maxDialogHeight = Math.trunc(windowHeight * 0.9);
 
   // Calculate dialog dimensions and CSS position based on dialogPosition
   let dialogW: number;
@@ -269,11 +273,11 @@ export function calculateLayout(
 
   // Fixed heights
   const headerH = HEADER_HEIGHT;
-  const timelineH = TIMELINE_HEIGHT;
   const statusBarH = STATUS_BAR_HEIGHT;
 
-  // Content area height (between timeline and status bar)
-  const contentH = dialogH - headerH - timelineH - statusBarH;
+  // Content area height (between timeline header and status bar)
+  const timelineHeaderH = TIMELINE_HEADER_HEIGHT;
+  const contentH = dialogH - headerH - timelineHeaderH - statusBarH;
 
   // Calculate canvas and details dimensions based on detailsPosition
   let canvasW: number;
@@ -292,45 +296,45 @@ export function calculateLayout(
     grid = {
       templateAreas: `'header' 'timeline' 'canvas' 'statusbar'`,
       templateColumns: [dialogW],
-      templateRows: [headerH, timelineH, canvasH, statusBarH],
+      templateRows: [headerH, timelineHeaderH, canvasH, statusBarH],
     };
   } else {
     // Details visible - layout depends on detailsPosition
     const effectiveDetailsW = Math.max(
       MIN_DETAILS_WIDTH,
-      Math.min(detailsWidth, dialogW * 0.5)
+      Math.min(detailsWidth, dialogW * 0.75)
     );
     const effectiveDetailsH = Math.max(
       MIN_DETAILS_HEIGHT,
-      Math.min(detailsHeight, contentH * 0.5)
+      Math.min(detailsHeight, contentH * 0.75)
     );
 
     switch (detailsPosition) {
       case "left":
         // Details on left spans timeline+canvas rows, timeline above canvas on right
         detailsW = effectiveDetailsW;
-        detailsH = contentH + timelineH;
+        detailsH = contentH + timelineHeaderH;
         canvasW = Math.max(MIN_CANVAS_WIDTH, dialogW - detailsW);
         canvasH = contentH;
 
         grid = {
           templateAreas: `'header header' 'details timeline' 'details canvas' 'statusbar statusbar'`,
           templateColumns: [detailsW, canvasW],
-          templateRows: [headerH, timelineH, canvasH, statusBarH],
+          templateRows: [headerH, timelineHeaderH, canvasH, statusBarH],
         };
         break;
 
       case "right":
         // Details on right spans timeline+canvas rows, timeline above canvas on left
         detailsW = effectiveDetailsW;
-        detailsH = contentH + timelineH;
+        detailsH = contentH + timelineHeaderH;
         canvasW = Math.max(MIN_CANVAS_WIDTH, dialogW - detailsW);
         canvasH = contentH;
 
         grid = {
           templateAreas: `'header header' 'timeline details' 'canvas details' 'statusbar statusbar'`,
           templateColumns: [canvasW, detailsW],
-          templateRows: [headerH, timelineH, canvasH, statusBarH],
+          templateRows: [headerH, timelineHeaderH, canvasH, statusBarH],
         };
         break;
 
@@ -344,7 +348,13 @@ export function calculateLayout(
         grid = {
           templateAreas: `'header' 'timeline' 'canvas' 'details' 'statusbar'`,
           templateColumns: [dialogW],
-          templateRows: [headerH, timelineH, canvasH, detailsH, statusBarH],
+          templateRows: [
+            headerH,
+            timelineHeaderH,
+            canvasH,
+            detailsH,
+            statusBarH,
+          ],
         };
         break;
     }
@@ -353,7 +363,7 @@ export function calculateLayout(
   // Calculate top positions (vertical stacking within dialog)
   const headerTop = 0;
   const timelineTop = headerTop + headerH;
-  const contentTop = timelineTop + timelineH;
+  const contentTop = timelineTop + timelineHeaderH;
   const statusBarTop = dialogH - statusBarH;
 
   // Calculate canvas, timeline, and details left/top based on position
@@ -363,6 +373,8 @@ export function calculateLayout(
   let detailsTop = contentTop;
   let timelineLeft = 0;
   let timelineW = dialogW;
+  // Timeline height spans header + canvas for grid line rendering
+  let timelineFullH = timelineHeaderH + canvasH;
 
   if (detailsVisible) {
     switch (detailsPosition) {
@@ -411,7 +423,7 @@ export function calculateLayout(
       left: timelineLeft,
       top: timelineTop,
       width: timelineW,
-      height: timelineH,
+      height: timelineFullH, // Full height: header + canvas for grid lines
     },
     canvas: {
       left: canvasLeft,
@@ -437,15 +449,16 @@ export function calculateLayout(
 
 export const selectors = {
   spanBuffer: (s: FlameGraphState) => s.spanBuffer,
-  spanCount: (s: FlameGraphState) => s.spanCount,
+  spansCount: (s: FlameGraphState) => s.spansCount,
   spanVersion: (s: FlameGraphState) => s.spanVersion,
-  hasSpans: (s: FlameGraphState) => s.spanCount > 0,
+  totalSpansRecorded: (s: FlameGraphState) => s.totalSpansRecorded,
+  hasSpans: (s: FlameGraphState) => s.spansCount > 0,
   selectedSpanIndex: (s: FlameGraphState) => s.selectedSpanIndex,
   selectedSpan: (s: FlameGraphState) => getSpanView(s.selectedSpanIndex),
   timeRange: (s: FlameGraphState): TimeRange => {
-    const { spanBuffer, spanCount } = s;
+    const { spanBuffer, spansCount } = s;
 
-    if (spanCount === 0) {
+    if (spansCount === 0) {
       return { minTime: 0, maxTime: 0 };
     }
 
@@ -453,7 +466,7 @@ export const selectors = {
     let maxTime = -Infinity;
     let hasRunningSpans = false;
 
-    for (let i = 0; i < spanCount; i++) {
+    for (let i = 0; i < spansCount; i++) {
       minTime = Math.min(minTime, spanBuffer.startTime[i]);
 
       if (hasRunningSpans) {
@@ -468,6 +481,16 @@ export const selectors = {
     }
 
     return { minTime, maxTime };
+  },
+  totalDuration: (s: FlameGraphState) => {
+    const { minTime, maxTime } = selectors.timeRange(s);
+    return maxTime - minTime;
+  },
+  maxZoom: (s: FlameGraphState) => {
+    const duration = selectors.totalDuration(s);
+    return duration > 0
+      ? Math.min(duration / MIN_VISIBLE_DURATION_MS, MAX_SAFE_ZOOM)
+      : MAX_SAFE_ZOOM;
   },
   viewState: (s: FlameGraphState) => s.viewState,
   isRecording: (s: FlameGraphState) => s.isRecording,
@@ -485,7 +508,7 @@ export const selectors = {
   }),
   zoomPercent: (s: FlameGraphState) => Math.round(s.viewState.zoom * 100),
   maxDepth: (s: FlameGraphState) => {
-    const count = s.spanCount;
+    const count = s.spansCount;
     if (count === 0) return 0;
     const buffer = s.spanBuffer;
     let max = 0;
@@ -530,28 +553,28 @@ export const selectors = {
 } as const;
 
 function createActions(store: StoreApi<FlameGraphState>) {
-  const { getState, setState } = store;
+  const { getState, setState, batch } = store;
 
   return {
     // Spans
     addSpan(span: FlameGraphSpan) {
       appendSpan(span);
-      setState({
+      setState((s) => ({
         spanBuffer: spanViews,
-        spanCount: getSpanCount(spanViews),
+        spansCount: s.spansCount + 1,
         spanVersion: Atomics.load(spanViews.version, 0),
-      });
+      }));
     },
 
     /** Start a span (adds with status: "running") */
     startSpan(span: FlameGraphSpan) {
-      if (spanIdToIndex.has(span.spanId)) return;
+      if (spanIdToIndex(span.spanId) !== undefined) return;
       appendSpan({ ...span, status: "running" });
-      setState({
+      setState((s) => ({
         spanBuffer: spanViews,
-        spanCount: getSpanCount(spanViews),
+        spansCount: s.spansCount + 1,
         spanVersion: Atomics.load(spanViews.version, 0),
-      });
+      }));
     },
 
     /** End a running span (updates status and duration) */
@@ -565,7 +588,7 @@ function createActions(store: StoreApi<FlameGraphState>) {
     /** Remove a span by ID */
     removeSpan(spanId: SpanId) {
       // Append-only storage: span removal is not supported.
-      if (spanIdToIndex.has(spanId)) {
+      if (spanIdToIndex(spanId) !== undefined) {
         setState({
           spanVersion: Atomics.load(spanViews.version, 0),
         });
@@ -590,6 +613,61 @@ function createActions(store: StoreApi<FlameGraphState>) {
       setState((s) => ({
         viewState: { ...s.viewState, ...viewState },
       }));
+    },
+
+    /**
+     * Apply zoom centered on a focus point.
+     * @param zoomFactor - Multiplier for zoom (>1 = zoom in, <1 = zoom out)
+     * @param focusX - X coordinate relative to content area (after padding)
+     * @returns true if zoom was applied, false if at limits
+     */
+    applyZoom(zoomFactor: number, focusX: number): boolean {
+      const state = getState();
+      const { width } = state.viewState.calculatedLayout.canvas;
+      const { viewState } = state;
+
+      const availableWidth = width - CANVAS_PADDING_LEFT - CANVAS_PADDING_RIGHT;
+      const minZoom = availableWidth / width;
+      const maxZoom = selectors.maxZoom(state);
+
+      // Calculate new zoom (clamped)
+      const newZoom = Math.max(
+        minZoom,
+        Math.min(maxZoom, viewState.zoom * zoomFactor)
+      );
+
+      // If zoom didn't change (at limits), skip update
+      if (Math.abs(newZoom - viewState.zoom) < 0.0001) {
+        return false;
+      }
+
+      // Calculate new offsetX to keep focus point stable
+      const scale = newZoom / viewState.zoom;
+      const newOffsetX = focusX - (focusX - viewState.offsetX) * scale;
+
+      // Clamp offsetX to pan bounds
+      const isAtMinZoom = Math.abs(newZoom - minZoom) < 0.001;
+      let clampedOffsetX: number;
+
+      if (isAtMinZoom) {
+        clampedOffsetX = 0;
+      } else {
+        const contentWidth = width * newZoom;
+        const maxOffsetX = CANVAS_PAN_MARGIN_PX;
+        const minOffsetX =
+          width - contentWidth - CANVAS_PAN_MARGIN_PX - CANVAS_PADDING_LEFT;
+        clampedOffsetX = Math.max(minOffsetX, Math.min(maxOffsetX, newOffsetX));
+      }
+
+      setState((s) => ({
+        viewState: {
+          ...s.viewState,
+          zoom: isAtMinZoom ? minZoom : newZoom,
+          offsetX: clampedOffsetX,
+        },
+      }));
+
+      return true;
     },
 
     setHeight(height: number) {
@@ -618,7 +696,10 @@ function createActions(store: StoreApi<FlameGraphState>) {
 
     // Dialog
     open() {
-      setState({ isOpen: true });
+      batch(() => {
+        this.recalculateLayout();
+        setState({ isOpen: true });
+      });
     },
 
     close() {
@@ -639,7 +720,7 @@ function createActions(store: StoreApi<FlameGraphState>) {
       resetSpanStorage();
       setState({
         spanBuffer: spanViews,
-        spanCount: getSpanCount(spanViews),
+        spansCount: 0,
         spanVersion: Atomics.load(spanViews.version, 0),
         selectedSpanIndex: null,
       });
@@ -656,49 +737,65 @@ function createActions(store: StoreApi<FlameGraphState>) {
 
     // Layout
     setDialogPosition(position: Position) {
-      setState((s) => ({
-        viewState: {
-          ...s.viewState,
-          layout: { ...s.viewState.layout, dialogPosition: position },
-        },
-      }));
-      this.recalculateLayout();
+      batch(() => {
+        setState((s) => ({
+          viewState: {
+            ...s.viewState,
+            layout: { ...s.viewState.layout, dialogPosition: position },
+          },
+        }));
+        this.recalculateLayout();
+      });
     },
 
     setDetailsPosition(position: Position) {
-      setState((s) => ({
-        viewState: {
-          ...s.viewState,
-          layout: { ...s.viewState.layout, detailsPosition: position },
-        },
-      }));
-      this.recalculateLayout();
+      batch(() => {
+        setState((s) => ({
+          viewState: {
+            ...s.viewState,
+            layout: { ...s.viewState.layout, detailsPosition: position },
+          },
+        }));
+        this.recalculateLayout();
+      });
     },
 
     resizeDialog(newWidth: number, newHeight: number) {
       const orientation = selectors.dialogPosition(getState());
+      const maxWidth = document.documentElement.clientWidth * 0.9;
+      const maxHeight = document.documentElement.clientHeight * 0.9;
       const nextLayout = () => {
         if (orientation === "left" || orientation === "right") {
           return {
-            dialogWidth: Math.max(LAYOUT_CONSTANTS.MIN_DIALOG_WIDTH, newWidth),
+            dialogWidth: clamp(
+              newWidth,
+              LAYOUT_CONSTANTS.MIN_DIALOG_WIDTH,
+              maxWidth
+            ),
           };
         }
         return {
-          dialogHeight: Math.max(LAYOUT_CONSTANTS.MIN_DIALOG_HEIGHT, newHeight),
+          dialogHeight: clamp(
+            newHeight,
+            LAYOUT_CONSTANTS.MIN_DIALOG_HEIGHT,
+            maxHeight
+          ),
         };
       };
 
-      setState((s) => ({
-        viewState: {
-          ...s.viewState,
-          layout: {
-            ...s.viewState.layout,
-            ...nextLayout(),
+      batch(() => {
+        setState((s) => ({
+          viewState: {
+            ...s.viewState,
+            layout: {
+              ...s.viewState.layout,
+              ...nextLayout(),
+            },
           },
-        },
-      }));
+        }));
 
-      this.recalculateLayout();
+        this.recalculateLayout();
+      });
     },
 
     resizeDetails(newWidth: number, newHeight: number) {
@@ -719,37 +816,35 @@ function createActions(store: StoreApi<FlameGraphState>) {
           ),
         };
       };
-      setState((s) => ({
-        viewState: {
-          ...s.viewState,
-          layout: {
-            ...s.viewState.layout,
-            ...nextLayout(),
+      batch(() => {
+        setState((s) => ({
+          viewState: {
+            ...s.viewState,
+            layout: {
+              ...s.viewState.layout,
+              ...nextLayout(),
+            },
           },
-        },
-      }));
-      this.recalculateLayout();
+        }));
+        this.recalculateLayout();
+      });
     },
 
     setDetailsVisible(visible: boolean) {
-      setState((s) => ({
-        viewState: {
-          ...s.viewState,
-          layout: { ...s.viewState.layout, detailsVisible: visible },
-        },
-      }));
-      this.recalculateLayout();
+      batch(() => {
+        setState((s) => ({
+          viewState: {
+            ...s.viewState,
+            layout: { ...s.viewState.layout, detailsVisible: visible },
+          },
+        }));
+        this.recalculateLayout();
+      });
     },
 
     recalculateLayout() {
       const layout = selectors.layout(getState());
-      const dialogWidth = selectors.dialogWidth(getState());
-      const dialogHeight = selectors.dialogHeight(getState());
-      const calculatedLayout = calculateLayout(
-        dialogWidth,
-        dialogHeight,
-        layout
-      );
+      const calculatedLayout = calculateLayout(layout);
       setState((s) => ({
         viewState: {
           ...s.viewState,

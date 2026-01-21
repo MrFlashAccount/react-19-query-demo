@@ -4,9 +4,14 @@ import {
   RESET_CASCADE,
   theme,
 } from "./styles";
-import type { ViewState } from "./types";
+import {
+  CANVAS_PADDING_LEFT,
+  CANVAS_PADDING_RIGHT,
+  CANVAS_PAN_MARGIN_PX,
+  type ViewState,
+} from "./types";
 import type { SpanBufferViews, SpanBufferDescriptor } from "./SpanBuffer";
-import { getSpanCount, readSpanId } from "./SpanBuffer";
+import { getSpansCount, readSpanId } from "./SpanBuffer";
 import { css, getElement, html } from "./utilities";
 import { CanvasWorkerClient } from "./canvas-worker";
 import { drawScheduler } from "./DrawScheduler";
@@ -18,11 +23,10 @@ const STYLES = css`
     ${RESET_CASCADE}
 
     display: block;
-    flex: 1;
-    position: relative;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     cursor: grab;
-    min-height: 0;
     contain: content;
   }
 
@@ -32,9 +36,9 @@ const STYLES = css`
 
   canvas {
     all: unset;
-    position: absolute;
-    top: 0;
-    left: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
   }
 
   .empty {
@@ -58,10 +62,12 @@ const STYLES = css`
 const ROW_HEIGHT = 28;
 const ROW_GAP = 3;
 const MIN_SPAN_WIDTH = 4;
-const PADDING_LEFT = 12;
-const PADDING_RIGHT = 12;
 const PADDING_TOP = 8;
-const PAN_MARGIN_PX = 20;
+
+// Aliases for imported constants
+const PADDING_LEFT = CANVAS_PADDING_LEFT;
+const PADDING_RIGHT = CANVAS_PADDING_RIGHT;
+const PAN_MARGIN_PX = CANVAS_PAN_MARGIN_PX;
 
 export class FlameGraphCanvas extends HTMLElement {
   public shadowRoot!: ShadowRoot;
@@ -151,11 +157,7 @@ export class FlameGraphCanvas extends HTMLElement {
       <style>
         ${STYLES}
       </style>
-      <canvas
-        width=${width * this.dpr}
-        height=${height * this.dpr}
-        style="width: ${width}px; height: ${height}px;"
-      ></canvas>
+      <canvas width=${width * this.dpr} height=${height * this.dpr}></canvas>
       <div class="empty">
         <div class="empty-icon">📈</div>
         <div>No spans recorded yet</div>
@@ -277,41 +279,13 @@ export class FlameGraphCanvas extends HTMLElement {
   private handleWheel = (e: WheelEvent) => {
     e.preventDefault();
 
-    const rect = selectors.layoutToDOMRect(
-      selectors.canvasLayout(flameGraphState.getState())
-    );
+    const state = flameGraphState.getState();
+    const rect = selectors.layoutToDOMRect(selectors.canvasLayout(state));
     const mouseX = e.clientX - rect.left;
-    const contentMouseX = mouseX - PADDING_LEFT;
-
+    const focusX = mouseX - PADDING_LEFT;
     const zoomFactor = e.deltaY > 0 ? 0.96 : 1.04;
-    const availableWidth = rect.width - PADDING_LEFT - PADDING_RIGHT;
-    const minZoom = availableWidth / rect.width;
-    const maxZoom = 500;
 
-    const { viewState } = flameGraphState.getState();
-
-    // Calculate new zoom (clamped)
-    const newZoom = Math.max(
-      minZoom,
-      Math.min(maxZoom, viewState.zoom * zoomFactor)
-    );
-
-    // If zoom didn't change (at limits), don't update offset
-    if (Math.abs(newZoom - viewState.zoom) < 0.0001) {
-      return;
-    }
-
-    const scale = newZoom / viewState.zoom;
-    const newOffsetX =
-      contentMouseX - (contentMouseX - viewState.offsetX) * scale;
-
-    const newViewState = this.clampViewState({
-      ...viewState,
-      offsetX: newOffsetX,
-      zoom: newZoom,
-    });
-
-    flameGraphState.setViewState(newViewState);
+    flameGraphState.applyZoom(zoomFactor, focusX);
   };
 
   private handleClick = (e: MouseEvent) => {
@@ -343,18 +317,17 @@ export class FlameGraphCanvas extends HTMLElement {
   };
 
   private clampViewState(state: ViewState): ViewState {
-    const { width, height } =
-      flameGraphState.getState().viewState.calculatedLayout.canvas;
-    const { spanBuffer, spanCount } = flameGraphState.getState();
-    const timeRange = selectors.timeRange(flameGraphState.getState());
-    const { minTime, maxTime } = timeRange;
-    const totalDuration = maxTime - minTime;
+    const globalState = flameGraphState.getState();
+    const { width, height } = globalState.viewState.calculatedLayout.canvas;
+    const { spanBuffer, spansCount } = globalState;
+    const totalDuration = selectors.totalDuration(globalState);
 
     if (totalDuration === 0 || width === 0) return state;
 
     const availableWidth = width - PADDING_LEFT - PADDING_RIGHT;
     const minZoom = availableWidth / width;
-    const zoom = Math.max(minZoom, Math.min(500, state.zoom));
+    const maxZoom = selectors.maxZoom(globalState);
+    const zoom = Math.max(minZoom, Math.min(maxZoom, state.zoom));
 
     const isAtMinZoom = Math.abs(zoom - minZoom) < 0.001;
 
@@ -372,7 +345,7 @@ export class FlameGraphCanvas extends HTMLElement {
 
     // Use max adjusted depth from span layouts for proper scroll limits
     let maxAdjustedDepth = 0;
-    for (let i = 0; i < spanCount; i++) {
+    for (let i = 0; i < spansCount; i++) {
       const adjustedDepth =
         i < this.spanLayoutsCount ? this.spanLayouts[i] : spanBuffer.depth[i];
       if (adjustedDepth > maxAdjustedDepth) {
@@ -390,12 +363,10 @@ export class FlameGraphCanvas extends HTMLElement {
 
   private resizeCanvas(width: number, height: number) {
     this.executeDraw(width, height);
-    this.canvas.style.width = `${width}px`;
-    this.canvas.style.height = `${height}px`;
   }
 
   private updateSpansAndDraw(spanBuffer: SpanBufferViews, version: number) {
-    const count = getSpanCount(spanBuffer);
+    const count = getSpansCount(spanBuffer);
     const layouts = calculateSpanLayouts(spanBuffer, count);
     this.spanLayouts = layouts.adjustedDepths;
     this.spanLayoutsCount = layouts.count;
@@ -467,7 +438,7 @@ export class FlameGraphCanvas extends HTMLElement {
   }
 
   private findSpanAt(x: number, y: number): number | null {
-    const { viewState, spanBuffer, spanCount } = flameGraphState.getState();
+    const { viewState, spanBuffer, spansCount } = flameGraphState.getState();
     const { width } = viewState.calculatedLayout.canvas;
     const { minTime, maxTime } = selectors.timeRange(
       flameGraphState.getState()
@@ -489,11 +460,11 @@ export class FlameGraphCanvas extends HTMLElement {
 
     // Check spans (running spans use currentTime for width)
     // Uses adjusted depths from lane calculator for proper hit testing
-    for (let i = spanCount - 1; i >= 0; i--) {
+    for (let i = spansCount - 1; i >= 0; i--) {
       const isRunning = spanBuffer.status[i] === 1;
       const duration = isRunning
         ? currentTime - spanBuffer.startTime[i]
-        : spanBuffer.duration[i];
+        : spanBuffer.endTime[i] - spanBuffer.startTime[i];
 
       // Use adjusted depth from span layouts
       const adjustedDepth =

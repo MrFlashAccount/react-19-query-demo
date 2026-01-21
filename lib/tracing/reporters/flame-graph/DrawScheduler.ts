@@ -34,14 +34,14 @@ class DrawScheduler {
     // If the RAF is already running, flush the batcher synchronously,
     // no need to schedule another RAF
     if (this.isRafRunning) {
-      this.batcher.flushSync();
+      this.batcher.flush({ sync: true });
     }
 
     if (!this.rafScheduled) {
       this.rafScheduled = true;
       this.rafId = requestAnimationFrame(() => {
         this.isRafRunning = true;
-        this.batcher.flushSync();
+        this.batcher.flush({ sync: true });
 
         this.isRafRunning = false;
         this.rafScheduled = false;

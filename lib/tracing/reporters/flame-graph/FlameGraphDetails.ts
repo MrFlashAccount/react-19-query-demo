@@ -13,7 +13,7 @@ import { flameGraphState, selectors } from "./state";
 import { drawScheduler } from "./DrawScheduler";
 
 const STYLES = css`
-  ${HOST_STYLES}
+  ${HOST_STYLES()}
   ${BUTTON_STYLES}
   
   :host {
@@ -162,14 +162,6 @@ export class FlameGraphDetails extends HTMLElement {
   }
 
   private subscribeToState() {
-    flameGraphState.subscribe(
-      selectors.detailsLayout,
-      () => {
-        this.draw();
-      },
-      { signal: this.unsubAbortController.signal }
-    );
-
     flameGraphState.subscribe(
       selectors.detailsPosition,
       () => {

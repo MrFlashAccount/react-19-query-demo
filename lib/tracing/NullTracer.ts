@@ -18,7 +18,7 @@ const nullMeta: ISpanMeta = { description: "", color: "primary" };
  */
 class NullSpan extends SpanBase implements ISpan {
   readonly name = "";
-  readonly spanId = SpanId("-");
+  readonly spanId = SpanId(0n);
   get state(): SpanState {
     return "inactive";
   }

@@ -4,6 +4,7 @@ import type {
   SpanEvent,
   Color,
   TraceEvent,
+  SpanId,
 } from "../types";
 import { BaseReporter } from "./BaseReporter";
 import type { SpanMetrics } from "./types";
@@ -69,7 +70,7 @@ export interface DevtoolsReporterOptions {
  * entries that appear in the DevTools timeline.
  */
 export class DevtoolsReporter extends BaseReporter {
-  private readonly devtoolsSpans = new Map<string, DevtoolsSpanMetrics>();
+  private readonly devtoolsSpans = new Map<SpanId, DevtoolsSpanMetrics>();
   private readonly reporterOptions: Required<DevtoolsReporterOptions>;
 
   constructor(options: DevtoolsReporterOptions = {}) {

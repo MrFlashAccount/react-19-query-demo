@@ -188,10 +188,10 @@ export class Span extends SpanBase implements ISpan {
     this.emitEvent(event);
   }
 
+  private static _nextId = 1n;
+
   private generateId(): SpanId {
-    return SpanId(
-      `${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
-    );
+    return SpanId(Span._nextId++);
   }
 
   [Symbol.dispose](): void {

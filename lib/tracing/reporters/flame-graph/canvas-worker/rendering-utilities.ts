@@ -7,9 +7,11 @@
  */
 export function lightenColor(hex: string, amount: number): string {
   const num = parseInt(hex.slice(1), 16);
+
   const r = Math.min(255, ((num >> 16) & 0xff) + Math.round(255 * amount));
   const g = Math.min(255, ((num >> 8) & 0xff) + Math.round(255 * amount));
   const b = Math.min(255, (num & 0xff) + Math.round(255 * amount));
+
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
@@ -83,4 +85,3 @@ export function truncateText(
   }
   return text + ellipsis;
 }
-

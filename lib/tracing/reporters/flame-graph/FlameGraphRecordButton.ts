@@ -20,7 +20,7 @@ export const button = {
 
 const STYLES = css`
   ${BUTTON_STYLES}
-  ${HOST_STYLES}
+  ${HOST_STYLES()}
 
   :host {
     display: contents;

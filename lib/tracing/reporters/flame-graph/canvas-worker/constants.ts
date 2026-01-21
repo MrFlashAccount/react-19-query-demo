@@ -10,4 +10,4 @@ export const PADDING_TOP = 8;
 export const SPAN_RADIUS = 12;
 export const SPAN_PADDING_X = 12;
 export const SPAN_PADDING_X_STICKY = 4;
-
+export const MIN_SPAN_TEXT_VISIBLE_WIDTH = 50;

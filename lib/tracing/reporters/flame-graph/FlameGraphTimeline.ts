@@ -1,4 +1,4 @@
-import { RESET_CASCADE, theme } from "./styles";
+import { HOST_STYLES } from "./styles";
 import { css, getElement, html } from "./utilities";
 import TimelineWorker from "./timeline.worker?worker";
 import type { InitMessage, DrawMessage } from "./timeline.worker";
@@ -7,16 +7,12 @@ import { flameGraphState, selectors } from "./state";
 import type { TimeRange } from "./types";
 
 const STYLES = css`
-  :host {
-    ${RESET_CASCADE}
+  ${HOST_STYLES()}
 
+  :host {
     display: block;
-    height: 28px;
-    flex-shrink: 0;
-    background: ${theme.ui.bgOverlay};
-    border-bottom: 1px solid ${theme.ui.borderSubtle};
-    position: relative;
-    contain: content;
+    width: 100%;
+    height: 100%;
   }
 
   canvas {
@@ -63,6 +59,12 @@ export class FlameGraphTimeline extends HTMLElement {
         this.resizeCanvas()
       )
     );
+    // Also subscribe to canvas layout since timeline height depends on it
+    this.unsubs.push(
+      flameGraphState.subscribe(selectors.canvasLayout, () =>
+        this.resizeCanvas()
+      )
+    );
   }
 
   private render() {
@@ -78,11 +80,7 @@ export class FlameGraphTimeline extends HTMLElement {
       <style>
         ${STYLES}
       </style>
-      <canvas
-        width=${width * dpr}
-        height=${height * dpr}
-        style="width: ${width}px; height: ${height}px;"
-      ></canvas>
+      <canvas width=${width * dpr} height=${height * dpr}></canvas>
     `;
   }
 
@@ -114,8 +112,6 @@ export class FlameGraphTimeline extends HTMLElement {
       const zoom = selectors.zoom(flameGraphState.getState());
 
       this.executeDraw(width, height, timeRange, offsetX, zoom);
-      this.canvas.style.width = `${width}px`;
-      this.canvas.style.height = `${height}px`;
     });
   }
 

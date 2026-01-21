@@ -13,7 +13,7 @@ import "./FlameGraphClearButton";
 
 const STYLES = css`
   ${BUTTON_STYLES}
-  ${HOST_STYLES}
+  ${HOST_STYLES()}
 
   :host {
     all: unset;
@@ -43,12 +43,19 @@ const STYLES = css`
   }
 
   flame-graph-timeline {
-    grid-area: timeline;
+    grid-area: timeline / 1 / canvas / -1; /* Spans timeline and canvas rows */
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
   }
 
   flame-graph-canvas {
     grid-area: canvas;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
+    z-index: 1;
   }
 
   flame-graph-details {
@@ -56,10 +63,12 @@ const STYLES = css`
   }
 
   .statusbar-area {
+    ${TYPOGRAPHY_STYLES({
+      fontSize: 11,
+      color: theme.ui.textMuted,
+    })}
     grid-area: statusbar;
     padding: 0 16px;
-    font-size: 11px;
-    color: ${theme.ui.textMuted};
     background: ${theme.ui.bgOverlay};
     border-top: 1px solid ${theme.ui.borderSubtle};
     display: flex;
@@ -67,6 +76,7 @@ const STYLES = css`
     justify-content: space-between;
     box-sizing: border-box;
     overflow: hidden;
+    font-variant-numeric: tabular-nums;
   }
 
   .title {
@@ -132,7 +142,7 @@ export class FlameGraphDialogContent extends HTMLElement {
   private subscribeToState() {
     // Subscribe to spans for count display
     this.unsubs.push(
-      flameGraphState.subscribe(selectors.spanCount, (count) => {
+      flameGraphState.subscribe(selectors.spansCount, (count) => {
         this.updateSpansCount(count);
       })
     );
@@ -293,7 +303,7 @@ export class FlameGraphDialogContent extends HTMLElement {
   private updateSpansCount(count: number) {
     drawScheduler.schedule(() => {
       if (this.spansCountEl) {
-        this.spansCountEl.textContent = `${count} span${
+        this.spansCountEl.textContent = `${count.toLocaleString()} span${
           count !== 1 ? "s" : ""
         }`;
       }

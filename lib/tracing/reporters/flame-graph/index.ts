@@ -7,9 +7,6 @@ export { FlameGraphDialog } from "./FlameGraphDialog";
 export { FlameGraphResizeHandle } from "./FlameGraphResizeHandle";
 export type { ResizeEventDetail } from "./FlameGraphResizeHandle";
 
-// Reporter
-export { FlameGraphReporter } from "./FlameGraphReporter";
-
 // Types
 export type {
   FlameGraphSpan,
@@ -21,4 +18,4 @@ export type {
 export type { SpanBufferViews } from "./SpanBuffer";
 
 // Utils
-export { COLOR_PALETTE, formatTime, escapeHtml, lightenColor } from "./styles";
+export { COLOR_PALETTE, formatTime, escapeHtml } from "./styles";

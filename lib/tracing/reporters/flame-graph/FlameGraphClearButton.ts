@@ -1,13 +1,12 @@
-import { BUTTON_STYLES, RESET_CASCADE, HOST_STYLES } from "./styles";
+import { BUTTON_STYLES, HOST_STYLES } from "./styles";
 import { css, getElement, html } from "./utilities";
 import { flameGraphState, selectors, type FlameGraphState } from "./state";
 
 const STYLES = css`
-  ${HOST_STYLES}
+  ${HOST_STYLES()}
   ${BUTTON_STYLES}
 
   :host {
-    ${RESET_CASCADE}
     display: contents;
   }
 

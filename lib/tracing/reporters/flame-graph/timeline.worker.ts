@@ -4,6 +4,7 @@
  */
 
 import type { TimeRange } from "./types";
+import { LAYOUT_CONSTANTS } from "./types";
 import {
   format,
   generateNiceTicks,
@@ -72,7 +73,7 @@ function draw(msg: DrawMessage): void {
   );
 
   // Setup drawing context
-  ctx.font = "10px ui-sans-serif, system-ui, sans-serif";
+  ctx.font = theme.family.default;
   ctx.textAlign = "center";
 
   // Relative time to X coordinate conversion (with padding offset)
@@ -82,7 +83,23 @@ function draw(msg: DrawMessage): void {
   // Track drawn labels to avoid duplicates
   const drawnLabels = new Set<string>();
 
-  // Draw ticks
+  // Draw vertical grid lines (from header through entire height)
+  ctx.strokeStyle = theme.timeline.gridLine;
+  ctx.lineWidth = 1;
+
+  for (const tick of ticks) {
+    const x = Math.round(relativeTimeToX(tick)) + 0.5;
+
+    // Skip lines outside visible area (with padding tolerance)
+    if (x < PADDING_LEFT || x > width + 20) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(x, LAYOUT_CONSTANTS.TIMELINE_HEADER_HEIGHT);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+
+  // Draw tick marks and labels (in header area)
   for (const tick of ticks) {
     const x = relativeTimeToX(tick);
 
@@ -95,13 +112,19 @@ function draw(msg: DrawMessage): void {
     if (drawnLabels.has(label)) continue;
     drawnLabels.add(label);
 
-    // Tick mark
-    ctx.fillStyle = theme.timeline.tickMark;
-    ctx.fillRect(Math.round(x), height - 6, 1, 6);
+    const roundedX = Math.round(x);
 
-    // Label
+    // Tick mark (at bottom of header area)
+    ctx.fillStyle = theme.timeline.gridLine;
+    ctx.fillRect(roundedX, LAYOUT_CONSTANTS.TIMELINE_HEADER_HEIGHT - 6, 1, 6);
+
+    // Label (above tick mark, centered on tick)
     ctx.fillStyle = theme.timeline.tickLabel;
-    ctx.fillText(label, x, height - 10);
+    ctx.fillText(
+      label,
+      roundedX + 0.5,
+      LAYOUT_CONSTANTS.TIMELINE_HEADER_HEIGHT - 10
+    );
   }
 }
 

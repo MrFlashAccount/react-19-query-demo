@@ -28,6 +28,7 @@ export interface StoreApi<T> {
   };
   getInitialState: () => T;
   destroy: () => void;
+  batch: (callback: () => void) => void;
 }
 
 export type StateCreator<T> = (
@@ -69,18 +70,40 @@ export function createStore<T extends Record<string, unknown>>(
   let state: T;
   let prevState: T | typeof unsetSymbol = unsetSymbol;
   let initialStateValue: T;
+  let isDirty = false;
+  let isBatching = false;
   const batcher = new Batcher<void>({
     process: () => {
       if (prevState === unsetSymbol) {
         throw new Error("prevState is null");
       }
+      if (!isDirty) return;
+
+      let errors = new Array<Error>();
+
       for (const listener of listeners) {
-        listener(state, prevState);
+        try {
+          listener(state, prevState);
+        } catch (error) {
+          errors.push(error as Error);
+        }
       }
+
       prevState = unsetSymbol;
+      isDirty = false;
+
+      if (errors.length > 0) {
+        throw new AggregateError(
+          errors,
+          "Error(s) occurred while processing listeners"
+        );
+      }
     },
     scheduler: "microtask",
   });
+
+  // @TODO: implement an efficient way of tracking which listeners need to be called
+  const calculateDirtyListeners = () => {};
 
   const getState = () => state;
   const getInitialState = () => initialStateValue;
@@ -101,9 +124,24 @@ export function createStore<T extends Record<string, unknown>>(
     if (!hasChanged) return;
 
     state = replace ? (partial as T) : { ...state, ...partial };
+    isDirty = true;
     if (prevState === unsetSymbol) {
       prevState = prevStateCopy;
-      batcher.flush({ force: true });
+      if (!isBatching) {
+        batcher.flush({ force: true });
+      }
+    }
+  };
+
+  const batch = (callback: () => void) => {
+    isBatching = true;
+    try {
+      callback();
+    } finally {
+      isBatching = false;
+      if (isDirty) {
+        batcher.flush({ force: true });
+      }
     }
   };
 
@@ -181,6 +219,7 @@ export function createStore<T extends Record<string, unknown>>(
     subscribe,
     getInitialState,
     destroy,
+    batch,
   };
 
   // Initialize state
