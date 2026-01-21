@@ -70,6 +70,10 @@ export interface FlameGraphState extends Record<string, unknown> {
   isOpen: boolean;
   isPipMode: boolean;
   height: number;
+  // Cached time range - updated incrementally
+  minTime: number;
+  maxTime: number;
+  runningSpansCount: number;
 }
 
 const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
@@ -211,6 +215,9 @@ function getInitialState(): FlameGraphState {
     isOpen: false,
     isPipMode: false,
     height: 350,
+    minTime: Infinity,
+    maxTime: -Infinity,
+    runningSpansCount: 0,
   };
 }
 
@@ -456,31 +463,14 @@ export const selectors = {
   selectedSpanIndex: (s: FlameGraphState) => s.selectedSpanIndex,
   selectedSpan: (s: FlameGraphState) => getSpanView(s.selectedSpanIndex),
   timeRange: (s: FlameGraphState): TimeRange => {
-    const { spanBuffer, spansCount } = s;
-
-    if (spansCount === 0) {
+    if (s.spansCount === 0) {
       return { minTime: 0, maxTime: 0 };
     }
-
-    let minTime = Infinity;
-    let maxTime = -Infinity;
-    let hasRunningSpans = false;
-
-    for (let i = 0; i < spansCount; i++) {
-      minTime = Math.min(minTime, spanBuffer.startTime[i]);
-
-      if (hasRunningSpans) {
-        continue;
-      }
-      if (spanBuffer.status[i] === 1) {
-        hasRunningSpans = true;
-        maxTime = performance.now();
-      } else {
-        maxTime = Math.max(maxTime, spanBuffer.endTime[i]);
-      }
-    }
-
-    return { minTime, maxTime };
+    // Use cached values; maxTime is live for running spans
+    return {
+      minTime: s.minTime,
+      maxTime: s.runningSpansCount > 0 ? performance.now() : s.maxTime,
+    };
   },
   totalDuration: (s: FlameGraphState) => {
     const { minTime, maxTime } = selectors.timeRange(s);
@@ -563,6 +553,8 @@ function createActions(store: StoreApi<FlameGraphState>) {
         spanBuffer: spanViews,
         spansCount: s.spansCount + 1,
         spanVersion: Atomics.load(spanViews.version, 0),
+        minTime: Math.min(s.minTime, span.startTime),
+        maxTime: Math.max(s.maxTime, span.endTime),
       }));
     },
 
@@ -574,15 +566,19 @@ function createActions(store: StoreApi<FlameGraphState>) {
         spanBuffer: spanViews,
         spansCount: s.spansCount + 1,
         spanVersion: Atomics.load(spanViews.version, 0),
+        minTime: Math.min(s.minTime, span.startTime),
+        runningSpansCount: s.runningSpansCount + 1,
       }));
     },
 
     /** End a running span (updates status and duration) */
     endSpan(spanId: SpanId, endTime: number, status: SpanState = "success") {
       updateSpanEnd(spanId, endTime, status);
-      setState({
+      setState((s) => ({
         spanVersion: Atomics.load(spanViews.version, 0),
-      });
+        maxTime: Math.max(s.maxTime, endTime),
+        runningSpansCount: Math.max(0, s.runningSpansCount - 1),
+      }));
     },
 
     /** Remove a span by ID */
@@ -723,6 +719,9 @@ function createActions(store: StoreApi<FlameGraphState>) {
         spansCount: 0,
         spanVersion: Atomics.load(spanViews.version, 0),
         selectedSpanIndex: null,
+        minTime: Infinity,
+        maxTime: -Infinity,
+        runningSpansCount: 0,
       });
     },
 

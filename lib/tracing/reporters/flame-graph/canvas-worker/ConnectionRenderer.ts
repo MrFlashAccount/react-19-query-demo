@@ -7,7 +7,7 @@ import type { SpanBufferViews } from "../SpanBuffer";
 import type { SpanId } from "../../../types";
 import { readSpanId } from "../SpanBuffer";
 import { theme } from "../styles";
-import { ROW_HEIGHT, ROW_GAP, MIN_SPAN_WIDTH } from "./constants";
+import { ROW_HEIGHT, ROW_GAP } from "./constants";
 
 export interface ConnectionRenderOptions {
   /** Only show connections for selected span and its ancestors/descendants */
@@ -17,11 +17,11 @@ export interface ConnectionRenderOptions {
 }
 
 export class ConnectionRenderer {
-  private static readonly LINE_COLOR = theme.ui.textDim;
-  private static readonly HIGHLIGHT_COLOR = theme.accent.selected;
-  private static readonly LINE_WIDTH = 1;
-  private static readonly HIGHLIGHT_WIDTH = 2;
-  private static readonly DOT_RADIUS = 3;
+  private static readonly LINE_COLOR = theme.accent.selected;
+  private static readonly HIGHLIGHT_COLOR = theme.accent.primary;
+  private static readonly LINE_WIDTH = 1.5;
+  private static readonly HIGHLIGHT_WIDTH = 2.5;
+  private static readonly DOT_RADIUS = 4;
 
   constructor(private ctx: OffscreenCanvasRenderingContext2D) {}
 
@@ -68,7 +68,7 @@ export class ConnectionRenderer {
     // Draw non-highlighted connections first (subtle)
     this.ctx.strokeStyle = ConnectionRenderer.LINE_COLOR;
     this.ctx.lineWidth = ConnectionRenderer.LINE_WIDTH;
-    this.ctx.globalAlpha = 0.3;
+    this.ctx.globalAlpha = 0.4;
 
     for (let i = 0; i < count; i++) {
       const parentIdx = parentIndices[i];
@@ -139,81 +139,77 @@ export class ConnectionRenderer {
     childIdx: number,
     adjustedDepths: Int32Array,
     timeToX: (t: number) => number,
-    durationToWidth: (d: number) => number,
+    _durationToWidth: (d: number) => number,
     effectiveOffsetY: number,
     viewportWidth: number,
     viewportHeight: number,
-    currentTime: number,
+    _currentTime: number,
     isHighlighted: boolean
   ): void {
     const parentDepth = adjustedDepths[parentIdx];
     const childDepth = adjustedDepths[childIdx];
 
-    // Calculate parent span geometry
-    const parentIsRunning = views.status[parentIdx] === 1;
-    const parentDuration = parentIsRunning
-      ? currentTime - views.startTime[parentIdx]
-      : views.endTime[parentIdx] - views.startTime[parentIdx];
+    // Calculate span positions - connect from LEFT side of spans
     const parentX = timeToX(views.startTime[parentIdx]);
-    const parentW = Math.max(durationToWidth(parentDuration), MIN_SPAN_WIDTH);
     const parentY = parentDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
-
-    // Calculate child span geometry
     const childX = timeToX(views.startTime[childIdx]);
     const childY = childDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
 
-    // Connection points
-    const parentBottomY = parentY + ROW_HEIGHT;
-    const childTopY = childY;
-
-    // For concurrent siblings, draw from parent's bottom-left area
-    // to child's top-left to show the tree structure
-    const parentConnectX = Math.max(
-      parentX + 8,
-      Math.min(childX, parentX + parentW - 8)
-    );
-    const childConnectX = childX + 8;
+    // Connection points on LEFT side of spans (vertically centered)
+    const parentConnectX = parentX;
+    const parentConnectY = parentY + ROW_HEIGHT / 2;
+    const childConnectX = childX;
+    const childConnectY = childY + ROW_HEIGHT / 2;
 
     // Skip if completely outside viewport
-    const minX = Math.min(parentConnectX, childConnectX);
+    const minX = Math.min(parentConnectX, childConnectX) - 20;
     const maxX = Math.max(parentConnectX, childConnectX);
-    const minY = Math.min(parentBottomY, childTopY);
-    const maxY = Math.max(parentBottomY, childTopY);
+    const minY = Math.min(parentConnectY, childConnectY);
+    const maxY = Math.max(parentConnectY, childConnectY);
 
     if (maxX < 0 || minX > viewportWidth || maxY < 0 || minY > viewportHeight) {
       return;
     }
 
-    // Draw connection line (elbow style)
+    // Draw connection line with smooth bezier curve
     this.ctx.beginPath();
 
-    const midY = (parentBottomY + childTopY) / 2;
+    // Calculate control points for smooth easing curve
+    // The curve goes left first, then curves down/up to the child
+    const horizontalOffset = Math.min(
+      30,
+      Math.abs(childConnectX - parentConnectX) * 0.4 + 15
+    );
+    const controlX = Math.min(parentConnectX, childConnectX) - horizontalOffset;
 
-    // Vertical from parent bottom
-    this.ctx.moveTo(parentConnectX, parentBottomY);
-    this.ctx.lineTo(parentConnectX, midY);
+    // Start from parent left side
+    this.ctx.moveTo(parentConnectX, parentConnectY);
 
-    // Horizontal to child column
-    this.ctx.lineTo(childConnectX, midY);
-
-    // Vertical to child top
-    this.ctx.lineTo(childConnectX, childTopY);
+    // Use cubic bezier for smooth S-curve
+    this.ctx.bezierCurveTo(
+      controlX,
+      parentConnectY, // First control point - pulls left from parent
+      controlX,
+      childConnectY, // Second control point - pulls left from child
+      childConnectX,
+      childConnectY // End at child left side
+    );
 
     this.ctx.stroke();
 
-    // Draw small dots at connection points for highlighted connections
+    // Draw dots on the LEFT side of spans
     if (isHighlighted) {
       const dotRadius = ConnectionRenderer.DOT_RADIUS;
       this.ctx.fillStyle = ConnectionRenderer.HIGHLIGHT_COLOR;
 
-      // Dot at parent
+      // Dot at parent left
       this.ctx.beginPath();
-      this.ctx.arc(parentConnectX, parentBottomY, dotRadius, 0, Math.PI * 2);
+      this.ctx.arc(parentConnectX, parentConnectY, dotRadius, 0, Math.PI * 2);
       this.ctx.fill();
 
-      // Dot at child
+      // Dot at child left
       this.ctx.beginPath();
-      this.ctx.arc(childConnectX, childTopY, dotRadius, 0, Math.PI * 2);
+      this.ctx.arc(childConnectX, childConnectY, dotRadius, 0, Math.PI * 2);
       this.ctx.fill();
     }
   }
