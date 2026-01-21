@@ -233,7 +233,7 @@ export default function App() {
     formData.set("movieLimit", "100");
     formData.set("gcTimeout", "60000");
     formData.set("searchQuery", "");
-    formData.set("showDevtools", "false");
+    formData.set("showDevtools", "true");
     formData.set("showLagRadar", "false");
 
     return formData;
