@@ -25,6 +25,20 @@ import {
 
 export class SpanRenderer {
   private static readonly MARGIN_PX = 2;
+  private static readonly FULL_RADIUS_WIDTH = 100;
+
+  /**
+   * Calculate radius based on span width using linear interpolation
+   * MIN_SPAN_WIDTH -> 0, FULL_RADIUS_WIDTH -> SPAN_RADIUS
+   */
+  private getDynamicRadius(width: number): number {
+    if (width <= MIN_SPAN_WIDTH) return 0;
+    if (width >= SpanRenderer.FULL_RADIUS_WIDTH) return SPAN_RADIUS;
+    const t =
+      (width - MIN_SPAN_WIDTH) /
+      (SpanRenderer.FULL_RADIUS_WIDTH - MIN_SPAN_WIDTH);
+    return SPAN_RADIUS * t;
+  }
 
   constructor(
     private ctx: OffscreenCanvasRenderingContext2D,
@@ -82,8 +96,9 @@ export class SpanRenderer {
 
     const leftVisible = rawX >= 0;
     const rightVisible = rawX + rawW <= viewportWidth;
-    const leftRadius = leftVisible ? SPAN_RADIUS : 0;
-    const rightRadius = rightVisible ? SPAN_RADIUS : 0;
+    const dynamicRadius = this.getDynamicRadius(rawW);
+    const leftRadius = leftVisible ? dynamicRadius : 0;
+    const rightRadius = rightVisible ? dynamicRadius : 0;
 
     // Pick style variants
     const fillColor = this.getFillColor(

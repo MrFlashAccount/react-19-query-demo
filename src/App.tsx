@@ -15,8 +15,8 @@ const LazyLagRadar = lazy(() =>
   import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar }))
 );
 
-const STRESS_DEPTH = 6;
-const STRESS_BREADTH = 3;
+const STRESS_DEPTH = 5;
+const STRESS_BREADTH = 5;
 const STRESS_BRANCHES = 1;
 const STRESS_TASKS = 25;
 
