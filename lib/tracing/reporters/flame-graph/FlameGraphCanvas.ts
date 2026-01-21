@@ -34,6 +34,10 @@ const STYLES = css`
     cursor: grabbing;
   }
 
+  .hidden {
+    display: none;
+  }
+
   canvas {
     all: unset;
     display: block;
@@ -74,6 +78,7 @@ export class FlameGraphCanvas extends HTMLElement {
   private canvas!: HTMLCanvasElement;
   private canvasWorker!: CanvasWorkerClient;
   private emptyEl!: HTMLElement;
+  private recordingIndicatorEl!: HTMLElement;
 
   // Drag state
   private isDragging = false;
@@ -121,7 +126,8 @@ export class FlameGraphCanvas extends HTMLElement {
     flameGraphState.subscribe(
       selectors.hasSpans,
       (hasSpans) => {
-        this.emptyEl.style.display = hasSpans ? "none" : "flex";
+        this.canvas.classList.toggle("hidden", !hasSpans);
+        this.emptyEl.classList.toggle("hidden", hasSpans);
       },
       { signal: this.unmountAbortController.signal }
     );
@@ -131,6 +137,15 @@ export class FlameGraphCanvas extends HTMLElement {
     flameGraphState.subscribe(selectors.timeRange, () => this.draw(), {
       signal: this.unmountAbortController.signal,
     });
+    flameGraphState.subscribe(
+      selectors.isRecording,
+      (isRecording) => {
+        this.recordingIndicatorEl.classList.toggle("hidden", !isRecording);
+        this.emptyEl.classList.toggle("hidden", isRecording);
+        this.canvas.classList.toggle("hidden", isRecording);
+      },
+      { signal: this.unmountAbortController.signal }
+    );
     // Subscribe to zoom/pan changes for redraw (fine-grained - only zoom/offset)
     flameGraphState.subscribe(selectors.panZoom, () => this.draw(), {
       signal: this.unmountAbortController.signal,
@@ -151,25 +166,40 @@ export class FlameGraphCanvas extends HTMLElement {
 
   private render() {
     if (!this.shadowRoot) return;
-    const { width, height } =
-      flameGraphState.getState().viewState.calculatedLayout.canvas;
+    const { width, height } = selectors.canvasLayout(
+      flameGraphState.getState()
+    );
+    const hasSpans = selectors.hasSpans(flameGraphState.getState());
+    const isRecording = selectors.isRecording(flameGraphState.getState());
     this.shadowRoot.innerHTML = html`
       <style>
         ${STYLES}
       </style>
-      <canvas width=${width * this.dpr} height=${height * this.dpr}></canvas>
-      <div class="empty">
+      <canvas
+        class=${hasSpans && !isRecording ? "" : "hidden"}
+        width=${width * this.dpr}
+        height=${height * this.dpr}
+      ></canvas>
+      <div class="empty ${hasSpans && !isRecording ? "hidden" : ""}">
         <div class="empty-icon">📈</div>
         <div>No spans recorded yet</div>
         <div style="font-size: 11px;">Click Record to start capturing</div>
       </div>
+      <div class="recording-indicator ${isRecording ? "" : "hidden"}">
+        <div class="recording-indicator-icon">🔴</div>
+        <div>Recording...</div>
+      </div>
     `;
     this.emptyEl = getElement(".empty", this.shadowRoot);
+    this.canvas = getElement<HTMLCanvasElement>("canvas", this.shadowRoot);
+    this.recordingIndicatorEl = getElement(
+      ".recording-indicator",
+      this.shadowRoot
+    );
   }
 
   private setupCanvas() {
     if (!this.shadowRoot) return;
-    this.canvas = getElement<HTMLCanvasElement>("canvas", this.shadowRoot);
 
     this.canvasWorker = new CanvasWorkerClient();
     this.unmountAbortController.signal.addEventListener(
