@@ -30,7 +30,10 @@ export class Batcher<T> {
   private items: T[] = [];
   private readonly onFlush: (items: T[]) => void;
   private readonly oncePerTick = createOncePerTick({
-    tickMethod: requestIdleCallback ?? setTimeout,
+    tickMethod:
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback
+        : setTimeout,
   });
 
   constructor(options: BatcherOptions<T>) {

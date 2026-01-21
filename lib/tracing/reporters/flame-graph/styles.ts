@@ -84,6 +84,9 @@ export const theme = (() => {
     secondaryLight: OklchColor("oklch(0.78 0.17 150)"),
     secondaryDark: OklchColor("oklch(0.62 0.18 145)"),
 
+    black: OklchColor("oklch(0.2 0 0)"), //#333333
+    white: OklchColor("oklch(0.9 0 0)"), //#FFFFFF
+
     // Tertiary (Amber)
     tertiary: OklchColor("oklch(0.78 0.16 75)"),
     tertiaryLight: OklchColor("oklch(0.84 0.15 85)"),
