@@ -149,15 +149,17 @@ export class ConnectionRenderer {
     const parentDepth = adjustedDepths[parentIdx];
     const childDepth = adjustedDepths[childIdx];
 
-    // Calculate span positions - connect from LEFT side of spans
+    // Calculate span positions
     const parentX = timeToX(views.startTime[parentIdx]);
     const parentY = parentDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
     const childX = timeToX(views.startTime[childIdx]);
     const childY = childDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;
 
-    // Connection points on LEFT side of spans (vertically centered)
-    const parentConnectX = parentX;
-    const parentConnectY = parentY + ROW_HEIGHT / 2;
+    // Parent: exit from BOTTOM of span (near left edge)
+    const parentConnectX = parentX + 8;
+    const parentConnectY = parentY + ROW_HEIGHT;
+
+    // Child: enter from LEFT side (vertically centered)
     const childConnectX = childX;
     const childConnectY = childY + ROW_HEIGHT / 2;
 
@@ -174,35 +176,34 @@ export class ConnectionRenderer {
     // Draw connection line with smooth bezier curve
     this.ctx.beginPath();
 
-    // Calculate control points for smooth easing curve
-    // The curve goes left first, then curves down/up to the child
-    const horizontalOffset = Math.min(
-      30,
-      Math.abs(childConnectX - parentConnectX) * 0.4 + 15
-    );
-    const controlX = Math.min(parentConnectX, childConnectX) - horizontalOffset;
-
-    // Start from parent left side
+    // Start from parent bottom
     this.ctx.moveTo(parentConnectX, parentConnectY);
 
-    // Use cubic bezier for smooth S-curve
+    // Calculate control points for smooth curve
+    const verticalDist = childConnectY - parentConnectY;
+    const horizontalOffset = Math.min(
+      25,
+      Math.abs(childConnectX - parentConnectX) * 0.3 + 12
+    );
+
+    // Use cubic bezier for smooth curve
     this.ctx.bezierCurveTo(
-      controlX,
-      parentConnectY, // First control point - pulls left from parent
-      controlX,
-      childConnectY, // Second control point - pulls left from child
+      parentConnectX,
+      parentConnectY + verticalDist * 0.5, // First control - below parent
+      childConnectX - horizontalOffset,
+      childConnectY, // Second control - left of child
       childConnectX,
       childConnectY // End at child left side
     );
 
     this.ctx.stroke();
 
-    // Draw dots on the LEFT side of spans
+    // Draw dots at connection points
     if (isHighlighted) {
       const dotRadius = ConnectionRenderer.DOT_RADIUS;
       this.ctx.fillStyle = ConnectionRenderer.HIGHLIGHT_COLOR;
 
-      // Dot at parent left
+      // Dot at parent bottom
       this.ctx.beginPath();
       this.ctx.arc(parentConnectX, parentConnectY, dotRadius, 0, Math.PI * 2);
       this.ctx.fill();
