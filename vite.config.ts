@@ -51,8 +51,6 @@ async function buildSW(config: (typeof serviceWorkers)[0]): Promise<void> {
       alias: {
         "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
       },
-      // Required for react-server-dom-webpack/server
-      conditions: ["react-server", "import", "module", "browser", "default"],
     },
     plugins: [react()],
     logLevel: "warn",

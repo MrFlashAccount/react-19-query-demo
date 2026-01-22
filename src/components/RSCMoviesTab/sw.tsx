@@ -8,7 +8,12 @@
 
 import "lib/rsc-service-worker-bff/rsc/webpack-shim";
 
-import { setupWorker, http, json, createRSC } from "lib/rsc-service-worker-bff";
+import { setupWorker, http, json, createClientModule } from "lib/rsc-service-worker-bff";
+import {
+  createFlightResponse,
+  createServerAction,
+  executeServerAction,
+} from "lib/rsc-service-worker-bff/rsc/flight-serializer";
 import type { Movie } from "../../api/types";
 import type * as ClientComponents from "./client-components";
 
@@ -63,24 +68,24 @@ async function searchMovies(query: string, limit: number = 500): Promise<Movie[]
     .slice(0, limit);
 }
 
-// ========== Setup RSC ==========
-const { ctx, Client, ready } = createRSC<typeof ClientComponents>({
-  moduleId: "rsc-movies-client",
-  components: ["RatingStars"],
-  actions: {
-    async updateRating(movieId: unknown, rating: unknown) {
-      const database = await getDatabase();
-      const movie = database.find((m) => m.id === movieId);
-      if (!movie) {
-        throw new Error(`Movie ${movieId} not found`);
-      }
-      // Add some randomness like the original
-      const randomDecimal = Math.random() * 1.9;
-      movie.rating = Math.min(10, parseFloat(((rating as number) + randomDecimal).toFixed(1)));
-      console.log("[SW] Updated rating:", movieId, "->", movie.rating);
-      return movie;
-    },
-  },
+// ========== Create Client Module ==========
+const { manifest, refs: Client } = createClientModule<typeof ClientComponents>(
+  "rsc-movies-client",
+  ["RatingStars"],
+);
+
+// ========== Server Actions ==========
+createServerAction("updateRating", async (movieId: string, rating: number): Promise<Movie> => {
+  const database = await getDatabase();
+  const movie = database.find((m) => m.id === movieId);
+  if (!movie) {
+    throw new Error(`Movie ${movieId} not found`);
+  }
+  // Add some randomness like the original
+  const randomDecimal = Math.random() * 1.9;
+  movie.rating = Math.min(10, parseFloat((rating + randomDecimal).toFixed(1)));
+  console.log("[SW] Updated rating:", movieId, "->", movie.rating);
+  return movie;
 });
 
 // ========== Server Components ==========
@@ -214,17 +219,35 @@ setupWorker([
 
   // ===== RSC API (for RSCMoviesTab) =====
 
-  // RSC endpoint + server actions
-  ...http.rscRoutes(
-    "/rsc/movies",
-    ({ url }) => {
-      const searchQuery = url.searchParams.get("q") ?? "";
-      const limit = Number(url.searchParams.get("limit") ?? 100);
-      return <App searchQuery={searchQuery} limit={limit} />;
-    },
-    ctx,
-    { ready },
-  ),
+  // GET /rsc/movies - RSC stream
+  http.get("/rsc/movies", async ({ url }) => {
+    const searchQuery = url.searchParams.get("q") ?? "";
+    const limit = Number(url.searchParams.get("limit") ?? 100);
+    console.log("[SW] Rendering RSC for movies:", { searchQuery, limit });
+    return createFlightResponse(<App searchQuery={searchQuery} limit={limit} />, manifest);
+  }),
+
+  // POST /rsc/movies - Server action
+  http.post("/rsc/movies", async ({ request }) => {
+    const actionId = request.headers.get("x-rsc-action");
+    if (!actionId) {
+      return json({ error: "Missing x-rsc-action header" }, { status: 400 });
+    }
+
+    console.log("[SW] Executing server action:", actionId);
+
+    // Parse args from request body
+    const body = await request.text();
+    let args: unknown[] = [];
+    try {
+      args = JSON.parse(body);
+      if (!Array.isArray(args)) args = [args];
+    } catch {
+      args = body ? [body] : [];
+    }
+
+    return executeServerAction(actionId, args, manifest);
+  }),
 ]);
 
 console.log("[Movies SW] Routes registered (JSON API + RSC)");

@@ -1,5 +1,5 @@
 import type { Movie } from "./types";
-import { callAction, fetchRSC } from "lib/rsc-service-worker-bff";
+import { callAction, fetchRSC } from "lib/rsc-service-worker-bff/rsc/client-only";
 
 const DEFAULT_LIMIT = 500;
 const decoder = new TextDecoder();

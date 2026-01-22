@@ -9,7 +9,7 @@
 import "lib/rsc-service-worker-bff/rsc/webpack-shim";
 
 import { lazy, use, Suspense } from "react";
-import { registerClientModule } from "lib/rsc-service-worker-bff";
+import { registerClientModule } from "lib/rsc-service-worker-bff/rsc/client-only";
 import type { TabProps } from "../shared/types";
 import { SearchBox } from "../shared";
 import { appGraph, rscMoviesQuery } from "../../queries";
