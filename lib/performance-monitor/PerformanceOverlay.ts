@@ -19,24 +19,25 @@ const overlayHeight = 24;
 
 const styles = css`
   :host {
-    all: unset;
-    display: block;
-    pointer-events: none;
-    font-family: "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    left: 0;
-    right: 0;
-    height: ${overlayHeight}px;
+    all: unset !important;
+    display: block !important;
+    pointer-events: none !important;
+    font-family: "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: ${overlayHeight}px !important;
   }
   
   :host([position="bottom"]) {
-    bottom: 0;
-    top: auto;
+    bottom: 0 !important;
+    top: auto !important;
   }
+
   :host(:not([position="bottom"])) {
-    top: 0;
+    top: 0 !important;
   }
   
   .isolate-layout {

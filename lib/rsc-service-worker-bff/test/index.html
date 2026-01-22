@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -208,10 +208,18 @@
         min-width: 60px;
       }
 
-      .log-type.info { color: var(--accent); }
-      .log-type.success { color: var(--success); }
-      .log-type.error { color: var(--error); }
-      .log-type.rsc { color: #a855f7; }
+      .log-type.info {
+        color: var(--accent);
+      }
+      .log-type.success {
+        color: var(--success);
+      }
+      .log-type.error {
+        color: var(--error);
+      }
+      .log-type.rsc {
+        color: #a855f7;
+      }
 
       .rsc-content {
         padding: 1.5rem;
@@ -239,7 +247,9 @@
       }
 
       @keyframes spin {
-        to { transform: rotate(360deg); }
+        to {
+          transform: rotate(360deg);
+        }
       }
 
       .error-message {
@@ -269,7 +279,44 @@
         Loading RSC Playground...
       </div>
     </div>
+    <nav
+      class="dev-nav"
+      style="
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        display: flex;
+        gap: 8px;
+        z-index: 9999;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+      "
+    >
+      <a
+        href="/"
+        style="
+          padding: 6px 12px;
+          background: rgba(15, 15, 20, 0.9);
+          color: #a1a1aa;
+          text-decoration: none;
+          border-radius: 6px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        "
+        >← Main App</a
+      >
+      <a
+        href="/lib/performance-monitor/test/"
+        style="
+          padding: 6px 12px;
+          background: rgba(15, 15, 20, 0.9);
+          color: #a1a1aa;
+          text-decoration: none;
+          border-radius: 6px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        "
+        >Perf Monitor</a
+      >
+    </nav>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>
-

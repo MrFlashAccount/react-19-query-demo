@@ -423,6 +423,44 @@
 
     <performance-overlay level="2" position="top-left"></performance-overlay>
 
+    <nav
+      class="dev-nav"
+      style="
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        display: flex;
+        gap: 8px;
+        z-index: 9999;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+      "
+    >
+      <a
+        href="/"
+        style="
+          padding: 6px 12px;
+          background: rgba(15, 15, 20, 0.9);
+          color: #a1a1aa;
+          text-decoration: none;
+          border-radius: 6px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        "
+        >← Main App</a
+      >
+      <a
+        href="/lib/rsc-service-worker-bff/test/"
+        style="
+          padding: 6px 12px;
+          background: rgba(15, 15, 20, 0.9);
+          color: #a1a1aa;
+          text-decoration: none;
+          border-radius: 6px;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+        "
+        >RSC Playground</a
+      >
+    </nav>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

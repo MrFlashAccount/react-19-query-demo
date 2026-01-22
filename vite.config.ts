@@ -28,6 +28,11 @@ export default defineConfig({
   build: {
     sourcemap: false,
     rolldownOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        "perf-monitor": path.resolve(__dirname, "lib/performance-monitor/test/index.html"),
+        "rsc-playground": path.resolve(__dirname, "lib/rsc-service-worker-bff/test/index.html"),
+      },
       output: {
         advancedChunks: {
           groups: [
