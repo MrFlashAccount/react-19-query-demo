@@ -6,11 +6,10 @@ export function noopCallback(): () => void {
   return noop;
 }
 
-const requestIdleCallbackFn =
-  typeof requestIdleCallback === "function" ? requestIdleCallback : setTimeout;
-export function requestIdleCallback(callback: () => void): void {
-  requestIdleCallbackFn(callback);
-}
+export const requestIdleCallback =
+  typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
+    ? window.requestIdleCallback
+    : setTimeout;
 
 export function serializePayload(payload: Record<string, unknown> | undefined | null): string {
   if (payload === undefined || payload === null) {

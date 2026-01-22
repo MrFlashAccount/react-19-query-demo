@@ -104,8 +104,7 @@ export function serializePayload(payload: Record<string, unknown> | undefined | 
   });
 }
 
-const requestIdleCallbackFn =
-  typeof requestIdleCallback === "function" ? requestIdleCallback : setTimeout;
-export function requestIdleCallback(callback: () => void): void {
-  requestIdleCallbackFn(callback);
-}
+export const requestIdleCallback =
+  typeof window !== "undefined" && typeof window.requestIdleCallback === "function"
+    ? window.requestIdleCallback
+    : setTimeout;

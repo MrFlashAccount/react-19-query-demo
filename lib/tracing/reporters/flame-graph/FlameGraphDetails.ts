@@ -1,18 +1,13 @@
 import "./FlameGraphResizeHandle";
 
+import { html, render } from "lit-html";
+
 import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
 
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
-import {
-  BUTTON_STYLES,
-  formatTime,
-  escapeHtml,
-  theme,
-  TYPOGRAPHY_STYLES,
-  HOST_STYLES,
-} from "./styles";
-import { css, getElement, html } from "./utilities";
+import { BUTTON_STYLES, formatTime, theme, TYPOGRAPHY_STYLES, HOST_STYLES } from "./styles";
+import { css } from "./utilities";
 
 const STYLES = css`
   ${HOST_STYLES()}
@@ -146,7 +141,6 @@ const STYLES = css`
 
 export class FlameGraphDetails extends HTMLElement {
   shadowRoot!: ShadowRoot;
-  private resizeHandle!: HTMLElement;
   private unsubAbortController = new AbortController();
 
   constructor() {
@@ -155,7 +149,7 @@ export class FlameGraphDetails extends HTMLElement {
   }
 
   connectedCallback() {
-    this.render();
+    this.renderTemplate();
     this.subscribeToState();
   }
 
@@ -195,11 +189,30 @@ export class FlameGraphDetails extends HTMLElement {
     });
   }
 
-  private render() {
+  private renderTemplate() {
     if (!this.shadowRoot) return;
-    this.shadowRoot.innerHTML = `<style>${STYLES}</style>`;
+    render(html`<style>${STYLES}</style>`, this.shadowRoot);
     this.updateContent();
   }
+
+  private handleClose = () => {
+    flameGraphState.setDetailsVisible(false);
+  };
+
+  private handleResize = (e: Event) => {
+    const detail = (e as CustomEvent).detail as ResizeEventDetail;
+    const layout = selectors.detailsLayout(flameGraphState.getState());
+    const position = selectors.detailsPosition(flameGraphState.getState());
+
+    // Delta sign depends on handle position:
+    // - details bottom (handle top): drag up = -deltaY = bigger height
+    // - details left (handle right): drag right = +deltaX = bigger width
+    // - details right (handle left): drag left = -deltaX = bigger width
+    const widthDelta = position === "left" ? detail.deltaX : -detail.deltaX;
+    const heightDelta = -detail.deltaY;
+
+    flameGraphState.resizeDetails(layout.width + widthDelta, layout.height + heightDelta);
+  };
 
   private updateContent() {
     const span = selectors.selectedSpan(flameGraphState.getState());
@@ -220,25 +233,21 @@ export class FlameGraphDetails extends HTMLElement {
     const position = selectors.detailsPosition(flameGraphState.getState());
     const handlePosition = selectors.getHandlePosition(position);
 
-    // TODO: use patching instead of innerHTML
-    this.shadowRoot.innerHTML = html`
-      <style>
-        ${STYLES}
-      </style>
+    const template = html`
+      <style>${STYLES}</style>
       <flame-graph-resize-handle
         position="${handlePosition}"
+        @resize=${this.handleResize}
       ></flame-graph-resize-handle>
       <div class="header">
-        <div class="title">${escapeHtml(span.name ?? "Unknown")}</div>
-        <button class="icon-only close-btn" part="close">✕</button>
+        <div class="title">${span.name ?? "Unknown"}</div>
+        <button class="icon-only close-btn" part="close" @click=${this.handleClose}>✕</button>
       </div>
       <div class="content">
         <div class="grid">
           <div class="item">
             <span class="label">Duration</span>
-            <span class="value duration"
-              >${isPending ? "–" : formatTime(span.duration as number)}</span
-            >
+            <span class="value duration">${isPending ? "–" : formatTime(span.duration as number)}</span>
           </div>
           <div class="item">
             <span class="label">Start</span>
@@ -246,9 +255,7 @@ export class FlameGraphDetails extends HTMLElement {
           </div>
           <div class="item">
             <span class="label">End</span>
-            <span class="value"
-              >${relativeEnd === null ? "–" : `+${formatTime(relativeEnd)}`}</span
-            >
+            <span class="value">${relativeEnd === null ? "–" : `+${formatTime(relativeEnd)}`}</span>
           </div>
           <div class="item">
             <span class="label">Status</span>
@@ -257,36 +264,18 @@ export class FlameGraphDetails extends HTMLElement {
         </div>
         ${
           payloadStr
-            ? `
-          <div class="payload">
-            <div class="payload-title">Payload</div>
-            <div class="payload-content">${escapeHtml(payloadStr)}</div>
-          </div>
-        `
+            ? html`
+            <div class="payload">
+              <div class="payload-title">Payload</div>
+              <div class="payload-content">${payloadStr}</div>
+            </div>
+          `
             : ""
         }
       </div>
     `;
 
-    this.resizeHandle = getElement("flame-graph-resize-handle", this.shadowRoot);
-    getElement(".close-btn", this.shadowRoot).addEventListener("click", () => {
-      flameGraphState.setDetailsVisible(false);
-    });
-
-    this.resizeHandle.addEventListener("resize", (e) => {
-      const detail = e.detail as unknown as ResizeEventDetail;
-      const layout = selectors.detailsLayout(flameGraphState.getState());
-      const position = selectors.detailsPosition(flameGraphState.getState());
-
-      // Delta sign depends on handle position:
-      // - details bottom (handle top): drag up = -deltaY = bigger height
-      // - details left (handle right): drag right = +deltaX = bigger width
-      // - details right (handle left): drag left = -deltaX = bigger width
-      const widthDelta = position === "left" ? detail.deltaX : -detail.deltaX;
-      const heightDelta = -detail.deltaY;
-
-      flameGraphState.resizeDetails(layout.width + widthDelta, layout.height + heightDelta);
-    });
+    render(template, this.shadowRoot);
   }
 }
 

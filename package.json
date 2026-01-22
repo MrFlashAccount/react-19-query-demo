@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm run \"/dev:.*/\"",
-    "dev:watch": "bunx --bun vite",
-    "dev:sw": "bunx --bun vite build --config vite.config.sw.ts --watch",
+    "dev:watch": "vite",
+    "dev:sw": "vite build --config vite.config.sw.ts --watch",
     "dev:perf": "bunx --bun vite --config lib/performance-monitor/test/vite.config.ts",
+    "dev:rsc": "bunx --bun vite --config lib/rsc-service-worker-bff/test/vite.config.ts",
     "build": "pnpm run build:sw && bunx --bun vite build",
     "build:sw": "bunx --bun vite build --config vite.config.sw.ts",
     "check": "pnpm run \"/check:.*/\"",
@@ -25,7 +26,9 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-github-corner": "2.5.0",
-    "react-lag-radar": "1.0.0"
+    "react-lag-radar": "1.0.0",
+    "react-server-dom-webpack": "^19.1.0",
+    "web-streams-polyfill": "^4.1.0"
   },
   "devDependencies": {
     "@babel/core": "7.28.5",

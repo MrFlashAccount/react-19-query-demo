@@ -1,4 +1,4 @@
-import { html, render } from "lit-html";
+import { html, render, nothing } from "lit-html";
 
 import {
   PerformanceObserver as PerfObserver,
@@ -38,6 +38,12 @@ const styles = css`
     border-bottom: none;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
+  :host([position="bottom"]) .settings-dropdown {
+    bottom: 100%;
+    top: auto;
+    margin-bottom: 4px;
+    margin-top: 0;
+  }
   
   .isolate-layout {
     all: unset;
@@ -59,19 +65,22 @@ const styles = css`
     align-items: center;
     justify-content: flex-start;
     gap: 0;
-    padding: 0 12px;
+    padding: 0 8px 0 12px;
     height: 100%;
     background: rgba(10, 10, 15, 0.92);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
   
-  .overlay.hidden {
-    display: none;
+  .overlay.collapsed {
+    background: transparent;
+    border: none;
+    justify-content: flex-end;
+    backdrop-filter: none;
   }
   
   .overlay-content {
-    width: 100%;
+    flex: 1;
     height: 100%;
     display: flex;
     align-items: center;
@@ -173,12 +182,264 @@ const styles = css`
     border-radius: 2px;
     background: rgba(0, 0, 0, 0.3);
   }
+  
+  /* Settings button */
+  .settings-wrapper {
+    position: relative;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+  
+  .settings-btn {
+    all: unset;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    color: #666;
+    transition:
+      color 0.15s,
+      background 0.15s;
+  }
+  
+  .settings-btn:hover {
+    color: #999;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  .settings-btn.active {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+  }
+  
+  .settings-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+  
+  /* Settings dropdown */
+  .settings-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 200px;
+    background: rgba(15, 15, 20, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 8px 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition:
+      opacity 0.15s,
+      transform 0.15s,
+      visibility 0.15s;
+  }
+  
+  .settings-dropdown.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+  
+  .settings-group {
+    padding: 8px 12px;
+  }
+  
+  .settings-group + .settings-group {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  
+  .settings-label {
+    color: #888;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  
+  /* Level selector */
+  .level-selector {
+    display: flex;
+    gap: 4px;
+  }
+  
+  .level-btn {
+    all: unset;
+    cursor: pointer;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #666;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  
+  .level-btn:hover {
+    color: #999;
+    background: rgba(255, 255, 255, 0.06);
+  }
+  
+  .level-btn.selected {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  /* Position toggle */
+  .position-toggle {
+    display: flex;
+    gap: 4px;
+  }
+  
+  .position-btn {
+    all: unset;
+    cursor: pointer;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #666;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  
+  .position-btn:hover {
+    color: #999;
+    background: rgba(255, 255, 255, 0.06);
+  }
+  
+  .position-btn.selected {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+  
+  .position-btn svg {
+    width: 12px;
+    height: 12px;
+  }
+  
+  /* Interval input */
+  .interval-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .interval-input {
+    all: unset;
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #e4e4e7;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: right;
+    min-width: 0;
+  }
+  
+  .interval-input:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.05);
+  }
+  
+  .interval-unit {
+    color: #666;
+    font-size: 10px;
+    font-weight: 500;
+    min-width: 20px;
+  }
+  
+  /* Level indicator dot */
+  .level-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 8px;
+  }
+  
+  .level-indicator.off {
+    background: #444;
+  }
+  .level-indicator.basic {
+    background: #3b82f6;
+  }
+  .level-indicator.detailed {
+    background: #22c55e;
+  }
+`;
+
+const gearIcon = html`
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <circle cx="12" cy="12" r="3"></circle>
+    <path
+      d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+    ></path>
+  </svg>
+`;
+
+const topIcon = html`
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+    <line x1="3" y1="9" x2="21" y2="9"></line>
+  </svg>
+`;
+
+const bottomIcon = html`
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+    <line x1="3" y1="15" x2="21" y2="15"></line>
+  </svg>
 `;
 
 export class PerformanceOverlay extends HTMLElement {
   readonly shadowRoot: ShadowRoot;
   private observer: PerfObserver;
-  private container!: HTMLDivElement;
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
   private level: OverlayLevel;
@@ -188,6 +449,7 @@ export class PerformanceOverlay extends HTMLElement {
   private dpr = window.devicePixelRatio || 1;
   private canvasWidth = 200;
   private canvasHeight = 16;
+  private settingsOpen = false;
 
   static get observedAttributes(): string[] {
     return ["level", "position", "sample-interval", "popover"];
@@ -227,13 +489,27 @@ export class PerformanceOverlay extends HTMLElement {
     this.render();
     if (this.level > 0) {
       this.observer.start();
-      this.showPopover();
     }
+    this.showPopover();
+
+    // Close settings when clicking outside
+    document.addEventListener("click", this.handleDocumentClick);
   }
 
   disconnectedCallback(): void {
     this.observer.destroy();
+    document.removeEventListener("click", this.handleDocumentClick);
   }
+
+  private handleDocumentClick = (e: MouseEvent): void => {
+    if (!this.settingsOpen) return;
+    const path = e.composedPath();
+    const settingsWrapper = this.shadowRoot.querySelector(".settings-wrapper");
+    if (settingsWrapper && !path.includes(settingsWrapper)) {
+      this.settingsOpen = false;
+      this.render();
+    }
+  };
 
   attributeChangedCallback(name: string, oldValue: string, newValue: string): void {
     if (oldValue === newValue) return;
@@ -241,9 +517,6 @@ export class PerformanceOverlay extends HTMLElement {
     if (name === "level") {
       this.level = parseInt(newValue, 10) as OverlayLevel;
       this.observer.setLevel(this.level);
-      if (this.container) {
-        this.container.classList.toggle("hidden", this.level === 0);
-      }
     }
 
     if (name === "sample-interval") {
@@ -270,15 +543,18 @@ export class PerformanceOverlay extends HTMLElement {
 
   setLevel(level: OverlayLevel): void {
     this.setAttribute("level", String(level));
-    if (level > 0) {
-      this.showPopover();
-    } else {
-      this.hidePopover();
-    }
   }
 
   getLevel(): OverlayLevel {
     return this.level;
+  }
+
+  setPosition(position: "top" | "bottom"): void {
+    this.setAttribute("position", position);
+  }
+
+  getPosition(): "top" | "bottom" {
+    return (this.getAttribute("position") as "top" | "bottom") || "top";
   }
 
   get popover() {
@@ -292,6 +568,34 @@ export class PerformanceOverlay extends HTMLElement {
       this.removeAttribute("popover");
     }
   }
+
+  private toggleSettings = (e: Event): void => {
+    e.stopPropagation();
+    this.settingsOpen = !this.settingsOpen;
+    this.render();
+  };
+
+  private handleLevelChange =
+    (newLevel: OverlayLevel) =>
+    (e: Event): void => {
+      e.stopPropagation();
+      this.setLevel(newLevel);
+    };
+
+  private handlePositionChange =
+    (newPosition: "top" | "bottom") =>
+    (e: Event): void => {
+      e.stopPropagation();
+      this.setPosition(newPosition);
+    };
+
+  private handleIntervalChange = (e: Event): void => {
+    const input = e.target as HTMLInputElement;
+    const value = parseInt(input.value, 10);
+    if (!isNaN(value) && value >= 50 && value <= 5000) {
+      this.setSampleInterval(value);
+    }
+  };
 
   private formatRam(mb: number): { value: string; unit: string } {
     if (mb >= 1024) {
@@ -319,92 +623,170 @@ export class PerformanceOverlay extends HTMLElement {
     return "fps-bad";
   }
 
+  private getLevelIndicatorClass(): string {
+    if (this.level === 0) return "off";
+    if (this.level === 1) return "basic";
+    return "detailed";
+  }
+
   private render(): void {
     const metrics = this.observer.getMetrics();
     const fpsClass = this.getFpsClass(metrics.fps, metrics.targetFps);
     const ram = metrics.ramUsed !== undefined ? this.formatRam(metrics.ramUsed) : null;
+    const position = this.getPosition();
+    const isCollapsed = this.level === 0;
+
+    const settingsDropdown = html`
+      <div class="settings-dropdown ${this.settingsOpen ? "open" : ""}">
+        <div class="settings-group">
+          <div class="settings-label">Level</div>
+          <div class="level-selector">
+            <button 
+              class="level-btn ${this.level === 0 ? "selected" : ""}" 
+              @click=${this.handleLevelChange(0)}
+            >Off</button>
+            <button 
+              class="level-btn ${this.level === 1 ? "selected" : ""}" 
+              @click=${this.handleLevelChange(1)}
+            >Basic</button>
+            <button 
+              class="level-btn ${this.level === 2 ? "selected" : ""}" 
+              @click=${this.handleLevelChange(2)}
+            >Detailed</button>
+          </div>
+        </div>
+        
+        <div class="settings-group">
+          <div class="settings-label">Position</div>
+          <div class="position-toggle">
+            <button 
+              class="position-btn ${position === "top" ? "selected" : ""}" 
+              @click=${this.handlePositionChange("top")}
+            >${topIcon} Top</button>
+            <button 
+              class="position-btn ${position === "bottom" ? "selected" : ""}" 
+              @click=${this.handlePositionChange("bottom")}
+            >${bottomIcon} Bottom</button>
+          </div>
+        </div>
+        
+        <div class="settings-group">
+          <div class="settings-label">Update Interval</div>
+          <div class="interval-row">
+            <input 
+              type="number" 
+              class="interval-input" 
+              .value=${String(this.sampleInterval)}
+              min="50"
+              max="5000"
+              step="50"
+              @change=${this.handleIntervalChange}
+            />
+            <span class="interval-unit">ms</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const settingsButton = html`
+      <div class="settings-wrapper">
+        <div class="level-indicator ${this.getLevelIndicatorClass()}"></div>
+        <button 
+          class="settings-btn ${this.settingsOpen ? "active" : ""}" 
+          @click=${this.toggleSettings}
+          title="Performance Settings"
+        >${gearIcon}</button>
+        ${settingsDropdown}
+      </div>
+    `;
 
     const template = html`
       <style>${styles}</style>
-      <div class="overlay ${this.level === 0 ? "hidden" : ""}" id="container">
+      <div class="overlay ${isCollapsed ? "collapsed" : ""}" id="container">
         <svg class="isolate-layout" width="100%" height="100%"> 
           <foreignObject width="100%" height="100%">
-            <div class="overlay-content">
-        <!-- Section 1: FPS -->
-        <div class="section">
-          <div class="stat">
-            <span class="label">FPS</span>
-            <span class="value value-3 ${fpsClass}">${metrics.fps}</span>
-          </div>
-          <div class="stat">
-            <span class="value hz">${metrics.targetFps}</span>
-            <span class="unit">Hz</span>
-          </div>
-        </div>
+            ${
+              isCollapsed
+                ? settingsButton
+                : html`
+                <div class="overlay-content">
+                  <!-- Section 1: FPS -->
+                  <div class="section">
+                    <div class="stat">
+                      <span class="label">FPS</span>
+                      <span class="value value-3 ${fpsClass}">${metrics.fps}</span>
+                    </div>
+                    <div class="stat">
+                      <span class="value hz">${metrics.targetFps}</span>
+                      <span class="unit">Hz</span>
+                    </div>
+                  </div>
 
-        ${
-          this.level === 2
-            ? html`
-          <!-- Section 2: Frametime Graph -->
-          <div class="section">
-            <canvas id="graph" class="graph-canvas" width=${this.canvasWidth * this.dpr} height=${this.canvasHeight * this.dpr} style="--canvas-width: ${this.canvasWidth}px; --canvas-height: ${this.canvasHeight}px;"></canvas>
-          </div>
+                  ${
+                    this.level === 2
+                      ? html`
+                      <!-- Section 2: Frametime Graph -->
+                      <div class="section">
+                        <canvas id="graph" class="graph-canvas" width=${this.canvasWidth * this.dpr} height=${this.canvasHeight * this.dpr} style="--canvas-width: ${this.canvasWidth}px; --canvas-height: ${this.canvasHeight}px;"></canvas>
+                      </div>
 
-          <!-- Section 3: CPU + FT -->
-          ${
-            metrics.cpuLoad !== undefined
-              ? html`
-            <div class="section">
-              <div class="stat">
-                <span class="label">CPU</span>
-                <span class="value value-3 ${this.getCpuClass(metrics.cpuLoad)}">${metrics.cpuLoad}</span>
-                <span class="unit">%</span>
-              </div>
-              <div class="stat">
-                <span class="label">FT</span>
-                <span class="value value-5 ft">${metrics.frameTime.toFixed(1)}</span>
-                <span class="unit">ms</span>
-              </div>
-            </div>
-          `
-              : ""
-          }
+                      <!-- Section 3: CPU + FT -->
+                      ${
+                        metrics.cpuLoad !== undefined
+                          ? html`
+                          <div class="section">
+                            <div class="stat">
+                              <span class="label">CPU</span>
+                              <span class="value value-3 ${this.getCpuClass(metrics.cpuLoad)}">${metrics.cpuLoad}</span>
+                              <span class="unit">%</span>
+                            </div>
+                            <div class="stat">
+                              <span class="label">FT</span>
+                              <span class="value value-5 ft">${metrics.frameTime.toFixed(1)}</span>
+                              <span class="unit">ms</span>
+                            </div>
+                          </div>
+                        `
+                          : nothing
+                      }
 
-          <!-- Section 4: GPU -->
-          <div class="section">
-            <div class="stat">
-              <span class="label">GPU</span>
-              <span class="value value-3" style="color:#555">N/A</span>
-            </div>
-          </div>
+                      <!-- Section 4: GPU -->
+                      <div class="section">
+                        <div class="stat">
+                          <span class="label">GPU</span>
+                          <span class="value value-3" style="color:#555">N/A</span>
+                        </div>
+                      </div>
 
-          <!-- Section 5: RAM -->
-          ${
-            ram
-              ? html`
-            <div class="section">
-              <div class="stat">
-                <span class="label">RAM</span>
-                <span class="value value-5 ram">${ram.value}</span>
-                <span class="unit">${ram.unit}</span>
-              </div>
-            </div>
-          `
-              : ""
-          }
-        `
-            : ""
-        }
-        </div>
-      </foreignObject>
-      </svg>
-        </div>
+                      <!-- Section 5: RAM -->
+                      ${
+                        ram
+                          ? html`
+                          <div class="section">
+                            <div class="stat">
+                              <span class="label">RAM</span>
+                              <span class="value value-5 ram">${ram.value}</span>
+                              <span class="unit">${ram.unit}</span>
+                            </div>
+                          </div>
+                        `
+                          : nothing
+                      }
+                    `
+                      : nothing
+                  }
+                </div>
+                ${settingsButton}
+              `
+            }
+          </foreignObject>
+        </svg>
+      </div>
     `;
 
     render(template, this.shadowRoot);
 
     // Get references after DOM update
-    this.container = this.shadowRoot.getElementById("container") as HTMLDivElement;
     if (this.level === 2) {
       this.canvas = this.shadowRoot.getElementById("graph") as HTMLCanvasElement;
       if (this.canvas) {

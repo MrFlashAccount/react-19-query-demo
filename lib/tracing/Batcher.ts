@@ -1,3 +1,4 @@
+import { requestIdleCallback } from "./utils";
 /**
  * Options for configuring a Batcher instance
  */
@@ -136,26 +137,15 @@ const schedulerByType: Record<
     },
   },
   requestIdleCallback: {
-    create: (callback: () => void) => {
-      const ric = typeof requestIdleCallback === "function" ? requestIdleCallback : setTimeout;
-      return () => {
-        ric(callback);
-      };
-    },
+    create: (callback: () => void) => () => requestIdleCallback(callback),
   },
   requestAnimationFrame: {
-    create: (callback: () => void) => {
-      return () => requestAnimationFrame(callback);
-    },
+    create: (callback: () => void) => () => requestAnimationFrame(callback),
   },
   setTimeout: {
-    create: (callback: () => void) => {
-      return () => setTimeout(callback, 0);
-    },
+    create: (callback: () => void) => () => setTimeout(callback, 0),
   },
   microtask: {
-    create: (callback: () => void) => {
-      return () => queueMicrotask(callback);
-    },
+    create: (callback: () => void) => () => queueMicrotask(callback),
   },
 };
