@@ -6,11 +6,7 @@
   "scripts": {
     "dev": "pnpm run \"/dev:.*/\"",
     "dev:watch": "vite",
-    "dev:sw": "vite build --config vite.config.sw.ts --watch",
-    "dev:perf": "bunx --bun vite --config lib/performance-monitor/test/vite.config.ts",
-    "dev:rsc": "bunx --bun vite --config lib/rsc-service-worker-bff/test/vite.config.ts",
-    "build": "pnpm run build:sw && bunx --bun vite build",
-    "build:sw": "bunx --bun vite build --config vite.config.sw.ts",
+    "build": "bunx --bun vite build",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit --isolatedDeclarations",
     "check:lint": "oxlint --fix --type-aware",
