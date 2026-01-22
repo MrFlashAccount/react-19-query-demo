@@ -75,3 +75,12 @@ export {
   getActionIdFromRequest,
   type RSCContext,
 } from "./rsc/server";
+
+export {
+  createFlightResponse,
+  serializeToFlightPayload,
+  serializeToFlightStream,
+  createServerAction,
+  executeServerAction,
+  getServerAction,
+} from "./rsc/flight-serializer";

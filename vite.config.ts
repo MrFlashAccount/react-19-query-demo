@@ -37,6 +37,7 @@ async function buildSW(
 
   await viteBuild({
     configFile: false,
+    mode: mode,
     root: path.dirname(config.entry),
     build: {
       write: true,
@@ -48,24 +49,16 @@ async function buildSW(
         name: "ServiceWorker",
         fileName: () => "sw.js",
       },
-      minify: false,
-      sourcemap: "inline",
     },
     resolve: {
       alias: {
         "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
       },
       // Required for react-server-dom-webpack/server
-      conditions:
-        mode === "development"
-          ? ["development", "browser", "import", "default"]
-          : ["production", "browser", "import", "default"],
+      conditions: [mode, "browser", "import", "default"],
     },
     plugins: [react()],
-    logLevel: "warn",
-    define: {
-      "process.env.NODE_ENV": JSON.stringify("development"),
-    },
+    define: { "process.env.NODE_ENV": JSON.stringify(mode) },
   });
 
   console.log("Built successfully");

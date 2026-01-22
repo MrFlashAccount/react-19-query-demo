@@ -8,12 +8,15 @@
 
 import "lib/rsc-service-worker-bff/rsc/webpack-shim";
 
-import { setupWorker, http, json, createClientModule } from "lib/rsc-service-worker-bff";
 import {
+  setupWorker,
+  http,
+  json,
+  createClientModule,
   createFlightResponse,
   createServerAction,
   executeServerAction,
-} from "lib/rsc-service-worker-bff/rsc/flight-serializer";
+} from "lib/rsc-service-worker-bff";
 import type { Movie } from "../../api/types";
 import type * as ClientComponents from "./client-components";
 
