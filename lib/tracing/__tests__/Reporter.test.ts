@@ -5,8 +5,8 @@ import type {
   SpanEndEvent,
   SpanEvent,
   ITracer,
-} from "../tracing/types";
-import { BaseReporter } from "../tracing/reporters/BaseReporter";
+} from "../types";
+import { BaseReporter } from "../reporters/BaseReporter";
 
 // Test implementation of BaseReporter
 class TestReporter extends BaseReporter {
@@ -490,10 +490,14 @@ describe("Tracer with reporters", () => {
     tracer.addReporter(reporter);
     reporter.start();
 
-    const span = tracer.startSpan("Test Span", { key: "value" }, {
-      description: "Test span",
-      color: "primary",
-    });
+    const span = tracer.startSpan(
+      "Test Span",
+      { key: "value" },
+      {
+        description: "Test span",
+        color: "primary",
+      }
+    );
 
     expect(reporter.startEvents).toHaveLength(1);
     expect(reporter.startEvents[0].name).toBe("Test Span");
@@ -527,10 +531,14 @@ describe("Tracer with reporters", () => {
     goodReporter.start();
 
     // Should not throw
-    const span = tracer.startSpan("Test Span", {}, {
-      description: "Test span",
-      color: "primary",
-    });
+    const span = tracer.startSpan(
+      "Test Span",
+      {},
+      {
+        description: "Test span",
+        color: "primary",
+      }
+    );
 
     // Error was logged
     expect(consoleErrorSpy).toHaveBeenCalledWith(

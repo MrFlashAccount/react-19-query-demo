@@ -15,11 +15,21 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "lib/react": path.resolve(__dirname, "lib/react"),
-      "lib/devtools": path.resolve(__dirname, "lib/devtools/index.ts"),
+      "lib/goat-query/react": path.resolve(
+        __dirname,
+        "lib/goat-query/react.ts"
+      ),
+      "lib/goat-query/devtools": path.resolve(
+        __dirname,
+        "lib/goat-query/devtools.ts"
+      ),
       "lib/brand": path.resolve(__dirname, "lib/brand/brand.ts"),
       "lib/tracing/helpers": path.resolve(__dirname, "lib/tracing/helpers.ts"),
       "lib/tracing": path.resolve(__dirname, "lib/tracing"),
+      "lib/performance-monitor": path.resolve(
+        __dirname,
+        "lib/performance-monitor/index.ts"
+      ),
     },
   },
   worker: { format: "es" },

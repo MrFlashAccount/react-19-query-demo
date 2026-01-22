@@ -113,3 +113,9 @@ export function serializePayload(
     return value;
   });
 }
+
+const requestIdleCallbackFn =
+  typeof requestIdleCallback === "function" ? requestIdleCallback : setTimeout;
+export function requestIdleCallback(callback: () => void): void {
+  requestIdleCallbackFn(callback);
+}

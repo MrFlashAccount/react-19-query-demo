@@ -1,4 +1,4 @@
-import { noop } from "../../utils";
+import { noop } from "../utils";
 import { Batcher } from "../Batcher";
 import type {
   IEventReceiver,

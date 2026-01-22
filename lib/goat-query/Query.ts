@@ -2,7 +2,7 @@ import { Retrier, type RetryConfig } from "./Retrier";
 import { timerWheel, type TimerWheel } from "./TimerWheel";
 import { createOncePerTick, type OncePerTick } from "./batcher";
 import { exponentialBackoff } from "./utils";
-import { tracer, tracePromise, type ISpan } from "./tracing";
+import { tracer, tracePromise, type ISpan } from "lib/tracing";
 import {
   type Context,
   type QueryDefinition,

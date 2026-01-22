@@ -1,4 +1,4 @@
-import { noopcb } from "../utils";
+import { noopCallback } from "./utils";
 import {
   type ISpan,
   SpanBase,
@@ -63,7 +63,7 @@ export class NullTracer implements ITracer {
   constructor(_options: ITracerOptions = {}) {}
 
   addReporter(_receiver: IEventReceiver): () => void {
-    return noopcb();
+    return noopCallback();
   }
 
   deleteReporter(_receiver: IEventReceiver): void {}

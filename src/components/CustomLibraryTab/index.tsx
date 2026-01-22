@@ -9,10 +9,10 @@ import {
 } from "../../queries";
 
 const { QueryProvider, useMutation, useQuery, QueryClient } = await import(
-  "lib/react"
+  "lib/goat-query/react"
 );
 const LazyDevtools = lazy(() =>
-  import("lib/devtools").then((d) => ({ default: d.QueryDevtools }))
+  import("lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools }))
 );
 
 const queryClient = new QueryClient({ graph: appGraph });

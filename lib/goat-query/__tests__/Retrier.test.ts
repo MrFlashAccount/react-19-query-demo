@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Retrier } from "../Retrier";
-import { timerWheel } from "../TimerWheel";
+import { Retrier } from "../goat-query/Retrier";
+import { timerWheel } from "../goat-query/TimerWheel";
 
 describe("Retrier", () => {
   beforeEach(() => {

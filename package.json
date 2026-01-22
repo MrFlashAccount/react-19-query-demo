@@ -1,4 +1,5 @@
 {
+  "schema": "https://json.schemastore.org/package",
   "name": "react-vite-ts",
   "private": true,
   "version": "0.0.0",
@@ -7,6 +8,7 @@
     "dev": "pnpm run \"/dev:.*/\"",
     "dev:watch": "vite",
     "dev:sw": "vite build --config vite.config.sw.ts --watch",
+    "dev:perf": "vite --config lib/performance-monitor/test/vite.config.ts",
     "build": "pnpm run build:sw && vite build",
     "build:sw": "vite build --config vite.config.sw.ts",
     "type-check": "tsgo --noEmit --isolatedDeclarations",
@@ -20,7 +22,8 @@
     "react-dom": "^19.2.0",
     "react-github-corner": "2.5.0",
     "react-lag-radar": "1.0.0",
-    "@tanstack/react-query-devtools": "5.90.2"
+    "@tanstack/react-query-devtools": "5.90.2",
+    "lit-html": "3.3.2"
   },
   "devDependencies": {
     "@babel/core": "7.28.5",
@@ -35,8 +38,10 @@
     "@vitejs/plugin-react": "5.1.1",
     "babel-plugin-react-compiler": "1.0.0",
     "tailwindcss": "4.1.17",
-    "@typescript/native-preview": "7.0.0-dev.20251204.1",
+    "@typescript/native-preview": "7.0.0-dev.20260122.3",
     "vite": "8.0.0-beta.0",
-    "vitest": "4.0.9"
+    "vitest": "4.0.9",
+    "oxfmt": "0.26.0",
+    "oxlint": "1.41.0"
   }
 }

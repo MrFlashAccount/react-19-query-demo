@@ -1,4 +1,4 @@
-import { query, mutation, DependencyGraph } from "lib/react";
+import { query, mutation, DependencyGraph } from "lib/goat-query/react";
 import type { MovieApi } from "./api/types";
 
 /**
@@ -47,7 +47,7 @@ export const appGraph = new DependencyGraph([
   updateMovieRatingMutation,
 ]);
 
-declare module "lib/react" {
+declare module "lib/goat-query/react" {
   interface Context {
     api: MovieApi;
   }

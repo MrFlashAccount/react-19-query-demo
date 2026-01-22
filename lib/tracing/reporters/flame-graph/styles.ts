@@ -259,10 +259,6 @@ export const RESIZE_HANDLE_STYLES = css`
   }
 `;
 
-// =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
-
 /** Format time in human-readable format */
 export function formatTime(ms: number): string {
   if (ms < 1) return `${(ms * 1000).toFixed(0)}µs`;

@@ -1,4 +1,4 @@
-import { serializePayload } from "../utils";
+import { serializePayload } from "./utils";
 import {
   TraceEvent,
   ISpan,

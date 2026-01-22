@@ -1,4 +1,5 @@
 import { createOncePerTick } from "../batcher";
+import { requestIdleCallback } from "../utils";
 /**
  * Options for configuring a Batcher instance
  */
@@ -30,10 +31,7 @@ export class Batcher<T> {
   private items: T[] = [];
   private readonly onFlush: (items: T[]) => void;
   private readonly oncePerTick = createOncePerTick({
-    tickMethod:
-      typeof requestIdleCallback === "function"
-        ? requestIdleCallback
-        : setTimeout,
+    tickMethod: requestIdleCallback,
   });
 
   constructor(options: BatcherOptions<T>) {

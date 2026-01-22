@@ -1,6 +1,6 @@
 import { Query } from "./Query";
 import { noop } from "./utils";
-import { tracer, tracePromise, type ISpan } from "./tracing";
+import { tracer, tracePromise, type ISpan } from "lib/tracing";
 import {
   type QueryDefinition,
   type Context,

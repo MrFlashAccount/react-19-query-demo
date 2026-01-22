@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Performance Overlay Test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --bg-primary: #0a0a0f;
+        --bg-secondary: #12121a;
+        --bg-tertiary: #1a1a24;
+        --text-primary: #e4e4e7;
+        --text-secondary: #a1a1aa;
+        --text-muted: #71717a;
+        --accent-green: #22c55e;
+        --accent-blue: #3b82f6;
+        --accent-purple: #a855f7;
+        --accent-yellow: #eab308;
+        --accent-red: #ef4444;
+        --border: rgba(255, 255, 255, 0.08);
+      }
+
+      body {
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        overflow-x: hidden;
+        padding-top: 24px;
+      }
+
+      .app {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        padding: 24px;
+        gap: 24px;
+      }
+
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      h1 {
+        font-size: 24px;
+        font-weight: 600;
+        background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .controls {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .control-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-secondary);
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+
+      .control-group label {
+        font-size: 12px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 500;
+      }
+
+      .btn-group {
+        display: flex;
+        gap: 4px;
+      }
+
+      button {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      button:hover {
+        background: var(--bg-secondary);
+        border-color: var(--text-muted);
+      }
+
+      button.active {
+        background: var(--accent-blue);
+        border-color: var(--accent-blue);
+        color: white;
+      }
+
+      button.danger {
+        background: var(--accent-red);
+        border-color: var(--accent-red);
+        color: white;
+      }
+
+      button.danger:hover {
+        filter: brightness(1.1);
+      }
+
+      button.success {
+        background: var(--accent-green);
+        border-color: var(--accent-green);
+        color: white;
+      }
+
+      button.success:hover {
+        filter: brightness(1.1);
+      }
+
+      main {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1fr 320px;
+        gap: 24px;
+      }
+
+      .canvas-area {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        position: relative;
+        overflow: hidden;
+        min-height: 400px;
+      }
+
+      #bench-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .panel {
+        background: var(--bg-secondary);
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+      }
+
+      .panel-header {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .panel-content {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .bench-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        background: var(--bg-tertiary);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+      }
+
+      .bench-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .bench-name {
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .bench-desc {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .bench-status {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: var(--bg-secondary);
+      }
+
+      .bench-status.running {
+        color: var(--accent-green);
+        background: rgba(34, 197, 94, 0.1);
+      }
+
+      .bench-status.stopped {
+        color: var(--text-muted);
+      }
+
+      .slider-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .slider-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .slider-label {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .slider-value {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        color: var(--accent-blue);
+      }
+
+      input[type="range"] {
+        width: 100%;
+        height: 4px;
+        background: var(--bg-tertiary);
+        border-radius: 2px;
+        appearance: none;
+        cursor: pointer;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        background: var(--accent-blue);
+        border-radius: 50%;
+        cursor: pointer;
+      }
+
+      .status-bar {
+        display: flex;
+        gap: 16px;
+        padding: 12px 16px;
+        background: var(--bg-secondary);
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 11px;
+      }
+
+      .status-item {
+        display: flex;
+        gap: 6px;
+      }
+
+      .status-label {
+        color: var(--text-muted);
+      }
+
+      .status-value {
+        color: var(--text-primary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>Performance Overlay Test</h1>
+        <div class="controls">
+          <div class="control-group">
+            <label>Level</label>
+            <div class="btn-group">
+              <button id="level-0">0</button>
+              <button id="level-1">1</button>
+              <button id="level-2" class="active">2</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <label>Position</label>
+            <div class="btn-group">
+              <button id="pos-top" class="active">Top</button>
+              <button id="pos-bottom">Bottom</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <div class="canvas-area">
+          <canvas id="bench-canvas"></canvas>
+        </div>
+
+        <div class="sidebar">
+          <div class="panel">
+            <div class="panel-header">Benchmarks</div>
+            <div class="panel-content">
+              <div class="bench-item">
+                <div class="bench-info">
+                  <span class="bench-name">🎨 Canvas Particles</span>
+                  <span class="bench-desc">Animates thousands of particles</span>
+                </div>
+                <button id="bench-particles" class="success">Start</button>
+              </div>
+              <div class="bench-item">
+                <div class="bench-info">
+                  <span class="bench-name">🔢 Heavy Compute</span>
+                  <span class="bench-desc">Blocks main thread</span>
+                </div>
+                <button id="bench-compute">Start</button>
+              </div>
+              <div class="bench-item">
+                <div class="bench-info">
+                  <span class="bench-name">📦 DOM Stress</span>
+                  <span class="bench-desc">Creates/destroys DOM nodes</span>
+                </div>
+                <button id="bench-dom">Start</button>
+              </div>
+              <div class="bench-item">
+                <div class="bench-info">
+                  <span class="bench-name">🎲 Memory Churn</span>
+                  <span class="bench-desc">Allocates/releases memory</span>
+                </div>
+                <button id="bench-memory">Start</button>
+              </div>
+              <div class="bench-item">
+                <div class="bench-info">
+                  <span class="bench-name">⚡ All Combined</span>
+                  <span class="bench-desc">Maximum stress test</span>
+                </div>
+                <button id="bench-all" class="danger">Start All</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">Settings</div>
+            <div class="panel-content">
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span class="slider-label">Particle Count</span>
+                  <span class="slider-value" id="particle-count-value">5000</span>
+                </div>
+                <input
+                  type="range"
+                  id="particle-count"
+                  min="100"
+                  max="50000"
+                  value="5000"
+                  step="100"
+                />
+              </div>
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span class="slider-label">Compute Load (ms)</span>
+                  <span class="slider-value" id="compute-load-value">5</span>
+                </div>
+                <input type="range" id="compute-load" min="0" max="50" value="5" />
+              </div>
+              <div class="slider-group">
+                <div class="slider-header">
+                  <span class="slider-label">DOM Nodes</span>
+                  <span class="slider-value" id="dom-nodes-value">100</span>
+                </div>
+                <input type="range" id="dom-nodes" min="10" max="1000" value="100" step="10" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div class="status-bar">
+        <div class="status-item">
+          <span class="status-label">Active Benchmarks:</span>
+          <span class="status-value" id="active-count">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Particles:</span>
+          <span class="status-value" id="particle-status">0</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">DOM Nodes:</span>
+          <span class="status-value" id="dom-status">0</span>
+        </div>
+      </div>
+    </div>
+
+    <performance-overlay level="2" position="top-left"></performance-overlay>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
