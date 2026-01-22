@@ -75,7 +75,7 @@ describe("Span", () => {
       vi.spyOn(performance, "now").mockReturnValue(2000);
       span.success({ result: "ok" });
 
-      expect(span.state).toBe("ended");
+      expect(span.state).toBe("success");
       expect(span.endTime).toBe(2000);
       expect(emitMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -101,7 +101,7 @@ describe("Span", () => {
       span.start();
       span.error(testError, { context: "test" });
 
-      expect(span.state).toBe("ended");
+      expect(span.state).toBe("error");
       expect(emitMock).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: "end",

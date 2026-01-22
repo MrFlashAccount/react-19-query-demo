@@ -105,7 +105,7 @@ describe("brand", () => {
     it("should brand values of any type", () => {
       const Id = brand.generic<"Id">();
 
-      const stringId = Id<string>();
+      const stringId = Id<string>()("abc");
       const numberId = Id<number>()(123);
       const objectId = Id<{ key: string }>()({ key: "value" });
 

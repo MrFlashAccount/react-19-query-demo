@@ -5,18 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm run \"/dev:.*/\"",
-    "dev:watch": "vite",
-    "dev:sw": "vite build --config vite.config.sw.ts --watch",
-    "dev:perf": "vite --config lib/performance-monitor/test/vite.config.ts",
-    "build": "pnpm run build:sw && vite build",
-    "build:sw": "vite build --config vite.config.sw.ts",
+    "dev:watch": "bunx --bun vite",
+    "dev:sw": "bunx --bun vite build --config vite.config.sw.ts --watch",
+    "dev:perf": "bunx --bun vite --config lib/performance-monitor/test/vite.config.ts",
+    "build": "pnpm run build:sw && bunx --bun vite build",
+    "build:sw": "bunx --bun vite build --config vite.config.sw.ts",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit --isolatedDeclarations",
     "check:lint": "oxlint --fix --type-aware",
     "check:format": "oxfmt --write",
-    "preview": "vite preview",
-    "test": "vitest",
-    "test:ui": "vitest --ui"
+    "preview": "bunx --bun vite preview",
+    "test": "bunx --bun vitest",
+    "test:ui": "bunx --bun vitest --ui"
   },
   "dependencies": {
     "@tanstack/react-query": "5.90.5",

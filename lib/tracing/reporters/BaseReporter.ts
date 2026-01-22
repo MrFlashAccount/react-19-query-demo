@@ -66,6 +66,7 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
    */
   start(): void {
     if (this.isActive) return;
+    this.onStart();
   }
 
   /**
@@ -73,15 +74,24 @@ export abstract class BaseReporter extends IReporter implements IEventReceiver {
    * No-op if already stopped.
    */
   stop(): void {
-    if (!this.unregister) return;
-
     // Flush any pending batched events
-    this.batcher?.flushSync();
+    this.batcher?.flush({ sync: true });
 
     this.unregister();
     this.unregister = noop;
     this.spans.clear();
+    this.onStop();
   }
+
+  /**
+   * Called when the reporter starts. Override in subclass.
+   */
+  protected onStart(): void {}
+
+  /**
+   * Called when the reporter stops. Override in subclass.
+   */
+  protected onStop(): void {}
 
   /**
    * IEventReceiver implementation - called by Tracer.
