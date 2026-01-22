@@ -45,3 +45,11 @@ export {
   // Polyfill
   polyfillReady,
 } from "./rsc";
+
+// Client reference utilities (for service worker)
+export {
+  clientRef,
+  createClientRefs,
+  createClientModule,
+  type ClientReference,
+} from "./rsc/client-reference";

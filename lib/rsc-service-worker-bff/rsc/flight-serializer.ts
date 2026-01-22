@@ -43,7 +43,6 @@ interface FlightModuleRef {
 // React internal symbols
 const REACT_ELEMENT_TYPE = Symbol.for("react.element");
 const REACT_TRANSITIONAL_ELEMENT_TYPE = Symbol.for("react.transitional.element");
-const REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
 const REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference");
 const REACT_SERVER_REFERENCE = Symbol.for("react.server.reference");
 
@@ -51,7 +50,6 @@ const REACT_SERVER_REFERENCE = Symbol.for("react.server.reference");
 const ELEMENT_PREFIX = "$";
 const MODULE_PREFIX = "$L";
 const FUNCTION_PREFIX = "$F";
-const PROMISE_PREFIX = "$@";
 
 /**
  * Server action registry - stores action functions by ID

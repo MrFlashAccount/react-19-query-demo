@@ -21,6 +21,7 @@ interface CounterProps {
 export function Counter({ initialCount, actionEndpoint = "/rsc" }: CounterProps) {
   const [count, setCount] = useState(initialCount);
   const [isPending, startTransition] = useTransition();
+  const [lastUpdateDuration, setLastUpdateDuration] = useState(0);
 
   const callServerAction = async (actionId: string, args: unknown[]) => {
     const response = await fetch(actionEndpoint, {
@@ -50,10 +51,14 @@ export function Counter({ initialCount, actionEndpoint = "/rsc" }: CounterProps)
   const handleIncrement = () => {
     startTransition(async () => {
       try {
+        const startTime = performance.now();
         const newCount = await callServerAction("increment", [count]);
         if (typeof newCount === "number") {
           setCount(newCount);
         }
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        setLastUpdateDuration(duration);
       } catch (err) {
         console.error("Increment failed:", err);
         // Fallback to local increment
@@ -65,10 +70,14 @@ export function Counter({ initialCount, actionEndpoint = "/rsc" }: CounterProps)
   const handleDecrement = () => {
     startTransition(async () => {
       try {
+        const startTime = performance.now();
         const newCount = await callServerAction("decrement", [count]);
         if (typeof newCount === "number") {
           setCount(newCount);
         }
+        const endTime = performance.now();
+        const duration = endTime - startTime;
+        setLastUpdateDuration(duration);
       } catch (err) {
         console.error("Decrement failed:", err);
         // Fallback to local decrement
@@ -79,24 +88,21 @@ export function Counter({ initialCount, actionEndpoint = "/rsc" }: CounterProps)
 
   return (
     <div className="counter">
-      <div className="counter-value">{isPending ? "..." : count}</div>
+      <div className={`counter-value ${isPending ? "updating" : ""}`}>{count}</div>
       <div className="counter-buttons">
-        <button
-          className="btn"
-          onClick={handleIncrement}
-          disabled={isPending}
-          style={{ padding: "0.5rem 1rem" }}
-        >
+        <button className="btn" onClick={handleIncrement} style={{ padding: "0.5rem 1rem" }}>
           + Increment
         </button>
         <button
           className="btn btn-secondary"
           onClick={handleDecrement}
-          disabled={isPending}
           style={{ padding: "0.5rem 1rem" }}
         >
           − Decrement
         </button>
+        {lastUpdateDuration > 0 && (
+          <div>Last update duration: {lastUpdateDuration.toFixed(2)}ms</div>
+        )}
       </div>
     </div>
   );
@@ -111,11 +117,7 @@ interface ButtonProps {
 /**
  * Styled button component (client component)
  */
-export function Button({
-  onClick,
-  children,
-  variant = "primary",
-}: ButtonProps) {
+export function Button({ onClick, children, variant = "primary" }: ButtonProps) {
   return (
     <button className={`btn ${variant === "secondary" ? "btn-secondary" : ""}`} onClick={onClick}>
       {children}
@@ -205,4 +207,3 @@ export function Card({ title, children }: CardProps) {
     </div>
   );
 }
-

@@ -21,7 +21,7 @@ async function buildServiceWorker(): Promise<void> {
       outDir: swCacheDir,
       emptyOutDir: true,
       lib: {
-        entry: path.resolve(rscTestDir, "sw.ts"),
+        entry: path.resolve(rscTestDir, "sw.tsx"),
         formats: ["iife"],
         name: "ServiceWorker",
         fileName: () => "sw.js",
