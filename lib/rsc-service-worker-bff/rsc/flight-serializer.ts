@@ -115,13 +115,9 @@ export async function executeServerAction(
 }
 
 /**
- * Serialize a React element to RSC wire format
+ * Serialize a React element to RSC wire format (returns string)
  */
-export function serializeToFlightStream(
-  element: ReactNode,
-  manifest: ClientManifest,
-): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
+export function serializeToFlightPayload(element: ReactNode, manifest: ClientManifest): string {
   // Start module IDs from 1 to leave 0 for the root
   let moduleRowId = 1;
   const rows: string[] = [];
@@ -309,17 +305,28 @@ export function serializeToFlightStream(
   const rootValue = serializeValue(element);
   const rootRow = `0:${JSON.stringify(rootValue)}\n`;
 
-  // Collect all data into a single buffer
-  // Safari has issues with streams that close synchronously in service workers
-  const allRows = [...rows, rootRow];
-  const fullPayload = encoder.encode(allRows.join(""));
+  // Return all rows as a single string
+  // Note: Module/import rows come first, then the root element row
+  return [...rows, rootRow].join("");
+}
 
-  // Create stream using pull-based approach for better Safari compatibility
+/**
+ * Serialize a React element to RSC wire format (returns ReadableStream)
+ * @deprecated Use serializeToFlightPayload for better Safari compatibility
+ */
+export function serializeToFlightStream(
+  element: ReactNode,
+  manifest: ClientManifest,
+): ReadableStream<Uint8Array> {
+  const payload = serializeToFlightPayload(element, manifest);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(payload);
+
   let sent = false;
   return new ReadableStream({
     pull(controller) {
       if (!sent) {
-        controller.enqueue(fullPayload);
+        controller.enqueue(data);
         sent = true;
       }
       controller.close();
@@ -328,20 +335,24 @@ export function serializeToFlightStream(
 }
 
 /**
- * Create a Response from a serialized RSC stream
+ * Create a Response from a serialized RSC payload
+ *
+ * Uses string body instead of ReadableStream for Safari service worker compatibility.
+ * Safari's service worker implementation doesn't properly handle ReadableStream
+ * in Response constructor, resulting in "[object ReadableStream]" as body.
  */
 export function createFlightResponse(
   element: ReactNode,
   manifest: ClientManifest,
   init?: ResponseInit,
 ): Response {
-  const stream = serializeToFlightStream(element, manifest);
-  return new Response(stream, {
+  const payload = serializeToFlightPayload(element, manifest);
+
+  return new Response(payload, {
     ...init,
     headers: {
       "Content-Type": "text/x-component; charset=utf-8",
       "Cache-Control": "no-cache, no-store, must-revalidate",
-      // Safari compatibility headers
       "X-Content-Type-Options": "nosniff",
       ...init?.headers,
     },
