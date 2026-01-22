@@ -28,8 +28,12 @@ const serviceWorkers = [
 ];
 
 // Build a single service worker
-async function buildSW(config: (typeof serviceWorkers)[0]): Promise<void> {
-  console.log(`[SW:${config.name}] Building...`);
+async function buildSW(
+  config: (typeof serviceWorkers)[0],
+  mode: "development" | "production",
+): Promise<void> {
+  console.group(`[SW:${config.name}, ${mode}]`);
+  console.log("Building...");
 
   await viteBuild({
     configFile: false,
@@ -51,6 +55,11 @@ async function buildSW(config: (typeof serviceWorkers)[0]): Promise<void> {
       alias: {
         "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
       },
+      // Required for react-server-dom-webpack/server
+      conditions:
+        mode === "development"
+          ? ["development", "browser", "import", "default"]
+          : ["production", "browser", "import", "default"],
     },
     plugins: [react()],
     logLevel: "warn",
@@ -59,16 +68,17 @@ async function buildSW(config: (typeof serviceWorkers)[0]): Promise<void> {
     },
   });
 
-  console.log(`[SW:${config.name}] Built successfully`);
+  console.log("Built successfully");
+  console.groupEnd();
 }
 
 // Build all service workers
-async function buildAllServiceWorkers(): Promise<void> {
-  await Promise.all(serviceWorkers.map(buildSW));
+async function buildAllServiceWorkers(mode: "development" | "production"): Promise<void> {
+  await Promise.all(serviceWorkers.map((sw) => buildSW(sw, mode)));
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     tailwindcss(),
     react({
@@ -80,7 +90,7 @@ export default defineConfig({
     {
       name: "rsc-service-workers",
       async buildStart() {
-        await buildAllServiceWorkers();
+        await buildAllServiceWorkers(mode as "development" | "production");
       },
       configureServer(server) {
         // Serve compiled service workers
@@ -110,7 +120,7 @@ export default defineConfig({
             !file.includes("node_modules")
           ) {
             console.log(`[SW:${sw.name}] Detected change, rebuilding...`);
-            await buildSW(sw);
+            await buildSW(sw, mode as "development" | "production");
             server.ws.send({ type: "full-reload" });
             return;
           }
@@ -171,4 +181,4 @@ export default defineConfig({
       "Cross-Origin-Embedder-Policy": "require-corp",
     },
   },
-});
+}));
