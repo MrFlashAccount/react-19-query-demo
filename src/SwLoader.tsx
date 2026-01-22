@@ -10,13 +10,13 @@ async function registerServiceWorker() {
     // Unregister old service workers
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const reg of registrations) {
-      if (!reg.active?.scriptURL.includes("rsc-movies-sw.js")) {
+      if (!reg.active?.scriptURL.includes("movies-sw.js")) {
         await reg.unregister();
       }
     }
 
-    // Register RSC movies service worker
-    const registration = await navigator.serviceWorker.register("/rsc-movies-sw.js", {
+    // Register combined movies service worker (handles both JSON API and RSC)
+    const registration = await navigator.serviceWorker.register("/movies-sw.js", {
       scope: "/",
     });
 
@@ -33,7 +33,7 @@ async function registerServiceWorker() {
     }
 
     await navigator.serviceWorker.ready;
-    console.log("[SW] RSC Movies service worker ready");
+    console.log("[SW] Movies service worker ready");
   } catch (error) {
     console.error("[SW] Failed to register service worker:", error);
   }

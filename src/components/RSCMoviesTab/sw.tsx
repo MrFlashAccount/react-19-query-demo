@@ -169,27 +169,62 @@ async function App({ searchQuery, limit }: { searchQuery: string; limit: number 
 
 // ========== Routes ==========
 setupWorker([
-  http.get("/health", () => json({ status: "ok", timestamp: Date.now() })),
+  // ===== JSON API (for CustomLibraryTab & TanStackQueryTab) =====
 
-  // RSC endpoint with search params
-  http.get("/rsc/movies", async ({ url }) => {
-    await ready;
-    const searchQuery = url.searchParams.get("q") ?? "";
-    const limit = Number(url.searchParams.get("limit") ?? 100);
+  // GET /api/movies/search?query=...&limit=...
+  http.get("/api/movies/search", async ({ url }) => {
+    const query = url.searchParams.get("query") ?? "";
+    const limitParam = url.searchParams.get("limit");
+    const limit = limitParam != null ? Number.parseInt(limitParam, 10) : 500;
 
-    const { renderRSC } = await import("lib/rsc-service-worker-bff/rsc/server");
-    const stream = await renderRSC(<App searchQuery={searchQuery} limit={limit} />, ctx);
-
-    return new Response(stream, {
-      headers: {
-        "Content-Type": "text/x-component; charset=utf-8",
-        "Cache-Control": "no-cache",
-      },
-    });
+    const results = await searchMovies(query, limit);
+    return json(results);
   }),
 
-  // Server actions
-  http.action("/rsc/movies", ctx, { ready }),
+  // GET /api/movies/:id
+  http.get("/api/movies/:id", async ({ params }) => {
+    const id = params.id as string;
+    const database = await getDatabase();
+    const movie = database.find((m) => m.id === id);
+
+    if (movie == null) {
+      return json({ error: `Movie with id ${id} not found` }, { status: 404 });
+    }
+
+    return json(movie);
+  }),
+
+  // PATCH /api/movies/:id/rating
+  http.patch("/api/movies/:id/rating", async ({ params, request }) => {
+    const id = params.id as string;
+    const body = (await request.json()) as { rating: number };
+    const database = await getDatabase();
+    const movie = database.find((m) => m.id === id);
+
+    if (movie == null) {
+      return json({ error: `Movie with id ${id} not found` }, { status: 404 });
+    }
+
+    // Update rating with some randomness
+    const randomDecimal = Math.random() * 1.9;
+    movie.rating = Math.min(10, parseFloat((body.rating + randomDecimal).toFixed(1)));
+
+    return json(movie);
+  }),
+
+  // ===== RSC API (for RSCMoviesTab) =====
+
+  // RSC endpoint + server actions
+  ...http.rscRoutes(
+    "/rsc/movies",
+    ({ url }) => {
+      const searchQuery = url.searchParams.get("q") ?? "";
+      const limit = Number(url.searchParams.get("limit") ?? 100);
+      return <App searchQuery={searchQuery} limit={limit} />;
+    },
+    ctx,
+    { ready },
+  ),
 ]);
 
-console.log("[RSC Movies SW] Routes registered");
+console.log("[Movies SW] Routes registered (JSON API + RSC)");

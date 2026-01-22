@@ -34,6 +34,22 @@ export interface RSCRouteOptions {
 }
 
 /**
+ * Context passed to RSC render function
+ */
+export interface RSCRenderContext<TParams extends RouteParams = RouteParams> {
+  url: URL;
+  request: Request;
+  params: TParams;
+}
+
+/**
+ * RSC render function type
+ */
+export type RSCRenderFn<TParams extends RouteParams = RouteParams> = (
+  ctx: RSCRenderContext<TParams>,
+) => ReactNode | Promise<ReactNode>;
+
+/**
  * HTTP method helpers for defining routes
  *
  * @example
@@ -77,19 +93,22 @@ export const http = {
    *
    * @example
    * ```tsx
-   * http.rsc("/rsc", () => <App />, ctx, { ready: initPromise })
+   * http.rsc("/rsc/movies", ({ url }) => {
+   *   const q = url.searchParams.get("q") ?? "";
+   *   return <MovieList query={q} />;
+   * }, ctx, { ready: initPromise })
    * ```
    */
-  rsc(
+  rsc<TParams extends RouteParams = RouteParams>(
     path: string,
-    render: () => ReactNode,
+    render: RSCRenderFn<TParams>,
     ctx: RSCContext,
     options?: RSCRouteOptions,
-  ): RouteDefinition {
+  ): RouteDefinition<TParams> {
     return {
       method: "GET",
       path,
-      handler: async () => {
+      handler: async ({ url, request, params }) => {
         // Lazy import to avoid circular deps and ensure webpack-shim loads first
         const { renderRSC } = await import("./rsc/server");
 
@@ -97,7 +116,8 @@ export const http = {
           await options.ready;
         }
 
-        const stream = await renderRSC(render(), ctx);
+        const element = await render({ url, request, params });
+        const stream = await renderRSC(element, ctx);
 
         return new Response(stream, {
           headers: {
@@ -172,15 +192,18 @@ export const http = {
    * @example
    * ```tsx
    * // Creates both GET /rsc (render) and POST /rsc (actions)
-   * ...http.rscRoutes("/rsc", () => <App />, ctx, { ready: initPromise })
+   * ...http.rscRoutes("/rsc/movies", ({ url }) => {
+   *   const q = url.searchParams.get("q") ?? "";
+   *   return <MovieList query={q} />;
+   * }, ctx, { ready: initPromise })
    * ```
    */
-  rscRoutes(
+  rscRoutes<TParams extends RouteParams = RouteParams>(
     path: string,
-    render: () => ReactNode,
+    render: RSCRenderFn<TParams>,
     ctx: RSCContext,
     options?: RSCRouteOptions,
-  ): [RouteDefinition, RouteDefinition] {
+  ): [RouteDefinition<TParams>, RouteDefinition] {
     return [this.rsc(path, render, ctx, options), this.action(path, ctx, options)];
   },
 } as const;

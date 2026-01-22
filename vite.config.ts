@@ -18,10 +18,11 @@ const serviceWorkers = [
     watchPattern: "rsc-service-worker-bff",
   },
   {
-    name: "rsc-movies",
+    // Combined Movies SW: handles both JSON API (/api/movies/*) and RSC (/rsc/movies)
+    name: "movies",
     entry: path.resolve(rootDir, "src/components/RSCMoviesTab/sw.tsx"),
     outDir: path.resolve(rootDir, "src/components/RSCMoviesTab/.sw-cache"),
-    serveUrls: ["/rsc-movies-sw.js"],
+    serveUrls: ["/movies-sw.js"],
     watchPattern: "RSCMoviesTab",
   },
 ];

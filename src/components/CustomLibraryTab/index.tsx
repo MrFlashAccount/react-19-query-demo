@@ -52,14 +52,7 @@ function CustomLibraryTabContent({ formState, onFormStateChange }: TabProps) {
 
       <div className="w-full max-w-6xl">
         <MovieList movies={movies}>
-          {(movie) => (
-            <MovieCardCustom
-              key={movie.id}
-              movie={movie}
-              searchQuery={searchQuery}
-              movieLimit={movieLimit}
-            />
-          )}
+          {(movie) => <MovieCardCustom key={movie.id} movie={movie} />}
         </MovieList>
       </div>
     </div>
@@ -69,25 +62,11 @@ function CustomLibraryTabContent({ formState, onFormStateChange }: TabProps) {
 /**
  * Movie card component using custom query library
  */
-function MovieCardCustom({
-  movie,
-  searchQuery,
-  movieLimit,
-}: {
-  movie: Movie;
-  searchQuery: string;
-  movieLimit: number;
-}) {
+function MovieCardCustom({ movie }: { movie: Movie }) {
   const movieId = movie.id;
 
   const { mutate: updateRating } = useMutation({
     mutation: updateMovieRatingMutation,
-  });
-
-  // Subscribe to movies query just to add some overhead
-  useQuery({
-    query: moviesQuery,
-    params: { searchQuery, movieLimit },
   });
 
   return (

@@ -6,8 +6,9 @@
  */
 "use client";
 
-import { useState, useTransition } from "react";
-import { callAction } from "lib/rsc-service-worker-bff";
+import { useState } from "react";
+import { useMutation } from "lib/goat-query/react";
+import { rscUpdateMovieRatingMutation } from "../../queries";
 
 // Star icon component
 function StarIcon({ filled, className }: { filled: boolean; className?: string }) {
@@ -39,25 +40,10 @@ export interface RatingStarsProps {
  */
 export function RatingStars({ movieId, currentStars }: RatingStarsProps) {
   const [hoveredStar, setHoveredStar] = useState<number | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [optimisticStars, setOptimisticStars] = useState(currentStars);
 
-  const handleStarClick = (starIndex: number) => {
-    // Optimistic update
-    setOptimisticStars(starIndex);
-
-    startTransition(async () => {
-      try {
-        await callAction("/rsc/movies", "updateRating", [movieId, starIndex * 2]);
-      } catch (err) {
-        console.error("Rating update failed:", err);
-        // Revert optimistic update
-        setOptimisticStars(currentStars);
-      }
-    });
-  };
-
-  const displayStars = optimisticStars;
+  const { mutate: updateRating, isPending } = useMutation({
+    mutation: rscUpdateMovieRatingMutation,
+  });
 
   return (
     <>
@@ -66,12 +52,12 @@ export function RatingStars({ movieId, currentStars }: RatingStarsProps) {
         onMouseLeave={() => setHoveredStar(null)}
       >
         {[1, 2, 3, 4, 5].map((star) => {
-          const showFilled = hoveredStar != null ? star <= hoveredStar : star <= displayStars;
+          const showFilled = hoveredStar != null ? star <= hoveredStar : star <= currentStars;
 
           return (
             <button
               key={star}
-              onClick={() => handleStarClick(star)}
+              onClick={() => updateRating({ movieId, rating: star * 2 })}
               onMouseEnter={() => setHoveredStar(star)}
               disabled={isPending}
               className={`transition-all duration-150 ${
