@@ -224,7 +224,7 @@ setupWorker([
     const searchQuery = url.searchParams.get("q") ?? "";
     const limit = Number(url.searchParams.get("limit") ?? 100);
     console.log("[SW] Rendering RSC for movies:", { searchQuery, limit });
-    return createFlightResponse(<App searchQuery={searchQuery} limit={limit} />, manifest);
+    return await createFlightResponse(<App searchQuery={searchQuery} limit={limit} />, manifest);
   }),
 
   // POST /rsc/movies - Server action

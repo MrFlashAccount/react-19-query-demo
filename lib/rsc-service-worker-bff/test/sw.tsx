@@ -119,9 +119,9 @@ setupWorker([
   ),
 
   // RSC endpoint - returns RSC stream
-  http.get("/rsc", () => {
+  http.get("/rsc", async () => {
     console.log("[SW] Rendering RSC stream...");
-    return createFlightResponse(<App />, manifest);
+    return await createFlightResponse(<App />, manifest);
   }),
 
   // Server action endpoint - handles action invocations from client

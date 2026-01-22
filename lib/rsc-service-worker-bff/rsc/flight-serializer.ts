@@ -104,7 +104,7 @@ export async function executeServerAction(
   try {
     const result = await action(...args);
     // Serialize the result as an RSC stream
-    return createFlightResponse(result as ReactNode, manifest);
+    return await createFlightResponse(result as ReactNode, manifest);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), {
@@ -115,9 +115,20 @@ export async function executeServerAction(
 }
 
 /**
- * Serialize a React element to RSC wire format (returns string)
+ * Check if a value is a Promise
  */
-export function serializeToFlightPayload(element: ReactNode, manifest: ClientManifest): string {
+function isPromise(value: unknown): value is Promise<unknown> {
+  return value != null && typeof (value as Promise<unknown>).then === "function";
+}
+
+/**
+ * Serialize a React element to RSC wire format (returns string)
+ * Supports async server components.
+ */
+export async function serializeToFlightPayload(
+  element: ReactNode,
+  manifest: ClientManifest,
+): Promise<string> {
   // Start module IDs from 1 to leave 0 for the root
   let moduleRowId = 1;
   const rows: string[] = [];
@@ -158,7 +169,13 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
     return id;
   }
 
-  function serializeValue(value: unknown): FlightValue {
+  async function serializeValue(value: unknown): Promise<FlightValue> {
+    // Handle Promises (from async components)
+    if (isPromise(value)) {
+      const resolved = await value;
+      return serializeValue(resolved);
+    }
+
     if (value === null || value === undefined) {
       return value as null | undefined;
     }
@@ -168,7 +185,8 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
     }
 
     if (Array.isArray(value)) {
-      return value.map(serializeValue);
+      const serialized = await Promise.all(value.map(serializeValue));
+      return serialized;
     }
 
     if (typeof value === "object") {
@@ -202,7 +220,7 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
       // Regular object
       const result: Record<string, FlightValue> = {};
       for (const key of Object.keys(obj)) {
-        result[key] = serializeValue(obj[key]);
+        result[key] = await serializeValue(obj[key]);
       }
       return result;
     }
@@ -216,15 +234,18 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
         return `${FUNCTION_PREFIX}${refId.toString(16)}` as unknown as FlightValue;
       }
 
-      // Server component - execute it
+      // Server component - execute it (may return Promise)
       const Component = value as (props: Record<string, unknown>) => ReactNode;
-      return serializeValue(Component({}));
+      const rendered = Component({});
+      return serializeValue(rendered);
     }
 
     return null;
   }
 
-  function serializeElement(element: ReactElement<Record<string, unknown>>): FlightValue {
+  async function serializeElement(
+    element: ReactElement<Record<string, unknown>>,
+  ): Promise<FlightValue> {
     const { type, key, props } = element;
 
     // Handle fragments
@@ -234,15 +255,17 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
     }
 
     // Helper to serialize props
-    function serializeProps(props: Record<string, unknown>): Record<string, FlightValue> {
+    async function serializeProps(
+      props: Record<string, unknown>,
+    ): Promise<Record<string, FlightValue>> {
       const serializedProps: Record<string, FlightValue> = {};
       for (const propKey of Object.keys(props)) {
         if (propKey !== "children") {
-          serializedProps[propKey] = serializeValue(props[propKey]);
+          serializedProps[propKey] = await serializeValue(props[propKey]);
         }
       }
       if (props.children !== undefined) {
-        serializedProps.children = serializeValue(props.children);
+        serializedProps.children = await serializeValue(props.children);
       }
       return serializedProps;
     }
@@ -262,7 +285,7 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
           ELEMENT_PREFIX,
           `${MODULE_PREFIX}${refId.toString(16)}`,
           key,
-          serializeProps(props),
+          await serializeProps(props),
         ] as FlightValue;
       }
     }
@@ -283,11 +306,11 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
           ELEMENT_PREFIX,
           `${MODULE_PREFIX}${refId.toString(16)}`,
           key,
-          serializeProps(props),
+          await serializeProps(props),
         ] as FlightValue;
       }
 
-      // Server component - render it
+      // Server component - render it (may be async)
       const rendered = (type as (props: Record<string, unknown>) => ReactNode)(props);
       return serializeValue(rendered);
     }
@@ -295,14 +318,14 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
     // Handle intrinsic element (div, span, etc.)
     if (typeof type === "string") {
       // Return element tuple: ["$", "div", key, props]
-      return [ELEMENT_PREFIX, type, key, serializeProps(props)] as FlightValue;
+      return [ELEMENT_PREFIX, type, key, await serializeProps(props)] as FlightValue;
     }
 
     return null;
   }
 
   // Serialize the root element
-  const rootValue = serializeValue(element);
+  const rootValue = await serializeValue(element);
   const rootRow = `0:${JSON.stringify(rootValue)}\n`;
 
   // Return all rows as a single string
@@ -314,11 +337,11 @@ export function serializeToFlightPayload(element: ReactNode, manifest: ClientMan
  * Serialize a React element to RSC wire format (returns ReadableStream)
  * @deprecated Use serializeToFlightPayload for better Safari compatibility
  */
-export function serializeToFlightStream(
+export async function serializeToFlightStream(
   element: ReactNode,
   manifest: ClientManifest,
-): ReadableStream<Uint8Array> {
-  const payload = serializeToFlightPayload(element, manifest);
+): Promise<ReadableStream<Uint8Array>> {
+  const payload = await serializeToFlightPayload(element, manifest);
   const encoder = new TextEncoder();
   const data = encoder.encode(payload);
 
@@ -341,12 +364,12 @@ export function serializeToFlightStream(
  * Safari's service worker implementation doesn't properly handle ReadableStream
  * in Response constructor, resulting in "[object ReadableStream]" as body.
  */
-export function createFlightResponse(
+export async function createFlightResponse(
   element: ReactNode,
   manifest: ClientManifest,
   init?: ResponseInit,
-): Response {
-  const payload = serializeToFlightPayload(element, manifest);
+): Promise<Response> {
+  const payload = await serializeToFlightPayload(element, manifest);
 
   return new Response(payload, {
     ...init,
