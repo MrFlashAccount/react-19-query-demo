@@ -1,37 +1,21 @@
+/// <reference lib="webworker" />
 import type { CompiledRoute, RouteDefinition, RouteParams } from "./types";
 
-/**
- * Convert a path pattern like "/api/movies/:id/rating" to a regex
- * and extract parameter names
- */
-export function compilePath(path: string): { pattern: RegExp; paramNames: string[] } {
-  const paramNames: string[] = [];
-
-  // Escape special regex chars except : for params
-  const regexPattern = path
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/:([a-zA-Z_][a-zA-Z0-9_]*)/g, (_, paramName) => {
-      paramNames.push(paramName);
-      return "([^/]+)";
-    });
-
-  return {
-    pattern: new RegExp(`^${regexPattern}$`),
-    paramNames,
-  };
-}
+// Ensure URLPattern global types are available
+import "./types";
 
 /**
- * Compile a route definition into a matchable route
+ * Compile a route definition into a matchable route using URLPattern
  */
 export function compileRoute<TParams extends RouteParams>(
   route: RouteDefinition<TParams>,
 ): CompiledRoute<TParams> {
-  const { pattern, paramNames } = compilePath(route.path);
+  // URLPattern uses :param syntax natively
+  const pattern = new URLPattern({ pathname: route.path });
+
   return {
     method: route.method,
     pattern,
-    paramNames,
     handler: route.handler,
   };
 }
@@ -47,16 +31,19 @@ export function matchRoute(
   for (const route of routes) {
     if (route.method !== method) continue;
 
-    const match = pathname.match(route.pattern);
+    const match = route.pattern.exec({ pathname });
     if (match) {
+      // Extract params from URLPattern result
       const params: RouteParams = {};
-      route.paramNames.forEach((name, index) => {
-        params[name] = decodeURIComponent(match[index + 1]);
-      });
+      const groups = match.pathname.groups;
+      for (const [key, value] of Object.entries(groups)) {
+        if (value !== undefined) {
+          params[key] = decodeURIComponent(value);
+        }
+      }
       return { route, params };
     }
   }
 
   return null;
 }
-

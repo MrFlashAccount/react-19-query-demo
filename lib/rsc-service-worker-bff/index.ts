@@ -9,8 +9,8 @@ export type {
   ServiceWorker,
 } from "./types";
 
-// HTTP method helpers
-export { http } from "./http";
+// HTTP method helpers (includes rsc, action, rscRoutes)
+export { http, type RSCRouteOptions } from "./http";
 
 // Response helpers
 export { json, text, html, redirect, noContent, error, passthrough } from "./response";
@@ -46,10 +46,29 @@ export {
   polyfillReady,
 } from "./rsc";
 
-// Client reference utilities (for service worker)
+// Client reference utilities (manual approach - for service worker)
 export {
   clientRef,
   createClientRefs,
   createClientModule,
   type ClientReference,
 } from "./rsc/client-reference";
+
+// Official RSC server utilities (recommended - uses react-server-dom-webpack)
+export {
+  // All-in-one setup
+  createRSC,
+  type CreateRSCConfig,
+  type CreateRSCResult,
+  // Individual utilities
+  createRSCContext,
+  createClientProxy,
+  registerAction,
+  registerActions,
+  renderRSC,
+  callAction,
+  decodeActionArgs,
+  isActionRequest,
+  getActionIdFromRequest,
+  type RSCContext,
+} from "./rsc/server";

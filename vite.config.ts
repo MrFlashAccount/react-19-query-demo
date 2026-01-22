@@ -33,6 +33,8 @@ async function buildServiceWorker(): Promise<void> {
       alias: {
         "@lib/rsc-service-worker-bff": path.resolve(rscTestDir, ".."),
       },
+      // Required for react-server-dom-webpack/server
+      conditions: ["react-server", "import", "module", "browser", "default"],
     },
     plugins: [react()],
     logLevel: "warn",
