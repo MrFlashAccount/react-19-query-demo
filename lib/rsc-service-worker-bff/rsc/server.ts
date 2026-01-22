@@ -142,13 +142,13 @@ export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unkn
  *
  * @example
  * ```ts
- * const stream = await callAction(ctx, 'incrementCount', encodedArgs);
+ * const stream = await handleAction(ctx, 'incrementCount', encodedArgs);
  * return new Response(stream, {
  *   headers: { 'Content-Type': 'text/x-component' }
  * });
  * ```
  */
-export async function callAction(
+export async function handleAction(
   ctx: RSCContext,
   actionId: string,
   encodedArgs: EncodedActionArgs,

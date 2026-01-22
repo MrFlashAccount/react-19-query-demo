@@ -76,6 +76,15 @@ declare module "react-server-dom-webpack/client" {
   ): Promise<T>;
 
   /**
+   * Create React elements from a fetch response promise
+   * Convenience wrapper around createFromReadableStream
+   */
+  export function createFromFetch<T = unknown>(
+    fetchPromise: Promise<Response>,
+    options?: CreateFromStreamOptions,
+  ): Promise<T>;
+
+  /**
    * Encode action arguments for sending to server
    */
   export function encodeReply(args: unknown[]): Promise<FormData | string>;

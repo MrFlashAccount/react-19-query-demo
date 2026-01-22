@@ -12,6 +12,45 @@
 
 import type { EncodedActionArgs } from "./types";
 
+/**
+ * Wait for service worker to be controlling the page.
+ * Resolves when the SW is active AND has claimed this client.
+ *
+ * @example
+ * ```ts
+ * await ensureWorkerReady();
+ * // Now safe to make requests that the SW will intercept
+ * ```
+ */
+export async function ensureWorkerReady(): Promise<void> {
+  if (!("serviceWorker" in navigator)) {
+    throw new Error("Service Workers not supported");
+  }
+
+  await navigator.serviceWorker.ready;
+
+  // If already controlled, we're good
+  if (navigator.serviceWorker.controller) {
+    return;
+  }
+
+  // Wait for controller to be set (after clients.claim())
+  await new Promise<void>((resolve) => {
+    const onChange = () => {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+        resolve();
+      }
+    };
+    navigator.serviceWorker.addEventListener("controllerchange", onChange);
+    // Check again in case it was set between ready and addEventListener
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.removeEventListener("controllerchange", onChange);
+      resolve();
+    }
+  });
+}
+
 // Lazy imports to ensure webpack-shim loads first
 let _createFromReadableStream: typeof import("react-server-dom-webpack/client").createFromReadableStream;
 let _encodeReply: typeof import("react-server-dom-webpack/client").encodeReply;
@@ -137,6 +176,8 @@ export function createCallServer(
 /**
  * Fetch and consume an RSC endpoint
  *
+ * Automatically waits for the service worker to be controlling the page.
+ *
  * @example
  * ```ts
  * const element = await fetchRSC('/rsc');
@@ -147,6 +188,8 @@ export async function fetchRSC<T = unknown>(
   url: string,
   options?: RequestInit & ConsumeRSCOptions,
 ): Promise<T> {
+  await ensureWorkerReady();
+
   const { callServer, ...fetchOptions } = options ?? {};
 
   const response = await fetch(url, {
@@ -162,6 +205,65 @@ export async function fetchRSC<T = unknown>(
   }
 
   return consumeRSC<T>(response.body!, { callServer });
+}
+
+/**
+ * Options for calling a server action
+ */
+export interface CallActionOptions extends Omit<RequestInit, "method" | "body"> {
+  /**
+   * If true, the response will be parsed as RSC and returned
+   * If false (default), only success/failure is checked
+   */
+  parseResponse?: boolean;
+}
+
+/**
+ * Call a server action from the client
+ *
+ * Automatically waits for the service worker to be controlling the page.
+ *
+ * @example
+ * ```ts
+ * // Simple action call (just check success)
+ * await callAction('/rsc/movies', 'updateRating', [movieId, 5]);
+ *
+ * // Action that returns RSC data
+ * const result = await callAction('/rsc/movies', 'getDetails', [movieId], { parseResponse: true });
+ * ```
+ */
+export async function callAction<T = void>(
+  endpoint: string,
+  actionId: string,
+  args: unknown[],
+  options?: CallActionOptions,
+): Promise<T> {
+  await ensureWorkerReady();
+
+  const { parseResponse = false, ...fetchOptions } = options ?? {};
+  const encodedArgs = await encodeActionArgs(args);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    body: encodedArgs.data,
+    headers: {
+      "Content-Type":
+        encodedArgs.type === "formdata" ? "application/x-www-form-urlencoded" : "text/plain",
+      "x-rsc-action": actionId,
+      ...fetchOptions?.headers,
+    },
+    ...fetchOptions,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Action '${actionId}' failed: ${response.status}`);
+  }
+
+  if (parseResponse && response.body) {
+    return consumeRSC<T>(response.body);
+  }
+
+  return undefined as T;
 }
 
 // Re-export types

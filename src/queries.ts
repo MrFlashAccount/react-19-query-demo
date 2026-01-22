@@ -24,6 +24,19 @@ export const movieQuery = query({
   gcTime: 60000,
 });
 
+export const rscMoviesQuery = query({
+  queryFn: (params: { searchQuery: string; limit: number }, ctx) =>
+    ctx.api.searchMoviesRSC(params.searchQuery, params.limit),
+  staleTime: 5000,
+  gcTime: 60000,
+});
+
+export const rscUpdateMovieRatingMutation = mutation({
+  mutationFn: (params: { movieId: string; rating: number }, ctx) =>
+    ctx.api.updateMovieRatingRSC(params.movieId, params.rating),
+  invalidates: [rscMoviesQuery],
+});
+
 /**
  * Mutation definitions for the movie application
  */
@@ -40,7 +53,13 @@ export const updateMovieRatingMutation = mutation({
 /**
  * Application dependency graph
  */
-export const appGraph = new DependencyGraph([moviesQuery, movieQuery, updateMovieRatingMutation]);
+export const appGraph = new DependencyGraph([
+  moviesQuery,
+  movieQuery,
+  updateMovieRatingMutation,
+  rscMoviesQuery,
+  rscUpdateMovieRatingMutation,
+]);
 
 declare module "lib/goat-query/react" {
   interface Context {

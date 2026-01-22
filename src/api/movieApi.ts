@@ -1,4 +1,5 @@
 import type { Movie } from "./types";
+import { callAction, fetchRSC } from "lib/rsc-service-worker-bff";
 
 const DEFAULT_LIMIT = 500;
 const decoder = new TextDecoder();
@@ -113,4 +114,22 @@ export async function getMovieById(movieId: string): Promise<Movie> {
  */
 export async function updateMovieRating(movieId: string, newRating: number): Promise<Movie> {
   return sendWorkerMessage<Movie>("updateMovieRating", { movieId, newRating });
+}
+
+export async function searchMoviesRSC(
+  query: string,
+  limit: number = DEFAULT_LIMIT,
+): Promise<React.ReactNode> {
+  const params = new URLSearchParams({
+    q: query,
+    limit: limit.toString(),
+  });
+
+  // fetchRSC automatically waits for SW to be controlling the page
+  return fetchRSC<React.ReactNode>(`/rsc/movies?${params}`);
+}
+
+export async function updateMovieRatingRSC(movieId: string, newRating: number) {
+  // callAction automatically waits for SW to be controlling the page
+  await callAction("/rsc/movies", "updateRating", [movieId, newRating]);
 }

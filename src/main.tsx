@@ -13,8 +13,10 @@ React.startTransition(() => {
   root.render(
     <React.StrictMode>
       <Suspense fallback={<Loader />}>
-        <App />
         <SwLoader />
+        <Suspense fallback={<Loader />}>
+          <App />
+        </Suspense>
       </Suspense>
     </React.StrictMode>,
   );

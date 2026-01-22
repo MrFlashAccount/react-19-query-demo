@@ -39,9 +39,12 @@ export {
   registerClientModule,
   buildClientManifest,
   // Client helpers
+  ensureWorkerReady,
   fetchRSC,
   consumeRSC,
   createCallServer,
+  callAction,
+  type CallActionOptions,
   // Polyfill
   polyfillReady,
 } from "./rsc";
@@ -66,7 +69,7 @@ export {
   registerAction,
   registerActions,
   renderRSC,
-  callAction,
+  handleAction,
   decodeActionArgs,
   isActionRequest,
   getActionIdFromRequest,

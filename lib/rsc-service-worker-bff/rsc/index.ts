@@ -88,19 +88,22 @@ export {
   createClientProxy,
   renderRSC,
   decodeActionArgs,
-  callAction,
+  handleAction,
   getActionIdFromRequest,
   isActionRequest,
 } from "./server";
 
 // Client (for main thread)
 export {
+  ensureWorkerReady,
   consumeRSC,
   consumeRSCResponse,
   encodeActionArgs,
   createCallServer,
   fetchRSC,
+  callAction,
   type ConsumeRSCOptions,
+  type CallActionOptions,
 } from "./client";
 
 // Module registry
@@ -143,4 +146,3 @@ export {
   getServerAction,
   executeServerAction,
 } from "./flight-serializer";
-

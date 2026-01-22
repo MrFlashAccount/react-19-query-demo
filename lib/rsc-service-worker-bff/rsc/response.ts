@@ -6,7 +6,13 @@
 
 import type { ReactNode } from "react";
 import { polyfillReady } from "./polyfill";
-import { renderRSC, callAction, getActionIdFromRequest, createRSCContext, registerActions } from "./server";
+import {
+  renderRSC,
+  handleAction,
+  getActionIdFromRequest,
+  createRSCContext,
+  registerActions,
+} from "./server";
 import type { ClientManifest, EncodedActionArgs, RSCResponseOptions, RSCContext } from "./types";
 
 /**
@@ -111,7 +117,7 @@ export async function rscAction(
     : { type: "string", data: body };
 
   try {
-    const stream = await callAction(ctx, actionId, encodedArgs, { onError: options?.onError });
+    const stream = await handleAction(ctx, actionId, encodedArgs, { onError: options?.onError });
 
     return new Response(stream, {
       status: options?.status ?? 200,
@@ -131,10 +137,7 @@ export async function rscAction(
 /**
  * Create an RSC error response
  */
-export function rscError(
-  message: string,
-  status: number = 500,
-): Response {
+export function rscError(message: string, status: number = 500): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -166,9 +169,7 @@ export interface CreateRSCHandlerOptions {
  * http.get('/rsc', () => renderApp(<App />));
  * ```
  */
-export function createRSCHandler(
-  options: CreateRSCHandlerOptions,
-): {
+export function createRSCHandler(options: CreateRSCHandlerOptions): {
   ctx: RSCContext;
   render: (element: ReactNode, responseOptions?: RSCResponseOptions) => Promise<Response>;
   action: (request: Request, responseOptions?: RSCResponseOptions) => Promise<Response>;
@@ -209,4 +210,3 @@ export function createRSCHandler(
 // Re-export for convenience
 export { createRSCContext, registerActions } from "./server";
 export type { RSCContext, RSCResponseOptions, ClientManifest };
-

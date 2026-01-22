@@ -6,22 +6,39 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, build as viteBuild } from "vite";
 
-const rscTestDir = path.resolve(__dirname, "lib/rsc-service-worker-bff/test");
-const swCacheDir = path.resolve(rscTestDir, ".sw-cache");
+const rootDir = __dirname;
 
-// Build the RSC service worker
-async function buildServiceWorker(): Promise<void> {
-  console.log("[SW] Building RSC service worker...");
+// Service worker configs
+const serviceWorkers = [
+  {
+    name: "rsc-playground",
+    entry: path.resolve(rootDir, "lib/rsc-service-worker-bff/test/sw.tsx"),
+    outDir: path.resolve(rootDir, "lib/rsc-service-worker-bff/test/.sw-cache"),
+    serveUrls: ["/sw.js", "/lib/rsc-service-worker-bff/test/sw.js"],
+    watchPattern: "rsc-service-worker-bff",
+  },
+  {
+    name: "rsc-movies",
+    entry: path.resolve(rootDir, "src/components/RSCMoviesTab/sw.tsx"),
+    outDir: path.resolve(rootDir, "src/components/RSCMoviesTab/.sw-cache"),
+    serveUrls: ["/rsc-movies-sw.js"],
+    watchPattern: "RSCMoviesTab",
+  },
+];
+
+// Build a single service worker
+async function buildSW(config: (typeof serviceWorkers)[0]): Promise<void> {
+  console.log(`[SW:${config.name}] Building...`);
 
   await viteBuild({
     configFile: false,
-    root: rscTestDir,
+    root: path.dirname(config.entry),
     build: {
       write: true,
-      outDir: swCacheDir,
+      outDir: config.outDir,
       emptyOutDir: true,
       lib: {
-        entry: path.resolve(rscTestDir, "sw.tsx"),
+        entry: config.entry,
         formats: ["iife"],
         name: "ServiceWorker",
         fileName: () => "sw.js",
@@ -31,7 +48,7 @@ async function buildServiceWorker(): Promise<void> {
     },
     resolve: {
       alias: {
-        "@lib/rsc-service-worker-bff": path.resolve(rscTestDir, ".."),
+        "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
       },
       // Required for react-server-dom-webpack/server
       conditions: ["react-server", "import", "module", "browser", "default"],
@@ -43,7 +60,12 @@ async function buildServiceWorker(): Promise<void> {
     },
   });
 
-  console.log("[SW] Service worker built successfully");
+  console.log(`[SW:${config.name}] Built successfully`);
+}
+
+// Build all service workers
+async function buildAllServiceWorkers(): Promise<void> {
+  await Promise.all(serviceWorkers.map(buildSW));
 }
 
 // https://vitejs.dev/config/
@@ -55,68 +77,73 @@ export default defineConfig({
         plugins: ["babel-plugin-react-compiler"],
       },
     }),
-    // RSC Service Worker plugin
+    // RSC Service Workers plugin
     {
-      name: "rsc-service-worker-dev",
+      name: "rsc-service-workers",
       async buildStart() {
-        // Always build SW at startup to ensure it's fresh
-        await buildServiceWorker();
+        await buildAllServiceWorkers();
       },
       configureServer(server) {
-        // Serve compiled SW for RSC playground
+        // Serve compiled service workers
         server.middlewares.use(async (req, res, next) => {
-          if (req.url === "/lib/rsc-service-worker-bff/test/sw.js" || req.url === "/sw.js") {
-            try {
-              const content = await readFile(path.resolve(swCacheDir, "sw.js"), "utf-8");
-              res.setHeader("Content-Type", "application/javascript");
-              res.setHeader("Cache-Control", "no-cache");
-              res.end(content);
-              return;
-            } catch (err) {
-              console.error("[SW] Error serving sw.js:", err);
+          for (const sw of serviceWorkers) {
+            if (sw.serveUrls.some((url) => req.url === url)) {
+              try {
+                const content = await readFile(path.resolve(sw.outDir, "sw.js"), "utf-8");
+                res.setHeader("Content-Type", "application/javascript");
+                res.setHeader("Cache-Control", "no-cache");
+                res.end(content);
+                return;
+              } catch (err) {
+                console.error(`[SW:${sw.name}] Error serving:`, err);
+              }
             }
           }
           next();
         });
       },
       async handleHotUpdate({ file, server }) {
-        // Rebuild SW when RSC files change
-        if (
-          file.includes("rsc-service-worker-bff") &&
-          !file.includes(".sw-cache") &&
-          !file.includes("node_modules")
-        ) {
-          console.log("[SW] Detected change, rebuilding...");
-          await buildServiceWorker();
-          server.ws.send({ type: "full-reload" });
+        // Rebuild relevant SW when files change
+        for (const sw of serviceWorkers) {
+          if (
+            file.includes(sw.watchPattern) &&
+            !file.includes(".sw-cache") &&
+            !file.includes("node_modules")
+          ) {
+            console.log(`[SW:${sw.name}] Detected change, rebuilding...`);
+            await buildSW(sw);
+            server.ws.send({ type: "full-reload" });
+            return;
+          }
         }
       },
-      // Copy SW to output for production build
+      // Copy SWs to output for production build
       async writeBundle() {
-        const distDir = path.resolve(__dirname, "dist");
-        const swSource = path.resolve(swCacheDir, "sw.js");
-        const swDest = path.resolve(distDir, "sw.js");
-        const swDestRsc = path.resolve(distDir, "lib/rsc-service-worker-bff/test/sw.js");
+        const distDir = path.resolve(rootDir, "dist");
 
-        if (fs.existsSync(swSource)) {
-          // Copy to root for /sw.js
-          fs.copyFileSync(swSource, swDest);
-          // Copy to test dir for relative path
-          fs.mkdirSync(path.dirname(swDestRsc), { recursive: true });
-          fs.copyFileSync(swSource, swDestRsc);
-          console.log("[SW] Copied service worker to dist");
+        for (const sw of serviceWorkers) {
+          const swSource = path.resolve(sw.outDir, "sw.js");
+          if (fs.existsSync(swSource)) {
+            for (const url of sw.serveUrls) {
+              const dest = path.resolve(distDir, url.slice(1)); // Remove leading /
+              fs.mkdirSync(path.dirname(dest), { recursive: true });
+              fs.copyFileSync(swSource, dest);
+            }
+            console.log(`[SW:${sw.name}] Copied to dist`);
+          }
         }
       },
     },
   ],
   resolve: {
     alias: {
-      "lib/goat-query/react": path.resolve(__dirname, "lib/goat-query/react.ts"),
-      "lib/goat-query/devtools": path.resolve(__dirname, "lib/goat-query/devtools/index.ts"),
-      "lib/brand": path.resolve(__dirname, "lib/brand/brand.ts"),
-      "lib/tracing/helpers": path.resolve(__dirname, "lib/tracing/helpers.ts"),
-      "lib/tracing": path.resolve(__dirname, "lib/tracing"),
-      "lib/performance-monitor": path.resolve(__dirname, "lib/performance-monitor/index.ts"),
+      "lib/goat-query/react": path.resolve(rootDir, "lib/goat-query/react.ts"),
+      "lib/goat-query/devtools": path.resolve(rootDir, "lib/goat-query/devtools/index.ts"),
+      "lib/brand": path.resolve(rootDir, "lib/brand/brand.ts"),
+      "lib/tracing/helpers": path.resolve(rootDir, "lib/tracing/helpers.ts"),
+      "lib/tracing": path.resolve(rootDir, "lib/tracing"),
+      "lib/performance-monitor": path.resolve(rootDir, "lib/performance-monitor/index.ts"),
+      "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
     },
   },
   worker: { format: "es" },
@@ -124,9 +151,9 @@ export default defineConfig({
     sourcemap: false,
     rolldownOptions: {
       input: {
-        main: path.resolve(__dirname, "index.html"),
-        "perf-monitor": path.resolve(__dirname, "lib/performance-monitor/test/index.html"),
-        "rsc-playground": path.resolve(__dirname, "lib/rsc-service-worker-bff/test/index.html"),
+        main: path.resolve(rootDir, "index.html"),
+        "perf-monitor": path.resolve(rootDir, "lib/performance-monitor/test/index.html"),
+        "rsc-playground": path.resolve(rootDir, "lib/rsc-service-worker-bff/test/index.html"),
       },
       output: {
         advancedChunks: {

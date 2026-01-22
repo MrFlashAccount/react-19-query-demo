@@ -1,11 +1,42 @@
 import { use } from "react";
 
 async function registerServiceWorker() {
-  await navigator.serviceWorker
-    .register("./movieApi.service-worker.js", { scope: "/" })
-    .catch((error) => {
-      console.error("Failed to register service worker:", error);
+  if (!("serviceWorker" in navigator)) {
+    console.warn("Service Workers not supported");
+    return;
+  }
+
+  try {
+    // Unregister old service workers
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const reg of registrations) {
+      if (!reg.active?.scriptURL.includes("rsc-movies-sw.js")) {
+        await reg.unregister();
+      }
+    }
+
+    // Register RSC movies service worker
+    const registration = await navigator.serviceWorker.register("/rsc-movies-sw.js", {
+      scope: "/",
     });
+
+    // Wait for activation if installing
+    if (registration.installing) {
+      await new Promise<void>((resolve) => {
+        registration.installing!.addEventListener("statechange", function handler() {
+          if (this.state === "activated") {
+            this.removeEventListener("statechange", handler);
+            resolve();
+          }
+        });
+      });
+    }
+
+    await navigator.serviceWorker.ready;
+    console.log("[SW] RSC Movies service worker ready");
+  } catch (error) {
+    console.error("[SW] Failed to register service worker:", error);
+  }
 }
 
 const promise = registerServiceWorker();

@@ -1,13 +1,21 @@
 import type { MovieApi } from "./api/types";
+import type { TabId } from "./components/shared/TabSelector";
 import { traced } from "lib/tracing";
 import type { ISpan } from "lib/tracing";
 import { useState, lazy, useTransition } from "react";
 
-import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
+import {
+  searchMovies,
+  getMovieById,
+  updateMovieRating,
+  searchMoviesRSC,
+  updateMovieRatingRSC,
+} from "./api/movieApi";
 import { TabSelector } from "./components/shared";
 
 const LazyTanStackQueryTab = lazy(() => import("./components/TanStackQueryTab"));
 const LazyCustomLibraryTab = lazy(() => import("./components/CustomLibraryTab"));
+const LazyRSCMoviesTab = lazy(() => import("./components/RSCMoviesTab"));
 const LazyLagRadar = lazy(() =>
   import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar })),
 );
@@ -205,7 +213,7 @@ function TracingStressTest() {
  * Compares custom query library implementation with TanStack Query
  */
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"custom" | "tanstack" | "unset">("custom");
+  const [activeTab, setActiveTab] = useState<TabId>("rsc");
 
   const [formState, setFormState] = useState(() => {
     const formData = new FormData();
@@ -229,6 +237,8 @@ export default function App() {
     getMovieById,
     searchMovies,
     updateMovieRating,
+    searchMoviesRSC,
+    updateMovieRatingRSC,
   };
 
   return (
@@ -249,6 +259,15 @@ export default function App() {
 
         {(() => {
           switch (activeTab) {
+            case "rsc":
+              return (
+                <LazyRSCMoviesTab
+                  devtools={formState.get("showDevtools") === "true"}
+                  formState={formState}
+                  onFormStateChange={updateFormState}
+                  api={api}
+                />
+              );
             case "custom":
               return (
                 <LazyCustomLibraryTab

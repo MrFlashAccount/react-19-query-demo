@@ -123,7 +123,7 @@ export const http = {
       path,
       handler: async ({ request }) => {
         // Lazy import to avoid circular deps and ensure webpack-shim loads first
-        const { callAction, isActionRequest, getActionIdFromRequest } =
+        const { handleAction, isActionRequest, getActionIdFromRequest } =
           await import("./rsc/server");
 
         if (options?.ready) {
@@ -146,11 +146,11 @@ export const http = {
           args = body ? [body] : [];
         }
 
-        // Create encoded format for callAction
+        // Create encoded format for handleAction
         const encodedArgs = { type: "string" as const, data: JSON.stringify(args) };
 
         try {
-          const stream = await callAction(ctx, actionId, encodedArgs);
+          const stream = await handleAction(ctx, actionId, encodedArgs);
           return new Response(stream, {
             headers: {
               ...RSC_HEADERS,
