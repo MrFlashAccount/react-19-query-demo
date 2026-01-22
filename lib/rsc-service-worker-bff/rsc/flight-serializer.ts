@@ -13,7 +13,8 @@
  */
 
 import type { ReactNode, ReactElement } from "react";
-import type { ClientManifest, ClientManifestEntry } from "./types";
+import { isFragment } from "react-is";
+import type { ClientManifest } from "./types";
 
 type FlightValue =
   | string
@@ -67,10 +68,7 @@ const serverActions = new Map<string, (...args: unknown[]) => unknown>();
  * <Counter onIncrement={increment} />
  * ```
  */
-export function createServerAction<T extends (...args: any[]) => any>(
-  id: string,
-  fn: T,
-): T {
+export function createServerAction<T extends (...args: any[]) => any>(id: string, fn: T): T {
   serverActions.set(id, fn as (...args: unknown[]) => unknown);
 
   const ref = {
@@ -184,7 +182,7 @@ export function serializeToFlightStream(
 
       // Check for React element
       if (obj.$$typeof === REACT_ELEMENT_TYPE || obj.$$typeof === REACT_TRANSITIONAL_ELEMENT_TYPE) {
-        return serializeElement(obj as unknown as ReactElement);
+        return serializeElement(obj as unknown as ReactElement<Record<string, unknown>>);
       }
 
       // Check for server action reference
@@ -232,11 +230,11 @@ export function serializeToFlightStream(
     return null;
   }
 
-  function serializeElement(element: ReactElement): FlightValue {
+  function serializeElement(element: ReactElement<Record<string, unknown>>): FlightValue {
     const { type, key, props } = element;
 
     // Handle fragments
-    if (type === REACT_FRAGMENT_TYPE) {
+    if (isFragment(type)) {
       const children = props.children;
       return serializeValue(children);
     }
@@ -266,7 +264,12 @@ export function serializeToFlightStream(
         const refId = getModuleRefId(moduleId, exportName);
 
         // Return element tuple: ["$", "$L<ref>", key, props]
-        return [ELEMENT_PREFIX, `${MODULE_PREFIX}${refId.toString(16)}`, key, serializeProps(props)] as FlightValue;
+        return [
+          ELEMENT_PREFIX,
+          `${MODULE_PREFIX}${refId.toString(16)}`,
+          key,
+          serializeProps(props),
+        ] as FlightValue;
       }
     }
 
@@ -282,7 +285,12 @@ export function serializeToFlightStream(
         const refId = getModuleRefId(moduleId, exportName);
 
         // Return element tuple: ["$", "$L<ref>", key, props]
-        return [ELEMENT_PREFIX, `${MODULE_PREFIX}${refId.toString(16)}`, key, serializeProps(props)] as FlightValue;
+        return [
+          ELEMENT_PREFIX,
+          `${MODULE_PREFIX}${refId.toString(16)}`,
+          key,
+          serializeProps(props),
+        ] as FlightValue;
       }
 
       // Server component - render it
@@ -303,15 +311,19 @@ export function serializeToFlightStream(
   const rootValue = serializeValue(element);
   const rootRow = `0:${JSON.stringify(rootValue)}\n`;
 
-  // Create stream
+  // Collect all data into a single buffer
+  // Safari has issues with streams that close synchronously in service workers
+  const allRows = [...rows, rootRow];
+  const fullPayload = encoder.encode(allRows.join(""));
+
+  // Create stream using pull-based approach for better Safari compatibility
+  let sent = false;
   return new ReadableStream({
-    start(controller) {
-      // Emit module references first
-      for (const row of rows) {
-        controller.enqueue(encoder.encode(row));
+    pull(controller) {
+      if (!sent) {
+        controller.enqueue(fullPayload);
+        sent = true;
       }
-      // Emit root
-      controller.enqueue(encoder.encode(rootRow));
       controller.close();
     },
   });
@@ -329,10 +341,11 @@ export function createFlightResponse(
   return new Response(stream, {
     ...init,
     headers: {
-      "Content-Type": "text/x-component",
+      "Content-Type": "text/x-component; charset=utf-8",
       "Cache-Control": "no-cache, no-store, must-revalidate",
+      // Safari compatibility headers
+      "X-Content-Type-Options": "nosniff",
       ...init?.headers,
     },
   });
 }
-
