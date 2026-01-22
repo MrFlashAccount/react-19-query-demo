@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
 import { TimerWheel } from "../TimerWheel";
 
 describe("TimerWheel", () => {
@@ -206,9 +207,7 @@ describe("TimerWheel", () => {
       const callbacks = Array.from({ length: 10 }, () => vi.fn());
 
       // Schedule timers
-      const timerIds = callbacks.map((cb, i) =>
-        wheel.schedule(cb, (i + 1) * 100)
-      );
+      const timerIds = callbacks.map((cb, i) => wheel.schedule(cb, (i + 1) * 100));
 
       // Cancel many timers in quick succession
       timerIds.slice(0, 5).forEach((id) => wheel.cancel(id));
@@ -328,9 +327,7 @@ describe("TimerWheel", () => {
       const normalCallback = vi.fn();
 
       // Spy on console.error to verify error is logged
-      const consoleErrorSpy = vi
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       wheel.schedule(errorCallback, 100);
       wheel.schedule(normalCallback, 150);

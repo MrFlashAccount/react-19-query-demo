@@ -5,9 +5,13 @@ import type {
   IInvalidatable,
 } from "./nodes/mutation";
 import { tracer, tracePromise, type ISpan } from "lib/tracing";
+
+import { type QueryDefinition, isQuery } from "./nodes/query";
+import { QueryPromise } from "./QueryPromise";
 import { Retrier, type RetryConfig } from "./Retrier";
 import { exponentialBackoff } from "./utils";
-import { QueryPromise } from "./QueryPromise";
+
+export type InvalidationTarget = IInvalidatable | QueryDefinition<any, any>;
 
 export interface MutationState<TResult> {
   promise: QueryPromise<TResult>;
@@ -20,28 +24,21 @@ export interface MutationState<TResult> {
 
 interface MutationEnvironment<TParams = unknown> {
   context: Context;
-  invalidate: (
-    queryDefinition: IInvalidatable,
-    parentSpan?: ISpan
-  ) => Promise<void>;
-  applyOptimisticUpdates: (
-    optimisticUpdate: OptimisticUpdateTarget<TParams, unknown>
-  ) => void;
+  invalidate: (queryDefinition: InvalidationTarget, parentSpan?: ISpan) => Promise<void>;
+  applyOptimisticUpdates: (optimisticUpdate: OptimisticUpdateTarget<TParams, unknown>) => void;
 }
 
 export class Mutation<TParams = unknown, TResult = unknown> {
   private mutationDefinition: MutationDefinition<TParams, TResult>;
   private environment: MutationEnvironment;
   private retry: RetryConfig;
-  private retryDelay:
-    | number
-    | ((failureCount: number, error: unknown) => number);
+  private retryDelay: number | ((failureCount: number, error: unknown) => number);
   private retrier: Retrier;
   private mutationFn: (params: TParams) => QueryPromise<TResult>;
 
   constructor(
     mutationDefinition: MutationDefinition<TParams, TResult>,
-    environment: MutationEnvironment
+    environment: MutationEnvironment,
   ) {
     this.mutationDefinition = mutationDefinition;
 
@@ -50,8 +47,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
     const config = mutationDefinition.config;
     this.retry = config.retry ?? 0;
     this.retryDelay =
-      config.retryDelay ??
-      ((failureCount) => exponentialBackoff(1000, failureCount, 10000));
+      config.retryDelay ?? ((failureCount) => exponentialBackoff(1000, failureCount, 10000));
 
     // Create retrier with options from definition
     this.retrier = new Retrier({
@@ -80,7 +76,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
       const span = tracer.startSpan(
         "⚛️ Mutation: Execute",
         { key: params, variables: params },
-        { color: "primary" }
+        { color: "primary" },
       );
 
       this.applyOptimisticUpdates(params, span);
@@ -111,7 +107,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
           (error) => {
             span.error(error);
             throw error;
-          }
+          },
         );
       }, QueryPromise) as QueryPromise<TResult>;
     };
@@ -125,12 +121,12 @@ export class Mutation<TParams = unknown, TResult = unknown> {
   private async invalidateDependencies(
     params: TParams,
     result: TResult,
-    parentSpan: ISpan
+    parentSpan: ISpan,
   ): Promise<void> {
     const invalidations = this.mutationDefinition.config.invalidates;
     if (!invalidations) return;
 
-    const invalidationTargets: IInvalidatable[] = [];
+    const invalidationTargets: InvalidationTarget[] = [];
 
     for (const invalidation of invalidations) {
       if (typeof invalidation === "function") {
@@ -147,7 +143,9 @@ export class Mutation<TParams = unknown, TResult = unknown> {
 
     if (invalidationTargets.length === 0) return;
 
-    const queries = invalidationTargets.map((target) => String(target));
+    const queries = invalidationTargets.map((target) =>
+      isQuery(target) ? "QueryDefinition" : target.toString(),
+    );
 
     // Create child span for invalidation
     const span = parentSpan.child({
@@ -158,11 +156,9 @@ export class Mutation<TParams = unknown, TResult = unknown> {
 
     await tracePromise(
       Promise.all(
-        invalidationTargets.map((queryDef) =>
-          this.environment.invalidate(queryDef, span)
-        )
+        invalidationTargets.map((queryDef) => this.environment.invalidate(queryDef, span)),
       ),
-      span
+      span,
     );
   }
 
@@ -183,7 +179,7 @@ export class Mutation<TParams = unknown, TResult = unknown> {
       for (const optimisticUpdate of optimisticUpdates(params, ctx)) {
         // Type assertion needed due to generic parameter variance
         this.environment.applyOptimisticUpdates(
-          optimisticUpdate as OptimisticUpdateTarget<unknown, unknown>
+          optimisticUpdate as OptimisticUpdateTarget<unknown, unknown>,
         );
       }
       span.success();

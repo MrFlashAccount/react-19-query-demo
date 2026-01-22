@@ -1,7 +1,7 @@
-import type { Query } from "./Query";
 import type { QueryDefinition, QueryParams } from "./nodes/query";
+import type { Query } from "./Query";
+
 import { serializeParams, type SerializedParams } from "./utils";
-import type { ICacheable } from "./nodes/types";
 
 /**
  * Query instances for a specific definition, indexed by serialized parameters
@@ -53,7 +53,7 @@ export class QueryCache {
   set<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
+    TData extends unknown = unknown,
   >(definition: QD, params: TParams, query: Query<QD, TParams, TData>): void {
     const paramsKey = serializeParams(params);
 
@@ -84,7 +84,7 @@ export class QueryCache {
   get<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
+    TData extends unknown = unknown,
   >(definition: QD, params: TParams): Query<QD, TParams, TData> | undefined {
     const paramsKey = serializeParams(params);
     const paramMap = this.cache.get(definition);
@@ -95,11 +95,8 @@ export class QueryCache {
   getRaw<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
-  >(
-    definition: QD,
-    serializedParams: SerializedParams
-  ): Query<QD, TParams, TData> | undefined {
+    TData extends unknown = unknown,
+  >(definition: QD, serializedParams: SerializedParams): Query<QD, TParams, TData> | undefined {
     const paramMap = this.cache.get(definition);
     return paramMap?.get(serializedParams) as Query<QD, TParams, TData>;
   }
@@ -112,10 +109,7 @@ export class QueryCache {
    * @param params - The query parameters
    * @returns True if the query exists
    */
-  has<QD extends QueryDefinition>(
-    definition: QD,
-    params: QueryParams<QD>
-  ): boolean {
+  has<QD extends QueryDefinition>(definition: QD, params: QueryParams<QD>): boolean {
     return this.get<QD>(definition, params) !== undefined;
   }
 
@@ -130,7 +124,7 @@ export class QueryCache {
   delete<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
+    TData extends unknown = unknown,
   >(definition: QD, params: TParams): boolean {
     const paramsKey = serializeParams(params);
     const paramMap = this.cache.get(definition);
@@ -159,9 +153,7 @@ export class QueryCache {
    * @param definition - The query definition reference
    * @returns Array of all Query instances for this definition
    */
-  findByDefinition<QD extends QueryDefinition>(
-    definition: QD
-  ): Array<Query<any, unknown>> {
+  findByDefinition<QD extends QueryDefinition>(definition: QD): Array<Query<any, unknown>> {
     const paramMap = this.cache.get(definition);
 
     if (!paramMap) {
@@ -178,9 +170,7 @@ export class QueryCache {
    * @param definitions - Set of query definitions to find
    * @returns Array of all matching Query instances
    */
-  findByDefinitions(
-    definitions: readonly QueryDefinition<any, any>[]
-  ): Array<Query<any, unknown>> {
+  findByDefinitions(definitions: readonly QueryDefinition<any, any>[]): Array<Query<any, unknown>> {
     const queries: Array<Query<any, unknown>> = [];
 
     for (const definition of definitions) {
@@ -215,12 +205,8 @@ export class QueryCache {
    *
    * @returns Iterator of [definition, paramsKey, query] tuples
    */
-  entries(): IterableIterator<
-    [QueryDefinition<any, any>, string, Query<any, unknown>]
-  > {
-    const entries: Array<
-      [QueryDefinition<any, any>, string, Query<any, unknown>]
-    > = [];
+  entries(): IterableIterator<[QueryDefinition<any, any>, string, Query<any, unknown>]> {
+    const entries: Array<[QueryDefinition<any, any>, string, Query<any, unknown>]> = [];
 
     for (const [definition, paramMap] of this.cache.entries()) {
       for (const [paramsKey, query] of paramMap.entries()) {
@@ -267,18 +253,15 @@ export class QueryCache {
       name?: string;
     }>;
   } {
-    const definitionBreakdown = Array.from(this.cache.entries()).map(
-      ([definition, paramMap]) => ({
-        definition,
-        count: paramMap.size,
-      })
-    );
+    const definitionBreakdown = Array.from(this.cache.entries()).map(([definition, paramMap]) => ({
+      definition,
+      count: paramMap.size,
+    }));
 
     return {
       totalQueries: this.totalSize,
       uniqueDefinitions: this.cache.size,
-      averageParamsPerDefinition:
-        this.cache.size > 0 ? this.totalSize / this.cache.size : 0,
+      averageParamsPerDefinition: this.cache.size > 0 ? this.totalSize / this.cache.size : 0,
       definitionBreakdown,
     };
   }

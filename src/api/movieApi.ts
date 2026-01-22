@@ -6,9 +6,7 @@ let worker: Worker | null = null;
 
 async function getWorker(): Promise<Worker> {
   if (worker == null) {
-    worker = await import("./movieApi.worker.ts?worker").then(
-      (module) => new module.default()
-    );
+    worker = await import("./movieApi.worker.ts?worker").then((module) => new module.default());
   }
 
   return worker!;
@@ -43,14 +41,14 @@ type WorkerResponse =
       error: string;
     };
 
-function sendWorkerMessage<T>(
+async function sendWorkerMessage<T>(
   type: WorkerMessage["type"],
-  payload: WorkerMessage["payload"]
+  payload: WorkerMessage["payload"],
 ): Promise<T> {
-  return new Promise(async (resolve, reject) => {
-    const worker = await getWorker();
-    const id = `${Date.now()}-${Math.random()}`;
+  const worker = await getWorker();
+  const id = `${Date.now()}-${Math.random()}`;
 
+  return new Promise((resolve, reject) => {
     const messageHandler = (event: MessageEvent<WorkerResponse>) => {
       if (event.data.id !== id) {
         return;
@@ -88,10 +86,7 @@ function sendWorkerMessage<T>(
  * @param limit - Maximum number of results to return
  * @returns Promise that resolves to an array of matching movies
  */
-export async function searchMovies(
-  query: string,
-  limit: number = DEFAULT_LIMIT
-): Promise<Movie[]> {
+export async function searchMovies(query: string, limit: number = DEFAULT_LIMIT): Promise<Movie[]> {
   return sendWorkerMessage<Movie[]>("searchMovies", { query, limit });
 }
 
@@ -116,9 +111,6 @@ export async function getMovieById(movieId: string): Promise<Movie> {
  * @param newRating - New rating value
  * @returns Promise that resolves to the updated movie
  */
-export async function updateMovieRating(
-  movieId: string,
-  newRating: number
-): Promise<Movie> {
+export async function updateMovieRating(movieId: string, newRating: number): Promise<Movie> {
   return sendWorkerMessage<Movie>("updateMovieRating", { movieId, newRating });
 }

@@ -1,6 +1,5 @@
-import { useDebugValue, useEffect, useLayoutEffect, useRef } from "react";
-import { useQueryContext } from "../react/QueryProvider";
-import { useDebugFormattedQuery } from "./useDebugFormattedQuery";
+import { useDebugValue, useEffect, useLayoutEffect } from "react";
+
 import {
   tracer,
   Tracer,
@@ -10,8 +9,10 @@ import {
   DevtoolsReporter,
   type LoggerReporterOptions,
   type DevtoolsReporterOptions,
-} from "../tracing";
-import { createPortal } from "react-dom";
+} from "../../tracing";
+import { useQueryContext } from "../react/QueryProvider";
+
+import { useDebugFormattedQuery } from "./useDebugFormattedQuery";
 
 setupTracer(new Tracer());
 
@@ -37,9 +38,7 @@ export interface QueryPerformanceTrackerProps {
   options?: DevtoolsReporterOptions;
 }
 
-export function QueryPerformanceTracker({
-  options,
-}: QueryPerformanceTrackerProps) {
+export function QueryPerformanceTracker({ options }: QueryPerformanceTrackerProps) {
   useEffect(() => {
     const reporter = new DevtoolsReporter({
       prefix: "goat-query",

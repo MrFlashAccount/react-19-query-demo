@@ -268,19 +268,11 @@ export interface ITracer {
    * Create a new span without starting it.
    * Call span.start() when ready to begin tracing.
    */
-  createSpan(
-    name: string,
-    payload?: Record<string, unknown>,
-    meta?: ISpanMeta
-  ): ISpan;
+  createSpan(name: string, payload?: Record<string, unknown>, meta?: ISpanMeta): ISpan;
 
   /**
    * Create and start a new span immediately.
    * Convenience method equivalent to createSpan + start.
    */
-  startSpan(
-    name: string,
-    payload?: Record<string, unknown>,
-    meta?: ISpanMeta
-  ): ISpan;
+  startSpan(name: string, payload?: Record<string, unknown>, meta?: ISpanMeta): ISpan;
 }

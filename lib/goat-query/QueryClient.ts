@@ -1,15 +1,12 @@
-import { Query } from "./Query";
-import { noop } from "./utils";
 import { tracer, tracePromise, type ISpan } from "lib/tracing";
-import {
-  type QueryDefinition,
-  type Context,
-  type QueryParams,
-} from "./nodes/query";
+
 import { type DependencyGraph } from "./DependencyGraph";
-import { type IInvalidatable, type MutationDefinition } from "./nodes/mutation";
+import { Mutation, type InvalidationTarget } from "./Mutation";
+import { type MutationDefinition } from "./nodes/mutation";
+import { type QueryDefinition, type Context, type QueryParams } from "./nodes/query";
+import { Query } from "./Query";
 import { QueryCache } from "./QueryCache";
-import { Mutation } from "./Mutation";
+import { noop } from "./utils";
 
 /**
  * Options for QueryClient constructor
@@ -146,11 +143,11 @@ export class QueryClient {
   addQuery<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
+    TData extends unknown = unknown,
   >(
     queryDefinition: QD,
     params: TParams,
-    options?: { prefetch?: boolean }
+    options?: { prefetch?: boolean },
   ): Query<QD, TParams, TData> {
     const existingQuery = this._cache.get(queryDefinition, params) as
       | Query<QD, TParams, TData>
@@ -178,14 +175,12 @@ export class QueryClient {
   }
 
   addMutation<TParams, TResult>(
-    mutationDefinition: MutationDefinition<TParams, TResult>
+    mutationDefinition: MutationDefinition<TParams, TResult>,
   ): Mutation<TParams, TResult> {
     return new Mutation(mutationDefinition, {
       context: this.context,
-      invalidate: (queryDefinition: IInvalidatable, parentSpan?: ISpan) => {
-        return this.invalidateQuery(queryDefinition, {
-          parentSpan,
-        });
+      invalidate: (target: InvalidationTarget, parentSpan?: ISpan) => {
+        return this.invalidateQuery(target, { parentSpan });
       },
       // TODO: Implement optimistic updates
       applyOptimisticUpdates: () => {},
@@ -201,7 +196,7 @@ export class QueryClient {
    */
   getQuery<QD extends QueryDefinition>(
     queryDefinition: QD,
-    params: QueryParams<QD>
+    params: QueryParams<QD>,
   ): Query<QD, unknown, unknown> | undefined {
     return this._cache.get<QD>(queryDefinition, params);
   }
@@ -213,10 +208,7 @@ export class QueryClient {
    * @param params - The query parameters
    * @returns True if the query instance exists
    */
-  hasQuery<QD extends QueryDefinition>(
-    queryDefinition: QD,
-    params: QueryParams<QD>
-  ): boolean {
+  hasQuery<QD extends QueryDefinition>(queryDefinition: QD, params: QueryParams<QD>): boolean {
     return this._cache.has<QD>(queryDefinition, params);
   }
 
@@ -227,10 +219,7 @@ export class QueryClient {
    * @param params - The query parameters
    * @returns True if the query is stale or doesn't exist
    */
-  isStale<QD extends QueryDefinition>(
-    queryDefinition: QD,
-    params: QueryParams<QD>
-  ): boolean {
+  isStale<QD extends QueryDefinition>(queryDefinition: QD, params: QueryParams<QD>): boolean {
     const entry = this._cache.get<QD>(queryDefinition, params);
 
     if (entry == null) {
@@ -263,14 +252,11 @@ export class QueryClient {
    * @param options - Optional invalidation options
    */
   async invalidateQuery(
-    queryDefinition: IInvalidatable,
-    options: InvalidateOptions = {}
+    queryDefinition: InvalidationTarget,
+    options: InvalidateOptions = {},
   ): Promise<void> {
     // Find all cache entries for this query definition
-    // Type assertion: IInvalidatable is used to represent query definitions that can be invalidated
-    const queries = this._cache.findByDefinition(
-      queryDefinition as unknown as QueryDefinition
-    );
+    const queries = this._cache.findByDefinition(queryDefinition as unknown as QueryDefinition);
     const queryKeys = queries.map((query) => query.serializedKey);
 
     // Create span - either as child of parent or as root
@@ -285,10 +271,7 @@ export class QueryClient {
           color: "tertiary",
         });
 
-    await tracePromise(
-      Promise.all(queries.map((query) => query.invalidate(span))),
-      span
-    );
+    await tracePromise(Promise.all(queries.map((query) => query.invalidate(span))), span);
 
     const newInstance = this.clone();
     this.notifyChange(newInstance);
@@ -304,7 +287,7 @@ export class QueryClient {
   async invalidateQueryInstance<QD extends QueryDefinition>(
     queryDefinition: QD,
     params: QueryParams<QD>,
-    options: InvalidateOptions = {}
+    options: InvalidateOptions = {},
   ): Promise<void> {
     const query = this._cache.get<QD>(queryDefinition, params);
 
@@ -318,7 +301,7 @@ export class QueryClient {
   private handleQueryGarbageCollect<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
+    TData extends unknown = unknown,
   >(queryDefinition: QD, params: TParams): void {
     if (this.deleteQuery(queryDefinition, params)) {
       const newInstance = this.clone();
@@ -329,7 +312,7 @@ export class QueryClient {
   private deleteQuery<
     QD extends QueryDefinition<TParams, TData>,
     TParams extends unknown = unknown,
-    TData extends unknown = unknown
+    TData extends unknown = unknown,
   >(queryDefinition: QD, params: TParams): boolean {
     const query = this._cache.get(queryDefinition, params);
     if (query == null) {

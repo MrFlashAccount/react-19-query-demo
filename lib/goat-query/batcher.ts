@@ -19,9 +19,7 @@ export interface OncePerTickOptions {
  * @param options - The options for the once per tick function.
  * @returns A function that executes a given callback once per tick.
  */
-export function createOncePerTick(
-  options: OncePerTickOptions = {}
-): OncePerTick {
+export function createOncePerTick(options: OncePerTickOptions = {}): OncePerTick {
   const { tickMethod = queueMicrotask } = options;
 
   let isPending = false;

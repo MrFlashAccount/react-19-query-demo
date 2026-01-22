@@ -168,7 +168,7 @@ export class FlameGraphResizeHandle extends HTMLElement {
             clientX: this.lastX,
             clientY: this.lastY,
           },
-        })
+        }),
       );
       this.pendingDeltaX = 0;
       this.pendingDeltaY = 0;
@@ -196,7 +196,7 @@ export class FlameGraphResizeHandle extends HTMLElement {
             clientX: this.lastX,
             clientY: this.lastY,
           },
-        })
+        }),
       );
       this.pendingDeltaX = 0;
       this.pendingDeltaY = 0;

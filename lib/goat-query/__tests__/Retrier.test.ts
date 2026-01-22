@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Retrier } from "../goat-query/Retrier";
-import { timerWheel } from "../goat-query/TimerWheel";
+
+import { Retrier } from "../Retrier";
+import { timerWheel } from "../TimerWheel";
 
 describe("Retrier", () => {
   beforeEach(() => {
@@ -226,10 +227,7 @@ describe("Retrier", () => {
 
     it("should not delay if retryDelay is 0", async () => {
       const retrier = new Retrier({ retry: 2, retryDelay: 0 });
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("fail 1"))
-        .mockResolvedValue("success");
+      const fn = vi.fn().mockRejectedValueOnce(new Error("fail 1")).mockResolvedValue("success");
 
       const promise = retrier.execute(fn);
 
@@ -282,10 +280,7 @@ describe("Retrier", () => {
 
       const retrier = new Retrier({ retry: 2, retryDelay: delayFn });
       const networkError = new Error("network timeout");
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(networkError)
-        .mockResolvedValue("success");
+      const fn = vi.fn().mockRejectedValueOnce(networkError).mockResolvedValue("success");
 
       const promise = retrier.execute(fn);
 
@@ -376,7 +371,7 @@ describe("Retrier", () => {
         Promise.resolve({
           id: 1,
           name: "Test User",
-        } as const)
+        } as const),
       );
 
       const result = await retrier.execute(fn);
@@ -602,10 +597,7 @@ describe("Retrier", () => {
   describe("pause and resume", () => {
     it("should pause retry process and resume it", async () => {
       const retrier = new Retrier({ retry: 3, retryDelay: 100 });
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("fail 1"))
-        .mockResolvedValue("success");
+      const fn = vi.fn().mockRejectedValueOnce(new Error("fail 1")).mockResolvedValue("success");
 
       const promise = retrier.execute(fn);
 
@@ -698,10 +690,7 @@ describe("Retrier", () => {
 
     it("should handle pause with no delay", async () => {
       const retrier = new Retrier({ retry: 3, retryDelay: 0 });
-      const fn = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("fail"))
-        .mockResolvedValue("success");
+      const fn = vi.fn().mockRejectedValueOnce(new Error("fail")).mockResolvedValue("success");
 
       const promise = retrier.execute(fn);
 

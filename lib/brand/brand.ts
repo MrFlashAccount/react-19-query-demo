@@ -1,17 +1,12 @@
-import type {
-  Nominal,
-  BrandValue,
-  BrandOptions,
-  BrandValidator,
-} from "./types";
 import type { StandardSchemaV1 } from "./standard-schema";
+import type { Nominal, BrandValue, BrandOptions, BrandValidator } from "./types";
 
 type ValidationResult<ValueType, BrandName> =
   | { ok: true; value: BrandValue<ValueType, BrandName> }
   | { ok: false };
 
 const normalizeStandardResult = <ValueType, BrandName>(
-  result: StandardSchemaV1.Result<ValueType>
+  result: StandardSchemaV1.Result<ValueType>,
 ): ValidationResult<ValueType, BrandName> => {
   if (result && "issues" in result && result.issues != null) {
     return { ok: false };
@@ -26,11 +21,9 @@ const normalizeStandardResult = <ValueType, BrandName>(
 };
 
 const invalidError = (value: unknown) =>
-  new Error(`Brand invariant violation: Invalid value for type ${value}`);
+  new Error(`Brand invariant violation: Invalid value for type ${String(value)}`);
 
-const getStandardValidator = <ValueType>(
-  value: StandardSchemaV1<unknown, ValueType>
-) => {
+const getStandardValidator = <ValueType>(value: StandardSchemaV1<unknown, ValueType>) => {
   const standard = value?.["~standard"];
   if (!standard || typeof standard.validate !== "function") {
     return null;
@@ -40,7 +33,7 @@ const getStandardValidator = <ValueType>(
 
 const validateValue = <ValueType, BrandName>(
   value: unknown,
-  validator?: BrandValidator<ValueType>
+  validator?: BrandValidator<ValueType>,
 ): ValidationResult<ValueType, BrandName> => {
   if (!validator) {
     return { ok: true, value: value as BrandValue<ValueType, BrandName> };
@@ -58,13 +51,12 @@ const validateValue = <ValueType, BrandName>(
     const standardResult = standardValidator(value);
     if (
       standardResult &&
-      typeof (standardResult as Promise<StandardSchemaV1.Result<ValueType>>)
-        .then === "function"
+      typeof (standardResult as Promise<StandardSchemaV1.Result<ValueType>>).then === "function"
     ) {
       return { ok: false };
     }
     return normalizeStandardResult<ValueType, BrandName>(
-      standardResult as StandardSchemaV1.Result<ValueType>
+      standardResult as StandardSchemaV1.Result<ValueType>,
     );
   } catch {
     return { ok: false };
@@ -84,13 +76,11 @@ const validateValue = <ValueType, BrandName>(
  * ```
  */
 export function brand<ValueType = never, const BrandName = never>(
-  options: BrandOptions<ValueType> = {}
+  options: BrandOptions<ValueType> = {},
 ): Nominal<ValueType, BrandName> {
   const { validator } = options;
 
-  const is = <ValueType, BrandName>(
-    value: unknown
-  ): value is BrandValue<ValueType, BrandName> => {
+  const is = <ValueType, BrandName>(value: unknown): value is BrandValue<ValueType, BrandName> => {
     return validateValue(value, validator).ok;
   };
 
@@ -102,9 +92,7 @@ export function brand<ValueType = never, const BrandName = never>(
     return result.value as BrandValue<ValueType, BrandName>;
   };
 
-  function nominal<const S extends ValueType>(
-    value: S
-  ): BrandValue<S, BrandName> {
+  function nominal<const S extends ValueType>(value: S): BrandValue<S, BrandName> {
     return to(value) as BrandValue<S, BrandName>;
   }
 

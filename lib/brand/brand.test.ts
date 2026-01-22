@@ -1,7 +1,8 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
-import { brand } from "./brand";
-import type { BrandValue } from "./types";
 import type { StandardSchemaV1 } from "./standard-schema";
+import type { BrandValue } from "./types";
+import { describe, it, expect, expectTypeOf } from "vitest";
+
+import { brand } from "./brand";
 
 describe("brand", () => {
   describe("brand()", () => {
@@ -36,8 +37,7 @@ describe("brand", () => {
     });
 
     it("should throw when validator fails", () => {
-      const isPositive = (v: unknown): v is number =>
-        typeof v === "number" && v > 0;
+      const isPositive = (v: unknown): v is number => typeof v === "number" && v > 0;
       const PositiveNumber = brand<number, "PositiveNumber">({
         validator: isPositive,
       });
@@ -46,8 +46,7 @@ describe("brand", () => {
     });
 
     it("should pass when validator succeeds", () => {
-      const isPositive = (v: unknown): v is number =>
-        typeof v === "number" && v > 0;
+      const isPositive = (v: unknown): v is number => typeof v === "number" && v > 0;
       const PositiveNumber = brand<number, "PositiveNumber">({
         validator: isPositive,
       });
@@ -127,9 +126,7 @@ describe("brand", () => {
           version: 1,
           vendor: "test",
           validate: (value: unknown) =>
-            typeof value === "string"
-              ? { value }
-              : { issues: [{ message: "Expected string" }] },
+            typeof value === "string" ? { value } : { issues: [{ message: "Expected string" }] },
         },
       };
       const Id = brand.generic<"Id">()({

@@ -1,5 +1,6 @@
-import type { Context } from "./types";
 import type { RetryConfig } from "../Retrier";
+import type { QueryDefinition } from "./query";
+import type { Context } from "./types";
 import type { IInvalidatable, IOptimisticUpdateable } from "./types";
 
 export const MUTATION_SYMBOL = Symbol();
@@ -10,7 +11,15 @@ export const MUTATION_SYMBOL = Symbol();
  */
 type InvalidationTarget<TParams, TResult> = Array<
   | IInvalidatable
-  | ((params: TParams, result: TResult) => IInvalidatable | IInvalidatable[])
+  | QueryDefinition<any, any>
+  | ((
+      params: TParams,
+      result: TResult,
+    ) =>
+      | IInvalidatable
+      | IInvalidatable[]
+      | QueryDefinition<any, any>
+      | QueryDefinition<any, any>[])
 >;
 
 /**
@@ -18,10 +27,7 @@ type InvalidationTarget<TParams, TResult> = Array<
  */
 export type OptimisticUpdateTarget<TParams, TOptimisticUpdateableData> = {
   target: IOptimisticUpdateable;
-  updater: (
-    old: TOptimisticUpdateableData,
-    params: TParams
-  ) => TOptimisticUpdateableData;
+  updater: (old: TOptimisticUpdateableData, params: TParams) => TOptimisticUpdateableData;
 };
 
 /**
@@ -32,10 +38,7 @@ interface MutationConfig<TParams = unknown, TResult = unknown> {
   retry?: RetryConfig;
   retryDelay?: number | ((failureCount: number, error: unknown) => number);
   invalidates?: InvalidationTarget<TParams, TResult>;
-  optimistic?: (
-    params: TParams,
-    ctx: Context
-  ) => OptimisticUpdateTarget<TParams, unknown>[];
+  optimistic?: (params: TParams, ctx: Context) => OptimisticUpdateTarget<TParams, unknown>[];
 }
 
 /**
@@ -73,7 +76,7 @@ export interface MutationDefinition<TParams = unknown, TResult = unknown> {
  * ```
  */
 export function mutation<TParams = unknown, TResult = unknown>(
-  config: MutationConfig<TParams, TResult>
+  config: MutationConfig<TParams, TResult>,
 ): Readonly<MutationDefinition<TParams, TResult>> {
   return { __type: MUTATION_SYMBOL, config: config };
 }
@@ -83,10 +86,7 @@ export function mutation<TParams = unknown, TResult = unknown>(
  */
 export function isMutation(node: unknown): node is MutationDefinition {
   return (
-    typeof node === "object" &&
-    node !== null &&
-    "__type" in node &&
-    node.__type === MUTATION_SYMBOL
+    typeof node === "object" && node !== null && "__type" in node && node.__type === MUTATION_SYMBOL
   );
 }
 

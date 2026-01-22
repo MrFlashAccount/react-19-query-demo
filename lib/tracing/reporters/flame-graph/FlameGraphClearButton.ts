@@ -1,6 +1,6 @@
+import { flameGraphState, selectors, type FlameGraphState } from "./state";
 import { BUTTON_STYLES, HOST_STYLES } from "./styles";
 import { css, getElement, html } from "./utilities";
-import { flameGraphState, selectors, type FlameGraphState } from "./state";
 
 const STYLES = css`
   ${HOST_STYLES()}
@@ -32,9 +32,7 @@ export class FlameGraphClearButton extends HTMLElement {
   }
 
   private render() {
-    const { isRecording, hasSpans } = this.selectState(
-      flameGraphState.getState()
-    );
+    const { isRecording, hasSpans } = this.selectState(flameGraphState.getState());
     this.shadowRoot.innerHTML = html`
       <style>
         ${STYLES}

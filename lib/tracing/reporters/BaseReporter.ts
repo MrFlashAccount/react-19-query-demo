@@ -1,12 +1,8 @@
-import { noop } from "../utils";
+import type { IEventReceiver, TraceEvent, SpanStartEvent, SpanEvent, SpanId } from "../types";
+
 import { Batcher } from "../Batcher";
-import type {
-  IEventReceiver,
-  TraceEvent,
-  SpanStartEvent,
-  SpanEvent,
-  SpanId,
-} from "../types";
+import { noop } from "../utils";
+
 import { IReporter, type BaseReporterOptions, type SpanMetrics } from "./types";
 
 /**

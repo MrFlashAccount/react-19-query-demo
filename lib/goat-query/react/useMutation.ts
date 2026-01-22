@@ -1,8 +1,9 @@
-import { useOptimistic, useTransition } from "react";
 import type { MutationDefinition } from "../nodes/mutation";
 import type { QueryPromise } from "../QueryPromise";
-import { useEvent } from "./useEvent";
+import { useOptimistic, useTransition } from "react";
+
 import { useQueryContext } from "./QueryProvider";
+import { useEvent } from "./useEvent";
 
 /**
  * Options for useMutation hook
@@ -65,18 +66,15 @@ export interface UseMutationResult<TParams, TResult> {
  * ```
  */
 export function useMutation<TParams, TResult>(
-  options: UseMutationOptions<TParams, TResult>
+  options: UseMutationOptions<TParams, TResult>,
 ): UseMutationResult<TParams, TResult> {
   const { mutation: mutationDefinition } = options;
   const { queryClient } = useQueryContext();
 
-  const [pendingPromise, setPendingPromise] =
-    useOptimistic<QueryPromise<TResult> | null>(null);
+  const [pendingPromise, setPendingPromise] = useOptimistic<QueryPromise<TResult> | null>(null);
   const [isPendingTransition, startPendingTransition] = useTransition();
 
-  const mutation = queryClient.addMutation<TParams, TResult>(
-    mutationDefinition
-  );
+  const mutation = queryClient.addMutation<TParams, TResult>(mutationDefinition);
 
   const mutate = useEvent(function mutate(params: TParams): Promise<TResult> {
     return new Promise<TResult>((resolve, reject) => {
@@ -93,7 +91,7 @@ export function useMutation<TParams, TResult>(
   let isPending = false;
   let isSuccess = false;
   let isError = false;
-  let error: QueryPromise<TResult>["reason"] | null = null;
+  let error: QueryPromise<TResult>["reason"] = null;
   let fetchStatus: QueryPromise<TResult>["fetchStatus"] = "idle";
 
   if (state !== null) {

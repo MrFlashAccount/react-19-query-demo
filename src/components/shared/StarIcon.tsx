@@ -1,13 +1,7 @@
 /**
  * Star icon component for rating display
  */
-export function StarIcon({
-  filled,
-  className = "",
-}: {
-  filled: boolean;
-  className?: string;
-}) {
+export function StarIcon({ filled, className = "" }: { filled: boolean; className?: string }) {
   if (filled) {
     return (
       <svg

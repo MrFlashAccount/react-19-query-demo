@@ -1,8 +1,10 @@
-import { useState, useTransition } from "react";
 import type { Movie } from "../../api/types";
+import { useState, useTransition } from "react";
+
 import { StarIcon } from "../shared/StarIcon";
-import { useEvent } from "./useEvent";
+
 import { MOVIE_CARD_SIZE_CSS } from "./MovieList";
+import { useEvent } from "./useEvent";
 
 /**
  * Movie card component using custom query library
@@ -63,9 +65,7 @@ export function MovieCard({
 
           <span className="text-gray-400">•</span>
 
-          <span className="truncate max-w-[120px] sm:max-w-none">
-            {director}
-          </span>
+          <span className="truncate max-w-[120px] sm:max-w-none">{director}</span>
 
           <span className="text-gray-400">•</span>
 
@@ -84,9 +84,7 @@ export function MovieCard({
         </div>
 
         {/* Plot */}
-        {movie.plot && (
-          <div className="text-xs text-gray-600 line-clamp-2">{movie.plot}</div>
-        )}
+        {movie.plot && <div className="text-xs text-gray-600 line-clamp-2">{movie.plot}</div>}
       </div>
     </div>
   );
@@ -110,14 +108,11 @@ function RatingStars({
   return (
     <>
       <div
-        className={`flex gap-0.5 ${
-          isPending ? "opacity-75 cursor-not-allowed" : ""
-        }`}
+        className={`flex gap-0.5 ${isPending ? "opacity-75 cursor-not-allowed" : ""}`}
         onMouseLeave={() => setHoveredStar(null)}
       >
         {[1, 2, 3, 4, 5].map((star) => {
-          const displayStar =
-            hoveredStar != null ? star <= hoveredStar : star <= currentStars;
+          const displayStar = hoveredStar != null ? star <= hoveredStar : star <= currentStars;
 
           return (
             <button
@@ -131,10 +126,7 @@ function RatingStars({
                 displayStar ? "text-yellow-400" : "text-gray-300"
               } hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              <StarIcon
-                filled={displayStar}
-                className="w-4 h-4 sm:w-5 sm:h-5"
-              />
+              <StarIcon filled={displayStar} className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           );
         })}

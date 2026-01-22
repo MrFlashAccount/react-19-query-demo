@@ -6,8 +6,9 @@ import {
   startTransition,
   useEffect,
 } from "react";
-import { QueryClient, type QueryClientContext } from "../QueryClient";
+
 import { type DependencyGraph } from "../DependencyGraph";
+import { QueryClient, type QueryClientContext } from "../QueryClient";
 
 /**
  * Context value for the query provider

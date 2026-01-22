@@ -10,17 +10,11 @@ interface SVGElementProps {
 export function usolateLayout(
   _strings: TemplateStringsArray,
   children: string,
-  svgProps: SVGElementProps = {}
+  svgProps: SVGElementProps = {},
 ) {
-  const {
-    width = "100%",
-    height = "100%",
-    class: className = "",
-    style = "",
-  } = svgProps;
+  const { width = "100%", height = "100%", class: className = "", style = "" } = svgProps;
 
-  const classNameString =
-    typeof className === "string" ? className : className.join(" ");
+  const classNameString = typeof className === "string" ? className : className.join(" ");
 
   const styleString =
     typeof style === "string"

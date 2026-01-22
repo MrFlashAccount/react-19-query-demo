@@ -1,6 +1,6 @@
+import { flameGraphState, selectors } from "./state";
 import { BUTTON_STYLES, HOST_STYLES, theme } from "./styles";
 import { css, html } from "./utilities";
-import { flameGraphState, selectors } from "./state";
 
 /** Button state colors */
 export const button = {
@@ -94,7 +94,7 @@ export class FlameGraphRecordButton extends HTMLElement {
         if (!this.btn) return;
         this.btn.className = this.getClassName(isRecording);
         this.btn.textContent = this.getLabel(isRecording);
-      })
+      }),
     );
   }
 

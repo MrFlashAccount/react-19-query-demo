@@ -1,4 +1,3 @@
-import { noopCallback } from "./utils";
 import {
   type ISpan,
   SpanBase,
@@ -10,6 +9,7 @@ import {
   type ITracerOptions,
   SpanId,
 } from "./types";
+import { noopCallback } from "./utils";
 
 const nullMeta: ISpanMeta = { description: "", color: "primary" };
 
@@ -72,19 +72,11 @@ export class NullTracer implements ITracer {
     return false;
   }
 
-  createSpan(
-    _name: string,
-    _payload?: Record<string, unknown>,
-    _meta?: ISpanMeta
-  ): ISpan {
+  createSpan(_name: string, _payload?: Record<string, unknown>, _meta?: ISpanMeta): ISpan {
     return this.noOpSpan;
   }
 
-  startSpan(
-    _name: string,
-    _payload?: Record<string, unknown>,
-    _meta?: ISpanMeta
-  ): ISpan {
+  startSpan(_name: string, _payload?: Record<string, unknown>, _meta?: ISpanMeta): ISpan {
     return this.noOpSpan;
   }
 }

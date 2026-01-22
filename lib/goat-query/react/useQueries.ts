@@ -1,7 +1,9 @@
 import { useEffect } from "react";
+
+import { noop } from "../utils";
+
 import { useQueryContext } from "./QueryProvider";
 import { type UseQueryOptions } from "./useQuery";
-import { noop } from "../utils";
 
 export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
   const { queryClient } = useQueryContext();
@@ -20,14 +22,12 @@ export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
       isError: queryState.status === "rejected",
       state: queryState,
       promise: queryInstance.promise,
-      refetch: queryInstance.refetch,
+      refetch: () => queryInstance.refetch(),
     };
   });
 
   useEffect(() => {
-    const subscriptions = queryInstances.map(({ queryInstance }) =>
-      queryInstance.subscribe(noop)
-    );
+    const subscriptions = queryInstances.map(({ queryInstance }) => queryInstance.subscribe(noop));
     return () => {
       subscriptions.forEach((unsubscribe) => unsubscribe());
     };

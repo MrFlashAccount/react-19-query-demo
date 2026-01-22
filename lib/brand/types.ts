@@ -33,10 +33,7 @@ export interface BrandMethods<ValueType, BrandName> {
 /**
  * Nominal type constructor - creates branded values of a fixed type
  */
-export type Nominal<
-  ValueType = never,
-  BrandName = never
-> = ValidateBrandValueType<
+export type Nominal<ValueType = never, BrandName = never> = ValidateBrandValueType<
   ValueType,
   BrandConstructor<ValueType, BrandName> &
     BrandMethods<ValueType, BrandName> &
@@ -50,7 +47,7 @@ export interface GenericNominal<BrandName> {
 }
 
 export type BrandConstructor<ValueType = never, BrandName = never> = (
-  value: ValueType
+  value: ValueType,
 ) => BrandValue<ValueType, BrandName>;
 
 type ValidateBrandValueType<ValueType, IfNormalType> = ValueType extends [never]

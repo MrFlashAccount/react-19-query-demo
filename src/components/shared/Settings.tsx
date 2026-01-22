@@ -1,5 +1,5 @@
-import { useId } from "react";
 import type { SettingsProps } from "./types";
+import { useId } from "react";
 
 const MIN_LIMIT = 0;
 const MAX_LIMIT = 2000;
@@ -37,12 +37,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
         className="anchor/settings h-[48px] md:h-[52px] aspect-square px-3 rounded-4xl [corner-shape:superellipse(1.33)] border border-gray-200 hover:border-black focus:outline-none focus:border-black transition-all duration-200 bg-white text-gray-700"
         aria-label="Settings"
       >
-        <svg
-          className="w-5 h-5 m-auto"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-5 h-5 m-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -64,9 +59,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
         className="anchored/settings anchored-bottom-span-right mt-2 bg-white rounded-4xl [corner-shape:superellipse(1.33)] shadow-xl border-1 border-gray-200 p-3 sm:p-4 z-50 [left:anchor(left)] [right:1rem] max-w-none sm:[right:auto] sm:w-[400px]"
       >
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base sm:text-lg font-bold text-gray-900">
-            Settings
-          </h3>
+          <h3 className="text-base sm:text-lg font-bold text-gray-900">Settings</h3>
           <button
             type="button"
             popoverTarget={popoverTarget}
@@ -74,12 +67,7 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
             className="text-gray-500 hover:text-gray-700 -mr-1"
             aria-label="Close settings"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -193,16 +181,11 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
               type="button"
               onClick={() => {
                 const newFormData = cloneFormData(formState);
-                newFormData.set(
-                  "showDevtools",
-                  !showDevtools ? "true" : "false"
-                );
+                newFormData.set("showDevtools", !showDevtools ? "true" : "false");
                 onFormStateChange(newFormData);
               }}
               className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-4xl [corner-shape:superellipse(1.33)] transition-colors ${
-                showDevtools
-                  ? "bg-black text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                showDevtools ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               {showDevtools ? "Hide" : "Show"} Devtools
@@ -216,16 +199,11 @@ export function Settings({ formState, onFormStateChange }: SettingsProps) {
               type="button"
               onClick={() => {
                 const newFormData = cloneFormData(formState);
-                newFormData.set(
-                  "showLagRadar",
-                  !showLagRadar ? "true" : "false"
-                );
+                newFormData.set("showLagRadar", !showLagRadar ? "true" : "false");
                 onFormStateChange(newFormData);
               }}
               className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm rounded-4xl [corner-shape:superellipse(1.33)] transition-colors ${
-                showLagRadar
-                  ? "bg-black text-white"
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                showLagRadar ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
               {showLagRadar ? "Hide" : "Show"} Lag Radar

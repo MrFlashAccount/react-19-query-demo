@@ -1,10 +1,11 @@
-import { HOST_STYLES } from "./styles";
-import { css, getElement, html } from "./utilities";
-import TimelineWorker from "./timeline.worker?worker";
 import type { InitMessage, DrawMessage } from "./timeline.worker";
+import type { TimeRange } from "./types";
+
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
-import type { TimeRange } from "./types";
+import { HOST_STYLES } from "./styles";
+import TimelineWorker from "./timeline.worker?worker";
+import { css, getElement, html } from "./utilities";
 
 const STYLES = css`
   ${HOST_STYLES()}
@@ -47,24 +48,14 @@ export class FlameGraphTimeline extends HTMLElement {
   }
 
   private subscribeToState() {
-    this.unsubs.push(
-      flameGraphState.subscribe(selectors.timeRange, () => this.draw())
-    );
+    this.unsubs.push(flameGraphState.subscribe(selectors.timeRange, () => this.draw()));
     // Fine-grained: only zoom/offset changes, not all viewState changes
+    this.unsubs.push(flameGraphState.subscribe(selectors.panZoom, () => this.draw()));
     this.unsubs.push(
-      flameGraphState.subscribe(selectors.panZoom, () => this.draw())
-    );
-    this.unsubs.push(
-      flameGraphState.subscribe(selectors.timelineLayout, () =>
-        this.resizeCanvas()
-      )
+      flameGraphState.subscribe(selectors.timelineLayout, () => this.resizeCanvas()),
     );
     // Also subscribe to canvas layout since timeline height depends on it
-    this.unsubs.push(
-      flameGraphState.subscribe(selectors.canvasLayout, () =>
-        this.resizeCanvas()
-      )
-    );
+    this.unsubs.push(flameGraphState.subscribe(selectors.canvasLayout, () => this.resizeCanvas()));
   }
 
   private render() {
@@ -72,9 +63,7 @@ export class FlameGraphTimeline extends HTMLElement {
       throw new Error("Shadow root not found");
     }
 
-    const { width, height } = selectors.timelineLayout(
-      flameGraphState.getState()
-    );
+    const { width, height } = selectors.timelineLayout(flameGraphState.getState());
     const dpr = window.devicePixelRatio || 1;
     this.shadowRoot.innerHTML = html`
       <style>
@@ -93,10 +82,7 @@ export class FlameGraphTimeline extends HTMLElement {
 
     // Transfer canvas control to worker
     const offscreen = this.canvas.transferControlToOffscreen();
-    this.worker.postMessage(
-      { type: "init", canvas: offscreen } satisfies InitMessage,
-      [offscreen]
-    );
+    this.worker.postMessage({ type: "init", canvas: offscreen } satisfies InitMessage, [offscreen]);
     this.workerReady = true;
   }
 
@@ -104,9 +90,7 @@ export class FlameGraphTimeline extends HTMLElement {
     drawScheduler.schedule(() => {
       if (this.worker === null) return;
 
-      const { width, height } = selectors.timelineLayout(
-        flameGraphState.getState()
-      );
+      const { width, height } = selectors.timelineLayout(flameGraphState.getState());
       const timeRange = selectors.timeRange(flameGraphState.getState());
       const offsetX = selectors.offsetX(flameGraphState.getState());
       const zoom = selectors.zoom(flameGraphState.getState());
@@ -117,9 +101,7 @@ export class FlameGraphTimeline extends HTMLElement {
 
   draw() {
     drawScheduler.schedule(() => {
-      const { width, height } = selectors.timelineLayout(
-        flameGraphState.getState()
-      );
+      const { width, height } = selectors.timelineLayout(flameGraphState.getState());
       const offsetX = selectors.offsetX(flameGraphState.getState());
       const zoom = selectors.zoom(flameGraphState.getState());
       const timeRange = selectors.timeRange(flameGraphState.getState());
@@ -132,7 +114,7 @@ export class FlameGraphTimeline extends HTMLElement {
     height: number,
     timeRange: TimeRange,
     offsetX: number,
-    zoom: number
+    zoom: number,
   ) {
     if (!this.worker || !this.workerReady) return;
 

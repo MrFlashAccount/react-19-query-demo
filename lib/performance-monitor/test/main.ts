@@ -1,4 +1,5 @@
 import "../PerformanceOverlay";
+
 import type { PerformanceOverlay as PerfOverlay, OverlayLevel } from "../index";
 
 // Get DOM elements

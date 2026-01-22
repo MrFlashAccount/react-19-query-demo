@@ -1,13 +1,7 @@
-import type {
-  SpanStartEvent,
-  SpanEndEvent,
-  SpanEvent,
-  Color,
-  TraceEvent,
-  SpanId,
-} from "../types";
-import { BaseReporter } from "./BaseReporter";
+import type { SpanStartEvent, SpanEndEvent, SpanEvent, Color, TraceEvent, SpanId } from "../types";
 import type { SpanMetrics } from "./types";
+
+import { BaseReporter } from "./BaseReporter";
 
 /**
  * Chrome DevTools performance panel detail structure
@@ -164,7 +158,7 @@ export class DevtoolsReporter extends BaseReporter {
             duration,
             description ?? "",
             metrics,
-            event
+            event,
           ),
         },
       });
@@ -194,7 +188,7 @@ export class DevtoolsReporter extends BaseReporter {
     duration: number,
     description: string,
     metrics: DevtoolsSpanMetrics,
-    endEvent: SpanEndEvent
+    endEvent: SpanEndEvent,
   ): DevtoolsDetail {
     const properties: Array<[string, string]> = [
       ["Status", status],
@@ -225,8 +219,7 @@ export class DevtoolsReporter extends BaseReporter {
     }
 
     // Use error color on failure, otherwise span's color
-    const devtoolsColor =
-      status === "error" ? colorToDevtools.error : colorToDevtools[color];
+    const devtoolsColor = status === "error" ? colorToDevtools.error : colorToDevtools[color];
 
     return {
       color: devtoolsColor,
@@ -239,7 +232,7 @@ export class DevtoolsReporter extends BaseReporter {
 
   private addPayloadProperties(
     properties: Array<[string, string]>,
-    payload: Record<string, unknown>
+    payload: Record<string, unknown>,
   ): void {
     for (const [key, value] of Object.entries(payload)) {
       // Skip internal properties
@@ -268,7 +261,7 @@ export class DevtoolsReporter extends BaseReporter {
     try {
       return JSON.stringify(value);
     } catch {
-      return String(value);
+      return Object.prototype.toString.call(value);
     }
   }
 

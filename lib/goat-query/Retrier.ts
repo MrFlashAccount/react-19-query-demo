@@ -13,10 +13,7 @@ export class RetrierCancelledError extends Error {
 /**
  * Retry configuration options
  */
-export type RetryConfig =
-  | number
-  | boolean
-  | ((failureCount: number, error: unknown) => boolean);
+export type RetryConfig = number | boolean | ((failureCount: number, error: unknown) => boolean);
 
 /**
  * Options for creating a Retrier
@@ -31,8 +28,8 @@ export interface RetrierOptions {
 export type PromiseConstructor<T> = new (
   callback: (
     resolve: (value: T | PromiseLike<T>) => void,
-    reject: (error: unknown) => void
-  ) => void
+    reject: (error: unknown) => void,
+  ) => void,
 ) => PromiseLike<T>;
 
 /**
@@ -99,7 +96,7 @@ export class Retrier {
    */
   async execute<T, R extends PromiseConstructor<T> = PromiseConstructor<T>>(
     fn: (props: { signal: AbortSignal; attempt: number }) => Promise<T>,
-    promiseConstructor?: R
+    promiseConstructor?: R,
   ): Promise<T> {
     // Cancel any previous execution by updating the current execution ID
     // This will cause the previous execution to throw RetrierCancelledError
@@ -139,8 +136,7 @@ export class Retrier {
       }
 
       try {
-        const PromiseCtor = (promiseConstructor ??
-          Promise) as PromiseConstructor<T>;
+        const PromiseCtor = (promiseConstructor ?? Promise) as PromiseConstructor<T>;
         return await new PromiseCtor((resolve, reject) => {
           fn({ signal: abortSignal, attempt: failureCount + 1 })
             .then(resolve)
@@ -184,11 +180,7 @@ export class Retrier {
    * @param error - The error that occurred
    * @returns True if we should retry
    */
-  private shouldRetry(
-    failureCount: number,
-    error: unknown,
-    signal: AbortSignal
-  ): boolean {
+  private shouldRetry(failureCount: number, error: unknown, signal: AbortSignal): boolean {
     const { retry } = this.options;
 
     if (signal.aborted) {
@@ -269,9 +261,7 @@ export class Retrier {
           timerId = null;
         }
         // Remove from paused timers if it's there
-        const pausedIndex = this.pausedTimers.findIndex(
-          (t) => t.resolve === resolve
-        );
+        const pausedIndex = this.pausedTimers.findIndex((t) => t.resolve === resolve);
         if (pausedIndex !== -1) {
           this.pausedTimers.splice(pausedIndex, 1);
         }
@@ -305,9 +295,7 @@ export class Retrier {
           isPaused = false;
 
           // Find and remove from paused timers
-          const pausedIndex = this.pausedTimers.findIndex(
-            (t) => t.resolve === resolve
-          );
+          const pausedIndex = this.pausedTimers.findIndex((t) => t.resolve === resolve);
           if (pausedIndex !== -1) {
             const pausedTimer = this.pausedTimers[pausedIndex];
             this.pausedTimers.splice(pausedIndex, 1);
@@ -352,9 +340,7 @@ export class Retrier {
   /**
    * Get the configured retry delay configuration
    */
-  getRetryDelayConfig():
-    | number
-    | ((failureCount: number, error: unknown) => number) {
+  getRetryDelayConfig(): number | ((failureCount: number, error: unknown) => number) {
     return this.options.retryDelay;
   }
 

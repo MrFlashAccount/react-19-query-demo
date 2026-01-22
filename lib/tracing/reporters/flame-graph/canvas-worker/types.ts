@@ -3,8 +3,8 @@
  */
 
 import type { Color, SpanId } from "../../../types";
-import type { TimeRange, ViewState } from "../types";
 import type { SpanBufferDescriptor } from "../SpanBuffer";
+import type { TimeRange, ViewState } from "../types";
 
 export interface InitMessage {
   type: "init";

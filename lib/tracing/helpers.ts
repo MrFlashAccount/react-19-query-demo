@@ -3,13 +3,10 @@
  * Works in any environment without async context dependencies.
  */
 
+import { type TracedOptions, executeWithSpan, createTracedDecorator } from "./shared";
 import { SpanBase, type ISpan, type ISpanMeta } from "./types";
+
 import { tracer } from "./index";
-import {
-  type TracedOptions,
-  executeWithSpan,
-  createTracedDecorator,
-} from "./shared";
 
 /**
  * Type guard to check if value is a span instance.
@@ -30,7 +27,7 @@ const createSpan = (
   name: string,
   meta: ISpanMeta | undefined,
   payload: Record<string, unknown> = {},
-  parentSpan?: ISpan
+  parentSpan?: ISpan,
 ): ISpan => {
   if (parentSpan) {
     const child = parentSpan.child({ name, payload, meta });
@@ -58,7 +55,7 @@ const createSpan = (
  */
 export function traced<TArgs extends unknown[], TReturn>(
   fn: (span: ISpan, ...args: TArgs) => TReturn,
-  options: TracedOptions
+  options: TracedOptions,
 ): (...args: TArgs) => TReturn {
   function withSpan(this: any, ...args: TArgs): TReturn {
     const { name, payload = {}, meta, parentSpan } = options;
@@ -100,7 +97,7 @@ export const Traced = createTracedDecorator(traced);
  */
 export function tracePromise<T, P extends PromiseLike<T>>(
   promise: P,
-  spanOrSpanOptions: ISpan | TracedOptions
+  spanOrSpanOptions: ISpan | TracedOptions,
 ): P {
   const span = isSpan(spanOrSpanOptions)
     ? spanOrSpanOptions
@@ -108,7 +105,7 @@ export function tracePromise<T, P extends PromiseLike<T>>(
         spanOrSpanOptions.name,
         spanOrSpanOptions.meta,
         spanOrSpanOptions.payload ?? {},
-        spanOrSpanOptions.parentSpan
+        spanOrSpanOptions.parentSpan,
       );
   span.start();
   return promise.then(
@@ -119,14 +116,11 @@ export function tracePromise<T, P extends PromiseLike<T>>(
     (err) => {
       span.error(err);
       throw err;
-    }
+    },
   ) as P;
 }
 
-export function runInSpan<T>(
-  fn: (span: ISpan) => T,
-  options: TracedOptions
-): T {
+export function runInSpan<T>(fn: (span: ISpan) => T, options: TracedOptions): T {
   const withSpan = traced((span: ISpan) => fn(span), options);
   return withSpan();
 }

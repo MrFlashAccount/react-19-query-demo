@@ -1,22 +1,18 @@
-import {
-  COLOR_PALETTE,
-  SELECTED_BORDER_COLOR,
-  RESET_CASCADE,
-  theme,
-} from "./styles";
+import type { SpanBufferViews, SpanBufferDescriptor } from "./SpanBuffer";
+
+import { CanvasWorkerClient } from "./canvas-worker";
+import { drawScheduler } from "./DrawScheduler";
+import { calculateSpanLayouts } from "./LaneCalculator";
+import { getSpansCount, readSpanId } from "./SpanBuffer";
+import { flameGraphState, selectors } from "./state";
+import { COLOR_PALETTE, SELECTED_BORDER_COLOR, RESET_CASCADE, theme } from "./styles";
 import {
   CANVAS_PADDING_LEFT,
   CANVAS_PADDING_RIGHT,
   CANVAS_PAN_MARGIN_PX,
   type ViewState,
 } from "./types";
-import type { SpanBufferViews, SpanBufferDescriptor } from "./SpanBuffer";
-import { getSpansCount, readSpanId } from "./SpanBuffer";
 import { css, getElement, html } from "./utilities";
-import { CanvasWorkerClient } from "./canvas-worker";
-import { drawScheduler } from "./DrawScheduler";
-import { flameGraphState, selectors } from "./state";
-import { calculateSpanLayouts } from "./LaneCalculator";
 
 const STYLES = css`
   :host {
@@ -122,7 +118,7 @@ export class FlameGraphCanvas extends HTMLElement {
       ({ spanBuffer, spanVersion }) => {
         this.updateSpansAndDraw(spanBuffer, spanVersion);
       },
-      { signal: this.unmountAbortController.signal, fireImmediately: true }
+      { signal: this.unmountAbortController.signal, fireImmediately: true },
     );
     flameGraphState.subscribe(
       selectors.hasSpans,
@@ -130,7 +126,7 @@ export class FlameGraphCanvas extends HTMLElement {
         this.canvas.classList.toggle("hidden", !hasSpans);
         this.emptyEl.classList.toggle("hidden", hasSpans);
       },
-      { signal: this.unmountAbortController.signal }
+      { signal: this.unmountAbortController.signal },
     );
     flameGraphState.subscribe(selectors.selectedSpan, () => this.draw(), {
       signal: this.unmountAbortController.signal,
@@ -145,7 +141,7 @@ export class FlameGraphCanvas extends HTMLElement {
         this.emptyEl.classList.toggle("hidden", isRecording);
         this.canvas.classList.toggle("hidden", isRecording);
       },
-      { signal: this.unmountAbortController.signal }
+      { signal: this.unmountAbortController.signal },
     );
     // Subscribe to zoom/pan changes for redraw (fine-grained - only zoom/offset)
     flameGraphState.subscribe(selectors.panZoom, () => this.draw(), {
@@ -155,7 +151,7 @@ export class FlameGraphCanvas extends HTMLElement {
     flameGraphState.subscribe(
       selectors.canvasLayout,
       (layout) => this.applyLayoutDimensions(layout.width, layout.height),
-      { signal: this.unmountAbortController.signal }
+      { signal: this.unmountAbortController.signal },
     );
   }
 
@@ -167,9 +163,7 @@ export class FlameGraphCanvas extends HTMLElement {
 
   private render() {
     if (!this.shadowRoot) return;
-    const { width, height } = selectors.canvasLayout(
-      flameGraphState.getState()
-    );
+    const { width, height } = selectors.canvasLayout(flameGraphState.getState());
     const hasSpans = selectors.hasSpans(flameGraphState.getState());
     const isRecording = selectors.isRecording(flameGraphState.getState());
     this.shadowRoot.innerHTML = html`
@@ -193,10 +187,7 @@ export class FlameGraphCanvas extends HTMLElement {
     `;
     this.emptyEl = getElement(".empty", this.shadowRoot);
     this.canvas = getElement<HTMLCanvasElement>("canvas", this.shadowRoot);
-    this.recordingIndicatorEl = getElement(
-      ".recording-indicator",
-      this.shadowRoot
-    );
+    this.recordingIndicatorEl = getElement(".recording-indicator", this.shadowRoot);
   }
 
   private setupCanvas() {
@@ -208,7 +199,7 @@ export class FlameGraphCanvas extends HTMLElement {
       () => {
         this.canvasWorker.terminate();
       },
-      { once: true }
+      { once: true },
     );
 
     // Transfer canvas control to worker
@@ -223,7 +214,7 @@ export class FlameGraphCanvas extends HTMLElement {
           stringSab: flameGraphState.getState().spanBuffer.stringSab,
         },
       },
-      [offscreen]
+      [offscreen],
     );
   }
 
@@ -337,13 +328,10 @@ export class FlameGraphCanvas extends HTMLElement {
             ? null
             : {
                 index: clickedIndex,
-                spanId: readSpanId(
-                  flameGraphState.getState().spanBuffer,
-                  clickedIndex
-                ),
+                spanId: readSpanId(flameGraphState.getState().spanBuffer, clickedIndex),
               },
         bubbles: true,
-      })
+      }),
     );
   };
 
@@ -401,16 +389,11 @@ export class FlameGraphCanvas extends HTMLElement {
     this.maxAdjustedDepth = maxDepth;
 
     drawScheduler.schedule(() => {
-      const { width, height } = selectors.canvasLayout(
-        flameGraphState.getState()
-      );
-      const { selectedSpanIndex, viewState, spanBuffer } =
-        flameGraphState.getState();
+      const { width, height } = selectors.canvasLayout(flameGraphState.getState());
+      const { selectedSpanIndex, viewState, spanBuffer } = flameGraphState.getState();
       const timeRange = selectors.timeRange(flameGraphState.getState());
       const selectedSpanId =
-        selectedSpanIndex == null
-          ? null
-          : readSpanId(spanBuffer, selectedSpanIndex);
+        selectedSpanIndex == null ? null : readSpanId(spanBuffer, selectedSpanIndex);
 
       const bufferDescriptor: SpanBufferDescriptor = {
         sab: spanBuffer.sab,
@@ -433,21 +416,16 @@ export class FlameGraphCanvas extends HTMLElement {
 
   draw() {
     drawScheduler.schedule(() => {
-      const { width, height } = selectors.canvasLayout(
-        flameGraphState.getState()
-      );
+      const { width, height } = selectors.canvasLayout(flameGraphState.getState());
       return this.executeDraw(width, height);
     });
   }
 
   private executeDraw(width: number, height: number) {
-    const { selectedSpanIndex, viewState, spanBuffer } =
-      flameGraphState.getState();
+    const { selectedSpanIndex, viewState, spanBuffer } = flameGraphState.getState();
     const timeRange = selectors.timeRange(flameGraphState.getState());
     const selectedSpanId =
-      selectedSpanIndex == null
-        ? null
-        : readSpanId(spanBuffer, selectedSpanIndex);
+      selectedSpanIndex == null ? null : readSpanId(spanBuffer, selectedSpanIndex);
 
     this.canvasWorker.draw({
       width,
@@ -469,9 +447,7 @@ export class FlameGraphCanvas extends HTMLElement {
   private findSpanAt(x: number, y: number): number | null {
     const { viewState, spanBuffer, spansCount } = flameGraphState.getState();
     const { width } = viewState.calculatedLayout.canvas;
-    const { minTime, maxTime } = selectors.timeRange(
-      flameGraphState.getState()
-    );
+    const { minTime, maxTime } = selectors.timeRange(flameGraphState.getState());
     const totalDuration = maxTime - minTime;
     if (totalDuration === 0) return null;
 
@@ -482,8 +458,7 @@ export class FlameGraphCanvas extends HTMLElement {
     const timeToX = (time: number) =>
       ((time - minTime) / totalDuration) * width * zoom + effectiveOffsetX;
 
-    const durationToWidth = (duration: number) =>
-      (duration / totalDuration) * width * zoom;
+    const durationToWidth = (duration: number) => (duration / totalDuration) * width * zoom;
 
     const currentTime = maxTime;
 
@@ -496,8 +471,7 @@ export class FlameGraphCanvas extends HTMLElement {
         : spanBuffer.endTime[i] - spanBuffer.startTime[i];
 
       // Use adjusted depth from span layouts
-      const adjustedDepth =
-        i < this.spanLayoutsCount ? this.spanLayouts[i] : spanBuffer.depth[i];
+      const adjustedDepth = i < this.spanLayoutsCount ? this.spanLayouts[i] : spanBuffer.depth[i];
 
       const sx = timeToX(spanBuffer.startTime[i]);
       const sy = adjustedDepth * (ROW_HEIGHT + ROW_GAP) + effectiveOffsetY;

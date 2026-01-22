@@ -4,6 +4,7 @@
  */
 
 import type { SpanBufferViews } from "./SpanBuffer";
+
 import { getSpansCount } from "./SpanBuffer";
 
 interface Interval {
@@ -22,11 +23,7 @@ export class IntervalTree {
   private intervals: Interval[] = [];
   private sorted = false;
 
-  build(
-    views: SpanBufferViews,
-    maxTime: number,
-    count: number = getSpansCount(views)
-  ): void {
+  build(views: SpanBufferViews, maxTime: number, count: number = getSpansCount(views)): void {
     this.intervals = [];
     for (let i = 0; i < count; i++) {
       const end = views.status[i] === 1 ? maxTime : views.endTime[i];
@@ -44,7 +41,7 @@ export class IntervalTree {
     views: SpanBufferViews,
     maxTime: number,
     depthProvider: DepthProvider,
-    count: number = getSpansCount(views)
+    count: number = getSpansCount(views),
   ): void {
     this.intervals = [];
     for (let i = 0; i < count; i++) {
@@ -59,12 +56,7 @@ export class IntervalTree {
     this.sorted = false;
   }
 
-  query(
-    timeStart: number,
-    timeEnd: number,
-    depthStart?: number,
-    depthEnd?: number
-  ): number[] {
+  query(timeStart: number, timeEnd: number, depthStart?: number, depthEnd?: number): number[] {
     if (this.intervals.length === 0) return [];
 
     if (!this.sorted) {
@@ -83,10 +75,7 @@ export class IntervalTree {
       // Check overlap: span.start <= timeEnd && span.end >= timeStart
       if (interval.end >= timeStart) {
         if (depthStart !== undefined && depthEnd !== undefined) {
-          if (
-            interval.adjustedDepth >= depthStart &&
-            interval.adjustedDepth <= depthEnd
-          ) {
+          if (interval.adjustedDepth >= depthStart && interval.adjustedDepth <= depthEnd) {
             result.push(interval.index);
           }
         } else {

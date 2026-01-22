@@ -1,18 +1,13 @@
-import { lazy, use } from "react";
-import { MovieList, MovieCard, SearchBox } from "../shared";
 import type { Movie } from "../../api/types";
 import type { TabProps } from "../shared/types";
-import {
-  appGraph,
-  moviesQuery,
-  updateMovieRatingMutation,
-} from "../../queries";
+import { lazy, use } from "react";
 
-const { QueryProvider, useMutation, useQuery, QueryClient } = await import(
-  "lib/goat-query/react"
-);
+import { appGraph, moviesQuery, updateMovieRatingMutation } from "../../queries";
+import { MovieList, MovieCard, SearchBox } from "../shared";
+
+const { QueryProvider, useMutation, useQuery, QueryClient } = await import("lib/goat-query/react");
 const LazyDevtools = lazy(() =>
-  import("lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools }))
+  import("lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
 );
 
 const queryClient = new QueryClient({ graph: appGraph });
@@ -40,7 +35,8 @@ export default function CustomLibraryTab({
  * Custom library tab component - demonstrates the custom query library implementation
  */
 function CustomLibraryTabContent({ formState, onFormStateChange }: TabProps) {
-  const searchQuery = String(formState.get("searchQuery") ?? "");
+  const searchQueryValue = formState.get("searchQuery");
+  const searchQuery = typeof searchQueryValue === "string" ? searchQueryValue : "";
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
 
   const { promise } = useQuery({

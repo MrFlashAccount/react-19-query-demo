@@ -1,6 +1,8 @@
-import { use, useMemo } from "react";
 import type { QueryClient } from "../QueryClient";
+import { use, useMemo } from "react";
+
 import { QueryContext } from "../react/QueryProvider";
+
 import { StatusIcons } from "./constants";
 
 export function useDebugFormattedQuery(queryClient?: QueryClient) {
@@ -12,22 +14,14 @@ export function useDebugFormattedQuery(queryClient?: QueryClient) {
 
   return useMemo(() => {
     const cache = client.getCache();
-    const queryDefinitions = Array.from(cache.entries()).map(
-      ([definition]) => definition
-    );
+    const queryDefinitions = Array.from(cache.entries()).map(([definition]) => definition);
     const allQueries = cache.findByDefinitions(queryDefinitions);
-    const pendingQueries = allQueries.filter(
-      (query) => query.getState().status === "pending"
-    );
+    const pendingQueries = allQueries.filter((query) => query.getState().status === "pending");
     const fetchingQueries = allQueries.filter(
-      (query) => query.getState().fetchStatus === "fetching"
+      (query) => query.getState().fetchStatus === "fetching",
     );
-    const fulfilledQueries = allQueries.filter(
-      (query) => query.getState().status === "fulfilled"
-    );
-    const rejectedQueries = allQueries.filter(
-      (query) => query.getState().status === "rejected"
-    );
+    const fulfilledQueries = allQueries.filter((query) => query.getState().status === "fulfilled");
+    const rejectedQueries = allQueries.filter((query) => query.getState().status === "rejected");
     const staleQueries = allQueries.filter((query) => query.isStale());
     return {
       [`${StatusIcons.total} total`]: {

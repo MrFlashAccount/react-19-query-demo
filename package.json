@@ -1,8 +1,7 @@
 {
-  "schema": "https://json.schemastore.org/package",
   "name": "react-vite-ts",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "pnpm run \"/dev:.*/\"",
@@ -11,37 +10,42 @@
     "dev:perf": "vite --config lib/performance-monitor/test/vite.config.ts",
     "build": "pnpm run build:sw && vite build",
     "build:sw": "vite build --config vite.config.sw.ts",
-    "type-check": "tsgo --noEmit --isolatedDeclarations",
+    "check": "pnpm run \"/check:.*/\"",
+    "check:type": "tsgo --noEmit --isolatedDeclarations",
+    "check:lint": "oxlint --fix --type-aware",
+    "check:format": "oxfmt --write",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@tanstack/react-query": "5.90.5",
+    "@tanstack/react-query-devtools": "5.90.2",
+    "lit-html": "3.3.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-github-corner": "2.5.0",
-    "react-lag-radar": "1.0.0",
-    "@tanstack/react-query-devtools": "5.90.2",
-    "lit-html": "3.3.2"
+    "react-lag-radar": "1.0.0"
   },
   "devDependencies": {
     "@babel/core": "7.28.5",
     "@tailwindcss/vite": "4.1.17",
+    "@testing-library/dom": "10.4.1",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.0",
-    "@testing-library/dom": "10.4.1",
     "@toolwind/anchors": "1.0.10",
     "@types/node": "^22.10.5",
     "@types/react": "19.2.5",
     "@types/react-dom": "19.2.3",
+    "@typescript/native-preview": "7.0.0-dev.20260122.3",
     "@vitejs/plugin-react": "5.1.1",
     "babel-plugin-react-compiler": "1.0.0",
-    "tailwindcss": "4.1.17",
-    "@typescript/native-preview": "7.0.0-dev.20260122.3",
-    "vite": "8.0.0-beta.0",
-    "vitest": "4.0.9",
     "oxfmt": "0.26.0",
-    "oxlint": "1.41.0"
-  }
+    "oxlint": "1.41.0",
+    "oxlint-tsgolint": "0.11.1",
+    "tailwindcss": "4.1.17",
+    "vite": "8.0.0-beta.0",
+    "vitest": "4.0.9"
+  },
+  "schema": "https://json.schemastore.org/package"
 }

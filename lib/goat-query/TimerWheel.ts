@@ -265,10 +265,7 @@ export class TimerWheel {
 
       // Bubble up or down as needed
       const parent = Math.floor((index - 1) / 2);
-      if (
-        index > 0 &&
-        this.heap[index]!.expirationTime < this.heap[parent]!.expirationTime
-      ) {
+      if (index > 0 && this.heap[index]!.expirationTime < this.heap[parent]!.expirationTime) {
         this.heapBubbleUp(index);
       } else {
         this.heapBubbleDown(index);
@@ -312,16 +309,14 @@ export class TimerWheel {
 
       if (
         leftIndex < length &&
-        this.heap[leftIndex]!.expirationTime <
-          this.heap[smallestIndex]!.expirationTime
+        this.heap[leftIndex]!.expirationTime < this.heap[smallestIndex]!.expirationTime
       ) {
         smallestIndex = leftIndex;
       }
 
       if (
         rightIndex < length &&
-        this.heap[rightIndex]!.expirationTime <
-          this.heap[smallestIndex]!.expirationTime
+        this.heap[rightIndex]!.expirationTime < this.heap[smallestIndex]!.expirationTime
       ) {
         smallestIndex = rightIndex;
       }

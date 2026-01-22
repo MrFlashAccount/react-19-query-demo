@@ -1,12 +1,38 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type {
   TraceEvent,
   SpanStartEvent,
   SpanEndEvent,
   SpanEvent,
   ITracer,
+  ISpan,
+  SpanId,
 } from "../types";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
 import { BaseReporter } from "../reporters/BaseReporter";
+
+// Helper to create mock spans with all required ISpan properties
+function createMockSpan(overrides: Omit<Partial<ISpan>, "spanId"> & { spanId: string }): ISpan {
+  return {
+    spanId: overrides.spanId as unknown as SpanId,
+    name: overrides.name ?? "Test Action",
+    state: overrides.state ?? "running",
+    parentSpan: overrides.parentSpan ?? undefined,
+    payload: overrides.payload ?? {},
+    meta: overrides.meta ?? { description: "Test span", color: "primary" as const },
+    startTime: overrides.startTime ?? 1000,
+    endTime: overrides.endTime ?? -1,
+    serializedPayload: JSON.stringify(overrides.payload ?? {}),
+    duration:
+      (overrides.endTime ?? -1) > 0 ? (overrides.endTime ?? 0) - (overrides.startTime ?? 1000) : 0,
+    start: vi.fn(),
+    event: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
+  };
+}
 
 // Test implementation of BaseReporter
 class TestReporter extends BaseReporter {
@@ -22,6 +48,22 @@ class TestReporter extends BaseReporter {
 
   protected onStop(): void {
     this.stopCalled = true;
+  }
+
+  protected processEvents(events: TraceEvent[]): void {
+    for (const event of events) {
+      switch (event.kind) {
+        case "start":
+          this.onSpanStart(event);
+          break;
+        case "end":
+          this.onSpanEnd(event);
+          break;
+        case "event":
+          this.onSpanEvent(event);
+          break;
+      }
+    }
   }
 
   protected onSpanStart(event: SpanStartEvent): void {
@@ -40,8 +82,8 @@ class TestReporter extends BaseReporter {
   }
 
   // Expose protected methods for testing
-  public getTrackedSpan(spanId: string) {
-    return this.getSpanMetrics(spanId);
+  public getTrackedSpan(spanId: string | SpanId) {
+    return this.getSpanMetrics(spanId as SpanId);
   }
 
   public getTrackedSpanCount() {
@@ -123,21 +165,10 @@ describe("BaseReporter", () => {
   });
 
   describe("event handling", () => {
-    const mockSpan = {
+    const mockSpan = createMockSpan({
       spanId: "test-span-1",
-      name: "Test Action",
-      state: "running" as const,
-      parentSpan: undefined,
       payload: { key: "value" },
-      meta: { description: "Test span", color: "primary" as const },
-      startTime: 1000,
-      endTime: -1,
-      start: vi.fn(),
-      event: vi.fn(),
-      success: vi.fn(),
-      error: vi.fn(),
-      child: vi.fn(),
-    };
+    });
 
     it("should receive span start events", () => {
       reporter.start();
@@ -238,21 +269,10 @@ describe("BaseReporter", () => {
   });
 
   describe("span tracking", () => {
-    const mockSpan = {
+    const mockSpan = createMockSpan({
       spanId: "tracked-span",
-      name: "Test Action",
-      state: "running" as const,
-      parentSpan: undefined,
       payload: { key: "tracked" },
-      meta: { description: "Test span", color: "primary" as const },
-      startTime: 1000,
-      endTime: -1,
-      start: vi.fn(),
-      event: vi.fn(),
-      success: vi.fn(),
-      error: vi.fn(),
-      child: vi.fn(),
-    };
+    });
 
     it("should track span on start", () => {
       reporter.start();
@@ -365,21 +385,9 @@ describe("BaseReporter", () => {
       tracer.addReporter(reporter1);
       tracer.addReporter(reporter2);
 
-      const mockSpan = {
+      const mockSpan = createMockSpan({
         spanId: "multi-test",
-        name: "Test Action",
-        state: "running" as const,
-        parentSpan: undefined,
-        payload: {},
-        meta: { description: "Test span", color: "primary" as const },
-        startTime: 1000,
-        endTime: -1,
-        start: vi.fn(),
-        event: vi.fn(),
-        success: vi.fn(),
-        error: vi.fn(),
-        child: vi.fn(),
-      };
+      });
 
       const event: SpanStartEvent = {
         kind: "start",
@@ -399,21 +407,10 @@ describe("BaseReporter", () => {
 
   describe("edge cases", () => {
     it("should handle span end without corresponding start (reporter added mid-span)", () => {
-      const mockSpan = {
+      const mockSpan = createMockSpan({
         spanId: "orphan-span",
-        name: "Test Action",
-        state: "running" as const,
-        parentSpan: undefined,
-        payload: {},
-        meta: { description: "Test span", color: "primary" as const },
-        startTime: 1000,
         endTime: 2000,
-        start: vi.fn(),
-        event: vi.fn(),
-        success: vi.fn(),
-        error: vi.fn(),
-        child: vi.fn(),
-      };
+      });
 
       // Start reporter AFTER span already started
       reporter.start();
@@ -437,21 +434,9 @@ describe("BaseReporter", () => {
     });
 
     it("should handle span event without corresponding start", () => {
-      const mockSpan = {
+      const mockSpan = createMockSpan({
         spanId: "orphan-span",
-        name: "Test Action",
-        state: "running" as const,
-        parentSpan: undefined,
-        payload: {},
-        meta: { description: "Test span", color: "primary" as const },
-        startTime: 1000,
-        endTime: -1,
-        start: vi.fn(),
-        event: vi.fn(),
-        success: vi.fn(),
-        error: vi.fn(),
-        child: vi.fn(),
-      };
+      });
 
       reporter.start();
       tracer.addReporter(reporter);
@@ -483,7 +468,7 @@ describe("Tracer with reporters", () => {
   });
 
   it("should dispatch events to reporters", async () => {
-    const { Tracer } = await import("../tracing/Tracer");
+    const { Tracer } = await import("../Tracer");
     const tracer = new Tracer();
     const reporter = new TestReporter();
 
@@ -496,7 +481,7 @@ describe("Tracer with reporters", () => {
       {
         description: "Test span",
         color: "primary",
-      }
+      },
     );
 
     expect(reporter.startEvents).toHaveLength(1);
@@ -510,12 +495,10 @@ describe("Tracer with reporters", () => {
   });
 
   it("should handle reporter errors without affecting tracer", async () => {
-    const { Tracer } = await import("../tracing/Tracer");
+    const { Tracer } = await import("../Tracer");
     const tracer = new Tracer();
 
-    const consoleErrorSpy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     // Broken reporter that throws
     const brokenReporter = {
@@ -531,20 +514,17 @@ describe("Tracer with reporters", () => {
     goodReporter.start();
 
     // Should not throw
-    const span = tracer.startSpan(
+    tracer.startSpan(
       "Test Span",
       {},
       {
         description: "Test span",
         color: "primary",
-      }
+      },
     );
 
     // Error was logged
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      "Reporter error:",
-      expect.any(Error)
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Reporter error:", expect.any(Error));
 
     // Good reporter still received event
     expect(goodReporter.startEvents).toHaveLength(1);
@@ -555,7 +535,7 @@ describe("Tracer with reporters", () => {
 
 describe("NullTracer with reporters", () => {
   it("should not throw when adding reporter", async () => {
-    const { NullTracer } = await import("../tracing/NullTracer");
+    const { NullTracer } = await import("../NullTracer");
     const tracer = new NullTracer();
 
     const receiver = { handleEvent: vi.fn() };
@@ -569,7 +549,7 @@ describe("NullTracer with reporters", () => {
   });
 
   it("should always return false for hasReporters()", async () => {
-    const { NullTracer } = await import("../tracing/NullTracer");
+    const { NullTracer } = await import("../NullTracer");
     const tracer = new NullTracer();
 
     expect(tracer.hasReporters()).toBe(false);

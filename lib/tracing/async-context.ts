@@ -7,13 +7,10 @@
  */
 
 import type { ISpan, ISpanMeta } from "./types";
+
+import { type AnyFn, type TracedOptions, executeWithSpan, createTracedDecorator } from "./shared";
+
 import { tracer } from "./index";
-import {
-  type AnyFn,
-  type TracedOptions,
-  executeWithSpan,
-  createTracedDecorator,
-} from "./shared";
 
 type ContextProvider<T> = {
   run<R>(value: T | undefined, fn: () => R): R;
@@ -25,7 +22,7 @@ type ContextProvider<T> = {
 if (typeof AsyncContext === "undefined" || !AsyncContext.Variable) {
   throw new Error(
     "AsyncContext.Variable not available. " +
-      "Use a polyfill or ./node.ts for Node.js environments."
+      "Use a polyfill or ./node.ts for Node.js environments.",
   );
 }
 
@@ -71,7 +68,7 @@ const createSpan = (
   name: string,
   meta?: ISpanMeta,
   payload?: Record<string, unknown>,
-  parentSpan?: ISpan
+  parentSpan?: ISpan,
 ): ISpan => {
   const parent = parentSpan ?? getCurrentSpan();
   if (parent) {
@@ -103,9 +100,7 @@ export function traced<T extends AnyFn>(fn: T, options: TracedOptions): T {
   function withSpan(this: any, ...args: Parameters<T>): ReturnType<T> {
     const { name, meta, payload, parentSpan } = options;
     const span = createSpan(name, meta, payload, parentSpan);
-    return runWithSpan(span, () =>
-      executeWithSpan(span, () => fn.apply(this, args))
-    );
+    return runWithSpan(span, () => executeWithSpan(span, () => fn.apply(this, args)));
   }
 
   return withSpan as T;
@@ -136,15 +131,7 @@ export const Traced = createTracedDecorator(traced);
  *   return await doWork();
  * }, { name: "operation", meta: { color: "primary" } });
  */
-export function runInSpan<T>(
-  fn: (span: ISpan) => T,
-  options: TracedOptions
-): T {
-  const span = createSpan(
-    options.name,
-    options.meta,
-    options.payload,
-    options.parentSpan
-  );
+export function runInSpan<T>(fn: (span: ISpan) => T, options: TracedOptions): T {
+  const span = createSpan(options.name, options.meta, options.payload, options.parentSpan);
   return runWithSpan(span, () => executeWithSpan(span, () => fn(span)));
 }

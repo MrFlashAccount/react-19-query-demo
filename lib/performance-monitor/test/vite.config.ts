@@ -1,5 +1,6 @@
-import { defineConfig } from "vite";
 import path from "path";
+
+import { defineConfig } from "vite";
 
 export default defineConfig({
   root: __dirname,
@@ -17,5 +18,3 @@ export default defineConfig({
     emptyOutDir: true,
   },
 });
-
-

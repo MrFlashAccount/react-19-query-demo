@@ -5,14 +5,10 @@
  */
 
 import type { Color, SpanId } from "../../../types";
-import type { TimeRange, ViewState } from "../types";
 import type { SpanBufferDescriptor } from "../SpanBuffer";
-import type {
-  WorkerMessage,
-  InitMessage,
-  UpdateSpansMessage,
-  DrawMessage,
-} from "./types";
+import type { TimeRange, ViewState } from "../types";
+import type { WorkerMessage, InitMessage, UpdateSpansMessage, DrawMessage } from "./types";
+
 import CanvasWorker from "./worker?worker";
 
 export interface DrawParams {
@@ -35,10 +31,7 @@ export interface InitParams {
  * Message factories for creating typed worker messages
  */
 export const msg = {
-  updateSpans: (
-    spanBuffer: SpanBufferDescriptor,
-    version: number
-  ): UpdateSpansMessage => ({
+  updateSpans: (spanBuffer: SpanBufferDescriptor, version: number): UpdateSpansMessage => ({
     type: "updateSpans",
     spanBuffer,
     version,
@@ -107,7 +100,7 @@ export class CanvasWorkerClient
           spanBuffer: params.spanBuffer,
         } satisfies InitMessage,
       ],
-      transfer
+      transfer,
     );
     this.isInitialized = true;
     return;
@@ -133,10 +126,7 @@ export class CanvasWorkerClient
 
     if (pendingMessages.length === 0) return;
 
-    this.sendMessages(
-      pendingMessages,
-      this.isBatching
-    ) as unknown as IBatchingCanvasWorkerClient;
+    this.sendMessages(pendingMessages, this.isBatching) as unknown as IBatchingCanvasWorkerClient;
 
     if (this.isBatching) {
       this.isBatching = false;
@@ -144,10 +134,7 @@ export class CanvasWorkerClient
     }
   }
 
-  private sendMessages(
-    messages: WorkerMessage[],
-    isBatch: boolean = false
-  ): void {
+  private sendMessages(messages: WorkerMessage[], isBatch: boolean = false): void {
     if (!this.isInitialized) {
       throw new Error("Worker not initialized");
     }
@@ -194,10 +181,5 @@ export class CanvasWorkerClient
 }
 
 // Re-export types for consumers
-export type {
-  WorkerMessage,
-  InitMessage,
-  UpdateSpansMessage,
-  DrawMessage,
-} from "./types";
+export type { WorkerMessage, InitMessage, UpdateSpansMessage, DrawMessage } from "./types";
 export type { TimeRange, ViewState } from "../types";

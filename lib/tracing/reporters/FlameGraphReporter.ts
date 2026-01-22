@@ -1,17 +1,13 @@
-import type {
-  SpanStartEvent,
-  SpanEndEvent,
-  TraceEvent,
-  SpanId,
-} from "../types";
-import { BaseReporter } from "./BaseReporter";
-import type { FlameGraphReporterOptions } from "./flame-graph/types";
-import type { SpanBufferViews } from "./flame-graph/SpanBuffer";
-
-import { flameGraphState } from "./flame-graph/state";
 // Import components to ensure registration
 import "./flame-graph/FlameGraphToggle";
 import "./flame-graph/FlameGraphDialog";
+
+import type { SpanStartEvent, SpanEndEvent, TraceEvent, SpanId } from "../types";
+import type { SpanBufferViews } from "./flame-graph/SpanBuffer";
+import type { FlameGraphReporterOptions } from "./flame-graph/types";
+
+import { BaseReporter } from "./BaseReporter";
+import { flameGraphState } from "./flame-graph/state";
 
 /**
  * FlameGraphReporter renders spans as a flame graph using Web Components.
@@ -22,9 +18,7 @@ export class FlameGraphReporter extends BaseReporter {
 
   private container: FlameGraphReporterElement | null = null;
 
-  private readonly reporterOptions: Required<
-    Omit<FlameGraphReporterOptions, "container">
-  > & {
+  private readonly reporterOptions: Required<Omit<FlameGraphReporterOptions, "container">> & {
     container?: HTMLElement | string;
   };
 
@@ -51,29 +45,24 @@ export class FlameGraphReporter extends BaseReporter {
     }
 
     // Resolve mount target
-    const containerOption =
-      target ?? this.reporterOptions.container ?? document.body;
+    const containerOption = target ?? this.reporterOptions.container ?? document.body;
     let mountTarget =
       typeof containerOption === "string"
         ? document.querySelector<HTMLElement>(containerOption)
         : containerOption;
 
     if (!mountTarget) {
+      const containerDesc = typeof containerOption === "string" ? containerOption : "HTMLElement";
       console.warn(
-        `[FlameGraphReporter] Container not found: ${containerOption}. Falling back to document body.`
+        `[FlameGraphReporter] Container not found: ${containerDesc}. Falling back to document body.`,
       );
       mountTarget = document.body;
     }
 
-    this.container = document.createElement(
-      "flame-graph-reporter"
-    ) as FlameGraphReporterElement;
+    this.container = document.createElement("flame-graph-reporter") as FlameGraphReporterElement;
     mountTarget.appendChild(this.container);
 
-    this.container.setAttribute(
-      "position",
-      this.reporterOptions.buttonPosition
-    );
+    this.container.setAttribute("position", this.reporterOptions.buttonPosition);
   }
 
   /**
@@ -121,9 +110,7 @@ export class FlameGraphReporter extends BaseReporter {
   }
 
   private handleSpanStartInternal(event: SpanStartEvent): void {
-    const parentDepth = event.parentSpan
-      ? this.depthMap.get(event.parentSpan.spanId) ?? 0
-      : -1;
+    const parentDepth = event.parentSpan ? (this.depthMap.get(event.parentSpan.spanId) ?? 0) : -1;
     const depth = parentDepth + 1;
 
     this.depthMap.set(event.span.spanId, depth);
@@ -199,11 +186,7 @@ class FlameGraphReporterElement extends HTMLElement {
     if (name === "position") {
       this.#toggle.setAttribute(
         "position",
-        this.getAttribute("position") as
-          | "bottom-right"
-          | "bottom-left"
-          | "top-right"
-          | "top-left"
+        this.getAttribute("position") as "bottom-right" | "bottom-left" | "top-right" | "top-left",
       );
     }
   }

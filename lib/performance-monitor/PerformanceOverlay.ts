@@ -1,10 +1,11 @@
+import { html, render } from "lit-html";
+
 import {
   PerformanceObserver as PerfObserver,
   type OverlayLevel,
   type PerformanceMetrics,
   type PerformanceObserverOptions,
 } from "./PerformanceObserver";
-import { html, render } from "lit-html";
 import { css } from "./utils";
 
 export interface PerformanceOverlayOptions extends PerformanceObserverOptions {

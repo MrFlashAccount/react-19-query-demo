@@ -2,8 +2,6 @@
  * Low-level canvas rendering utilities
  */
 
-import { CODE_TO_COLOR, type SpanBufferViews } from "../SpanBuffer";
-
 /**
  * Lighten a hex color by a given amount (0-1)
  */
@@ -37,7 +35,7 @@ export function roundRectAsymmetric(
   w: number,
   h: number,
   leftR: number,
-  rightR: number
+  rightR: number,
 ): void {
   leftR = Math.min(leftR, w / 2, h / 2);
   rightR = Math.min(rightR, w / 2, h / 2);
@@ -76,7 +74,7 @@ export function roundRectAsymmetric(
 export function truncateText(
   ctx: OffscreenCanvasRenderingContext2D,
   text: string,
-  maxWidth: number
+  maxWidth: number,
 ): string {
   const ellipsis = "…";
   let width = ctx.measureText(text).width;

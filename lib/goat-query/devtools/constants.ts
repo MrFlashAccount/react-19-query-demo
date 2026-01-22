@@ -63,7 +63,6 @@ export const StatusColors = {
   },
 } as const satisfies Record<string, ColorDefinition>;
 
-
 // ============================================
 // ICON DEFINITIONS
 // ============================================
@@ -158,10 +157,7 @@ export function getStatusIcon(status: string): string {
 /**
  * Get devtools color based on status and category
  */
-export function getDevtoolsColor(
-  status: "success" | "error",
-  category: string
-): string {
+export function getDevtoolsColor(status: "success" | "error", category: string): string {
   if (status === "error") {
     return StatusColors.error.devtools;
   }

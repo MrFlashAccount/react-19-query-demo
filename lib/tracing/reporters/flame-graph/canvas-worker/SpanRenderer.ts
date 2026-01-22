@@ -4,9 +4,11 @@
 
 import type { Color, SpanId } from "../../../types";
 import type { SpanBufferViews } from "../SpanBuffer";
+
 import { CODE_TO_COLOR, readSpanId, readSpanName } from "../SpanBuffer";
 import { theme } from "../styles";
 import { PADDING_LEFT } from "../utilities";
+
 import {
   ROW_HEIGHT,
   ROW_GAP,
@@ -16,12 +18,7 @@ import {
   SPAN_PADDING_X_STICKY,
   MIN_SPAN_TEXT_VISIBLE_WIDTH,
 } from "./constants";
-import {
-  lightenColor,
-  formatTime,
-  roundRectAsymmetric,
-  truncateText,
-} from "./rendering-utilities";
+import { lightenColor, formatTime, roundRectAsymmetric, truncateText } from "./rendering-utilities";
 
 export class SpanRenderer {
   private static readonly MARGIN_PX = 2;
@@ -34,16 +31,14 @@ export class SpanRenderer {
   private getDynamicRadius(width: number): number {
     if (width <= MIN_SPAN_WIDTH) return 0;
     if (width >= SpanRenderer.FULL_RADIUS_WIDTH) return SPAN_RADIUS;
-    const t =
-      (width - MIN_SPAN_WIDTH) /
-      (SpanRenderer.FULL_RADIUS_WIDTH - MIN_SPAN_WIDTH);
+    const t = (width - MIN_SPAN_WIDTH) / (SpanRenderer.FULL_RADIUS_WIDTH - MIN_SPAN_WIDTH);
     return SPAN_RADIUS * t;
   }
 
   constructor(
     private ctx: OffscreenCanvasRenderingContext2D,
     private colorPalette: Record<Color, string>,
-    private selectedBorderColor: string
+    private selectedBorderColor: string,
   ) {}
 
   /**
@@ -60,7 +55,7 @@ export class SpanRenderer {
     viewportWidth: number,
     viewportHeight: number,
     selectedSpanId: SpanId | null,
-    currentTime: number
+    currentTime: number,
   ): void {
     const status = views.status[index];
     const isRunning = status === 1;
@@ -73,20 +68,12 @@ export class SpanRenderer {
     const h = ROW_HEIGHT;
 
     // Early exit if outside viewport
-    if (
-      rawX + rawW < 0 ||
-      rawX > viewportWidth ||
-      y + h < 0 ||
-      y > viewportHeight
-    )
-      return;
+    if (rawX + rawW < 0 || rawX > viewportWidth || y + h < 0 || y > viewportHeight) return;
 
     const isSelected = readSpanId(views, index) === selectedSpanId;
     const colorCode = views.color[index];
     const color = CODE_TO_COLOR[colorCode as keyof typeof CODE_TO_COLOR];
-    const baseColor = color
-      ? this.colorPalette[color]
-      : this.colorPalette.primary;
+    const baseColor = color ? this.colorPalette[color] : this.colorPalette.primary;
 
     const margin = SpanRenderer.MARGIN_PX;
     const clippedX = Math.max(-margin, rawX);
@@ -101,26 +88,13 @@ export class SpanRenderer {
     const rightRadius = rightVisible ? dynamicRadius : 0;
 
     // Pick style variants
-    const fillColor = this.getFillColor(
-      status,
-      baseColor,
-      isSelected,
-      isRunning
-    );
+    const fillColor = this.getFillColor(status, baseColor, isSelected, isRunning);
     const border = this.getBorderStyle(baseColor, isSelected, isRunning);
 
     // Draw background
     this.ctx.fillStyle = fillColor;
     this.ctx.beginPath();
-    roundRectAsymmetric(
-      this.ctx,
-      clippedX,
-      y,
-      clippedW,
-      h,
-      leftRadius,
-      rightRadius
-    );
+    roundRectAsymmetric(this.ctx, clippedX, y, clippedW, h, leftRadius, rightRadius);
     this.ctx.fill();
 
     // Draw border
@@ -128,15 +102,7 @@ export class SpanRenderer {
     this.ctx.lineWidth = border.lineWidth;
     if (border.dashed) this.ctx.setLineDash([4, 4]);
     this.ctx.beginPath();
-    roundRectAsymmetric(
-      this.ctx,
-      clippedX,
-      y,
-      clippedW,
-      h,
-      leftRadius,
-      rightRadius
-    );
+    roundRectAsymmetric(this.ctx, clippedX, y, clippedW, h, leftRadius, rightRadius);
     this.ctx.stroke();
     if (border.dashed) this.ctx.setLineDash([]);
 
@@ -145,30 +111,18 @@ export class SpanRenderer {
       ? "⏳ In progress"
       : formatTime(views.endTime[index] - views.startTime[index]);
     const minRightSpace = isRunning ? 80 : 50;
-    this.drawSpanText(
-      views,
-      index,
-      rawX,
-      y,
-      rawW,
-      h,
-      viewportWidth,
-      rightLabel,
-      minRightSpace
-    );
+    this.drawSpanText(views, index, rawX, y, rawW, h, viewportWidth, rightLabel, minRightSpace);
   }
 
   private getFillColor(
     status: number,
     baseColor: string,
     isSelected: boolean,
-    isRunning: boolean
+    isRunning: boolean,
   ): string {
     if (isRunning) {
       // transparent fill for running spans
-      return isSelected
-        ? lightenColor(baseColor, 0.15) + "cc"
-        : baseColor + "88";
+      return isSelected ? lightenColor(baseColor, 0.15) + "cc" : baseColor + "88";
     }
 
     const bgColor = status === 3 ? this.colorPalette.error : baseColor;
@@ -178,7 +132,7 @@ export class SpanRenderer {
   private getBorderStyle(
     baseColor: string,
     isSelected: boolean,
-    isRunning: boolean
+    isRunning: boolean,
   ): { strokeStyle: string; lineWidth: number; dashed: boolean } {
     if (isSelected) {
       return {
@@ -202,7 +156,7 @@ export class SpanRenderer {
     h: number,
     viewportWidth: number,
     rightLabel: string,
-    minRightSpace: number
+    minRightSpace: number,
   ): void {
     const visibleLeft = Math.max(rawX, PADDING_LEFT);
     const visibleRight = Math.min(rawX + rawW, viewportWidth);
@@ -214,8 +168,7 @@ export class SpanRenderer {
     const isLeftSticky = rawX < PADDING_LEFT;
     const isRightSticky = rawX + rawW > viewportWidth;
     // Use same padding on both sides when either is sticky for visual consistency
-    const padding =
-      isLeftSticky || isRightSticky ? SPAN_PADDING_X_STICKY : SPAN_PADDING_X;
+    const padding = isLeftSticky || isRightSticky ? SPAN_PADDING_X_STICKY : SPAN_PADDING_X;
 
     const availableTextWidth = visibleWidth - padding * 2;
 
@@ -242,9 +195,7 @@ export class SpanRenderer {
     const rightTextWidth = this.ctx.measureText(rightLabel).width;
 
     const showRight = availableTextWidth > minRightSpace + 20;
-    const labelMaxWidth = showRight
-      ? availableTextWidth - rightTextWidth - 8
-      : availableTextWidth;
+    const labelMaxWidth = showRight ? availableTextWidth - rightTextWidth - 8 : availableTextWidth;
 
     if (labelMaxWidth > 10) {
       this.ctx.fillStyle = theme.spanText.label;

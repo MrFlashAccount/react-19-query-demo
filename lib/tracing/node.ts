@@ -6,13 +6,10 @@
  */
 
 import type { ISpan, ISpanMeta } from "./types";
+
+import { type AnyFn, type TracedOptions, executeWithSpan, createTracedDecorator } from "./shared";
+
 import { tracer } from "./index";
-import {
-  type AnyFn,
-  type TracedOptions,
-  executeWithSpan,
-  createTracedDecorator,
-} from "./shared";
 
 // ============================================
 // Context (AsyncLocalStorage)
@@ -27,7 +24,7 @@ try {
 } catch {
   throw new Error(
     "AsyncLocalStorage not available. " +
-      "This module requires Node.js. Use ./asynccontext.ts for browsers."
+      "This module requires Node.js. Use ./asynccontext.ts for browsers.",
   );
 }
 
@@ -54,7 +51,7 @@ const createSpan = (
   name: string,
   meta?: ISpanMeta,
   payload?: Record<string, unknown>,
-  parentSpan?: ISpan
+  parentSpan?: ISpan,
 ): ISpan => {
   const parent = parentSpan ?? getCurrentSpan();
   if (parent) {
@@ -82,9 +79,7 @@ export function traced<T extends AnyFn>(fn: T, options: TracedOptions): T {
   const wrapped = function (this: any, ...args: Parameters<T>): ReturnType<T> {
     const { name, meta, payload, parentSpan } = options;
     const span = createSpan(name, meta, payload, parentSpan);
-    return runWithSpan(span, () =>
-      executeWithSpan(span, () => fn.apply(this, args))
-    );
+    return runWithSpan(span, () => executeWithSpan(span, () => fn.apply(this, args)));
   };
 
   return wrapped as T;
@@ -115,15 +110,7 @@ export const Traced = createTracedDecorator(traced);
  *   return await doWork();
  * }, { name: "operation", meta: { color: "primary" } });
  */
-export function runInSpan<T>(
-  fn: (span: ISpan) => T,
-  options: TracedOptions
-): T {
-  const span = createSpan(
-    options.name,
-    options.meta,
-    options.payload,
-    options.parentSpan
-  );
+export function runInSpan<T>(fn: (span: ISpan) => T, options: TracedOptions): T {
+  const span = createSpan(options.name, options.meta, options.payload, options.parentSpan);
   return runWithSpan(span, () => executeWithSpan(span, () => fn(span)));
 }

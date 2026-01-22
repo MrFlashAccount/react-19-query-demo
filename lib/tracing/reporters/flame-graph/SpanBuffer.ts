@@ -111,10 +111,7 @@ function getNumericBufferByteLength(capacity: number): number {
   return align(offset, 8);
 }
 
-function createViews(
-  sab: SharedArrayBuffer,
-  stringSab: SharedArrayBuffer
-): SpanBufferViews {
+function createViews(sab: SharedArrayBuffer, stringSab: SharedArrayBuffer): SpanBufferViews {
   const header = new Int32Array(sab, 0, HEADER_INTS);
   const capacity = header[HEADER_CAPACITY_INDEX];
   let offset = HEADER_BYTES;
@@ -160,7 +157,7 @@ function createViews(
 
 export function createSpanBuffer(
   capacity: number = DEFAULT_SPAN_CAPACITY,
-  stringCapacity: number = DEFAULT_STRING_CAPACITY
+  stringCapacity: number = DEFAULT_STRING_CAPACITY,
 ): SpanBufferViews {
   const byteLength = getNumericBufferByteLength(capacity);
   const sab = new SharedArrayBuffer(byteLength);
@@ -174,7 +171,7 @@ export function createSpanBuffer(
 
 export function attachSpanBuffer(
   sab: SharedArrayBuffer,
-  stringSab: SharedArrayBuffer
+  stringSab: SharedArrayBuffer,
 ): SpanBufferViews {
   return createViews(sab, stringSab);
 }
@@ -202,16 +199,11 @@ export function readSpanName(views: SpanBufferViews, index: number): string {
 
 /** Compute duration from start/end times. For running spans (status=1), use performance.now(). */
 export function readDuration(views: SpanBufferViews, index: number): number {
-  const end =
-    views.status[index] === 1 ? performance.now() : views.endTime[index];
+  const end = views.status[index] === 1 ? performance.now() : views.endTime[index];
   return end - views.startTime[index];
 }
 
-export function writeSpanId(
-  views: SpanBufferViews,
-  index: number,
-  spanId: SpanId
-): void {
+export function writeSpanId(views: SpanBufferViews, index: number, spanId: SpanId): void {
   views.spanId[index] = spanId;
 }
 
@@ -219,7 +211,7 @@ export function encodeName(
   views: SpanBufferViews,
   index: number,
   name: string,
-  stringOffset: number
+  stringOffset: number,
 ): number {
   const bytes = encoder.encode(name);
   views.stringBytes.set(bytes, stringOffset);
@@ -231,7 +223,7 @@ export function encodeName(
 export function cloneSpanBuffer(
   prev: SpanBufferViews,
   nextCapacity: number,
-  nextStringCapacity: number
+  nextStringCapacity: number,
 ): SpanBufferViews {
   const next = createSpanBuffer(nextCapacity, nextStringCapacity);
   const count = getSpansCount(prev);

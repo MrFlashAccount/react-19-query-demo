@@ -1,4 +1,3 @@
-import { serializePayload } from "./utils";
 import {
   TraceEvent,
   ISpan,
@@ -15,6 +14,7 @@ import {
   type SpanState,
   SpanBase,
 } from "./types";
+import { serializePayload } from "./utils";
 
 const defaultMeta: ISpanMeta = { description: "", color: "primary" };
 
@@ -163,7 +163,7 @@ export class Span extends SpanBase implements ISpan {
   private end(
     status: "success" | "error",
     payload?: Record<string, unknown>,
-    error?: unknown
+    error?: unknown,
   ): void {
     if (this._state !== "running") {
       return;
@@ -181,9 +181,7 @@ export class Span extends SpanBase implements ISpan {
     };
 
     const event: SpanEndEvent =
-      status === "error"
-        ? { ...base, status: "error", error }
-        : { ...base, status: "success" };
+      status === "error" ? { ...base, status: "error", error } : { ...base, status: "success" };
 
     this.emitEvent(event);
   }
@@ -248,11 +246,7 @@ export class Tracer implements ITracer {
    * Create a new span without starting it.
    * Call span.start() when ready to begin tracing.
    */
-  createSpan(
-    name: string,
-    payload: Record<string, unknown> = {},
-    meta?: ISpanMeta
-  ): ISpan {
+  createSpan(name: string, payload: Record<string, unknown> = {}, meta?: ISpanMeta): ISpan {
     return new Span({
       name,
       payload,
@@ -266,11 +260,7 @@ export class Tracer implements ITracer {
    * Create and start a new span immediately.
    * Convenience method equivalent to createSpan + start.
    */
-  startSpan(
-    name: string,
-    payload: Record<string, unknown> = {},
-    meta?: ISpanMeta
-  ): ISpan {
+  startSpan(name: string, payload: Record<string, unknown> = {}, meta?: ISpanMeta): ISpan {
     const span = this.createSpan(name, payload, meta);
     span.start();
     return span;

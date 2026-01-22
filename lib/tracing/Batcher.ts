@@ -137,10 +137,7 @@ const schedulerByType: Record<
   },
   requestIdleCallback: {
     create: (callback: () => void) => {
-      const ric =
-        typeof requestIdleCallback === "function"
-          ? requestIdleCallback
-          : setTimeout;
+      const ric = typeof requestIdleCallback === "function" ? requestIdleCallback : setTimeout;
       return () => {
         ric(callback);
       };

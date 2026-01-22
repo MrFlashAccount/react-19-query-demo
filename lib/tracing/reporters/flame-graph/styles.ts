@@ -1,11 +1,10 @@
-import { brand } from "lib/brand";
 import type { Color } from "../../types";
+import { brand } from "lib/brand";
+
 import { css } from "./utilities";
-import type { CSSProperties } from "react";
 
 const OklchColor = brand<
-  | `oklch(${number} ${number} ${number})`
-  | `oklch(${number} ${number} ${number} / ${number})`,
+  `oklch(${number} ${number} ${number})` | `oklch(${number} ${number} ${number} / ${number})`,
   "OklchColor"
 >();
 
@@ -281,7 +280,7 @@ export const PIP_STYLES = css`
     padding: 0;
     overflow: hidden;
   }
-
+  
   body {
     margin: 0;
     padding: 0;
@@ -296,7 +295,7 @@ export const RESET_CASCADE = css`
   box-sizing: border-box;
   color: inherit;
   font-family: inherit;
-
+  
   &::before,
   &::after,
   ::before,
@@ -308,11 +307,22 @@ export const RESET_CASCADE = css`
   }
 `;
 
+/** CSS contain property values for isolation declarations */
+type CSSContainValue =
+  | "none"
+  | "strict"
+  | "content"
+  | "size"
+  | "layout"
+  | "style"
+  | "paint"
+  | (string & {});
+
 export const HOST_STYLES = ({
   contain = "content",
 }: {
-  contain?: CSSProperties["contain"] | false;
-} = {}) => css`
+  contain?: CSSContainValue | false;
+} = {}): string => css`
   :host {
     ${RESET_CASCADE}
     ${TYPOGRAPHY_STYLES()}

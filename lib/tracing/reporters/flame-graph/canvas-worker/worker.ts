@@ -8,23 +8,16 @@
  * - Depth filtering: skips spans outside visible vertical range
  */
 
-import { PADDING_LEFT } from "../utilities";
+import type { WorkerMessage, InitMessage, UpdateSpansMessage, DrawMessage } from "./types";
+
 import { LaneCalculator } from "../LaneCalculator";
-import { SpanRenderer } from "./SpanRenderer";
+import { attachSpanBuffer, getSpansCount, type SpanBufferViews } from "../SpanBuffer";
+import { PADDING_LEFT } from "../utilities";
+
 import { ConnectionRenderer } from "./ConnectionRenderer";
-import { SpansIndex } from "./SpansIndex";
 import { ROW_HEIGHT, ROW_GAP, PADDING_TOP } from "./constants";
-import type {
-  WorkerMessage,
-  InitMessage,
-  UpdateSpansMessage,
-  DrawMessage,
-} from "./types";
-import {
-  attachSpanBuffer,
-  getSpansCount,
-  type SpanBufferViews,
-} from "../SpanBuffer";
+import { SpanRenderer } from "./SpanRenderer";
+import { SpansIndex } from "./SpansIndex";
 
 // Worker state
 let canvas: OffscreenCanvas | null = null;
@@ -39,9 +32,7 @@ let lastVersion = -1;
 function handleInit(msg: InitMessage): void {
   canvas = msg.canvas;
   ctx = canvas.getContext("2d");
-  spanRenderer = ctx
-    ? new SpanRenderer(ctx, msg.colorPalette, msg.selectedBorderColor)
-    : null;
+  spanRenderer = ctx ? new SpanRenderer(ctx, msg.colorPalette, msg.selectedBorderColor) : null;
   connectionRenderer = ctx ? new ConnectionRenderer(ctx) : null;
   spanViews = attachSpanBuffer(msg.spanBuffer.sab, msg.spanBuffer.stringSab);
   lastVersion = -1;
@@ -93,27 +84,22 @@ function handleDraw(msg: DrawMessage): void {
 
   const timeToX = (time: number) =>
     ((time - minTime) / totalDuration) * width * zoom + effectiveOffsetX;
-  const durationToWidth = (duration: number) =>
-    (duration / totalDuration) * width * zoom;
+  const durationToWidth = (duration: number) => (duration / totalDuration) * width * zoom;
 
   // Calculate visible ranges for virtualization (use effective offset to match drawing)
   // Overscan: 10px for connections (parentConnectX = childX - 10)
   const timePerPx = totalDuration / (width * zoom);
   const overscanPx = 10;
   const overscanTime = timePerPx * overscanPx;
-  const visibleTimeStart =
-    minTime + (0 - effectiveOffsetX) * timePerPx - overscanTime;
-  const visibleTimeEnd =
-    minTime + (width - effectiveOffsetX) * timePerPx + overscanTime;
+  const visibleTimeStart = minTime + (0 - effectiveOffsetX) * timePerPx - overscanTime;
+  const visibleTimeEnd = minTime + (width - effectiveOffsetX) * timePerPx + overscanTime;
 
   const depthOverscan = 1; // 1 row for connections from parent above
   const visibleDepthStart = Math.max(
     0,
-    Math.floor((-offsetY - PADDING_TOP) / (ROW_HEIGHT + ROW_GAP)) -
-      depthOverscan
+    Math.floor((-offsetY - PADDING_TOP) / (ROW_HEIGHT + ROW_GAP)) - depthOverscan,
   );
-  const visibleDepthEnd =
-    Math.ceil((height - offsetY) / (ROW_HEIGHT + ROW_GAP)) + depthOverscan;
+  const visibleDepthEnd = Math.ceil((height - offsetY) / (ROW_HEIGHT + ROW_GAP)) + depthOverscan;
 
   const currentTime = timeRange.maxTime;
 
@@ -122,7 +108,7 @@ function handleDraw(msg: DrawMessage): void {
     visibleTimeStart,
     visibleTimeEnd,
     visibleDepthStart,
-    visibleDepthEnd
+    visibleDepthEnd,
   );
 
   // Draw connection lines (behind spans) - only for visible spans
@@ -137,7 +123,7 @@ function handleDraw(msg: DrawMessage): void {
       effectiveOffsetY,
       width,
       height,
-      selectedSpanId
+      selectedSpanId,
     );
   }
 
@@ -153,7 +139,7 @@ function handleDraw(msg: DrawMessage): void {
       width,
       height,
       selectedSpanId,
-      currentTime
+      currentTime,
     );
   }
 }

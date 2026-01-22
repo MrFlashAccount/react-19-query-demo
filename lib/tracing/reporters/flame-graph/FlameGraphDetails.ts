@@ -1,3 +1,9 @@
+import "./FlameGraphResizeHandle";
+
+import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
+
+import { drawScheduler } from "./DrawScheduler";
+import { flameGraphState, selectors } from "./state";
 import {
   BUTTON_STYLES,
   formatTime,
@@ -6,11 +12,7 @@ import {
   TYPOGRAPHY_STYLES,
   HOST_STYLES,
 } from "./styles";
-import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
-import "./FlameGraphResizeHandle";
 import { css, getElement, html } from "./utilities";
-import { flameGraphState, selectors } from "./state";
-import { drawScheduler } from "./DrawScheduler";
 
 const STYLES = css`
   ${HOST_STYLES()}
@@ -167,7 +169,7 @@ export class FlameGraphDetails extends HTMLElement {
       () => {
         this.draw();
       },
-      { signal: this.unsubAbortController.signal }
+      { signal: this.unsubAbortController.signal },
     );
 
     flameGraphState.subscribe(
@@ -175,7 +177,7 @@ export class FlameGraphDetails extends HTMLElement {
       () => {
         this.draw();
       },
-      { signal: this.unsubAbortController.signal }
+      { signal: this.unsubAbortController.signal },
     );
 
     flameGraphState.subscribe(
@@ -183,7 +185,7 @@ export class FlameGraphDetails extends HTMLElement {
       () => {
         this.draw();
       },
-      { signal: this.unsubAbortController.signal }
+      { signal: this.unsubAbortController.signal },
     );
   }
 
@@ -204,18 +206,11 @@ export class FlameGraphDetails extends HTMLElement {
     const timeRange = selectors.timeRange(flameGraphState.getState());
     if (!span) return;
     const isPending = span.status === "running";
-    const relativeStart =
-      span.startTime !== undefined ? span.startTime - timeRange.minTime : 0;
-    const relativeEnd = isPending
-      ? null
-      : (span.endTime as number) - timeRange.minTime;
+    const relativeStart = span.startTime !== undefined ? span.startTime - timeRange.minTime : 0;
+    const relativeEnd = isPending ? null : (span.endTime as number) - timeRange.minTime;
 
-    const statusText = isPending ? "In Progress" : span.status ?? "unknown";
-    const statusClass = isPending
-      ? ""
-      : span.status === "error"
-      ? "error"
-      : "success";
+    const statusText = isPending ? "In Progress" : (span.status ?? "unknown");
+    const statusClass = isPending ? "" : span.status === "error" ? "error" : "success";
 
     const payloadStr =
       span.payload && Object.keys(span.payload).length > 0
@@ -252,9 +247,7 @@ export class FlameGraphDetails extends HTMLElement {
           <div class="item">
             <span class="label">End</span>
             <span class="value"
-              >${relativeEnd === null
-                ? "–"
-                : `+${formatTime(relativeEnd)}`}</span
+              >${relativeEnd === null ? "–" : `+${formatTime(relativeEnd)}`}</span
             >
           </div>
           <div class="item">
@@ -262,21 +255,20 @@ export class FlameGraphDetails extends HTMLElement {
             <span class="value ${statusClass}">${statusText}</span>
           </div>
         </div>
-        ${payloadStr
-          ? `
+        ${
+          payloadStr
+            ? `
           <div class="payload">
             <div class="payload-title">Payload</div>
             <div class="payload-content">${escapeHtml(payloadStr)}</div>
           </div>
         `
-          : ""}
+            : ""
+        }
       </div>
     `;
 
-    this.resizeHandle = getElement(
-      "flame-graph-resize-handle",
-      this.shadowRoot
-    );
+    this.resizeHandle = getElement("flame-graph-resize-handle", this.shadowRoot);
     getElement(".close-btn", this.shadowRoot).addEventListener("click", () => {
       flameGraphState.setDetailsVisible(false);
     });
@@ -293,10 +285,7 @@ export class FlameGraphDetails extends HTMLElement {
       const widthDelta = position === "left" ? detail.deltaX : -detail.deltaX;
       const heightDelta = -detail.deltaY;
 
-      flameGraphState.resizeDetails(
-        layout.width + widthDelta,
-        layout.height + heightDelta
-      );
+      flameGraphState.resizeDetails(layout.width + widthDelta, layout.height + heightDelta);
     });
   }
 }

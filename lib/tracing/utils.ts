@@ -12,9 +12,7 @@ export function requestIdleCallback(callback: () => void): void {
   requestIdleCallbackFn(callback);
 }
 
-export function serializePayload(
-  payload: Record<string, unknown> | undefined | null
-): string {
+export function serializePayload(payload: Record<string, unknown> | undefined | null): string {
   if (payload === undefined || payload === null) {
     return "";
   }
@@ -57,7 +55,7 @@ export function serializePayload(
         Object.entries(value).map(([key, value]) => [
           key,
           serializePayload(value as Record<string, unknown>),
-        ])
+        ]),
       );
     }
 

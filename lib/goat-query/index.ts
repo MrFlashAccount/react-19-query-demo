@@ -3,22 +3,9 @@ export { QueryCache } from "./QueryCache";
 export { exponentialBackoff } from "./utils";
 
 export { DependencyGraph } from "./DependencyGraph";
-export type {
-  IInvalidatable,
-  IOptimisticUpdateable,
-  Context,
-} from "./nodes/types";
-export {
-  query,
-  type QueryDefinition,
-  isQuery,
-  getQueryInstanceKey,
-} from "./nodes/query";
-export {
-  mutation,
-  type MutationDefinition,
-  isMutation,
-} from "./nodes/mutation";
+export type { IInvalidatable, IOptimisticUpdateable, Context } from "./nodes/types";
+export { query, type QueryDefinition, isQuery, getQueryInstanceKey } from "./nodes/query";
+export { mutation, type MutationDefinition, isMutation } from "./nodes/mutation";
 export {
   QueryClient,
   type QueryClientOptions,

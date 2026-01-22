@@ -1,15 +1,16 @@
-import { BUTTON_STYLES, HOST_STYLES, theme, TYPOGRAPHY_STYLES } from "./styles";
-import type { GridConfig, Position } from "./types";
-import { css, getElement, html } from "./utilities";
-import { drawScheduler } from "./DrawScheduler";
-import { flameGraphState, selectors } from "./state";
-
 // Import components to ensure they're registered
 import "./FlameGraphTimeline";
 import "./FlameGraphCanvas";
 import "./FlameGraphDetails";
 import "./FlameGraphRecordButton";
 import "./FlameGraphClearButton";
+
+import type { GridConfig, Position } from "./types";
+
+import { drawScheduler } from "./DrawScheduler";
+import { flameGraphState, selectors } from "./state";
+import { BUTTON_STYLES, HOST_STYLES, theme, TYPOGRAPHY_STYLES } from "./styles";
+import { css, getElement, html } from "./utilities";
 
 const STYLES = css`
   ${BUTTON_STYLES}
@@ -144,7 +145,7 @@ export class FlameGraphDialogContent extends HTMLElement {
     this.unsubs.push(
       flameGraphState.subscribe(selectors.spansCount, (count) => {
         this.updateSpansCount(count);
-      })
+      }),
     );
 
     // Subscribe to viewState.zoom for zoom display
@@ -155,14 +156,14 @@ export class FlameGraphDialogContent extends HTMLElement {
             this.zoomLevelEl.textContent = `Zoom: ${Math.round(zoom * 100)}%`;
           }
         });
-      })
+      }),
     );
 
     // Single subscription to calculated layout - applies all sizing
     this.unsubs.push(
       flameGraphState.subscribe(selectors.gridLayout, (layout) => {
         this.applyLayout(layout);
-      })
+      }),
     );
   }
 
@@ -173,12 +174,9 @@ export class FlameGraphDialogContent extends HTMLElement {
   private applyLayout(layout: GridConfig) {
     drawScheduler.schedule(() => {
       const gridLayoutCSS = this.getGridLayoutAsCSS(layout);
-      this.gridContainer.style.gridTemplateAreas =
-        gridLayoutCSS.gridTemplateAreas;
-      this.gridContainer.style.gridTemplateColumns =
-        gridLayoutCSS.gridTemplateColumns;
-      this.gridContainer.style.gridTemplateRows =
-        gridLayoutCSS.gridTemplateRows;
+      this.gridContainer.style.gridTemplateAreas = gridLayoutCSS.gridTemplateAreas;
+      this.gridContainer.style.gridTemplateColumns = gridLayoutCSS.gridTemplateColumns;
+      this.gridContainer.style.gridTemplateRows = gridLayoutCSS.gridTemplateRows;
     });
   }
 
@@ -274,9 +272,7 @@ export class FlameGraphDialogContent extends HTMLElement {
       const target = e.target as HTMLElement;
 
       // Details position buttons
-      const detailsBtn = target.closest(
-        "[data-details-position]"
-      ) as HTMLElement;
+      const detailsBtn = target.closest("[data-details-position]") as HTMLElement;
       if (detailsBtn) {
         const position = detailsBtn.dataset.detailsPosition as Position;
         flameGraphState.setDetailsPosition(position);
@@ -303,9 +299,7 @@ export class FlameGraphDialogContent extends HTMLElement {
   private updateSpansCount(count: number) {
     drawScheduler.schedule(() => {
       if (this.spansCountEl) {
-        this.spansCountEl.textContent = `${count.toLocaleString()} span${
-          count !== 1 ? "s" : ""
-        }`;
+        this.spansCountEl.textContent = `${count.toLocaleString()} span${count !== 1 ? "s" : ""}`;
       }
     });
   }
@@ -313,9 +307,7 @@ export class FlameGraphDialogContent extends HTMLElement {
   private getGridLayoutAsCSS(layout: GridConfig) {
     return {
       gridTemplateAreas: layout.templateAreas,
-      gridTemplateColumns: layout.templateColumns
-        .map((v) => `${v}px`)
-        .join(" "),
+      gridTemplateColumns: layout.templateColumns.map((v) => `${v}px`).join(" "),
       gridTemplateRows: layout.templateRows.map((v) => `${v}px`).join(" "),
     };
   }

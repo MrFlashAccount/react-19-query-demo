@@ -30,7 +30,7 @@ export function executeWithSpan<T>(span: ISpan, fn: (span: ISpan) => T): T {
         (err) => {
           span.error(err);
           throw err;
-        }
+        },
       ) as T;
     }
 
@@ -46,14 +46,10 @@ export function executeWithSpan<T>(span: ISpan, fn: (span: ISpan) => T): T {
  * Create a Traced decorator from a traced HOF.
  */
 export function createTracedDecorator(
-  tracedFn: <T extends AnyFn>(fn: T, options: TracedOptions) => AnyFn
+  tracedFn: <T extends AnyFn>(fn: T, options: TracedOptions) => AnyFn,
 ) {
   return function Traced(name: string, meta?: any): MethodDecorator {
-    return function (
-      _target: any,
-      _propertyKey: string | symbol,
-      descriptor: PropertyDescriptor
-    ) {
+    return function (_target: any, _propertyKey: string | symbol, descriptor: PropertyDescriptor) {
       const original = descriptor.value as AnyFn;
       descriptor.value = tracedFn(original, { name, meta }) as AnyFn;
       return descriptor;

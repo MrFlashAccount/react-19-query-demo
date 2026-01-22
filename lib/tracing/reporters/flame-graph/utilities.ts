@@ -2,10 +2,7 @@ interface QuerySelectable {
   querySelector(selector: string): HTMLElement | null;
 }
 
-export function getElement<T extends HTMLElement>(
-  selector: string,
-  parent: QuerySelectable
-): T {
+export function getElement<T extends HTMLElement>(selector: string, parent: QuerySelectable): T {
   const element = parent.querySelector(selector);
   if (!element) {
     throw new Error(`Element not found: ${selector}`);
@@ -36,7 +33,7 @@ export function niceNumber(value: number): number {
 export function generateNiceTicks(
   rangeStart: number,
   rangeEnd: number,
-  targetTickCount: number
+  targetTickCount: number,
 ): number[] {
   const range = rangeEnd - rangeStart;
   if (range <= 0 || targetTickCount <= 0) return [];
@@ -148,14 +145,15 @@ export const unitsRecord: Readonly<Record<Units, Unit>> = {
   },
 };
 
-const unitsEntries = Object.entries(unitsRecord).sort(
-  (a, b) => b[1].factor - a[1].factor
-) as [Units, Unit][];
+const unitsEntries = Object.entries(unitsRecord).sort((a, b) => b[1].factor - a[1].factor) as [
+  Units,
+  Unit,
+][];
 
 export function durationToValue(duration: Duration): number {
   return Object.entries(duration).reduce(
     (acc, [key, value]) => acc + value * factors[key as Units],
-    0
+    0,
   );
 }
 
@@ -166,7 +164,7 @@ export type ValueToDurationOptions = {
 
 export function valueToDuration(
   valueInMicroSeconds: number,
-  options: ValueToDurationOptions = {}
+  options: ValueToDurationOptions = {},
 ): Duration {
   const { maxUnit = "century", minUnit = "microsec" } = options;
 
@@ -223,18 +221,15 @@ export function format(value: number): string {
 function formatDuration(duration: Duration): string {
   const { century, decade, year, day, hour, min, sec, ms, microsec } = duration;
 
-  const formattedSentury =
-    century > 0 ? formatUnit(century, unitsRecord.century) : null;
-  const formattedDecade =
-    decade > 0 ? formatUnit(decade, unitsRecord.decade) : null;
+  const formattedSentury = century > 0 ? formatUnit(century, unitsRecord.century) : null;
+  const formattedDecade = decade > 0 ? formatUnit(decade, unitsRecord.decade) : null;
   const formattedYears = year > 0 ? formatUnit(year, unitsRecord.year) : null;
   const formattedDays = day > 0 ? formatUnit(day, unitsRecord.day) : null;
   const formattedHours = hour > 0 ? formatUnit(hour, unitsRecord.hour) : null;
   const formattedMinutes = min > 0 ? formatUnit(min, unitsRecord.min) : null;
   const formattedSeconds = sec > 0 ? formatUnit(sec, unitsRecord.sec) : null;
   const formattedMilliseconds = ms > 0 ? formatUnit(ms, unitsRecord.ms) : null;
-  const formattedMicroseconds =
-    microsec > 0 ? formatUnit(microsec, unitsRecord.microsec) : null;
+  const formattedMicroseconds = microsec > 0 ? formatUnit(microsec, unitsRecord.microsec) : null;
 
   return (
     [
@@ -257,32 +252,23 @@ function formatUnit(value: number, unit: Unit, shortUnit = true): string {
   return `${value}${shortUnit ? unit.shortUnit : unit.unit}`;
 }
 
-export function addEventListener<
-  T extends AbortSignal,
-  EventName extends "abort"
->(
+export function addEventListener<T extends AbortSignal, EventName extends "abort">(
   signal: T,
   event: EventName,
   listener: (event: AbortSignalEventMap[EventName]) => void,
-  options?: AddEventListenerOptions
+  options?: AddEventListenerOptions,
 ): () => void;
-export function addEventListener<
-  T extends Window,
-  K extends keyof WindowEventMap
->(
+export function addEventListener<T extends Window, K extends keyof WindowEventMap>(
   el: T,
   event: K,
   listener: (event: WindowEventMap[K]) => void,
-  options?: AddEventListenerOptions
+  options?: AddEventListenerOptions,
 ): () => void;
-export function addEventListener<
-  T extends HTMLElement,
-  K extends keyof HTMLElementEventMap
->(
+export function addEventListener<T extends HTMLElement, K extends keyof HTMLElementEventMap>(
   el: T,
   event: K,
   listener: (event: HTMLElementEventMap[K]) => void,
-  options?: AddEventListenerOptions
+  options?: AddEventListenerOptions,
 ): () => void {
   el.addEventListener(event, listener, options);
   return () => el.removeEventListener(event, listener, options);

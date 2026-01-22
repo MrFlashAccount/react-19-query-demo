@@ -4,14 +4,10 @@
  */
 
 import type { TimeRange } from "./types";
-import { LAYOUT_CONSTANTS } from "./types";
-import {
-  format,
-  generateNiceTicks,
-  MIN_TICK_SPACING,
-  PADDING_LEFT,
-} from "./utilities";
+
 import { theme } from "./styles";
+import { LAYOUT_CONSTANTS } from "./types";
+import { format, generateNiceTicks, MIN_TICK_SPACING, PADDING_LEFT } from "./utilities";
 
 // Worker state
 let canvas: OffscreenCanvas | null = null;
@@ -66,11 +62,7 @@ function draw(msg: DrawMessage): void {
   // Generate nice ticks for the visible range (relative to minTime)
   const relativeStart = visibleStart - minTime;
   const relativeEnd = visibleEnd - minTime;
-  const ticks = generateNiceTicks(
-    Math.max(0, relativeStart),
-    relativeEnd,
-    targetTickCount
-  );
+  const ticks = generateNiceTicks(Math.max(0, relativeStart), relativeEnd, targetTickCount);
 
   // Setup drawing context
   ctx.font = `${theme.size.default}px ${theme.family.default}`;
@@ -120,11 +112,7 @@ function draw(msg: DrawMessage): void {
 
     // Label (above tick mark, centered on tick)
     ctx.fillStyle = theme.timeline.tickLabel;
-    ctx.fillText(
-      label,
-      roundedX + 0.5,
-      LAYOUT_CONSTANTS.TIMELINE_HEADER_HEIGHT - 10
-    );
+    ctx.fillText(label, roundedX + 0.5, LAYOUT_CONSTANTS.TIMELINE_HEADER_HEIGHT - 10);
   }
 }
 

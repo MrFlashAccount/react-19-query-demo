@@ -1,6 +1,7 @@
 import type { RetryConfig } from "../Retrier";
-import { serializeParams } from "../utils";
 import type { Context } from "./types";
+
+import { serializeParams } from "../utils";
 
 export const QUERY_SYMBOL = Symbol();
 
@@ -32,12 +33,8 @@ export interface QueryDefinition<TParams = unknown, TData = unknown> {
 export type AnyQueryDefinition = QueryDefinition<any, any>;
 
 export type QueryFn<QD extends AnyQueryDefinition> = QD["config"]["queryFn"];
-export type QueryFnResult<QD extends AnyQueryDefinition> = ReturnType<
-  QueryFn<QD>
->;
-export type QueryParams<QD extends AnyQueryDefinition> = Parameters<
-  QueryFn<QD>
->[0];
+export type QueryFnResult<QD extends AnyQueryDefinition> = ReturnType<QueryFn<QD>>;
+export type QueryParams<QD extends AnyQueryDefinition> = Parameters<QueryFn<QD>>[0];
 export type QueryData<QD extends AnyQueryDefinition> =
   QueryFnResult<QD> extends Promise<infer T> ? T : never;
 
@@ -60,11 +57,8 @@ export type QueryData<QD extends AnyQueryDefinition> =
  * ```
  */
 
-export function query<
-  TParams extends unknown = never,
-  TData extends unknown = unknown
->(
-  config: Readonly<QueryConfig<TParams, TData>>
+export function query<TParams extends unknown = never, TData extends unknown = unknown>(
+  config: Readonly<QueryConfig<TParams, TData>>,
 ): Readonly<QueryDefinition<TParams, TData>> {
   return { __type: QUERY_SYMBOL, config: config };
 }
@@ -74,10 +68,7 @@ export function query<
  */
 export function isQuery(node: unknown): node is QueryDefinition {
   return (
-    typeof node === "object" &&
-    node !== null &&
-    "__type" in node &&
-    node.__type === QUERY_SYMBOL
+    typeof node === "object" && node !== null && "__type" in node && node.__type === QUERY_SYMBOL
   );
 }
 

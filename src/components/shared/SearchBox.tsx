@@ -1,4 +1,5 @@
 import { useTransition } from "react";
+
 import { Settings } from "./Settings";
 
 export interface SearchBoxProps {
@@ -8,7 +9,8 @@ export interface SearchBoxProps {
 
 export function SearchBox({ formState, onFormStateChange }: SearchBoxProps) {
   const [isPending, startTransition] = useTransition();
-  const searchQuery = String(formState.get("searchQuery") ?? "");
+  const searchQueryValue = formState.get("searchQuery");
+  const searchQuery = typeof searchQueryValue === "string" ? searchQueryValue : "";
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
 
   const setFormState = (newFormData: FormData) => {

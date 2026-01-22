@@ -3,10 +3,12 @@
  * Shows parent-child relationships visually, especially useful for concurrent spans.
  */
 
-import type { SpanBufferViews } from "../SpanBuffer";
 import type { SpanId } from "../../../types";
+import type { SpanBufferViews } from "../SpanBuffer";
+
 import { readSpanId } from "../SpanBuffer";
 import { theme } from "../styles";
+
 import { ROW_HEIGHT, ROW_GAP } from "./constants";
 
 export interface ConnectionRenderOptions {
@@ -38,7 +40,7 @@ export class ConnectionRenderer {
     effectiveOffsetY: number,
     viewportWidth: number,
     viewportHeight: number,
-    selectedSpanId: SpanId | null
+    selectedSpanId: SpanId | null,
   ): void {
     if (visibleSpans.length === 0) return;
 
@@ -63,12 +65,7 @@ export class ConnectionRenderer {
         current = parentIndices[current];
       }
       // Add visible descendants
-      this.addVisibleDescendants(
-        selectedIndex,
-        parentIndices,
-        visibleSpans,
-        highlightSet
-      );
+      this.addVisibleDescendants(selectedIndex, parentIndices, visibleSpans, highlightSet);
     }
 
     // Build set of visible spans for O(1) lookup
@@ -110,7 +107,7 @@ export class ConnectionRenderer {
         effectiveOffsetY,
         viewportWidth,
         viewportHeight,
-        false
+        false,
       );
     }
 
@@ -123,8 +120,7 @@ export class ConnectionRenderer {
       for (const childIdx of childrenToDraw) {
         const parentIdx = parentIndices[childIdx];
         if (parentIdx < 0) continue;
-        if (!highlightSet.has(childIdx) || !highlightSet.has(parentIdx))
-          continue;
+        if (!highlightSet.has(childIdx) || !highlightSet.has(parentIdx)) continue;
 
         this.drawConnection(
           views,
@@ -136,7 +132,7 @@ export class ConnectionRenderer {
           effectiveOffsetY,
           viewportWidth,
           viewportHeight,
-          true
+          true,
         );
       }
     }
@@ -146,7 +142,7 @@ export class ConnectionRenderer {
     index: number,
     parentIndices: Int32Array,
     visibleSpans: number[],
-    result: Set<number>
+    result: Set<number>,
   ): void {
     // Only check visible spans for descendants
     for (const i of visibleSpans) {
@@ -167,7 +163,7 @@ export class ConnectionRenderer {
     effectiveOffsetY: number,
     viewportWidth: number,
     viewportHeight: number,
-    isHighlighted: boolean
+    isHighlighted: boolean,
   ): void {
     const parentDepth = adjustedDepths[parentIdx];
     const childDepth = adjustedDepths[childIdx];
@@ -235,7 +231,7 @@ export class ConnectionRenderer {
         childConnectX - arcWidth,
         childConnectY - verticalDist * 0.3, // Control 2: left and slightly up from child
         childConnectX,
-        childConnectY
+        childConnectY,
       );
     } else {
       // Simple vertical curve for bottom connections
@@ -244,7 +240,7 @@ export class ConnectionRenderer {
         parentConnectX,
         childConnectY, // Control: straight down to child's Y
         childConnectX,
-        childConnectY
+        childConnectY,
       );
     }
 

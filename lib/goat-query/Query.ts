@@ -1,8 +1,7 @@
-import { Retrier, type RetryConfig } from "./Retrier";
-import { timerWheel, type TimerWheel } from "./TimerWheel";
-import { createOncePerTick, type OncePerTick } from "./batcher";
-import { exponentialBackoff } from "./utils";
 import { tracer, tracePromise, type ISpan } from "lib/tracing";
+
+import { createOncePerTick, type OncePerTick } from "./batcher";
+import { Batcher } from "./devtools/Batcher";
 import {
   type Context,
   type QueryDefinition,
@@ -10,7 +9,9 @@ import {
   getQueryInstanceKey,
 } from "./nodes/query";
 import { QueryPromise } from "./QueryPromise";
-import { Batcher } from "./devtools/Batcher";
+import { Retrier, type RetryConfig } from "./Retrier";
+import { timerWheel, type TimerWheel } from "./TimerWheel";
+import { exponentialBackoff } from "./utils";
 
 /**
  * Query state tracking
@@ -42,7 +43,7 @@ const DEFAULT_GC_TIME = 1000 * 60 * 5; // 5 minutes
 export class Query<
   QD extends QueryDefinition<TParams, TData>,
   TParams extends unknown = unknown,
-  TData extends unknown = unknown
+  TData extends unknown = unknown,
 > {
   private queryDefinition: QD;
   private params: TParams;
@@ -70,9 +71,7 @@ export class Query<
   private readonly gcTime: number;
   private readonly staleTime: number | "static";
   private readonly retry: RetryConfig;
-  private readonly retryDelay:
-    | number
-    | ((failureCount: number, error: unknown) => number);
+  private readonly retryDelay: number | ((failureCount: number, error: unknown) => number);
 
   get promise() {
     return this.currentPromise;
@@ -86,11 +85,7 @@ export class Query<
     return this.params;
   }
 
-  constructor(
-    queryDefinition: QD,
-    params: TParams,
-    environment: QueryEnvironment
-  ) {
+  constructor(queryDefinition: QD, params: TParams, environment: QueryEnvironment) {
     this.queryDefinition = queryDefinition;
     this.params = params;
     this.environment = environment;
@@ -113,8 +108,7 @@ export class Query<
     this.staleTime = config.staleTime ?? 0;
     this.retry = config.retry ?? 3;
     this.retryDelay =
-      config.retryDelay ??
-      ((failureCount) => exponentialBackoff(1000, failureCount, 10000));
+      config.retryDelay ?? ((failureCount) => exponentialBackoff(1000, failureCount, 10000));
 
     // Create retrier with options from definition
     this.retrier = new Retrier({
@@ -191,10 +185,7 @@ export class Query<
    */
   private createFetcher(): QueryPromise<TData> {
     // If already fetching, return the current promise
-    if (
-      this.currentPromise != null &&
-      this.currentPromise.fetchStatus === "fetching"
-    ) {
+    if (this.currentPromise != null && this.currentPromise.fetchStatus === "fetching") {
       return this.currentPromise;
     }
 
@@ -237,10 +228,7 @@ export class Query<
   }
 
   prefetch(): void {
-    if (
-      this.currentPromise.value != null ||
-      this.currentPromise.fetchStatus === "fetching"
-    ) {
+    if (this.currentPromise.value != null || this.currentPromise.fetchStatus === "fetching") {
       return;
     }
 
@@ -250,7 +238,7 @@ export class Query<
     const span = tracer.startSpan(
       "🔜 Query: Prefetch",
       { key: this.serializedKey },
-      { color: "primary" }
+      { color: "primary" },
     );
 
     // tracePromise handles success/error on the span
@@ -374,11 +362,9 @@ export class Query<
   }
 
   private startObservingCommitEffects(abortSignal: AbortSignal): void {
-    this.environment.commitTarget.addEventListener(
-      "commit",
-      () => this.batcher.flush(),
-      { signal: abortSignal }
-    );
+    this.environment.commitTarget.addEventListener("commit", () => this.batcher.flush(), {
+      signal: abortSignal,
+    });
   }
 
   /**

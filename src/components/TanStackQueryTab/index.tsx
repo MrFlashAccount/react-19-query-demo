@@ -1,7 +1,8 @@
-import { MovieList, SearchBox, MovieCard } from "../shared";
 import type { Movie, MovieApi } from "../../api/types";
 import type { TabProps } from "../shared/types";
 import { lazy } from "react";
+
+import { MovieList, SearchBox, MovieCard } from "../shared";
 
 const {
   QueryClient,
@@ -17,9 +18,9 @@ const queryClient = new QueryClient({
 });
 
 const ReactQueryDevtoolsProduction = lazy(() =>
-  import("@tanstack/react-query-devtools/build/modern/production.js").then(
-    (d) => ({ default: d.ReactQueryDevtools })
-  )
+  import("@tanstack/react-query-devtools/build/modern/production.js").then((d) => ({
+    default: d.ReactQueryDevtools,
+  })),
 );
 
 export default function TanStackQueryTab({
@@ -41,12 +42,9 @@ export default function TanStackQueryTab({
   );
 }
 
-function TanStackQueryTabContent({
-  formState,
-  onFormStateChange,
-  api,
-}: TabProps) {
-  const searchQuery = String(formState.get("searchQuery") ?? "");
+function TanStackQueryTabContent({ formState, onFormStateChange, api }: TabProps) {
+  const searchQueryValue = formState.get("searchQuery");
+  const searchQuery = typeof searchQueryValue === "string" ? searchQueryValue : "";
   const movieLimit = Number(formState.get("movieLimit") ?? 0);
   const gcTimeout = Number(formState.get("gcTimeout") ?? 0);
 
@@ -99,8 +97,7 @@ function MovieCardTanStack({
   const queryClient = useQueryClient();
 
   const { mutateAsync: updateRating } = useMutation({
-    mutationFn: ({ rating }: { rating: number }) =>
-      api.updateMovieRating(movieId, rating),
+    mutationFn: ({ rating }: { rating: number }) => api.updateMovieRating(movieId, rating),
     onSuccess: async ({ id }) => {
       await queryClient.invalidateQueries({ queryKey: ["movies"] });
       await queryClient.invalidateQueries({ queryKey: ["movie", id] });

@@ -9,16 +9,7 @@ import type {
   Position,
   HandlePosition,
 } from "./types";
-import {
-  LAYOUT_CONSTANTS,
-  MIN_VISIBLE_DURATION_MS,
-  MAX_SAFE_ZOOM,
-  CANVAS_PADDING_LEFT,
-  CANVAS_PADDING_RIGHT,
-  CANVAS_PAN_MARGIN_PX,
-} from "./types";
-import { clamp } from "./utilities";
-import { createStore, type StoreApi } from "./store";
+
 import {
   CODE_TO_COLOR,
   CODE_TO_STATUS,
@@ -38,6 +29,16 @@ import {
   writeSpanId,
   type SpanBufferViews,
 } from "./SpanBuffer";
+import { createStore, type StoreApi } from "./store";
+import {
+  LAYOUT_CONSTANTS,
+  MIN_VISIBLE_DURATION_MS,
+  MAX_SAFE_ZOOM,
+  CANVAS_PADDING_LEFT,
+  CANVAS_PADDING_RIGHT,
+  CANVAS_PAN_MARGIN_PX,
+} from "./types";
+import { clamp } from "./utilities";
 
 export interface FlameGraphViewState {
   offsetX: number;
@@ -86,10 +87,7 @@ const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
   detailsVisible: false,
 };
 
-let spanViews = createSpanBuffer(
-  DEFAULT_SPAN_CAPACITY,
-  DEFAULT_STRING_CAPACITY
-);
+let spanViews = createSpanBuffer(DEFAULT_SPAN_CAPACITY, DEFAULT_STRING_CAPACITY);
 let stringOffset = 0;
 let startingSpanId: SpanId | null = null;
 const payloadByIndex = new Map<number, Record<string, unknown>>();
@@ -112,12 +110,9 @@ function resetSpanStorage(): SpanBufferViews {
 function ensureSpanCapacity(nameByteLength: number): void {
   const count = getSpansCount(spanViews);
   const needsCapacity = count >= spanViews.capacity;
-  const needsStrings =
-    stringOffset + nameByteLength > spanViews.stringBytes.length;
+  const needsStrings = stringOffset + nameByteLength > spanViews.stringBytes.length;
   if (!needsCapacity && !needsStrings) return;
-  const nextCapacity = needsCapacity
-    ? Math.ceil(spanViews.capacity * 1.5)
-    : spanViews.capacity;
+  const nextCapacity = needsCapacity ? Math.ceil(spanViews.capacity * 1.5) : spanViews.capacity;
   const nextStringCapacity = needsStrings
     ? Math.max(spanViews.stringBytes.length * 2, stringOffset + nameByteLength)
     : spanViews.stringBytes.length;
@@ -140,7 +135,7 @@ function appendSpan(span: FlameGraphSpan): number {
   spanViews.status[index] = STATUS_TO_CODE[span.status];
   spanViews.color[index] = span.color ? COLOR_TO_CODE[span.color] : 0;
   spanViews.parentIndex[index] =
-    span.parentSpanId != null ? spanIdToIndex(span.parentSpanId) ?? -1 : -1;
+    span.parentSpanId != null ? (spanIdToIndex(span.parentSpanId) ?? -1) : -1;
   writeSpanId(spanViews, index, span.spanId);
   stringOffset = encodeName(spanViews, index, span.name, stringOffset);
   Atomics.store(spanViews.count, 0, index + 1);
@@ -151,11 +146,7 @@ function appendSpan(span: FlameGraphSpan): number {
   return index;
 }
 
-function updateSpanEnd(
-  spanId: SpanId,
-  endTime: number,
-  status: SpanState
-): void {
+function updateSpanEnd(spanId: SpanId, endTime: number, status: SpanState): void {
   const index = spanIdToIndex(spanId);
   if (index === undefined) return;
   spanViews.endTime[index] = endTime;
@@ -307,13 +298,10 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
     };
   } else {
     // Details visible - layout depends on detailsPosition
-    const effectiveDetailsW = Math.max(
-      MIN_DETAILS_WIDTH,
-      Math.min(detailsWidth, dialogW * 0.75)
-    );
+    const effectiveDetailsW = Math.max(MIN_DETAILS_WIDTH, Math.min(detailsWidth, dialogW * 0.75));
     const effectiveDetailsH = Math.max(
       MIN_DETAILS_HEIGHT,
-      Math.min(detailsHeight, contentH * 0.75)
+      Math.min(detailsHeight, contentH * 0.75),
     );
 
     switch (detailsPosition) {
@@ -355,13 +343,7 @@ export function calculateLayout(config: LayoutConfig): LayoutResult {
         grid = {
           templateAreas: `'header' 'timeline' 'canvas' 'details' 'statusbar'`,
           templateColumns: [dialogW],
-          templateRows: [
-            headerH,
-            timelineHeaderH,
-            canvasH,
-            detailsH,
-            statusBarH,
-          ],
+          templateRows: [headerH, timelineHeaderH, canvasH, detailsH, statusBarH],
         };
         break;
     }
@@ -512,8 +494,7 @@ export const selectors = {
   timelineLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.timeline,
   canvasLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.canvas,
   detailsLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.details,
-  statusBarLayout: (s: FlameGraphState) =>
-    s.viewState.calculatedLayout.statusBar,
+  statusBarLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.statusBar,
   gridLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.grid,
   headerLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.header,
   dialogLayout: (s: FlameGraphState) => s.viewState.calculatedLayout.dialog,
@@ -627,10 +608,7 @@ function createActions(store: StoreApi<FlameGraphState>) {
       const maxZoom = selectors.maxZoom(state);
 
       // Calculate new zoom (clamped)
-      const newZoom = Math.max(
-        minZoom,
-        Math.min(maxZoom, viewState.zoom * zoomFactor)
-      );
+      const newZoom = Math.max(minZoom, Math.min(maxZoom, viewState.zoom * zoomFactor));
 
       // If zoom didn't change (at limits), skip update
       if (Math.abs(newZoom - viewState.zoom) < 0.0001) {
@@ -650,8 +628,7 @@ function createActions(store: StoreApi<FlameGraphState>) {
       } else {
         const contentWidth = width * newZoom;
         const maxOffsetX = CANVAS_PAN_MARGIN_PX;
-        const minOffsetX =
-          width - contentWidth - CANVAS_PAN_MARGIN_PX - CANVAS_PADDING_LEFT;
+        const minOffsetX = width - contentWidth - CANVAS_PAN_MARGIN_PX - CANVAS_PADDING_LEFT;
         clampedOffsetX = Math.max(minOffsetX, Math.min(maxOffsetX, newOffsetX));
       }
 
@@ -766,19 +743,11 @@ function createActions(store: StoreApi<FlameGraphState>) {
       const nextLayout = () => {
         if (orientation === "left" || orientation === "right") {
           return {
-            dialogWidth: clamp(
-              newWidth,
-              LAYOUT_CONSTANTS.MIN_DIALOG_WIDTH,
-              maxWidth
-            ),
+            dialogWidth: clamp(newWidth, LAYOUT_CONSTANTS.MIN_DIALOG_WIDTH, maxWidth),
           };
         }
         return {
-          dialogHeight: clamp(
-            newHeight,
-            LAYOUT_CONSTANTS.MIN_DIALOG_HEIGHT,
-            maxHeight
-          ),
+          dialogHeight: clamp(newHeight, LAYOUT_CONSTANTS.MIN_DIALOG_HEIGHT, maxHeight),
         };
       };
 
@@ -802,17 +771,11 @@ function createActions(store: StoreApi<FlameGraphState>) {
       const nextLayout = () => {
         if (orientation === "left" || orientation === "right") {
           return {
-            detailsWidth: Math.max(
-              LAYOUT_CONSTANTS.MIN_DETAILS_WIDTH,
-              newWidth
-            ),
+            detailsWidth: Math.max(LAYOUT_CONSTANTS.MIN_DETAILS_WIDTH, newWidth),
           };
         }
         return {
-          detailsHeight: Math.max(
-            LAYOUT_CONSTANTS.MIN_DETAILS_HEIGHT,
-            newHeight
-          ),
+          detailsHeight: Math.max(LAYOUT_CONSTANTS.MIN_DETAILS_HEIGHT, newHeight),
         };
       };
       batch(() => {

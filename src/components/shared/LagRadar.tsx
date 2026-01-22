@@ -27,10 +27,7 @@ export function LagRadar() {
       });
     };
 
-    window.visualViewport?.addEventListener(
-      "resize",
-      handleVisualViewportChange,
-    );
+    window.visualViewport?.addEventListener("resize", handleVisualViewportChange);
 
     return () =>
       window.visualViewport?.removeEventListener(

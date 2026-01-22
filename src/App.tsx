@@ -1,18 +1,15 @@
-import { useState, lazy, useTransition } from "react";
-import { TabSelector } from "./components/shared";
-import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
 import type { MovieApi } from "./api/types";
 import { traced } from "lib/tracing";
 import type { ISpan } from "lib/tracing";
+import { useState, lazy, useTransition } from "react";
 
-const LazyTanStackQueryTab = lazy(
-  () => import("./components/TanStackQueryTab")
-);
-const LazyCustomLibraryTab = lazy(
-  () => import("./components/CustomLibraryTab")
-);
+import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
+import { TabSelector } from "./components/shared";
+
+const LazyTanStackQueryTab = lazy(() => import("./components/TanStackQueryTab"));
+const LazyCustomLibraryTab = lazy(() => import("./components/CustomLibraryTab"));
 const LazyLagRadar = lazy(() =>
-  import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar }))
+  import("./components/shared/LagRadar").then((d) => ({ default: d.LagRadar })),
 );
 
 const STRESS_DEPTH = 5;
@@ -22,28 +19,20 @@ const STRESS_TASKS = 25;
 
 // Total invocations: branches * (breadth^(depth+1) - 1) / (breadth - 1) + 2 (root + tail) * STRESS_TASKS
 const TOTAL_INVOCATIONS =
-  (STRESS_BRANCHES *
-    ((STRESS_BREADTH ** (STRESS_DEPTH + 1) - 1) / (STRESS_BREADTH - 1)) +
-    2) *
+  (STRESS_BRANCHES * ((STRESS_BREADTH ** (STRESS_DEPTH + 1) - 1) / (STRESS_BREADTH - 1)) + 2) *
   STRESS_TASKS;
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 // Non-traced version for baseline comparison
-const runBranchUntraced = async (
-  depth: number,
-  breadth: number
-): Promise<void> => {
+const runBranchUntraced = async (depth: number, breadth: number): Promise<void> => {
   await sleep(2 + Math.random() * 10);
 
   if (depth <= 0) {
     return;
   }
 
-  const tasks = Array.from({ length: breadth }, () =>
-    runBranchUntraced(depth - 1, breadth)
-  );
+  const tasks = Array.from({ length: breadth }, () => runBranchUntraced(depth - 1, breadth));
   await Promise.all(tasks);
   await sleep(2 + Math.random() * 10);
 };
@@ -53,7 +42,7 @@ const runStressTestUntraced = async (): Promise<void> => {
 
   for (let i = 0; i < STRESS_TASKS; i += 1) {
     const branches = Array.from({ length: STRESS_BRANCHES }, () =>
-      runBranchUntraced(STRESS_DEPTH, STRESS_BREADTH)
+      runBranchUntraced(STRESS_DEPTH, STRESS_BREADTH),
     );
     await Promise.all(branches);
     await sleep(5 + Math.random() * 15);
@@ -70,7 +59,7 @@ const runBranch = async (
   parent: ISpan,
   depth: number,
   breadth: number,
-  path: string
+  path: string,
 ): Promise<void> => {
   const withSpan = traced(
     async (span: ISpan) => {
@@ -81,7 +70,7 @@ const runBranch = async (
       }
 
       const tasks = Array.from({ length: breadth }, (_, index) =>
-        runBranch(span, depth - 1, breadth, `${path}.${index}`)
+        runBranch(span, depth - 1, breadth, `${path}.${index}`),
       );
       await Promise.all(tasks);
       await sleep(2 + Math.random() * 10);
@@ -91,7 +80,7 @@ const runBranch = async (
       payload: { depth, breadth, path, parent: parent.payload },
       meta: { color: depth % 2 === 0 ? "secondary" : "tertiary" },
       parentSpan: parent,
-    }
+    },
   );
 
   await withSpan();
@@ -104,7 +93,7 @@ const runTracingStressTest = async (): Promise<void> => {
 
       for (let i = 0; i < STRESS_TASKS; i += 1) {
         const branches = Array.from({ length: STRESS_BRANCHES }, (_, index) =>
-          runBranch(root, STRESS_DEPTH, STRESS_BREADTH, `root-${index}`)
+          runBranch(root, STRESS_DEPTH, STRESS_BREADTH, `root-${index}`),
         );
         await Promise.all(branches);
         await sleep(5 + Math.random() * 15);
@@ -121,7 +110,7 @@ const runTracingStressTest = async (): Promise<void> => {
           payload: { phase: "tail" },
           meta: { color: "secondary" },
           parentSpan: root,
-        }
+        },
       );
 
       await tailSpan();
@@ -134,7 +123,7 @@ const runTracingStressTest = async (): Promise<void> => {
         branches: STRESS_BRANCHES,
       },
       meta: { color: "primary", description: "Tracing stress test" },
-    }
+    },
   );
 
   await rootSpan();
@@ -189,28 +178,21 @@ function TracingStressTest() {
         {result ? (
           <>
             <div>
-              Untraced: {result.untracedMs.toFixed(1)}ms | Traced:{" "}
-              {result.tracedMs.toFixed(1)}ms
+              Untraced: {result.untracedMs.toFixed(1)}ms | Traced: {result.tracedMs.toFixed(1)}ms
             </div>
             <div>
               Overhead: {(result.tracedMs - result.untracedMs).toFixed(1)}ms (
-              {(
-                ((result.tracedMs - result.untracedMs) / result.untracedMs) *
-                100
-              ).toFixed(1)}
-              % | {overheadPerSpanUs!.toFixed(2)}μs/span)
+              {(((result.tracedMs - result.untracedMs) / result.untracedMs) * 100).toFixed(1)}% |{" "}
+              {overheadPerSpanUs!.toFixed(2)}μs/span)
             </div>
-            <div className="text-gray-300">
-              {TOTAL_INVOCATIONS.toLocaleString()} spans
-            </div>
+            <div className="text-gray-300">{TOTAL_INVOCATIONS.toLocaleString()} spans</div>
           </>
         ) : error ? (
           <div className="text-red-400">Error: {error}</div>
         ) : (
           <div>
             Spawns {TOTAL_INVOCATIONS.toLocaleString()} async spans (depth=
-            {STRESS_DEPTH}, breadth={STRESS_BREADTH}, branches={STRESS_BRANCHES}
-            )
+            {STRESS_DEPTH}, breadth={STRESS_BREADTH}, branches={STRESS_BRANCHES})
           </div>
         )}
       </div>
@@ -223,9 +205,7 @@ function TracingStressTest() {
  * Compares custom query library implementation with TanStack Query
  */
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"custom" | "tanstack" | "unset">(
-    "custom"
-  );
+  const [activeTab, setActiveTab] = useState<"custom" | "tanstack" | "unset">("custom");
 
   const [formState, setFormState] = useState(() => {
     const formData = new FormData();
@@ -260,9 +240,7 @@ export default function App() {
             <span className="text-black">Movie</span>
             <span className="text-gray-400">DB</span>
           </h1>
-          <p className="text-gray-500 text-xs md:text-sm mb-6">
-            Search thousands of movies
-          </p>
+          <p className="text-gray-500 text-xs md:text-sm mb-6">Search thousands of movies</p>
           <TabSelector activeTab={activeTab} onTabChange={setActiveTab} />
           <div className="mt-6 flex justify-center">
             <TracingStressTest />
@@ -293,9 +271,7 @@ export default function App() {
               return (
                 <div className="flex flex-col items-center justify-center py-20 px-4">
                   <div className="animate-pulse h-6 w-6 border-2 border-gray-300 border-t-black rounded-full mb-4" />
-                  <p className="text-gray-500 text-sm">
-                    Cleaning up from the last tab...
-                  </p>
+                  <p className="text-gray-500 text-sm">Cleaning up from the last tab...</p>
                 </div>
               );
           }

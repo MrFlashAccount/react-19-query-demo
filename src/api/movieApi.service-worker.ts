@@ -29,14 +29,12 @@ async function getDatabase(): Promise<Movie[]> {
         id: movie.id,
         titleText: movie.titleText.text,
         releaseYear: movie.releaseYear?.year ?? 0,
-        genres: movie.genres.genres.map(
-          (genre: { text: string }) => genre.text
-        ),
+        genres: movie.genres.genres.map((genre: { text: string }) => genre.text),
         plot: movie.plot?.plotText.plainText ?? "",
         directors: [],
         rating: movie.ratingsSummary.aggregateRating ?? 0,
         image: movie.primaryImage?.url ?? "",
-      } satisfies Movie)
+      }) satisfies Movie,
   );
 
   return movieDatabaseCache;
@@ -46,10 +44,7 @@ async function getDatabase(): Promise<Movie[]> {
  * Search movies by query string.
  * Searches in title, genres, director, and plot.
  */
-async function searchMovies(
-  query: string,
-  limit: number = 500
-): Promise<Movie[]> {
+async function searchMovies(query: string, limit: number = 500): Promise<Movie[]> {
   const database = await getDatabase();
   query = query.trim();
 
@@ -66,9 +61,7 @@ async function searchMovies(
       }
 
       // Search in genres
-      if (
-        movie.genres.some((genre) => genre.toLowerCase().includes(searchTerm))
-      ) {
+      if (movie.genres.some((genre) => genre.toLowerCase().includes(searchTerm))) {
         return true;
       }
 
@@ -78,11 +71,7 @@ async function searchMovies(
       }
 
       // Search in director
-      if (
-        movie.directors.some((director) =>
-          director.toLowerCase().includes(searchTerm)
-        )
-      ) {
+      if (movie.directors.some((director) => director.toLowerCase().includes(searchTerm))) {
         return true;
       }
 
@@ -129,8 +118,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
         if (pathname === "/api/movies/search" && method === "GET") {
           const query = url.searchParams.get("query") ?? "";
           const limitParam = url.searchParams.get("limit");
-          const limit =
-            limitParam != null ? Number.parseInt(limitParam, 10) : 500;
+          const limit = limitParam != null ? Number.parseInt(limitParam, 10) : 500;
 
           const results = await searchMovies(query, limit);
           return jsonResponse(results);
@@ -144,19 +132,14 @@ self.addEventListener("fetch", (event: FetchEvent) => {
           const movie = database.find((m) => m.id === movieId);
 
           if (movie == null) {
-            return jsonResponse(
-              { error: `Movie with id ${movieId} not found` },
-              404
-            );
+            return jsonResponse({ error: `Movie with id ${movieId} not found` }, 404);
           }
 
           return jsonResponse(movie);
         }
 
         // PATCH /api/movies/:id/rating
-        const updateRatingMatch = pathname.match(
-          /^\/api\/movies\/([^/]+)\/rating$/
-        );
+        const updateRatingMatch = pathname.match(/^\/api\/movies\/([^/]+)\/rating$/);
         if (updateRatingMatch && method === "PATCH") {
           const movieId = updateRatingMatch[1];
           const body = (await event.request.json()) as { rating: number };
@@ -165,18 +148,12 @@ self.addEventListener("fetch", (event: FetchEvent) => {
           const movie = database.find((m) => m.id === movieId);
 
           if (movie == null) {
-            return jsonResponse(
-              { error: `Movie with id ${movieId} not found` },
-              404
-            );
+            return jsonResponse({ error: `Movie with id ${movieId} not found` }, 404);
           }
 
           // Update rating
           const randomDecimal = Math.random() * 1.9;
-          const newRating = Math.min(
-            10,
-            parseFloat((body.rating + randomDecimal).toFixed(1))
-          );
+          const newRating = Math.min(10, parseFloat((body.rating + randomDecimal).toFixed(1)));
 
           movie.rating = newRating;
 
@@ -190,9 +167,9 @@ self.addEventListener("fetch", (event: FetchEvent) => {
           {
             error: error instanceof Error ? error.message : String(error),
           },
-          500
+          500,
         );
       }
-    })()
+    })(),
   );
 });

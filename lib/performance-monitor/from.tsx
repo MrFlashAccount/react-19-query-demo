@@ -334,15 +334,11 @@ export function PerformanceMonitor({ metrics }: PerformanceMonitorProps) {
         </div>
         <div>
           <span style={{ color: "#71717a" }}>ft </span>
-          <span style={{ color: "#e4e4e7" }}>
-            {metrics.frameTime.toFixed(1)}ms
-          </span>
+          <span style={{ color: "#e4e4e7" }}>{metrics.frameTime.toFixed(1)}ms</span>
         </div>
         <div>
           <span style={{ color: "#71717a" }}>jank </span>
-          <span
-            style={{ color: metrics.jankCount > 0 ? "#ef4444" : "#71717a" }}
-          >
+          <span style={{ color: metrics.jankCount > 0 ? "#ef4444" : "#71717a" }}>
             {metrics.jankCount}
           </span>
         </div>

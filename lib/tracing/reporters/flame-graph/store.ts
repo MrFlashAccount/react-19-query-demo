@@ -1,4 +1,5 @@
 import { Batcher } from "../../Batcher";
+
 import { addEventListener } from "./utilities";
 
 type SetStateAction<T> = Partial<T> | ((state: T) => Partial<T>);
@@ -16,14 +17,11 @@ export interface StoreApi<T> {
   getState: () => T;
   setState: (action: SetStateAction<T>, replace?: boolean) => void;
   subscribe: {
-    (
-      listener: StateListener<T>,
-      options?: { signal?: AbortSignal }
-    ): () => void;
+    (listener: StateListener<T>, options?: { signal?: AbortSignal }): () => void;
     <U>(
       selector: Selector<T, U>,
       listener: (selected: U, prevSelected: U) => void,
-      options?: SubscribeOptions<U>
+      options?: SubscribeOptions<U>,
     ): () => void;
   };
   getInitialState: () => T;
@@ -34,7 +32,7 @@ export interface StoreApi<T> {
 export type StateCreator<T> = (
   set: StoreApi<T>["setState"],
   get: StoreApi<T>["getState"],
-  api: StoreApi<T>
+  api: StoreApi<T>,
 ) => T;
 
 const defaultEqualityFn = <T>(a: T, b: T): boolean => {
@@ -54,8 +52,7 @@ const defaultEqualityFn = <T>(a: T, b: T): boolean => {
     const bKeys = Object.keys(b);
     if (aKeys.length !== bKeys.length) return false;
     return aKeys.every(
-      (k) =>
-        (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k]
+      (k) => (a as Record<string, unknown>)[k] === (b as Record<string, unknown>)[k],
     );
   }
   return false;
@@ -64,7 +61,7 @@ const defaultEqualityFn = <T>(a: T, b: T): boolean => {
 const unsetSymbol = Symbol("unset");
 
 export function createStore<T extends Record<string, unknown>>(
-  initialState: T | StateCreator<T>
+  initialState: T | StateCreator<T>,
 ): StoreApi<T> {
   const listeners = new Set<StateListener<T>>();
   let state: T;
@@ -93,17 +90,11 @@ export function createStore<T extends Record<string, unknown>>(
       isDirty = false;
 
       if (errors.length > 0) {
-        throw new AggregateError(
-          errors,
-          "Error(s) occurred while processing listeners"
-        );
+        throw new AggregateError(errors, "Error(s) occurred while processing listeners");
       }
     },
     scheduler: "microtask",
   });
-
-  // @TODO: implement an efficient way of tracking which listeners need to be called
-  const calculateDirtyListeners = () => {};
 
   const getState = () => state;
   const getInitialState = () => initialStateValue;
@@ -114,11 +105,7 @@ export function createStore<T extends Record<string, unknown>>(
 
     // Check if anything actually changed
     const hasChanged = Object.keys(partial).some(
-      (key) =>
-        !defaultEqualityFn(
-          partial[key as keyof T],
-          prevStateCopy[key as keyof T]
-        )
+      (key) => !defaultEqualityFn(partial[key as keyof T], prevStateCopy[key as keyof T]),
     );
 
     if (!hasChanged) return;
@@ -148,10 +135,8 @@ export function createStore<T extends Record<string, unknown>>(
   // Overloaded subscribe: full state or with selector
   const subscribe: StoreApi<T>["subscribe"] = <U>(
     listenerOrSelector: StateListener<T> | Selector<T, U>,
-    maybeListenerOrOptions?:
-      | ((selected: U, prevSelected: U) => void)
-      | SubscribeOptions<U>,
-    options: SubscribeOptions<U> = {}
+    maybeListenerOrOptions?: ((selected: U, prevSelected: U) => void) | SubscribeOptions<U>,
+    options: SubscribeOptions<U> = {},
   ): (() => void) => {
     // Selector + listener case: second arg is a function
     if (typeof maybeListenerOrOptions === "function") {

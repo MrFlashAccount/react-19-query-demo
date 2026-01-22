@@ -1,15 +1,16 @@
-import { HOST_STYLES, theme } from "./styles";
-import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
-import type { FlameGraphDialogContent } from "./FlameGraphDialogContent";
-import type { Position } from "./types";
-import { addEventListener } from "./utilities";
-
 // Import components to ensure they're registered
 import "./FlameGraphDialogContent";
 import "./FlameGraphResizeHandle";
-import { css, getElement, html } from "./utilities";
+
+import type { FlameGraphDialogContent } from "./FlameGraphDialogContent";
+import type { ResizeEventDetail } from "./FlameGraphResizeHandle";
+import type { Position } from "./types";
+
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
+import { HOST_STYLES, theme } from "./styles";
+import { addEventListener } from "./utilities";
+import { css, getElement, html } from "./utilities";
 
 // TypeScript types for Document Picture-in-Picture API
 interface DocumentPictureInPictureOptions {
@@ -169,9 +170,7 @@ export class FlameGraphDialog extends HTMLElement {
    * Apply calculated layout to the dialog panel.
    * All sizing/positioning comes from the layout state.
    */
-  private applyLayoutToPanel(
-    layout: ReturnType<typeof selectors.dialogLayout>
-  ) {
+  private applyLayoutToPanel(layout: ReturnType<typeof selectors.dialogLayout>) {
     this.panel.style.width = `${layout.width}px`;
     this.panel.style.height = `${layout.height}px`;
     this.panel.style.top = layout.position.top;
@@ -184,19 +183,12 @@ export class FlameGraphDialog extends HTMLElement {
     if (!this.panel || !this.resizeHandle) return;
 
     // Remove old position classes
-    this.panel.classList.remove(
-      "position-bottom",
-      "position-left",
-      "position-right"
-    );
+    this.panel.classList.remove("position-bottom", "position-left", "position-right");
     // Add new position class
     this.panel.classList.add(`position-${position}`);
 
     // Update resize handle position
-    this.resizeHandle.setAttribute(
-      "position",
-      selectors.getHandlePosition(position)
-    );
+    this.resizeHandle.setAttribute("position", selectors.getHandlePosition(position));
   }
 
   private subscribeToState() {
@@ -210,7 +202,7 @@ export class FlameGraphDialog extends HTMLElement {
           this.panel.classList.remove("open");
           this.hidePopover();
         }
-      })
+      }),
     );
 
     // Subscribe to dialog position changes (for CSS class updates)
@@ -219,7 +211,7 @@ export class FlameGraphDialog extends HTMLElement {
         drawScheduler.schedule(() => {
           this.updatePanelPosition(position);
         });
-      })
+      }),
     );
 
     // Single subscription to calculated layout - applies all sizing
@@ -228,7 +220,7 @@ export class FlameGraphDialog extends HTMLElement {
         drawScheduler.schedule(() => {
           this.applyLayoutToPanel(layout);
         });
-      })
+      }),
     );
   }
 
@@ -264,13 +256,10 @@ export class FlameGraphDialog extends HTMLElement {
     `;
 
     this.panel = getElement(".panel", this.shadowRoot);
-    this.resizeHandle = getElement(
-      "flame-graph-resize-handle",
-      this.shadowRoot
-    );
+    this.resizeHandle = getElement("flame-graph-resize-handle", this.shadowRoot);
     this.content = getElement<FlameGraphDialogContent>(
       "flame-graph-dialog-content",
-      this.shadowRoot
+      this.shadowRoot,
     );
   }
 
@@ -292,7 +281,7 @@ export class FlameGraphDialog extends HTMLElement {
       () => {
         flameGraphState.onResizeWindow();
       },
-      { passive: true }
+      { passive: true },
     );
 
     // Resize handle
@@ -302,19 +291,14 @@ export class FlameGraphDialog extends HTMLElement {
         const detail = e.detail as unknown as ResizeEventDetail;
         const layout = selectors.dialogLayout(flameGraphState.getState());
 
-        flameGraphState.resizeDialog(
-          layout.width - detail.deltaX,
-          layout.height - detail.deltaY
-        );
+        flameGraphState.resizeDialog(layout.width - detail.deltaX, layout.height - detail.deltaY);
       },
-      { passive: true }
+      { passive: true },
     );
 
     // Content events bubble up
     this.content?.addEventListener("spanselect", ((e: CustomEvent) => {
-      this.dispatchEvent(
-        new CustomEvent("spanselect", { detail: e.detail, bubbles: true })
-      );
+      this.dispatchEvent(new CustomEvent("spanselect", { detail: e.detail, bubbles: true }));
     }) as EventListener);
   }
 

@@ -1,7 +1,8 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+
+import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -15,21 +16,12 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "lib/goat-query/react": path.resolve(
-        __dirname,
-        "lib/goat-query/react.ts"
-      ),
-      "lib/goat-query/devtools": path.resolve(
-        __dirname,
-        "lib/goat-query/devtools.ts"
-      ),
+      "lib/goat-query/react": path.resolve(__dirname, "lib/goat-query/react.ts"),
+      "lib/goat-query/devtools": path.resolve(__dirname, "lib/goat-query/devtools.ts"),
       "lib/brand": path.resolve(__dirname, "lib/brand/brand.ts"),
       "lib/tracing/helpers": path.resolve(__dirname, "lib/tracing/helpers.ts"),
       "lib/tracing": path.resolve(__dirname, "lib/tracing"),
-      "lib/performance-monitor": path.resolve(
-        __dirname,
-        "lib/performance-monitor/index.ts"
-      ),
+      "lib/performance-monitor": path.resolve(__dirname, "lib/performance-monitor/index.ts"),
     },
   },
   worker: { format: "es" },

@@ -1,5 +1,5 @@
-import { query, mutation, DependencyGraph } from "lib/goat-query/react";
 import type { MovieApi } from "./api/types";
+import { query, mutation, DependencyGraph } from "lib/goat-query/react";
 
 /**
  * Query definitions for the movie application
@@ -19,8 +19,7 @@ export const moviesQuery = query({
  * Query to get a single movie by ID
  */
 export const movieQuery = query({
-  queryFn: (params: { movieId: string }, ctx) =>
-    ctx.api.getMovieById(params.movieId),
+  queryFn: (params: { movieId: string }, ctx) => ctx.api.getMovieById(params.movieId),
   staleTime: 10000,
   gcTime: 60000,
 });
@@ -41,11 +40,7 @@ export const updateMovieRatingMutation = mutation({
 /**
  * Application dependency graph
  */
-export const appGraph = new DependencyGraph([
-  moviesQuery,
-  movieQuery,
-  updateMovieRatingMutation,
-]);
+export const appGraph = new DependencyGraph([moviesQuery, movieQuery, updateMovieRatingMutation]);
 
 declare module "lib/goat-query/react" {
   interface Context {

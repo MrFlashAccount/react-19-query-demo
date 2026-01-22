@@ -1,6 +1,7 @@
-import { Tracer } from "./Tracer";
-import { NullTracer } from "./NullTracer";
 import type { ITracer } from "./types";
+
+import { NullTracer } from "./NullTracer";
+import { Tracer } from "./Tracer";
 
 export type {
   SpanStartEvent,
@@ -23,12 +24,7 @@ export { SpanBase } from "./types";
 export type { ISpan as Span } from "./types";
 
 // Re-export reporter system
-export {
-  BaseReporter,
-  LoggerReporter,
-  DevtoolsReporter,
-  FlameGraphReporter,
-} from "./reporters";
+export { BaseReporter, LoggerReporter, DevtoolsReporter, FlameGraphReporter } from "./reporters";
 
 export type {
   IReporter,

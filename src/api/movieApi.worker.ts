@@ -33,9 +33,7 @@ type WorkerResponse =
 type Handler<P> = (payload: P) => Promise<ArrayBuffer>;
 
 // Reusable wrapper to handle message processing
-function createHandler<P>(
-  handler: Handler<P>
-): (payload: P, id: string) => Promise<void> {
+function createHandler<P>(handler: Handler<P>): (payload: P, id: string) => Promise<void> {
   return async (payload: P, id: string) => {
     try {
       const arrayBuffer = await handler(payload);
@@ -60,10 +58,7 @@ function createHandler<P>(
 }
 
 // Individual handler methods
-async function handleSearchMovies(payload: {
-  query: string;
-  limit: number;
-}): Promise<ArrayBuffer> {
+async function handleSearchMovies(payload: { query: string; limit: number }): Promise<ArrayBuffer> {
   const searchParams = new URLSearchParams({
     query: payload.query,
     limit: payload.limit.toString(),
@@ -78,9 +73,7 @@ async function handleSearchMovies(payload: {
   return response.arrayBuffer();
 }
 
-async function handleGetMovieById(payload: {
-  movieId: string;
-}): Promise<ArrayBuffer> {
+async function handleGetMovieById(payload: { movieId: string }): Promise<ArrayBuffer> {
   const response = await fetch(`/api/movies/${payload.movieId}`);
 
   if (!response.ok) {
@@ -135,10 +128,11 @@ self.addEventListener("message", async (event: MessageEvent<WorkerMessage>) => {
       await handlers.updateMovieRating(payload, id);
       break;
     default: {
+      const exhaustiveCheck: never = type;
       const errorResponse: WorkerResponse = {
         id,
         type: "error",
-        error: `Unknown message type: ${type}`,
+        error: `Unknown message type: ${exhaustiveCheck as string}`,
       };
       self.postMessage(errorResponse);
     }

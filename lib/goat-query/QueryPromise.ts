@@ -6,15 +6,15 @@ export interface IdleQueryPromise<TData> {
   value: undefined | TData;
   dataUpdatedAt: undefined | number;
   fetchStatus: "idle";
-  reason: undefined | unknown;
+  reason: unknown;
   errorUpdatedAt: undefined | number;
   readonly _promise: Promise<TData>;
   then<TResult1 = TData, TResult2 = never>(
     onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2>;
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
   ): Promise<TData | TResult>;
   finally(onfinally?: (() => void) | null): Promise<TData>;
   readonly [Symbol.toStringTag]: string;
@@ -26,15 +26,15 @@ export interface PendingQueryPromise<TData> {
   value: undefined | TData;
   dataUpdatedAt: undefined | number;
   fetchStatus: "fetching";
-  reason: undefined | unknown;
+  reason: unknown;
   errorUpdatedAt: undefined | number;
   readonly _promise: Promise<TData>;
   then<TResult1 = TData, TResult2 = never>(
     onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2>;
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
   ): Promise<TData | TResult>;
   finally(onfinally?: (() => void) | null): Promise<TData>;
   readonly [Symbol.toStringTag]: string;
@@ -51,10 +51,10 @@ export interface FulfilledQueryPromise<TData> {
   readonly _promise: Promise<TData>;
   then<TResult1 = TData, TResult2 = never>(
     onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2>;
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
   ): Promise<TData | TResult>;
   finally(onfinally?: (() => void) | null): Promise<TData>;
   readonly [Symbol.toStringTag]: string;
@@ -71,22 +71,22 @@ export interface RejectedQueryPromise {
   readonly _promise: Promise<never>;
   then<TResult1 = never, TResult2 = never>(
     onfulfilled?: ((value: never) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2>;
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
-  ): Promise<never | TResult>;
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
+  ): Promise<TResult>;
   finally(onfinally?: (() => void) | null): Promise<never>;
   readonly [Symbol.toStringTag]: string;
 }
 
-export class QueryPromise<TData> {
+export class QueryPromise<TData> implements PromiseLike<TData> {
   __$type = QUERY_PROMISE_SYMBOL;
   status: "pending" | "fulfilled" | "rejected";
   value: TData | undefined;
   dataUpdatedAt: number | undefined;
   fetchStatus: "idle" | "fetching";
-  reason: unknown | undefined;
+  reason: unknown;
   errorUpdatedAt: number | undefined;
 
   /** @internal */
@@ -95,8 +95,8 @@ export class QueryPromise<TData> {
   constructor(
     callback: (
       resolve: (value: TData | PromiseLike<TData>) => void,
-      reject: (error: unknown) => void
-    ) => void
+      reject: (error: unknown) => void,
+    ) => void,
   ) {
     this.status = "pending";
     this.value = undefined;
@@ -126,19 +126,20 @@ export class QueryPromise<TData> {
         this.reason = reason;
         this.errorUpdatedAt = Date.now();
         throw reason;
-      }
+      },
     );
   }
 
+  // oxlint-disable-next-line unicorn/no-thenable
   then<TResult1 = TData, TResult2 = never>(
     onfulfilled?: ((value: TData) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
   ): Promise<TResult1 | TResult2> {
     return this._promise.then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
   ): Promise<TData | TResult> {
     return this._promise.catch(onrejected);
   }

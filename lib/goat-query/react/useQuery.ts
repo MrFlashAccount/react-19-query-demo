@@ -1,25 +1,16 @@
-import { useDebugValue, useEffect } from "react";
-import { noop } from "../utils";
-import { useQueryContext } from "./QueryProvider";
 import type { QueryState } from "../Query";
-import type {
-  FulfilledQueryPromise,
-  QueryPromise,
-  RejectedQueryPromise,
-} from "../QueryPromise";
-import {
-  type QueryData,
-  type QueryDefinition,
-  type QueryParams,
-} from "../nodes/query";
+import type { FulfilledQueryPromise, QueryPromise, RejectedQueryPromise } from "../QueryPromise";
+import { useDebugValue, useEffect } from "react";
+
+import { type QueryData, type QueryDefinition, type QueryParams } from "../nodes/query";
+import { noop } from "../utils";
+
+import { useQueryContext } from "./QueryProvider";
 
 /**
  * Options for useQuery hook with parameters
  */
-export interface UseQueryOptions<
-  QD extends QueryDefinition<any, any>,
-  TParams = QueryParams<QD>
-> {
+export interface UseQueryOptions<QD extends QueryDefinition<any, any>, TParams = QueryParams<QD>> {
   /** The query definition */
   query: QD;
   /** The parameters for this query instance */
@@ -93,18 +84,16 @@ export interface UseQueryRejectedResult<TData> extends UseQueryResult<TData> {
 export function useQuery<
   QD extends QueryDefinition<any, any>,
   TParams = QueryParams<QD>,
-  TData = QueryData<QD>
+  TData = QueryData<QD>,
 >(options: UseQueryOptions<QD, TParams>): UseQueryResult<TData> {
   const { query: queryDefinition } = options;
   const params = options.params;
   const { queryClient } = useQueryContext();
 
   // Add or get query instance from cache
-  const query = queryClient.addQuery<QD, TParams, TData>(
-    queryDefinition,
-    params,
-    { prefetch: true }
-  );
+  const query = queryClient.addQuery<QD, TParams, TData>(queryDefinition, params, {
+    prefetch: true,
+  });
 
   const queryState = query.getState();
   const isPending = queryState.status === "pending";
@@ -137,6 +126,6 @@ export function useQuery<
     isError,
     state: queryState,
     promise: query.promise,
-    refetch: query.refetch,
+    refetch: () => query.refetch(),
   };
 }

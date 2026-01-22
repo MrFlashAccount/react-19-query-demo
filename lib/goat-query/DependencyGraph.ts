@@ -75,7 +75,7 @@ export class DependencyGraph {
       } else {
         throw new Error(
           `Invalid node type in dependency graph at index ${index}. ` +
-            `Expected query or mutation definition.`
+            `Expected query or mutation definition.`,
         );
       }
     });
@@ -95,9 +95,7 @@ export class DependencyGraph {
     const { invalidates, optimistic } = mutation.config;
 
     if (mutation.__index === undefined) {
-      throw new Error(
-        "Mutation index not set. This is an internal error in graph construction."
-      );
+      throw new Error("Mutation index not set. This is an internal error in graph construction.");
     }
 
     // Parse invalidation relationships
@@ -108,13 +106,13 @@ export class DependencyGraph {
           if (!isQuery(query)) {
             throw new Error(
               `Invalid query in invalidates array for mutation at index ${mutation.__index}. ` +
-                `Expected a query definition.`
+                `Expected a query definition.`,
             );
           }
           if (query.__index === undefined) {
             throw new Error(
               `Query in invalidates array for mutation at index ${mutation.__index} ` +
-                `has no index. Make sure the query is registered in the graph.`
+                `has no index. Make sure the query is registered in the graph.`,
             );
           }
 

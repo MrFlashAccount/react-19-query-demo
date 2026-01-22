@@ -12,11 +12,7 @@ export const noopAsync = async (..._args: any[]) => {};
  * @param max - The maximum delay
  * @returns The delay
  */
-export function exponentialBackoff(
-  base: number,
-  attempts: number,
-  max: number = Infinity
-): number {
+export function exponentialBackoff(base: number, attempts: number, max: number = Infinity): number {
   return Math.min(base * 2 ** (attempts - 1), max);
 }
 
@@ -42,11 +38,7 @@ export function serializeParams(params: unknown): SerializedParams {
         return value.toISOString();
       }
 
-      if (
-        typeof value === "object" &&
-        value !== null &&
-        !Array.isArray(value)
-      ) {
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
         const sorted = Object.entries(value).sort((a, b) => {
           if (a[0] < b[0]) return -1;
           if (a[0] > b[0]) return 1;
@@ -57,13 +49,11 @@ export function serializeParams(params: unknown): SerializedParams {
       }
 
       return value;
-    })
+    }),
   );
 }
 
-export function serializePayload(
-  payload: Record<string, unknown> | undefined | null
-): string {
+export function serializePayload(payload: Record<string, unknown> | undefined | null): string {
   if (payload === undefined || payload === null) {
     return "";
   }
@@ -106,7 +96,7 @@ export function serializePayload(
         Object.entries(value).map(([key, value]) => [
           key,
           serializePayload(value as Record<string, unknown>),
-        ])
+        ]),
       );
     }
 

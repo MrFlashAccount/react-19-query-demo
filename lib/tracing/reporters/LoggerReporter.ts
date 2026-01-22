@@ -1,11 +1,5 @@
-import type {
-  SpanStartEvent,
-  SpanEndEvent,
-  SpanEvent,
-  Color,
-  SpanId,
-  TraceEvent,
-} from "../types";
+import type { SpanStartEvent, SpanEndEvent, SpanEvent, Color, SpanId, TraceEvent } from "../types";
+
 import { BaseReporter } from "./BaseReporter";
 
 const colorToHex: Record<Color, `#${string}`> = {
@@ -109,9 +103,7 @@ export class LoggerReporter extends BaseReporter {
     this.trackSpanStart(event);
 
     // Calculate and store depth
-    const parentDepth = event.parentSpan
-      ? this.spanDepths.get(event.parentSpan.spanId) ?? 0
-      : 0;
+    const parentDepth = event.parentSpan ? (this.spanDepths.get(event.parentSpan.spanId) ?? 0) : 0;
     const depth = parentDepth + 1;
     this.spanDepths.set(event.span.spanId, depth);
 
@@ -121,14 +113,13 @@ export class LoggerReporter extends BaseReporter {
 
     // Open console group if within depth limit
     if (this.loggerOptions.useGrouping && withinDepthLimit) {
-      const method =
-        event.parentSpan === undefined ? "groupCollapsed" : "group";
+      const method = event.parentSpan === undefined ? "groupCollapsed" : "group";
       const descPart = description ? ` — ${description}` : "";
 
       console[method](
         `%c${event.span.name}%c${descPart}`,
         `color: ${hexColor}; font-weight: bold;`,
-        `color: ${UIColors.description}; font-weight: normal;`
+        `color: ${UIColors.description}; font-weight: normal;`,
       );
     }
 
@@ -169,7 +160,7 @@ export class LoggerReporter extends BaseReporter {
     console.log(
       `%c${indent}${Icons.event} ${event.eventName} %c+${elapsed.toFixed(2)}ms`,
       `color: ${UIColors.muted}; font-weight: bold;`,
-      `color: ${UIColors.timestamp}; font-size: 0.9em;`
+      `color: ${UIColors.timestamp}; font-size: 0.9em;`,
     );
 
     if (this.loggerOptions.showPayloadDetails && event.payload) {
@@ -185,7 +176,7 @@ export class LoggerReporter extends BaseReporter {
     console.log(
       `%c${indent}${Icons.start} Started %c+0.00ms`,
       `color: ${hexColor}; font-weight: bold;`,
-      `color: ${UIColors.timestamp}; font-size: 0.9em;`
+      `color: ${UIColors.timestamp}; font-size: 0.9em;`,
     );
 
     if (this.loggerOptions.showPayloadDetails && event.payload) {
@@ -197,7 +188,7 @@ export class LoggerReporter extends BaseReporter {
     event: SpanEndEvent,
     duration: number,
     startedAt: number,
-    depth: number
+    depth: number,
   ): void {
     const indent = this.getIndent(depth);
     const style = StatusStyle[event.status];
@@ -207,7 +198,7 @@ export class LoggerReporter extends BaseReporter {
     console.log(
       `%c${indent}${style.icon} ${statusLabel} %c+${duration.toFixed(2)}ms`,
       `color: ${style.color}; font-weight: bold;`,
-      `color: ${UIColors.timestamp}; font-size: 0.9em;`
+      `color: ${UIColors.timestamp}; font-size: 0.9em;`,
     );
 
     if (event.status === "error" && event.error) {
@@ -228,7 +219,7 @@ export class LoggerReporter extends BaseReporter {
     event: SpanEndEvent,
     duration: number,
     startedAt: number,
-    indent: string
+    indent: string,
   ): void {
     const metadata: Record<string, unknown> = {
       name: event.span.name,
@@ -252,7 +243,7 @@ export class LoggerReporter extends BaseReporter {
 
     console.groupCollapsed(
       `%c${indent}📊 Span Metadata`,
-      `color: ${UIColors.muted}; font-weight: bold;`
+      `color: ${UIColors.muted}; font-weight: bold;`,
     );
     console.table(metadata);
     console.groupEnd();
@@ -271,15 +262,10 @@ export class LoggerReporter extends BaseReporter {
    * Only used when grouping is disabled or depth exceeds max
    */
   private getIndent(depth: number): string {
-    if (
-      this.loggerOptions.useGrouping &&
-      depth <= this.loggerOptions.maxDepth
-    ) {
+    if (this.loggerOptions.useGrouping && depth <= this.loggerOptions.maxDepth) {
       return "";
     }
 
-    return `${Icons.muted} `.repeat(
-      Math.min(depth - 1, this.loggerOptions.maxDepth)
-    );
+    return `${Icons.muted} `.repeat(Math.min(depth - 1, this.loggerOptions.maxDepth));
   }
 }
