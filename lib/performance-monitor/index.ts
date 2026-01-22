@@ -7,6 +7,12 @@ export {
 
 export { PerformanceOverlay, type PerformanceOverlayOptions } from "./PerformanceOverlay";
 
+export {
+  PerformanceSettings,
+  type PerformanceSettingsState,
+  type PerformanceSettingsChangeEvent,
+} from "./PerformanceSettings";
+
 // React hooks (legacy from from.tsx)
 export {
   usePerformanceMonitor,
