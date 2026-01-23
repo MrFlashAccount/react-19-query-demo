@@ -7,57 +7,92 @@ import {
   type PerformanceObserverOptions,
 } from "./PerformanceObserver";
 import "./PerformanceSettings";
-import type { PerformanceSettingsChangeEvent } from "./PerformanceSettings";
+import type { PerformanceSettingsChangeEvent, OverlayPosition } from "./PerformanceSettings";
 import { css } from "./utils";
 
 export interface PerformanceOverlayOptions extends PerformanceObserverOptions {
-  position?: "top" | "bottom";
+  position?: OverlayPosition;
   sampleInterval?: number; // ms, default 500
 }
 
-const overlayHeight = 24;
+const overlayHeight = 28;
 
 const styles = css`
   :host {
     all: unset !important;
-    display: block !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
     pointer-events: none !important;
+
+    display: block !important;
     font-family: "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace !important;
     font-size: 12px !important;
     line-height: 1 !important;
-    position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    height: ${overlayHeight}px !important;
+    user-select: none !important;
   }
   
-  :host([position="bottom"]) {
+  :host([position="bottom"]), :host([position="bottom"]) .overlay-content {
     bottom: 0 !important;
     top: auto !important;
   }
 
-  :host(:not([position="bottom"])) {
+  :host([position="top"]), :host([position="top"]) .overlay-content {
     top: 0 !important;
+  }
+  
+  :host([position="floating"]) .overlay-content,
+  :host([position="pip"]) .overlay-content {
+    left: auto;
+    right: var(--floating-right, 4px);
+    top: var(--floating-top, auto);
+    bottom: var(--floating-bottom, 4px);
+    width: auto;
+    height: auto;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  :host([position="floating"]) .overlay-content {
+    flex-direction: column;
+    align-items: start;
+    padding: 12px;
+    cursor: grab;
+  }
+  :host([position="floating"][level="1"]) .overlay-content {
+    padding: 8px 32px 8px 8px;
+  }
+  :host([position="floating"]) .overlay-content.dragging {
+    cursor: grabbing;
   }
   
   .isolate-layout {
     all: unset;
     pointer-events: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: 0;
     width: 100%;
-    height: ${overlayHeight}px;
-    overflow: visible;
+    height: 100%;
+    overflow: clip;
     overflow-clip-margin: unset;
     contain: content;
   }
   
   .overlay {
     display: flex;
-    height: ${overlayHeight}px;
     align-items: center;
     justify-content: flex-start;
     gap: 0;
     padding: 0 8px 0 12px;
-    background: rgba(10, 10, 15, 0.92);
   }
   
   .overlay.collapsed {
@@ -67,12 +102,36 @@ const styles = css`
     backdrop-filter: none;
   }
   
+  :host([position="floating"]) .overlay-content,
+  :host([position="pip"]) .overlay-content {
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  
+  :host([position="floating"]), :host([position="floating"]) .overlay-content,
+  :host([position="pip"]), :host([position="pip"]) .overlay-content {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    width: auto;
+  }
+  
+  :host([position="floating"]), :host([position="floating"]) .section,
+  :host([position="pip"]), :host([position="pip"]) .section {
+    border-right: none;
+    padding: 0;
+  }
+  
   .overlay-content {
+    position: fixed;
+    pointer-events: auto;
     width: 100%;
     height: ${overlayHeight}px;
         display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
+    background: rgba(10, 10, 15, 0.92);
+    backdrop-filter: blur(8px);
+    corner-shape: superellipse(1.33);
   }
 
   .section {
@@ -169,6 +228,12 @@ const styles = css`
     border-radius: 2px;
     background: rgba(0, 0, 0, 0.3);
   }
+
+  performance-settings {
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
 `;
 
 export class PerformanceOverlay extends HTMLElement {
@@ -229,6 +294,10 @@ export class PerformanceOverlay extends HTMLElement {
 
   disconnectedCallback(): void {
     this.observer.destroy();
+    this.exitPip();
+    // Clean up drag listeners
+    document.removeEventListener("mousemove", this.handleDragMove);
+    document.removeEventListener("mouseup", this.handleDragEnd);
   }
 
   private handleSettingsChange = (e: PerformanceSettingsChangeEvent): void => {
@@ -276,12 +345,191 @@ export class PerformanceOverlay extends HTMLElement {
     return this.level;
   }
 
-  setPosition(position: "top" | "bottom"): void {
+  setPosition(position: OverlayPosition): void {
+    const currentPosition = this.getPosition();
+
+    // Exiting PIP mode
+    if (currentPosition === "pip" && position !== "pip") {
+      this.exitPip();
+    }
+
     this.setAttribute("position", position);
+
+    // Entering PIP mode
+    if (position === "pip" && currentPosition !== "pip") {
+      void this.enterPip();
+    }
   }
 
-  getPosition(): "top" | "bottom" {
-    return (this.getAttribute("position") as "top" | "bottom") || "top";
+  getPosition(): OverlayPosition {
+    const pos = this.getAttribute("position");
+    if (pos === "top" || pos === "bottom" || pos === "floating" || pos === "pip") {
+      return pos;
+    }
+    return "top";
+  }
+
+  private pipWindow: Window | null = null;
+  private isMovingToPip = false;
+
+  // Drag state
+  private isDragging = false;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private floatingRight = 4;
+  private floatingBottom = 4;
+  private floatingTop: number | null = null;
+  private readonly SNAP_THRESHOLD = 8;
+  private readonly EDGE_MARGIN = 4;
+
+  private async enterPip(): Promise<void> {
+    if (!("documentPictureInPicture" in window)) {
+      console.warn("Document Picture-in-Picture not supported");
+      return;
+    }
+
+    try {
+      // @ts-expect-error - documentPictureInPicture is not yet in TypeScript types
+      const pipWindow: Window = await window.documentPictureInPicture.requestWindow({
+        width: 400,
+        height: 60,
+      });
+
+      // Copy styles to PIP window
+      const pipDocument = pipWindow.document;
+      pipDocument.body.style.margin = "0";
+      pipDocument.body.style.padding = "0";
+      pipDocument.body.style.background = "transparent";
+
+      // Handle PIP window close
+      pipWindow.addEventListener("pagehide", () => {
+        this.pipWindow = null;
+        document.body.appendChild(this);
+        this.setAttribute("position", "floating");
+      });
+
+      // Set flag before moving to prevent disconnectedCallback from closing PIP
+      this.isMovingToPip = true;
+      this.pipWindow = pipWindow;
+
+      // Move overlay to PIP window
+      pipDocument.body.appendChild(this);
+
+      this.isMovingToPip = false;
+    } catch (e) {
+      console.error("Failed to enter PiP:", e);
+      this.setAttribute("position", "floating");
+    }
+  }
+
+  private exitPip(): void {
+    if (this.pipWindow && !this.isMovingToPip) {
+      this.pipWindow.close();
+      this.pipWindow = null;
+      document.body.appendChild(this);
+    }
+  }
+
+  private handleDragStart = (e: MouseEvent): void => {
+    if (this.getPosition() !== "floating") return;
+
+    const target = e.target as HTMLElement;
+    // Don't start drag if clicking on interactive elements
+    if (target.closest("button, input, select, a, performance-settings")) return;
+
+    this.isDragging = true;
+    this.dragStartX = e.clientX;
+    this.dragStartY = e.clientY;
+
+    const overlayContent = this.shadowRoot.querySelector(".overlay-content");
+    overlayContent?.classList.add("dragging");
+
+    document.addEventListener("mousemove", this.handleDragMove);
+    document.addEventListener("mouseup", this.handleDragEnd);
+    e.preventDefault();
+  };
+
+  private handleDragMove = (e: MouseEvent): void => {
+    if (!this.isDragging) return;
+
+    const deltaX = this.dragStartX - e.clientX;
+    const deltaY = this.dragStartY - e.clientY;
+
+    this.dragStartX = e.clientX;
+    this.dragStartY = e.clientY;
+
+    const overlayContent = this.shadowRoot.querySelector(".overlay-content") as HTMLElement;
+    if (!overlayContent) return;
+
+    const rect = overlayContent.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+
+    // Calculate new position
+    let newRight = this.floatingRight + deltaX;
+    let newBottom = this.floatingBottom + deltaY;
+
+    // Constrain to viewport
+    newRight = Math.max(
+      this.EDGE_MARGIN,
+      Math.min(viewportWidth - rect.width - this.EDGE_MARGIN, newRight),
+    );
+    newBottom = Math.max(
+      this.EDGE_MARGIN,
+      Math.min(viewportHeight - rect.height - this.EDGE_MARGIN, newBottom),
+    );
+
+    // Snap to edges
+    const leftDist = viewportWidth - newRight - rect.width;
+    const rightDist = newRight;
+    const topDist = viewportHeight - newBottom - rect.height;
+    const bottomDist = newBottom;
+
+    // Snap horizontally
+    if (leftDist < this.SNAP_THRESHOLD) {
+      newRight = viewportWidth - rect.width - this.EDGE_MARGIN;
+    } else if (rightDist < this.SNAP_THRESHOLD) {
+      newRight = this.EDGE_MARGIN;
+    }
+
+    // Snap vertically
+    if (topDist < this.SNAP_THRESHOLD) {
+      newBottom = viewportHeight - rect.height - this.EDGE_MARGIN;
+      this.floatingTop = this.EDGE_MARGIN;
+    } else if (bottomDist < this.SNAP_THRESHOLD) {
+      newBottom = this.EDGE_MARGIN;
+      this.floatingTop = null;
+    } else {
+      this.floatingTop = null;
+    }
+
+    this.floatingRight = newRight;
+    this.floatingBottom = newBottom;
+    this.updateFloatingPosition();
+  };
+
+  private handleDragEnd = (): void => {
+    this.isDragging = false;
+
+    const overlayContent = this.shadowRoot.querySelector(".overlay-content");
+    overlayContent?.classList.remove("dragging");
+
+    document.removeEventListener("mousemove", this.handleDragMove);
+    document.removeEventListener("mouseup", this.handleDragEnd);
+  };
+
+  private updateFloatingPosition(): void {
+    const overlayContent = this.shadowRoot.querySelector(".overlay-content") as HTMLElement;
+    if (!overlayContent) return;
+
+    overlayContent.style.setProperty("--floating-right", `${this.floatingRight}px`);
+    if (this.floatingTop !== null) {
+      overlayContent.style.setProperty("--floating-top", `${this.floatingTop}px`);
+      overlayContent.style.setProperty("--floating-bottom", "auto");
+    } else {
+      overlayContent.style.setProperty("--floating-top", "auto");
+      overlayContent.style.setProperty("--floating-bottom", `${this.floatingBottom}px`);
+    }
   }
 
   get popover() {
@@ -327,7 +575,8 @@ export class PerformanceOverlay extends HTMLElement {
     const ram = metrics.ramUsed !== undefined ? this.formatRam(metrics.ramUsed) : null;
     const position = this.getPosition();
     const isCollapsed = this.level === 0;
-    const dropdownPosition = position === "bottom" ? "top" : "bottom";
+    // For bottom/floating/pip positions, dropdown opens upward
+    const dropdownPosition = position === "top" ? "bottom" : "top";
 
     const settingsElement = html`
       <performance-settings
@@ -348,7 +597,7 @@ export class PerformanceOverlay extends HTMLElement {
                 : html`
                   <svg class="isolate-layout" width="100%" height="100%">
   <foreignObject width="100%" height="100%">
-                <div class="overlay-content">
+                <div class="overlay-content" @mousedown=${this.handleDragStart}>
                   
                     <!-- Section 1: FPS -->
                   <div class="section">
@@ -361,6 +610,8 @@ export class PerformanceOverlay extends HTMLElement {
                       <span class="unit">Hz</span>
                     </div>
                   </div>
+
+                  ${settingsElement}
 
                   ${
                     this.level === 2
@@ -420,7 +671,6 @@ export class PerformanceOverlay extends HTMLElement {
         </svg>  
               `
             }
-            ${settingsElement}
       </div>
     `;
 

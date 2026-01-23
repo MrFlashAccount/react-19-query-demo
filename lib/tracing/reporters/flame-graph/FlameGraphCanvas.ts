@@ -1,3 +1,6 @@
+import { html, render } from "lit-html";
+import { createRef, ref, type Ref } from "lit-html/directives/ref.js";
+
 import type { SpanBufferViews, SpanBufferDescriptor } from "./SpanBuffer";
 
 import { CanvasWorkerClient } from "./canvas-worker";
@@ -12,7 +15,7 @@ import {
   CANVAS_PAN_MARGIN_PX,
   type ViewState,
 } from "./types";
-import { css, getElement, html } from "./utilities";
+import { css } from "./utilities";
 
 const STYLES = css`
   :host {
@@ -71,10 +74,12 @@ const PAN_MARGIN_PX = CANVAS_PAN_MARGIN_PX;
 
 export class FlameGraphCanvas extends HTMLElement {
   public shadowRoot!: ShadowRoot;
-  private canvas!: HTMLCanvasElement;
   private canvasWorker!: CanvasWorkerClient;
-  private emptyEl!: HTMLElement;
-  private recordingIndicatorEl!: HTMLElement;
+
+  // Element refs
+  private canvasRef: Ref<HTMLCanvasElement> = createRef();
+  private emptyRef: Ref<HTMLElement> = createRef();
+  private recordingIndicatorRef: Ref<HTMLElement> = createRef();
 
   // Drag state
   private isDragging = false;
@@ -97,9 +102,9 @@ export class FlameGraphCanvas extends HTMLElement {
     this.shadowRoot = this.attachShadow({ mode: "open" });
   }
 
-  connectedCallback() {
-    this.render();
-    this.setupCanvas();
+  async connectedCallback() {
+    this.renderTemplate();
+    await this.setupCanvas();
     this.setupEventListeners();
     this.subscribeToState();
   }
@@ -123,8 +128,8 @@ export class FlameGraphCanvas extends HTMLElement {
     flameGraphState.subscribe(
       selectors.hasSpans,
       (hasSpans) => {
-        this.canvas.classList.toggle("hidden", !hasSpans);
-        this.emptyEl.classList.toggle("hidden", hasSpans);
+        this.canvasRef.value!.classList.toggle("hidden", !hasSpans);
+        this.emptyRef.value!.classList.toggle("hidden", hasSpans);
       },
       { signal: this.unmountAbortController.signal },
     );
@@ -137,9 +142,9 @@ export class FlameGraphCanvas extends HTMLElement {
     flameGraphState.subscribe(
       selectors.isRecording,
       (isRecording) => {
-        this.recordingIndicatorEl.classList.toggle("hidden", !isRecording);
-        this.emptyEl.classList.toggle("hidden", isRecording);
-        this.canvas.classList.toggle("hidden", isRecording);
+        this.recordingIndicatorRef.value!.classList.toggle("hidden", !isRecording);
+        this.emptyRef.value!.classList.toggle("hidden", isRecording);
+        this.canvasRef.value!.classList.toggle("hidden", isRecording);
       },
       { signal: this.unmountAbortController.signal },
     );
@@ -161,36 +166,35 @@ export class FlameGraphCanvas extends HTMLElement {
     });
   }
 
-  private render() {
+  private renderTemplate() {
     if (!this.shadowRoot) return;
     const { width, height } = selectors.canvasLayout(flameGraphState.getState());
     const hasSpans = selectors.hasSpans(flameGraphState.getState());
     const isRecording = selectors.isRecording(flameGraphState.getState());
-    this.shadowRoot.innerHTML = html`
-      <style>
-        ${STYLES}
-      </style>
+
+    const template = html`
+      <style>${STYLES}</style>
       <canvas
-        class=${hasSpans && !isRecording ? "" : "hidden"}
-        width=${width * this.dpr}
-        height=${height * this.dpr}
+        ${ref(this.canvasRef)}
+        class="${hasSpans && !isRecording ? "" : "hidden"}"
+        width="${width * this.dpr}"
+        height="${height * this.dpr}"
       ></canvas>
-      <div class="empty ${hasSpans && !isRecording ? "hidden" : ""}">
+      <div ${ref(this.emptyRef)} class="empty ${hasSpans && !isRecording ? "hidden" : ""}">
         <div class="empty-icon">📈</div>
         <div>No spans recorded yet</div>
         <div style="font-size: 11px;">Click Record to start capturing</div>
       </div>
-      <div class="recording-indicator ${isRecording ? "" : "hidden"}">
+      <div ${ref(this.recordingIndicatorRef)} class="recording-indicator ${isRecording ? "" : "hidden"}">
         <div class="recording-indicator-icon">🔴</div>
         <div>Recording...</div>
       </div>
     `;
-    this.emptyEl = getElement(".empty", this.shadowRoot);
-    this.canvas = getElement<HTMLCanvasElement>("canvas", this.shadowRoot);
-    this.recordingIndicatorEl = getElement(".recording-indicator", this.shadowRoot);
+
+    render(template, this.shadowRoot);
   }
 
-  private setupCanvas() {
+  private async setupCanvas() {
     if (!this.shadowRoot) return;
 
     this.canvasWorker = new CanvasWorkerClient();
@@ -203,8 +207,8 @@ export class FlameGraphCanvas extends HTMLElement {
     );
 
     // Transfer canvas control to worker
-    const offscreen = this.canvas.transferControlToOffscreen();
-    this.canvasWorker.init(
+    const offscreen = this.canvasRef.value!.transferControlToOffscreen();
+    await this.canvasWorker.init(
       {
         canvas: offscreen,
         colorPalette: COLOR_PALETTE,
@@ -238,16 +242,6 @@ export class FlameGraphCanvas extends HTMLElement {
       passive: false,
       signal: this.unmountAbortController.signal,
     });
-
-    document.addEventListener("pointermove", this.handlePointerMove, {
-      passive: false,
-      signal: this.unmountAbortController.signal,
-    });
-
-    document.addEventListener("pointerup", this.handlePointerUp, {
-      passive: false,
-      signal: this.unmountAbortController.signal,
-    });
   }
 
   private handleMouseMoveForCursor = (e: MouseEvent) => {
@@ -261,6 +255,7 @@ export class FlameGraphCanvas extends HTMLElement {
 
   private handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
+    e.preventDefault();
     const { viewState } = flameGraphState.getState();
     this.isDragging = true;
     this.hasDragged = false;
@@ -269,10 +264,21 @@ export class FlameGraphCanvas extends HTMLElement {
     this.dragStartOffsetX = viewState.offsetX;
     this.dragStartOffsetY = viewState.offsetY;
     this.setPointerCapture(e.pointerId);
+
+    document.addEventListener("pointermove", this.handlePointerMove, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
+
+    document.addEventListener("pointerup", this.handlePointerUp, {
+      passive: false,
+      signal: this.unmountAbortController.signal,
+    });
   };
 
   private handlePointerMove = (e: PointerEvent) => {
     if (!this.isDragging) return;
+    e.preventDefault();
 
     const dx = e.clientX - this.dragStartX;
     const dy = e.clientY - this.dragStartY;
@@ -292,10 +298,10 @@ export class FlameGraphCanvas extends HTMLElement {
   };
 
   private handlePointerUp = (e: PointerEvent) => {
-    if (this.isDragging) {
-      this.releasePointerCapture(e.pointerId);
-    }
+    this.releasePointerCapture(e.pointerId);
     this.isDragging = false;
+    document.removeEventListener("pointermove", this.handlePointerMove);
+    document.removeEventListener("pointerup", this.handlePointerUp);
   };
 
   private handleWheel = (e: WheelEvent) => {

@@ -326,6 +326,6 @@ export const HOST_STYLES = ({
   :host {
     ${RESET_CASCADE}
     ${TYPOGRAPHY_STYLES()}
-    ${contain !== false && `contain: ${contain};`}
+    ${contain !== false ? `contain: ${contain};` : ""}
   }
 `;

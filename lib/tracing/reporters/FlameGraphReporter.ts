@@ -192,10 +192,12 @@ class FlameGraphReporterElement extends HTMLElement {
   }
 
   connectedCallback() {
-    const fragment = document.createDocumentFragment();
-    fragment.appendChild(this.#toggle);
-    fragment.appendChild(this.#dialog);
-    this.#shadowRoot.appendChild(fragment);
+    setTimeout(() => {
+      const fragment = document.createDocumentFragment();
+      fragment.appendChild(this.#toggle);
+      fragment.appendChild(this.#dialog);
+      this.#shadowRoot.appendChild(fragment);
+    }, 0);
   }
 }
 

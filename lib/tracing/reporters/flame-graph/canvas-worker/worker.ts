@@ -36,6 +36,7 @@ function handleInit(msg: InitMessage): void {
   connectionRenderer = ctx ? new ConnectionRenderer(ctx) : null;
   spanViews = attachSpanBuffer(msg.spanBuffer.sab, msg.spanBuffer.stringSab);
   lastVersion = -1;
+  self.postMessage({ type: "init-success" });
 }
 
 function handleUpdateSpans(msg: UpdateSpansMessage): void {

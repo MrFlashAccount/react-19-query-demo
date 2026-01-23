@@ -34,10 +34,7 @@ async function ensureImports(): Promise<void> {
  * Create an RSC context for rendering
  */
 export function createRSCContext(manifest: ClientManifest): RSCContext {
-  return {
-    manifest,
-    actions: new Map(),
-  };
+  return { manifest, actions: new Map() };
 }
 
 /**

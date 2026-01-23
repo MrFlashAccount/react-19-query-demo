@@ -49,7 +49,7 @@ export const msg = {
 };
 
 interface IPreInitCanvasWorkerClient {
-  init(params: InitParams, transfer: Transferable[]): void;
+  init(params: InitParams, transfer: Transferable[]): Promise<void>;
 }
 
 interface ICanvasWorkerClientMethods {
@@ -85,31 +85,46 @@ export class CanvasWorkerClient
    * @param params - Canvas and color configuration
    * @param transfer - Transferable objects (the OffscreenCanvas)
    */
-  init(params: InitParams, transfer: Transferable[]) {
+  init(params: InitParams, transfer: Transferable[]): Promise<void> {
     if (this.isInitialized) {
       throw new Error("Worker already initialized, cannot re-initialize");
     }
 
-    this.worker.postMessage(
-      [
-        {
-          type: "init",
-          canvas: params.canvas,
-          colorPalette: params.colorPalette,
-          selectedBorderColor: params.selectedBorderColor,
-          spanBuffer: params.spanBuffer,
-        } satisfies InitMessage,
-      ],
-      transfer,
-    );
-    this.isInitialized = true;
-    return;
+    return new Promise((resolve, reject) => {
+      this.worker.postMessage(
+        [
+          {
+            type: "init",
+            canvas: params.canvas,
+            colorPalette: params.colorPalette,
+            selectedBorderColor: params.selectedBorderColor,
+            spanBuffer: params.spanBuffer,
+          } satisfies InitMessage,
+        ],
+        transfer,
+      );
+      this.isInitialized = true;
+      const unsubAbortController = new AbortController();
+      this.worker.addEventListener(
+        "message",
+        (event) => {
+          if (event.data.type === "init-success") {
+            if (event.data.success) {
+              unsubAbortController.abort();
+              resolve();
+            } else {
+              unsubAbortController.abort();
+              reject(event.data.error);
+            }
+          }
+        },
+        { signal: unsubAbortController.signal },
+      );
+      this.worker.onerror = reject;
+    });
   }
 
   batch() {
-    if (!this.isInitialized) {
-      throw new Error("Worker not initialized");
-    }
     this.isBatching = true;
     return this as unknown as IBatchingCanvasWorkerClient;
   }

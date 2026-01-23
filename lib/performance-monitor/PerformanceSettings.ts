@@ -3,9 +3,11 @@ import { ref, createRef, type Ref } from "lit-html/directives/ref.js";
 import type { OverlayLevel } from "./PerformanceObserver";
 import { css } from "./utils";
 
+export type OverlayPosition = "top" | "bottom" | "floating" | "pip";
+
 export interface PerformanceSettingsState {
   level: OverlayLevel;
-  position: "top" | "bottom";
+  position: OverlayPosition;
   sampleInterval: number;
 }
 
@@ -20,6 +22,7 @@ const styles = css`
       "JetBrains Mono", "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono",
       monospace;
     font-size: 12px;
+    cursor: default;
   }
   
   .settings-wrapper {
@@ -36,8 +39,8 @@ const styles = css`
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    aspect-ratio: 1/1;
     border-radius: 4px;
     color: #666;
     transition:
@@ -82,12 +85,27 @@ const styles = css`
     /* Content styling */
     min-width: 200px;
   
-    /* Animation */
     transition:
-      opacity 0.15s ease-out,
-      transform 0.15s ease-out,
-      overlay 0.15s ease-out allow-discrete,
-      display 0.15s ease-out allow-discrete;
+      opacity 0.15s,
+      translate 0.15s,
+      overlay 0.15s allow-discrete,
+      display 0.15s allow-discrete;
+    opacity: 0;
+  
+    translate: 0 -1em;
+  
+    &:popover-open {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+  @starting-style {
+    .settings-popover {
+      &:popover-open {
+        opacity: 0;
+        translate: 0 -1em;
+      }
+    }
   }
   
   /* When overlay is at bottom, prefer opening upward */
@@ -101,18 +119,6 @@ const styles = css`
       flip-block flip-inline;
   }
   
-  .settings-popover:popover-open {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
-  @starting-style {
-    .settings-popover:popover-open {
-      opacity: 0;
-      transform: translateY(-4px);
-    }
-  }
-  
   .settings-content {
     background: rgba(15, 15, 20, 0.98);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -120,7 +126,7 @@ const styles = css`
     corner-shape: superellipse(1.33);
     padding: 8px 0;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(8px);
   }
   
   .settings-group {
@@ -173,14 +179,14 @@ const styles = css`
   }
   
   .position-toggle {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 4px;
   }
   
   .position-btn {
     all: unset;
     cursor: pointer;
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -204,6 +210,16 @@ const styles = css`
     color: #22c55e;
     background: rgba(34, 197, 94, 0.1);
     border-color: rgba(34, 197, 94, 0.3);
+  }
+  
+  .position-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  
+  .position-btn:disabled:hover {
+    color: #666;
+    background: rgba(255, 255, 255, 0.03);
   }
   
   .position-btn svg {
@@ -305,14 +321,49 @@ const bottomIcon = html`
   </svg>
 `;
 
+const floatingIcon = html`
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+    <rect x="10" y="8" width="10" height="8" rx="1" ry="1" fill="currentColor" opacity="0.3"></rect>
+  </svg>
+`;
+
+const pipIcon = html`
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect>
+    <rect x="12" y="10" width="8" height="6" rx="1" ry="1"></rect>
+    <path d="M7 12l2 2 2-2" stroke-width="1.5"></path>
+  </svg>
+`;
+
+const VALID_POSITIONS: OverlayPosition[] = ["top", "bottom", "floating", "pip"];
+
+function isValidPosition(value: string | null): value is OverlayPosition {
+  return VALID_POSITIONS.includes(value as OverlayPosition);
+}
+
 export class PerformanceSettings extends HTMLElement {
   readonly shadowRoot: ShadowRoot;
   private _level: OverlayLevel = 1;
-  private _position: "top" | "bottom" = "top";
+  private _position: OverlayPosition = "top";
   private _sampleInterval: number = 500;
   private _open = false;
-  private popoverRef: Ref<HTMLDivElement> = createRef();
   private buttonRef: Ref<HTMLButtonElement> = createRef();
+  private _pipSupported = "documentPictureInPicture" in window;
 
   static get observedAttributes(): string[] {
     return ["level", "position", "sample-interval", "dropdown-position"];
@@ -325,7 +376,8 @@ export class PerformanceSettings extends HTMLElement {
 
   connectedCallback(): void {
     this._level = (parseInt(this.getAttribute("level") || "1", 10) as OverlayLevel) || 1;
-    this._position = (this.getAttribute("position") as "top" | "bottom") || "top";
+    const posAttr = this.getAttribute("position");
+    this._position = isValidPosition(posAttr) ? posAttr : "top";
     this._sampleInterval = parseInt(this.getAttribute("sample-interval") || "500", 10) || 500;
     this.render();
   }
@@ -340,7 +392,7 @@ export class PerformanceSettings extends HTMLElement {
     if (name === "level") {
       this._level = parseInt(newValue, 10) as OverlayLevel;
     } else if (name === "position") {
-      this._position = newValue as "top" | "bottom";
+      this._position = isValidPosition(newValue) ? newValue : "top";
     } else if (name === "sample-interval") {
       this._sampleInterval = parseInt(newValue, 10) || 500;
     }
@@ -359,13 +411,17 @@ export class PerformanceSettings extends HTMLElement {
     this.setAttribute("level", String(val));
   }
 
-  get position(): "top" | "bottom" {
+  get position(): OverlayPosition {
     return this._position;
   }
 
-  set position(val: "top" | "bottom") {
+  set position(val: OverlayPosition) {
     this._position = val;
     this.setAttribute("position", val);
+  }
+
+  get pipSupported(): boolean {
+    return this._pipSupported;
   }
 
   get sampleInterval(): number {
@@ -375,22 +431,6 @@ export class PerformanceSettings extends HTMLElement {
   set sampleInterval(val: number) {
     this._sampleInterval = val;
     this.setAttribute("sample-interval", String(val));
-  }
-
-  get open(): boolean {
-    return this._open;
-  }
-
-  set open(val: boolean) {
-    this._open = val;
-    const popover = this.popoverRef.value;
-    if (popover) {
-      if (val) {
-        popover.showPopover();
-      } else {
-        popover.hidePopover();
-      }
-    }
   }
 
   private handleToggle = (e: ToggleEvent): void => {
@@ -410,14 +450,14 @@ export class PerformanceSettings extends HTMLElement {
 
   private handleLevelChange = (newLevel: OverlayLevel) => (): void => {
     this._level = newLevel;
+    this.setAttribute("level", String(newLevel));
     this.emitChange({ level: newLevel });
-    this.render();
   };
 
-  private handlePositionChange = (newPosition: "top" | "bottom") => (): void => {
+  private handlePositionChange = (newPosition: OverlayPosition) => (): void => {
     this._position = newPosition;
+    this.setAttribute("position", newPosition);
     this.emitChange({ position: newPosition });
-    this.render();
   };
 
   private handleIntervalChange = (e: Event): void => {
@@ -441,7 +481,6 @@ export class PerformanceSettings extends HTMLElement {
           popovertargetaction="toggle"
         >${gearIcon}</button>
         <div 
-          ${ref(this.popoverRef)}
           id="performance-settings-popover"
           class="settings-popover"
           popover="auto"
@@ -477,6 +516,16 @@ export class PerformanceSettings extends HTMLElement {
                   class="position-btn ${this._position === "bottom" ? "selected" : ""}" 
                   @click=${this.handlePositionChange("bottom")}
                 >${bottomIcon} Bottom</button>
+                <button 
+                  class="position-btn ${this._position === "floating" ? "selected" : ""}" 
+                  @click=${this.handlePositionChange("floating")}
+                >${floatingIcon} Float</button>
+                <button 
+                  class="position-btn ${this._position === "pip" ? "selected" : ""}" 
+                  @click=${this.handlePositionChange("pip")}
+                  ?disabled=${!this._pipSupported}
+                  title=${this._pipSupported ? "Picture-in-Picture" : "PiP not supported in this browser"}
+                >${pipIcon} PiP</button>
               </div>
             </div>
             
