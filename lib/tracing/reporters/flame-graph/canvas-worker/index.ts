@@ -9,8 +9,6 @@ import type { SpanBufferDescriptor } from "../SpanBuffer";
 import type { TimeRange, ViewState } from "../types";
 import type { WorkerMessage, InitMessage, UpdateSpansMessage, DrawMessage } from "./types";
 
-import CanvasWorker from "./worker?worker";
-
 export interface DrawParams {
   width: number;
   height: number;
@@ -77,7 +75,7 @@ export class CanvasWorkerClient
   private batchMessages: WorkerMessage[] = [];
 
   constructor() {
-    this.worker = new CanvasWorker();
+    this.worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
   }
 
   /**

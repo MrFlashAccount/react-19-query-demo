@@ -7,7 +7,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "lib/goat-query/react";
+import { useMutation } from "@lib/goat-query/react";
 import { rscUpdateMovieRatingMutation } from "../../queries";
 
 // Star icon component

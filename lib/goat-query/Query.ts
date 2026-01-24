@@ -1,4 +1,4 @@
-import { tracer, tracePromise, type ISpan } from "lib/tracing";
+import { tracer, tracePromise, type ISpan } from "@lib/tracing";
 
 import { createOncePerTick, type OncePerTick } from "./batcher";
 import { Batcher } from "./devtools/Batcher";

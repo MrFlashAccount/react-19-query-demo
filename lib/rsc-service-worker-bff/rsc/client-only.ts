@@ -6,7 +6,7 @@
  *
  * Usage:
  * ```ts
- * import { registerClientModule, fetchRSC, callAction } from 'lib/rsc-service-worker-bff/rsc/client-only';
+ * import { registerClientModule, fetchRSC, callAction } from '@lib/rsc-service-worker-bff/rsc/client-only';
  * ```
  */
 

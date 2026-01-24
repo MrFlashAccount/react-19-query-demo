@@ -6,18 +6,18 @@
  */
 
 // IMPORTANT: Import webpack shim FIRST - before any react-server-dom-webpack imports
-import "lib/rsc-service-worker-bff/rsc/webpack-shim";
+import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
 
 import { lazy, use, Suspense } from "react";
-import { registerClientModule } from "lib/rsc-service-worker-bff/rsc/client-only";
+import { registerClientModule } from "@lib/rsc-service-worker-bff/rsc/client-only";
 import type { TabProps } from "../shared/types";
 import { SearchBox } from "../shared";
 import { appGraph, rscMoviesQuery } from "../../queries";
 import * as ClientComponents from "./client-components";
 
-const { QueryProvider, useQuery, QueryClient } = await import("lib/goat-query/react");
+const { QueryProvider, useQuery, QueryClient } = await import("@lib/goat-query/react");
 const LazyDevtools = lazy(() =>
-  import("lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
+  import("@lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
 );
 
 // Register client components so RSC can hydrate them

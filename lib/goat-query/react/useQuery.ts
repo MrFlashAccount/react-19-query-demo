@@ -104,20 +104,18 @@ export function useQuery<
   // Subscribe to query changes
   useEffect(() => query.subscribe(noop), [query]);
 
-  if (import.meta.env.DEV) {
-    useDebugValue(query, (query) => {
-      return {
-        "🕛 pending": query.getState().status === "pending",
-        "🔄 fetching": query.getState().fetchStatus === "fetching",
-        "✅ success": query.getState().status === "fulfilled",
-        "❌ error": query.getState().status === "rejected",
-        "🕒 stale": query.isStale(),
-        "🔍 data": query.getState().data,
-        "📦 params": query.getKey().params,
-        "📦 definition": query.getKey().definition,
-      };
-    });
-  }
+  useDebugValue(query, (query) => {
+    return {
+      "🕛 pending": query.getState().status === "pending",
+      "🔄 fetching": query.getState().fetchStatus === "fetching",
+      "✅ success": query.getState().status === "fulfilled",
+      "❌ error": query.getState().status === "rejected",
+      "🕒 stale": query.isStale(),
+      "🔍 data": query.getState().data,
+      "📦 params": query.getKey().params,
+      "📦 definition": query.getKey().definition,
+    };
+  });
 
   return {
     isPending,

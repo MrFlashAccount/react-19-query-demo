@@ -46,6 +46,7 @@ const styles = css`
     transition:
       color 0.15s,
       background 0.15s;
+    anchor-name: --settings-btn;
   }
   
   .settings-btn:hover {
@@ -70,7 +71,10 @@ const styles = css`
     background: transparent;
     overflow: visible;
   
-    /* Anchor positioning with viewport-aware fallbacks */
+    /* Anchor positioning - fixed position required for top layer */
+    position: fixed;
+    position-anchor: --settings-btn;
+    inset: unset;
     margin: unset;
     position-area: block-end span-inline-start;
     margin-block-start: 4px;

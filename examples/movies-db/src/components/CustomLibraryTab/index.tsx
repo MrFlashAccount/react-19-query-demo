@@ -5,9 +5,9 @@ import { lazy, use } from "react";
 import { appGraph, moviesQuery, updateMovieRatingMutation } from "../../queries";
 import { MovieList, MovieCard, SearchBox } from "../shared";
 
-const { QueryProvider, useMutation, useQuery, QueryClient } = await import("lib/goat-query/react");
+const { QueryProvider, useMutation, useQuery, QueryClient } = await import("@lib/goat-query/react");
 const LazyDevtools = lazy(() =>
-  import("lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
+  import("@lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
 );
 
 const queryClient = new QueryClient({ graph: appGraph });

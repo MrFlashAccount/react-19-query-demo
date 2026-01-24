@@ -6,7 +6,7 @@
  */
 /// <reference lib="webworker" />
 
-import "lib/rsc-service-worker-bff/rsc/webpack-shim";
+import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
 
 import {
   setupWorker,
@@ -16,7 +16,7 @@ import {
   createFlightResponse,
   createServerAction,
   executeServerAction,
-} from "lib/rsc-service-worker-bff";
+} from "@lib/rsc-service-worker-bff";
 import type { Movie } from "../../api/types";
 import type * as ClientComponents from "./client-components";
 

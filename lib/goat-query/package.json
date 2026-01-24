@@ -1,0 +1,39 @@
+{
+  "name": "@lib/goat-query",
+  "version": "0.0.0",
+  "sideEffects": false,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./devtools": {
+      "types": "./dist/devtools/index.d.ts",
+      "default": "./dist/devtools/index.js"
+    }
+  },
+  "dependencies": {
+    "@lib/brand": "workspace:*",
+    "@lib/tracing": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check": "pnpm run /check:.*/",
+    "check:type": "tsgo --noEmit",
+    "check:lint": "oxlint --fix --type-aware",
+    "check:format": "oxfmt --write"
+  }
+}

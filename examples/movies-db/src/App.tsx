@@ -1,7 +1,7 @@
 import type { MovieApi } from "./api/types";
 import type { TabId } from "./components/shared/TabSelector";
-import { traced } from "lib/tracing";
-import type { ISpan } from "lib/tracing";
+import { traced } from "@lib/tracing";
+import type { ISpan } from "@lib/tracing";
 import { useState, lazy, useTransition } from "react";
 
 import {

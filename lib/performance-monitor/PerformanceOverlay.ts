@@ -42,10 +42,14 @@ const styles = css`
   :host([position="bottom"]), :host([position="bottom"]) .overlay-content {
     bottom: 0 !important;
     top: auto !important;
+    left: 0 !important;
+    right: 0 !important;
   }
 
   :host([position="top"]), :host([position="top"]) .overlay-content {
     top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
   }
   
   :host([position="floating"]) .overlay-content,
@@ -71,22 +75,7 @@ const styles = css`
   :host([position="floating"]) .overlay-content.dragging {
     cursor: grabbing;
   }
-  
-  .isolate-layout {
-    all: unset;
-    pointer-events: none;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: clip;
-    overflow-clip-margin: unset;
-    contain: content;
-  }
-  
+    
   .overlay {
     display: flex;
     align-items: center;
@@ -285,19 +274,25 @@ export class PerformanceOverlay extends HTMLElement {
   }
 
   connectedCallback(): void {
+    // Ensure position attribute is set for CSS selectors
+    if (!this.hasAttribute("position")) {
+      this.setAttribute("position", "top");
+    }
     this.render();
     if (this.level > 0) {
       this.observer.start();
     }
     this.showPopover();
+    window.addEventListener("resize", this.handleWindowResize);
   }
 
   disconnectedCallback(): void {
     this.observer.destroy();
     this.exitPip();
-    // Clean up drag listeners
+    // Clean up listeners
     document.removeEventListener("mousemove", this.handleDragMove);
     document.removeEventListener("mouseup", this.handleDragEnd);
+    window.removeEventListener("resize", this.handleWindowResize);
   }
 
   private handleSettingsChange = (e: PerformanceSettingsChangeEvent): void => {
@@ -532,6 +527,37 @@ export class PerformanceOverlay extends HTMLElement {
     }
   }
 
+  private handleWindowResize = (): void => {
+    if (this.getPosition() !== "floating") return;
+
+    const overlayContent = this.shadowRoot.querySelector(".overlay-content") as HTMLElement;
+    if (!overlayContent) return;
+
+    const rect = overlayContent.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+
+    // Constrain to new viewport size
+    this.floatingRight = Math.max(
+      this.EDGE_MARGIN,
+      Math.min(viewportWidth - rect.width - this.EDGE_MARGIN, this.floatingRight),
+    );
+
+    if (this.floatingTop !== null) {
+      this.floatingTop = Math.max(
+        this.EDGE_MARGIN,
+        Math.min(viewportHeight - rect.height - this.EDGE_MARGIN, this.floatingTop),
+      );
+    } else {
+      this.floatingBottom = Math.max(
+        this.EDGE_MARGIN,
+        Math.min(viewportHeight - rect.height - this.EDGE_MARGIN, this.floatingBottom),
+      );
+    }
+
+    this.updateFloatingPosition();
+  };
+
   get popover() {
     return this.getAttribute("popover") ?? "manual";
   }
@@ -595,8 +621,6 @@ export class PerformanceOverlay extends HTMLElement {
               isCollapsed
                 ? nothing
                 : html`
-                  <svg class="isolate-layout" width="100%" height="100%">
-  <foreignObject width="100%" height="100%">
                 <div class="overlay-content" @mousedown=${this.handleDragStart}>
                   
                     <!-- Section 1: FPS -->
@@ -667,8 +691,6 @@ export class PerformanceOverlay extends HTMLElement {
                   }
                   
                   </div>
-                  </foreignObject>
-        </svg>  
               `
             }
       </div>

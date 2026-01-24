@@ -1,0 +1,40 @@
+{
+  "name": "@lib/rsc-service-worker-bff",
+  "version": "0.0.0",
+  "sideEffects": false,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./rsc": {
+      "types": "./dist/rsc/index.d.ts",
+      "default": "./dist/rsc/index.js"
+    },
+    "./rsc/*": {
+      "types": "./dist/rsc/*.d.ts",
+      "default": "./dist/rsc/*.js"
+    }
+  },
+  "dependencies": {
+    "react-is": "19.2.0",
+    "react-server-dom-webpack": "^19.1.0",
+    "web-streams-polyfill": "^4.1.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check": "pnpm run /check:.*/",
+    "check:type": "tsgo --noEmit",
+    "check:lint": "oxlint --fix --type-aware",
+    "check:format": "oxfmt --write"
+  }
+}

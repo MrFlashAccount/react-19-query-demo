@@ -6,7 +6,7 @@ export default defineConfig({
   root: __dirname,
   resolve: {
     alias: {
-      "lib/performance-monitor": path.resolve(__dirname, "../index.ts"),
+      "@lib/performance-monitor": path.resolve(__dirname, "../index.ts"),
     },
   },
   server: {

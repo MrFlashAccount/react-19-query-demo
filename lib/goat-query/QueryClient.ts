@@ -1,4 +1,4 @@
-import { tracer, tracePromise, type ISpan } from "lib/tracing";
+import { tracer, tracePromise, type ISpan } from "@lib/tracing";
 
 import { type DependencyGraph } from "./DependencyGraph";
 import { Mutation, type InvalidationTarget } from "./Mutation";

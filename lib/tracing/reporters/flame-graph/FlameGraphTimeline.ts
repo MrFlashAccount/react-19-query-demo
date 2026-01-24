@@ -4,7 +4,6 @@ import type { TimeRange } from "./types";
 import { drawScheduler } from "./DrawScheduler";
 import { flameGraphState, selectors } from "./state";
 import { HOST_STYLES } from "./styles";
-import TimelineWorker from "./timeline.worker?worker";
 import { css, getElement, html } from "./utilities";
 
 const STYLES = css`
@@ -77,8 +76,8 @@ export class FlameGraphTimeline extends HTMLElement {
     this.canvas = getElement("canvas", this.shadowRoot);
     if (!this.canvas) return;
 
-    // Create worker using Vite's ?worker import
-    this.worker = new TimelineWorker();
+    // Create worker in a bundler-agnostic way (works in Vite + tsdown builds)
+    this.worker = new Worker(new URL("./timeline.worker.ts", import.meta.url), { type: "module" });
 
     // Transfer canvas control to worker
     const offscreen = this.canvas.transferControlToOffscreen();

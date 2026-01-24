@@ -4,7 +4,7 @@ import type {
   OptimisticUpdateTarget,
   IInvalidatable,
 } from "./nodes/mutation";
-import { tracer, tracePromise, type ISpan } from "lib/tracing";
+import { tracer, tracePromise, type ISpan } from "@lib/tracing";
 
 import { type QueryDefinition, isQuery } from "./nodes/query";
 import { QueryPromise } from "./QueryPromise";

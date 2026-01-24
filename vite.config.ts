@@ -20,8 +20,8 @@ const serviceWorkers = [
   {
     // Combined Movies SW: handles both JSON API (/api/movies/*) and RSC (/rsc/movies)
     name: "movies",
-    entry: path.resolve(rootDir, "src/components/RSCMoviesTab/sw.tsx"),
-    outDir: path.resolve(rootDir, "src/components/RSCMoviesTab/.sw-cache"),
+    entry: path.resolve(rootDir, "examples/movies-db/src/components/RSCMoviesTab/sw.tsx"),
+    outDir: path.resolve(rootDir, "examples/movies-db/src/components/RSCMoviesTab/.sw-cache"),
     serveUrls: ["/movies-sw.js"],
     watchPattern: "RSCMoviesTab",
   },
@@ -52,7 +52,7 @@ async function buildSW(
     },
     resolve: {
       alias: {
-        "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
+        "@lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
       },
       // Required for react-server-dom-webpack/server
       conditions: [mode, "browser", "import", "default"],
@@ -139,13 +139,13 @@ export default defineConfig(({ mode }) => ({
   ],
   resolve: {
     alias: {
-      "lib/goat-query/react": path.resolve(rootDir, "lib/goat-query/react.ts"),
-      "lib/goat-query/devtools": path.resolve(rootDir, "lib/goat-query/devtools/index.ts"),
-      "lib/brand": path.resolve(rootDir, "lib/brand/brand.ts"),
-      "lib/tracing/helpers": path.resolve(rootDir, "lib/tracing/helpers.ts"),
-      "lib/tracing": path.resolve(rootDir, "lib/tracing"),
-      "lib/performance-monitor": path.resolve(rootDir, "lib/performance-monitor/index.ts"),
-      "lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
+      "@lib/goat-query/react": path.resolve(rootDir, "lib/goat-query/react.ts"),
+      "@lib/goat-query/devtools": path.resolve(rootDir, "lib/goat-query/devtools/index.ts"),
+      "@lib/brand": path.resolve(rootDir, "lib/brand/brand.ts"),
+      "@lib/tracing/helpers": path.resolve(rootDir, "lib/tracing/helpers.ts"),
+      "@lib/tracing": path.resolve(rootDir, "lib/tracing"),
+      "@lib/performance-monitor": path.resolve(rootDir, "lib/performance-monitor/index.ts"),
+      "@lib/rsc-service-worker-bff": path.resolve(rootDir, "lib/rsc-service-worker-bff"),
     },
   },
   worker: { format: "es" },

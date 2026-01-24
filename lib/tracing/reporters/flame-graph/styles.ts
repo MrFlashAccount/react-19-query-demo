@@ -1,5 +1,5 @@
 import type { Color } from "../../types";
-import { brand } from "lib/brand";
+import { brand } from "@lib/brand";
 
 import { css } from "./utilities";
 

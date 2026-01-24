@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo",
+    "incremental": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "#/*": ["./src/*"],
+      "@/*": ["./src/*"],
+      "@db/*": ["./src/db/*"],
+      "@api/*": ["./src/api/*"],
+      "@components/*": ["./src/components/*"],
+      "@queries/*": ["./src/queries/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@lib/goat-query": ["../../lib/goat-query/index.ts"],
+      "@lib/goat-query/react": ["../../lib/goat-query/react.ts"],
+      "@lib/goat-query/devtools": ["../../lib/goat-query/devtools/index.ts"],
+      "@lib/rsc-service-worker-bff": ["../../lib/rsc-service-worker-bff/index.ts"],
+      "tracing": ["../../lib/tracing/index.ts"],
+      "performance-monitor": ["../../lib/performance-monitor/index.ts"]
+    }
+  },
+  "include": ["src", "../../lib/**/*.ts", "../../lib/**/*.tsx"]
+}

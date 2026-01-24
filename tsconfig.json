@@ -25,15 +25,15 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "*": ["./*"],
-      "lib/tracing": ["./lib/tracing/index.ts"],
-      "lib/tracing/helpers": ["./lib/tracing/helpers.ts"],
-      "lib/brand": ["./lib/brand/brand.ts"],
-      "lib/brand/*": ["./lib/brand/*.ts"],
-      "lib/goat-query/react": ["./lib/goat-query/react.ts"],
-      "lib/goat-query/devtools": ["./lib/goat-query/devtools/index.ts"],
-      "lib/performance-monitor": ["./lib/performance-monitor/index.ts"],
-      "lib/rsc-service-worker-bff": ["./lib/rsc-service-worker-bff/index.ts"]
+      "@lib/tracing": ["./lib/tracing/index.ts"],
+      "@lib/tracing/helpers": ["./lib/tracing/helpers.ts"],
+      "@lib/brand": ["./lib/brand/brand.ts"],
+      "@lib/brand/*": ["./lib/brand/*.ts"],
+      "@lib/goat-query/react": ["./lib/goat-query/react.ts"],
+      "@lib/goat-query/devtools": ["./lib/goat-query/devtools/index.ts"],
+      "@lib/performance-monitor": ["./lib/performance-monitor/index.ts"],
+      "@lib/rsc-service-worker-bff": ["./lib/rsc-service-worker-bff/index.ts"]
     }
   },
-  "include": ["src", "lib"]
+  "include": ["examples/movies-db/src", "lib"]
 }

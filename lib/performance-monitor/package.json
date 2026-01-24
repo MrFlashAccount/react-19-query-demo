@@ -1,0 +1,28 @@
+{
+  "name": "@lib/performance-monitor",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "lit-html": "3.3.2"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check": "pnpm run \"/check:.*/\"",
+    "check:type": "tsgo --noEmit",
+    "check:lint": "oxlint --fix --type-aware",
+    "check:format": "oxfmt --write"
+  }
+}
+

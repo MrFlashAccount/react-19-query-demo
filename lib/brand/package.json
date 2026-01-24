@@ -1,13 +1,32 @@
 {
+  "name": "@lib/brand",
+  "version": "0.0.0",
   "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/brand.js",
+  "types": "./dist/brand.d.ts",
   "exports": {
     ".": {
-      "types": "./brand.ts",
-      "default": "./brand.ts"
+      "types": "./dist/brand.d.ts",
+      "default": "./dist/brand.js"
     },
     "./types": {
-      "types": "./types.ts",
-      "default": "./types.ts"
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./standard-schema": {
+      "types": "./dist/standard-schema.d.ts",
+      "default": "./dist/standard-schema.js"
     }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check": "pnpm run \"/check:.*/\"",
+    "check:type": "tsgo --noEmit",
+    "check:lint": "oxlint --fix --type-aware",
+    "check:format": "oxfmt --write"
   }
 }

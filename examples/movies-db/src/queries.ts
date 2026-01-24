@@ -1,5 +1,5 @@
 import type { MovieApi } from "./api/types";
-import { query, mutation, DependencyGraph } from "lib/goat-query/react";
+import { query, mutation, DependencyGraph } from "@lib/goat-query/react";
 
 /**
  * Query definitions for the movie application
@@ -61,7 +61,7 @@ export const appGraph = new DependencyGraph([
   rscUpdateMovieRatingMutation,
 ]);
 
-declare module "lib/goat-query/react" {
+declare module "@lib/goat-query/react" {
   interface Context {
     api: MovieApi;
   }

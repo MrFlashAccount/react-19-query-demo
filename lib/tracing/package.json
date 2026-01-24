@@ -1,0 +1,40 @@
+{
+  "name": "@lib/tracing",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./helpers": {
+      "types": "./dist/helpers.d.ts",
+      "default": "./dist/helpers.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "default": "./dist/node.js"
+    },
+    "./asynccontext": {
+      "types": "./dist/asynccontext.d.ts",
+      "default": "./dist/asynccontext.js"
+    }
+  },
+  "dependencies": {
+    "@lib/brand": "workspace:*",
+    "lit-html": "3.3.2"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check": "pnpm run \"/check:.*/\"",
+    "check:type": "tsgo --noEmit",
+    "check:lint": "oxlint --fix --type-aware",
+    "check:format": "oxfmt --write"
+  }
+}

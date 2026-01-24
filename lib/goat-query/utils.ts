@@ -1,4 +1,4 @@
-import { brand } from "lib/brand";
+import { brand } from "@lib/brand";
 
 export const noop = (..._args: any[]) => {};
 export const noopcb = () => noop;

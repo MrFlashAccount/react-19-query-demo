@@ -1,4 +1,4 @@
-import { brand } from "lib/brand";
+import { brand } from "@lib/brand";
 
 export type SpanState = "inactive" | "running" | "success" | "error";
 
