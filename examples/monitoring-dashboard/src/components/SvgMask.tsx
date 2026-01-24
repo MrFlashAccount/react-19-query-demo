@@ -3,9 +3,10 @@ import * as React from "react";
 
 import * as tailwindMerge from "#/utilities/tailwindMerge";
 import type { TestIdProps } from "./AriaComponents";
+import type { RefProp } from "./AriaComponents/types";
 
 /** Props for a {@link SvgMask}. */
-export interface SvgMaskProps extends TestIdProps {
+export interface SvgMaskProps extends TestIdProps, RefProp<HTMLDivElement> {
   readonly invert?: boolean;
   readonly alt?: string;
   /** The URL of the SVG to use as the mask. */
@@ -20,11 +21,9 @@ export interface SvgMaskProps extends TestIdProps {
  * Use an SVG as a mask. This lets the SVG use the text color (`currentColor`).
  * @deprecated Prefer `<Icon />` or `<SvgUse />` instead.
  */
-const SvgMask = React.forwardRef(function SvgMask(
-  props: SvgMaskProps,
-  ref: React.ForwardedRef<HTMLDivElement>,
-) {
+const SvgMask = function SvgMask(props: SvgMaskProps) {
   const { invert = false, alt = "", src, style, color, className, testId = "svg-mask" } = props;
+  const { ref: forwardedRef } = props;
   const urlSrc = `url(${JSON.stringify(src)})`;
   const mask = invert ? `${urlSrc}, linear-gradient(white 0 0)` : urlSrc;
 
@@ -33,9 +32,9 @@ const SvgMask = React.forwardRef(function SvgMask(
   return (
     <div
       data-testid={testId}
-      ref={ref}
+      ref={forwardedRef}
       style={{
-        ...(style ?? {}),
+        ...style,
         backgroundColor: color ?? "currentcolor",
         maskImage: mask,
         maskPosition: "center",
@@ -57,7 +56,7 @@ const SvgMask = React.forwardRef(function SvgMask(
       <img alt={alt} src={src} className="pointer-events-none opacity-0" draggable={false} />
     </div>
   );
-});
+};
 
 /**
  * @deprecated Prefer `<Icon />` or `<SvgUse />` instead.

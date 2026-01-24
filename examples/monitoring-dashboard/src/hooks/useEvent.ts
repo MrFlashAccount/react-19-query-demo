@@ -24,7 +24,7 @@ export function useEvent<Func extends (...args: never[]) => unknown>(
   return useCallback<Func>(
     // @ts-expect-error we know that the callbackRef.current is of type Func
     function eventCallback(...args: Parameters<Func>) {
-      if (process.env.NODE_ENV === "development") {
+      if (import.meta.env.DEV) {
         dontCallInRenderGuard();
       }
 

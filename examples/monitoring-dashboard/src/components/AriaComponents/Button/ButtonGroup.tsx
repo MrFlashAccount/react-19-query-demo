@@ -1,79 +1,76 @@
 /** @file A group of buttons. */
-import { forwardRef, Fragment, type PropsWithChildren, type ReactElement } from 'react'
-import flattenChildren from 'react-keyed-flatten-children'
+import { Fragment, isValidElement, type PropsWithChildren, type ReactElement } from "react";
+import flattenChildren from "react-keyed-flatten-children";
 
-import { tv, type VariantProps } from '#/utilities/tailwindVariants'
-import { IS_DEV_MODE } from 'enso-common/src/detect'
-import invariant from 'tiny-invariant'
-import type { TestIdProps } from '../types'
+import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import type { RefProp } from "#/components/AriaComponents/types";
+import invariant from "tiny-invariant";
+import type { TestIdProps } from "../types";
 import {
   ButtonGroupProvider,
   JoinedButtonPrivateContextProvider,
   ResetButtonGroupContext,
-} from './shared'
-import type { ButtonGroupSharedButtonProps, PrivateJoinedButtonPosition } from './types'
+} from "./shared";
+import type { ButtonGroupSharedButtonProps, PrivateJoinedButtonPosition } from "./types";
+
+const IS_DEV_MODE = import.meta.env.DEV;
 
 const STYLES = tv({
-  base: 'flex flex-1 shrink-0 max-h-max',
+  base: "flex flex-1 shrink-0 max-h-max",
   variants: {
-    wrap: { true: 'flex-wrap' },
-    direction: { column: 'flex-col', row: 'flex-row' },
-    width: { auto: 'w-auto', full: 'w-full', min: 'w-min', max: 'w-max' },
+    wrap: { true: "flex-wrap" },
+    direction: { column: "flex-col", row: "flex-row" },
+    width: { auto: "w-auto", full: "w-full", min: "w-min", max: "w-max" },
     gap: {
-      custom: '',
-      none: 'gap-0',
-      joined: 'gap-0',
-      large: 'gap-3.5',
-      medium: 'gap-2',
-      small: 'gap-1.5',
-      xsmall: 'gap-1',
-      xxsmall: 'gap-0.5',
+      custom: "",
+      none: "gap-0",
+      joined: "gap-0",
+      large: "gap-3.5",
+      medium: "gap-2",
+      small: "gap-1.5",
+      xsmall: "gap-1",
+      xxsmall: "gap-0.5",
     },
     align: {
-      start: 'justify-start',
-      center: 'justify-center',
-      end: 'justify-end',
-      between: 'justify-between',
-      around: 'justify-around',
-      evenly: 'justify-evenly',
+      start: "justify-start",
+      center: "justify-center",
+      end: "justify-end",
+      between: "justify-between",
+      around: "justify-around",
+      evenly: "justify-evenly",
     },
     verticalAlign: {
-      start: 'items-start',
-      center: 'items-center',
-      end: 'items-end',
+      start: "items-start",
+      center: "items-center",
+      end: "items-end",
     },
   },
   defaultVariants: {
-    direction: 'row',
-    gap: 'medium',
+    direction: "row",
+    gap: "medium",
     wrap: false,
-    width: 'full',
+    width: "full",
   },
   compoundVariants: [
-    { direction: 'column', align: 'start', class: 'items-start' },
-    { direction: 'column', align: 'center', class: 'items-center' },
-    { direction: 'column', align: 'end', class: 'items-end' },
-    { direction: 'column', verticalAlign: 'start', class: 'justify-start' },
-    { direction: 'column', verticalAlign: 'center', class: 'justify-center' },
-    { direction: 'column', verticalAlign: 'end', class: 'justify-end' },
+    { direction: "column", align: "start", class: "items-start" },
+    { direction: "column", align: "center", class: "items-center" },
+    { direction: "column", align: "end", class: "items-end" },
+    { direction: "column", verticalAlign: "start", class: "justify-start" },
+    { direction: "column", verticalAlign: "center", class: "justify-center" },
+    { direction: "column", verticalAlign: "end", class: "justify-end" },
   ],
-})
+});
 
 /** Props for a {@link ButtonGroup}. */
 interface ButtonGroupProps
-  extends React.PropsWithChildren,
-    VariantProps<typeof STYLES>,
-    TestIdProps {
-  readonly className?: string | undefined
-  readonly buttonVariants?: ButtonGroupSharedButtonProps
+  extends PropsWithChildren, VariantProps<typeof STYLES>, TestIdProps, RefProp<HTMLDivElement> {
+  readonly className?: string | undefined;
+  readonly buttonVariants?: ButtonGroupSharedButtonProps;
 }
 
 /** A group of buttons. */
 
-export const ButtonGroup = forwardRef(function ButtonGroup(
-  props: ButtonGroupProps,
-  ref: React.ForwardedRef<HTMLDivElement>,
-) {
+export function ButtonGroup(props: ButtonGroupProps) {
   const {
     children,
     className,
@@ -85,73 +82,72 @@ export const ButtonGroup = forwardRef(function ButtonGroup(
     variants = STYLES,
     verticalAlign,
     buttonVariants = {},
-    testId = 'button-group',
+    testId = "button-group",
+    ref: forwardedRef,
     ...passthrough
-  } = props
+  } = props;
 
-  const isJoin = gap === 'joined'
+  const isJoin = gap === "joined";
 
   if (IS_DEV_MODE) {
-    const isColumnAndJoined = direction === 'column' && isJoin
+    const isColumnAndJoined = direction === "column" && isJoin;
     invariant(
       !isColumnAndJoined,
-      'ButtonGroup: Joined mode is only supported for row direction, please implement column joined mode',
-    )
+      "ButtonGroup: Joined mode is only supported for row direction, please implement column joined mode",
+    );
   }
 
   return (
     <div
-      ref={ref}
+      ref={forwardedRef}
       className={variants({ gap, wrap, direction, align, verticalAlign, width, className })}
       data-testid={testId}
       {...passthrough}
     >
       <ResetButtonGroupContext>
         <ButtonGroupProvider {...buttonVariants}>
-          {isJoin ?
-            <JoinedButtons>{children}</JoinedButtons>
-          : children}
+          {isJoin ? <JoinedButtons>{children}</JoinedButtons> : children}
         </ButtonGroupProvider>
       </ResetButtonGroupContext>
     </div>
-  )
-})
+  );
+}
 
 /**
  * A wrapper for a button group that joins the buttons together.
  * Adds custom styles to the buttons.
  */
 function JoinedButtons(props: PropsWithChildren) {
-  const { children } = props
+  const { children } = props;
 
-  return flattenChildren(children).map(
-    (child: ReactElement, index: number, array: ReactElement[]) => {
-      if (array.length === 1) {
-        return <Fragment key={child.key}>{child}</Fragment>
-      }
+  const elements = flattenChildren(children).filter(isValidElement) as ReactElement[];
 
-      let position: PrivateJoinedButtonPosition = 'middle'
+  return elements.map((child: ReactElement, index: number, array: ReactElement[]) => {
+    if (array.length === 1) {
+      return <Fragment key={child.key}>{child}</Fragment>;
+    }
 
-      if (index === 0) {
-        position = 'first'
-      }
+    let position: PrivateJoinedButtonPosition = "middle";
 
-      if (index === array.length - 1) {
-        position = 'last'
-      }
+    if (index === 0) {
+      position = "first";
+    }
 
-      return (
-        <JoinedButtonPrivateContextProvider key={child.key} isJoined position={position}>
-          {child}
-        </JoinedButtonPrivateContextProvider>
-      )
-    },
-  )
+    if (index === array.length - 1) {
+      position = "last";
+    }
+
+    return (
+      <JoinedButtonPrivateContextProvider key={child.key} isJoined position={position}>
+        {child}
+      </JoinedButtonPrivateContextProvider>
+    );
+  });
 }
 
 /**
  * A button group that joins the buttons together.
  */
 export function ButtonGroupJoin(props: ButtonGroupProps) {
-  return <ButtonGroup {...props} direction="row" gap="joined" />
+  return <ButtonGroup {...props} direction="row" gap="joined" />;
 }

@@ -129,4 +129,3 @@ export function createClientModule<M extends ComponentModule>(
 
   return { manifest, refs };
 }
-

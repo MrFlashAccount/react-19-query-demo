@@ -2,84 +2,82 @@
  * @file
  * A menu displays a list of actions or options that a user can choose.
  */
-import * as React from 'react'
+import * as React from "react";
 
-import { createHideableComponent, createLeafComponent } from '@react-aria/collections'
-import * as aria from 'react-aria-components'
+import { createHideableComponent, createLeafComponent } from "@react-aria/collections";
+import * as aria from "react-aria-components";
 
-import { tv, type VariantProps } from '#/utilities/tailwindVariants'
+import { tv, type VariantProps } from "#/utilities/tailwindVariants";
 
-import { twJoin } from '#/utilities/tailwindMerge'
-import { memo } from 'react'
-import { AnimatedBackground } from '../../AnimatedBackground'
-import { Popover } from '../Dialog'
-import { Separator, SEPARATOR_STYLES, type SeparatorProps } from '../Separator'
-import { Text } from '../Text'
-import type { Placement, TestIdProps } from '../types'
-import { MenuItem } from './MenuItem'
-import { MenuTrigger } from './MenuTrigger'
+import { twJoin } from "#/utilities/tailwindMerge";
+import { memo } from "react";
+import { AnimatedBackground } from "../../AnimatedBackground";
+import { Popover } from "../Dialog";
+import { Separator, SEPARATOR_STYLES, type SeparatorProps } from "../Separator";
+import { Text } from "../Text";
+import type { Placement, TestIdProps } from "../types";
+import { MenuItem } from "./MenuItem";
+import { MenuTrigger } from "./MenuTrigger";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const MENU_STYLES = tv({
-  base: 'flex flex-col [clip-path:inset(0_0_0_0_round_.75rem)] overflow-x-hidden',
+  base: "flex flex-col [clip-path:inset(0_0_0_0_round_.75rem)] overflow-x-hidden",
   slots: {
-    popover: 'min-w-[200px] w-auto max-w-[300px]',
+    popover: "min-w-[200px] w-auto max-w-[300px]",
   },
-})
+});
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const MENU_SECTION_STYLES = tv({
-  base: 'flex flex-col',
+  base: "flex flex-col",
   slots: {
-    header: 'px-3.5 py-0.5',
+    header: "px-3.5 py-0.5",
   },
-})
+});
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const MENU_SEPARATOR_STYLES = tv({
   extend: SEPARATOR_STYLES,
-  base: 'my-1.5 mx-2',
-})
+  base: "my-1.5 mx-2",
+});
 
 /** Props for {@link Menu} */
 export interface MenuProps<T extends object>
-  extends aria.MenuProps<T>,
-    VariantProps<typeof MENU_STYLES>,
-    TestIdProps {
-  readonly variant?: 'dark' | 'light'
-  readonly placement?: Placement | undefined
-  readonly className?: string
+  extends aria.MenuProps<T>, VariantProps<typeof MENU_STYLES>, TestIdProps {
+  readonly variant?: "dark" | "light";
+  readonly placement?: Placement | undefined;
+  readonly className?: string;
 }
 
 /** Props for {@link MenuSection} */
 export type MenuSectionProps<T extends object> = BaseMenuSectionProps &
   TestIdProps &
   VariantProps<typeof MENU_SECTION_STYLES> &
-  (MenuSectionDynamicProps<T> | MenuSectionStaticProps)
+  (MenuSectionDynamicProps<T> | MenuSectionStaticProps);
 
 /**
  * Base props for a menu section.
  */
 interface BaseMenuSectionProps {
-  readonly title: string
-  readonly className?: string
-  readonly id?: aria.Key
+  readonly title: string;
+  readonly className?: string;
+  readonly id?: aria.Key;
 }
 
 /**
  * Props for a dynamic menu section.
  */
 interface MenuSectionDynamicProps<T extends object> {
-  readonly items: Iterable<T>
-  readonly children: (item: T) => React.ReactNode
+  readonly items: Iterable<T>;
+  readonly children: (item: T) => React.ReactNode;
 }
 
 /**
  * Props for a static menu section.
  */
 interface MenuSectionStaticProps {
-  readonly items?: never
-  readonly children: React.ReactNode
+  readonly items?: never;
+  readonly children: React.ReactNode;
 }
 
 /**
@@ -96,11 +94,11 @@ export const Menu = createHideableComponent(function Menu<T extends object>(prop
     children,
     variants = MENU_STYLES,
     placement,
-    testId = 'menu',
+    testId = "menu",
     ...menuProps
-  } = props
+  } = props;
 
-  const styles = variants()
+  const styles = variants();
 
   return (
     <Popover
@@ -118,17 +116,17 @@ export const Menu = createHideableComponent(function Menu<T extends object>(prop
         </AnimatedBackground>
       )}
     </Popover>
-  )
+  );
 }) as (<T extends object>(props: MenuProps<T>) => React.ReactElement) & {
   /* eslint-disable @typescript-eslint/naming-convention */
-  Item: typeof MenuItem
-  Section: typeof MenuSection
-  SectionHeader: typeof MenuSectionHeader
-  Trigger: typeof MenuTrigger
-  Separator: typeof MenuSeparator
-  SubmenuTrigger: typeof aria.SubmenuTrigger
+  Item: typeof MenuItem;
+  Section: typeof MenuSection;
+  SectionHeader: typeof MenuSectionHeader;
+  Trigger: typeof MenuTrigger;
+  Separator: typeof MenuSeparator;
+  SubmenuTrigger: typeof aria.SubmenuTrigger;
   /* eslint-enable @typescript-eslint/naming-convention */
-}
+};
 
 /**
  * A section within a menu.
@@ -140,11 +138,11 @@ function MenuSection<T extends object>(props: MenuSectionProps<T>) {
     items,
     children,
     variants = MENU_SECTION_STYLES,
-    testId = 'menu-section',
+    testId = "menu-section",
     ...sectionProps
-  } = props
+  } = props;
 
-  const styles = variants()
+  const styles = variants();
 
   return (
     <aria.MenuSection
@@ -155,19 +153,16 @@ function MenuSection<T extends object>(props: MenuSectionProps<T>) {
     >
       <MenuSectionHeader title={title} variants={variants} />
 
-      {items ?
-        <aria.Collection items={items}>{children}</aria.Collection>
-      : children}
+      {items ? <aria.Collection items={items}>{children}</aria.Collection> : children}
     </aria.MenuSection>
-  )
+  );
 }
 
 /** Props for {@link MenuSectionHeader} */
 export interface MenuSectionHeaderProps
-  extends VariantProps<typeof MENU_SECTION_STYLES>,
-    TestIdProps {
-  readonly title: string
-  readonly className?: string
+  extends VariantProps<typeof MENU_SECTION_STYLES>, TestIdProps {
+  readonly title: string;
+  readonly className?: string;
 }
 
 /**
@@ -175,16 +170,16 @@ export interface MenuSectionHeaderProps
  */
 // eslint-disable-next-line no-restricted-syntax
 export const MenuSectionHeader = createLeafComponent(
-  'header',
+  "header",
   function MenuSectionHeader(props: MenuSectionHeaderProps) {
     const {
       className,
       title,
       variants = MENU_SECTION_STYLES,
-      testId = 'menu-section-header',
-    } = props
+      testId = "menu-section-header",
+    } = props;
 
-    const styles = variants()
+    const styles = variants();
 
     return (
       <Text
@@ -194,31 +189,30 @@ export const MenuSectionHeader = createLeafComponent(
         weight="bold"
         color="muted"
         textSelection="none"
-        className={styles.header({ className: twJoin(className, 'block') })}
+        className={styles.header({ className: twJoin(className, "block") })}
       >
         {title}
       </Text>
-    )
+    );
   },
-)
+);
 
 /** Props for {@link MenuSeparator} */
 export interface MenuSeparatorProps
-  extends SeparatorProps,
-    VariantProps<typeof MENU_SEPARATOR_STYLES> {}
+  extends SeparatorProps, VariantProps<typeof MENU_SEPARATOR_STYLES> {}
 
 /**
  * A separator in a menu.
  */
 export const MenuSeparator = memo(function MenuSeparator(props: MenuSeparatorProps) {
-  const { variants = MENU_SEPARATOR_STYLES, ...rest } = props
+  const { variants = MENU_SEPARATOR_STYLES, ...rest } = props;
 
-  return <Separator size="thin" variants={variants} {...rest} />
-})
+  return <Separator size="thin" variants={variants} {...rest} />;
+});
 
-Menu.Item = MenuItem
-Menu.Section = MenuSection
-Menu.SectionHeader = MenuSectionHeader
-Menu.Trigger = MenuTrigger
-Menu.Separator = MenuSeparator
-Menu.SubmenuTrigger = aria.SubmenuTrigger
+Menu.Item = MenuItem;
+Menu.Section = MenuSection;
+Menu.SectionHeader = MenuSectionHeader;
+Menu.Trigger = MenuTrigger;
+Menu.Separator = MenuSeparator;
+Menu.SubmenuTrigger = aria.SubmenuTrigger;

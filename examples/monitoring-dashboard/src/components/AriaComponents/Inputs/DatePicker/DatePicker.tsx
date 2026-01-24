@@ -1,10 +1,10 @@
 /** @file A date picker. */
-import { useContext, type ForwardedRef } from 'react'
+import { useContext } from "react";
 
-import type { DateSegment as DateSegmentType } from 'react-stately'
+import type { DateSegment as DateSegmentType } from "react-stately";
 
-import CrossIcon from '#/assets/cross.svg'
-import ArrowIcon from '#/assets/folder_arrow.svg'
+import CrossIcon from "#/assets/cross.svg";
+import ArrowIcon from "#/assets/folder_arrow.svg";
 import {
   DatePicker as AriaDatePicker,
   Calendar,
@@ -23,11 +23,10 @@ import {
   Label,
   type DatePickerProps as AriaDatePickerProps,
   type DateValue,
-} from '#/components/aria'
-import { useText } from '#/providers/TextProvider'
-import { forwardRef } from '#/utilities/react'
-import type { VariantProps } from '#/utilities/tailwindVariants'
-import { tv } from '#/utilities/tailwindVariants'
+} from "#/components/aria";
+import type { RefProp } from "#/components/AriaComponents/types";
+import type { VariantProps } from "#/utilities/tailwindVariants";
+import { tv } from "#/utilities/tailwindVariants";
 import {
   Button,
   Form,
@@ -39,80 +38,80 @@ import {
   type FieldStateProps,
   type FieldValues,
   type TSchema,
-} from '../..'
+} from "../..";
 // This cannot be added to the import above or else it is `undefined` due to a circular import.
-import { makeRoundedStyles } from '../../utilities'
+import { makeRoundedStyles } from "../../utilities";
 
 const DATE_PICKER_STYLES = tv({
-  base: '',
+  base: "",
   variants: {
-    rounded: makeRoundedStyles('inputContainer'),
+    rounded: makeRoundedStyles("inputContainer"),
     size: {
       small: {
-        inputContainer: 'h-6 px-2',
+        inputContainer: "h-6 px-2",
       },
       medium: {
-        inputContainer: 'h-8 px-4',
+        inputContainer: "h-8 px-4",
       },
     },
   },
   slots: {
-    inputContainer: 'flex items-center gap-2 rounded-full border-0.5 border-primary/20',
-    dateInput: 'flex justify-start grow order-2',
-    dateSegment: 'rounded placeholder-shown:text-primary/30 focus:bg-primary/10 px-[0.5px]',
-    calendarButton: 'order-1 rotate-90',
-    resetButton: 'order-2',
-    calendarPopover: '',
-    calendarDialog: 'text-primary text-xs mx-2',
-    calendarContainer: '',
-    calendarHeader: 'flex items-center mb-2',
-    calendarHeading: 'grow text-center',
-    calendarGrid: '',
-    calendarGridHeader: 'flex',
-    calendarGridHeaderCell: '',
-    calendarGridBody: '',
+    inputContainer: "flex items-center gap-2 rounded-full border-0.5 border-primary/20",
+    dateInput: "flex justify-start grow order-2",
+    dateSegment: "rounded placeholder-shown:text-primary/30 focus:bg-primary/10 px-[0.5px]",
+    calendarButton: "order-1 rotate-90",
+    resetButton: "order-2",
+    calendarPopover: "",
+    calendarDialog: "text-primary text-xs mx-2",
+    calendarContainer: "",
+    calendarHeader: "flex items-center mb-2",
+    calendarHeading: "grow text-center",
+    calendarGrid: "",
+    calendarGridHeader: "flex",
+    calendarGridHeaderCell: "",
+    calendarGridBody: "",
     calendarGridCell:
-      'text-center px-1 rounded border border-transparent hover:bg-primary/10 outside-visible-range:text-primary/30 disabled:text-primary/30 selected:border-primary/40',
+      "text-center px-1 rounded border border-transparent hover:bg-primary/10 outside-visible-range:text-primary/30 disabled:text-primary/30 selected:border-primary/40",
   },
   defaultVariants: {
-    size: 'medium',
-    rounded: 'xlarge',
+    size: "medium",
+    rounded: "xlarge",
   },
-})
+});
 
 /** Return the date segment using English placeholders. */
 function normalizeDateSegment(segment: DateSegmentType): DateSegmentType {
   if (segment.text !== segment.placeholder) {
-    return segment
+    return segment;
   }
   switch (segment.type) {
-    case 'era': {
-      return { ...segment, text: 'AD', placeholder: 'AD' }
+    case "era": {
+      return { ...segment, text: "AD", placeholder: "AD" };
     }
-    case 'year': {
-      return { ...segment, text: 'yyyy', placeholder: 'yyyy' }
+    case "year": {
+      return { ...segment, text: "yyyy", placeholder: "yyyy" };
     }
-    case 'month': {
-      return { ...segment, text: 'mm', placeholder: 'mm' }
+    case "month": {
+      return { ...segment, text: "mm", placeholder: "mm" };
     }
-    case 'day': {
-      return { ...segment, text: 'dd', placeholder: 'dd' }
+    case "day": {
+      return { ...segment, text: "dd", placeholder: "dd" };
     }
-    case 'hour': {
-      return { ...segment, text: 'HH', placeholder: 'HH' }
+    case "hour": {
+      return { ...segment, text: "HH", placeholder: "HH" };
     }
-    case 'minute': {
-      return { ...segment, text: 'MM', placeholder: 'MM' }
+    case "minute": {
+      return { ...segment, text: "MM", placeholder: "MM" };
     }
-    case 'second': {
-      return { ...segment, text: 'SS', placeholder: 'SS' }
+    case "second": {
+      return { ...segment, text: "SS", placeholder: "SS" };
     }
-    case 'timeZoneName': {
-      return { ...segment, text: 'UTC+XX', placeholder: 'UTC+XX' }
+    case "timeZoneName": {
+      return { ...segment, text: "UTC+XX", placeholder: "UTC+XX" };
     }
-    case 'dayPeriod':
-    case 'literal': {
-      return segment
+    case "dayPeriod":
+    case "literal": {
+      return segment;
     }
   }
 }
@@ -121,33 +120,35 @@ function normalizeDateSegment(segment: DateSegmentType): DateSegmentType {
 export interface DatePickerProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, DateValue>,
-> extends Pick<AriaDatePickerProps<DateValue>, 'granularity'>,
+>
+  extends
+    Pick<AriaDatePickerProps<DateValue>, "granularity">,
     FieldStateProps<
       Omit<
         AriaDatePickerProps<Extract<FieldValues<Schema>[TFieldName], DateValue>>,
-        'children' | 'className' | 'style'
+        "children" | "className" | "style"
       >,
       Schema,
       TFieldName,
       DateValue
     >,
     FieldProps,
-    Pick<FieldComponentProps<Schema>, 'className' | 'style'>,
-    VariantProps<typeof DATE_PICKER_STYLES> {
-  readonly noResetButton?: boolean
-  readonly noCalendarHeader?: boolean
-  readonly segments?: Partial<Record<DateSegmentType['type'], boolean>>
+    Pick<FieldComponentProps<Schema>, "className" | "style">,
+    VariantProps<typeof DATE_PICKER_STYLES>,
+    RefProp<HTMLDivElement> {
+  readonly noResetButton?: boolean;
+  readonly noCalendarHeader?: boolean;
+  readonly segments?: Partial<Record<DateSegmentType["type"], boolean>>;
 }
 
 // This is a function, even though it does not contain function syntax.
 // eslint-disable-next-line no-restricted-syntax
-const useDateValueField = Form.makeUseField<DateValue>()
+const useDateValueField = Form.makeUseField<DateValue>();
 
 /** A date picker. */
-export const DatePicker = forwardRef(function DatePicker<
-  Schema extends TSchema,
-  TFieldName extends FieldPath<Schema, DateValue>,
->(props: DatePickerProps<Schema, TFieldName>, ref: ForwardedRef<HTMLDivElement>) {
+export function DatePicker<Schema extends TSchema, TFieldName extends FieldPath<Schema, DateValue>>(
+  props: DatePickerProps<Schema, TFieldName>,
+) {
   const {
     isRequired = false,
     noResetButton = isRequired,
@@ -165,17 +166,18 @@ export const DatePicker = forwardRef(function DatePicker<
     isInvalid,
     style,
     rounded,
+    ref: forwardedRef,
     ...rest
-  } = props
+  } = props;
 
   const { fieldState, formInstance } = useDateValueField({
     name,
     isDisabled,
     form,
     defaultValue,
-  })
+  });
 
-  const styles = variants({ size, rounded })
+  const styles = variants({ size, rounded });
 
   return (
     <Form.Field
@@ -183,13 +185,13 @@ export const DatePicker = forwardRef(function DatePicker<
       name={name}
       fullWidth
       label={label}
-      aria-label={props['aria-label']}
-      aria-labelledby={props['aria-labelledby']}
-      aria-describedby={props['aria-describedby']}
+      aria-label={props["aria-label"]}
+      aria-labelledby={props["aria-labelledby"]}
+      aria-describedby={props["aria-describedby"]}
       isRequired={isRequired}
       isInvalid={fieldState.invalid}
-      aria-details={props['aria-details']}
-      ref={ref}
+      aria-details={props["aria-details"]}
+      ref={forwardedRef}
       style={style}
     >
       <Form.Controller
@@ -209,15 +211,17 @@ export const DatePicker = forwardRef(function DatePicker<
               <I18nProvider locale="sv">
                 <DateInput className={styles.dateInput()}>
                   {(segment) =>
-                    segments[segment.type] === false ?
+                    segments[segment.type] === false ? (
                       <></>
-                    : <DateSegment
+                    ) : (
+                      <DateSegment
                         segment={normalizeDateSegment(segment)}
                         className={styles.dateSegment({
                           className:
-                            segment.type === 'literal' && segment.text === ' ' ? 'w-1.5' : '',
+                            segment.type === "literal" && segment.text === " " ? "w-1.5" : "",
                         })}
                       />
+                    )
                   }
                 </DateInput>
               </I18nProvider>
@@ -239,12 +243,13 @@ export const DatePicker = forwardRef(function DatePicker<
                     <Button variant="icon" slot="next" icon={ArrowIcon} />
                   </header>
                   <CalendarGrid className={styles.calendarGrid()}>
-                    {noCalendarHeader ?
+                    {noCalendarHeader ? (
                       <></>
-                    : <CalendarGridHeader className={styles.calendarGridHeader()}>
+                    ) : (
+                      <CalendarGridHeader className={styles.calendarGridHeader()}>
                         {() => <CalendarHeaderCell className={styles.calendarGridHeaderCell()} />}
                       </CalendarGridHeader>
-                    }
+                    )}
                     <CalendarGridBody className={styles.calendarGridBody()}>
                       {(date) => <CalendarCell date={date} className={styles.calendarGridCell()} />}
                     </CalendarGridBody>
@@ -257,31 +262,30 @@ export const DatePicker = forwardRef(function DatePicker<
         )}
       />
     </Form.Field>
-  )
-})
+  );
+}
 
 /** Props for a {@link DatePickerResetButton}. */
 interface DatePickerResetButtonProps {
-  readonly className?: string
+  readonly className?: string;
 }
 
 /** A reset button for a {@link DatePicker}. */
 function DatePickerResetButton(props: DatePickerResetButtonProps) {
-  const { className } = props
-  const state = useContext(DatePickerStateContext)
-  const { getText } = useText()
+  const { className } = props;
+  const state = useContext(DatePickerStateContext);
 
   return (
     <Button
       // Do not inherit default Button behavior from DatePicker.
       slot={null}
       variant="icon"
-      aria-label={getText('reset')}
+      aria-label="Reset"
       icon={CrossIcon}
-      className={className ?? ''}
+      className={className ?? ""}
       onPress={() => {
-        state?.setValue(null)
+        state?.setValue(null);
       }}
     />
-  )
+  );
 }

@@ -1,18 +1,17 @@
 /** @file A button to close a dialog without submitting it. */
-import type { JSX } from 'react'
+import type { JSX } from "react";
 
-import { useText } from '#/providers/TextProvider'
-import { Button, type ButtonProps } from '../Button'
-import { useDialogContext } from './DialogProvider'
+import { Button, type ButtonProps } from "../Button";
+import { useDialogContext } from "./DialogProvider";
 
 /** Additional props for the Cancel component. */
 interface DialogDismissBaseProps<IconType extends string> {
-  readonly variant?: ButtonProps<IconType>['variant']
+  readonly variant?: ButtonProps<IconType>["variant"];
 }
 
 /** Props for a {@link DialogDismiss}. */
 export type DialogDismissProps<IconType extends string> = DialogDismissBaseProps<IconType> &
-  Omit<ButtonProps<IconType>, 'formnovalidate' | 'href' | 'variant'>
+  Omit<ButtonProps<IconType>, "formnovalidate" | "href" | "variant">;
 
 /**
  * Dismiss button for dialogs.
@@ -21,11 +20,9 @@ export type DialogDismissProps<IconType extends string> = DialogDismissBaseProps
 export function DialogDismiss<IconType extends string>(
   props: DialogDismissProps<IconType>,
 ): JSX.Element {
-  const { getText } = useText()
+  const { size = "medium", ...buttonProps } = props;
 
-  const { size = 'medium', ...buttonProps } = props
-
-  const dialogContext = useDialogContext()
+  const dialogContext = useDialogContext();
 
   return (
     <Button
@@ -38,11 +35,11 @@ export function DialogDismiss<IconType extends string>(
       /* eslint-disable-next-line @typescript-eslint/no-explicit-any,no-restricted-syntax */
       {...(buttonProps as any)}
       onPress={async (event) => {
-        dialogContext?.close()
-        await buttonProps.onPress?.(event)
+        dialogContext?.close();
+        await buttonProps.onPress?.(event);
       }}
     >
-      {getText('cancel')}
+      Cancel
     </Button>
-  )
+  );
 }

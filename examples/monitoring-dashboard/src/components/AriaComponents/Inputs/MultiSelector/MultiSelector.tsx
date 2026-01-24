@@ -1,7 +1,7 @@
 /** @file A horizontal selector supporting multiple input. */
-import { useRef, type CSSProperties, type ForwardedRef, type Ref } from 'react'
+import { useRef, type CSSProperties, type Ref } from "react";
 
-import { omit, unsafeRemoveUndefined } from 'enso-common/src/utilities/data/object'
+import { omit, unsafeRemoveUndefined } from "#/utilities/object";
 
 import {
   FieldError,
@@ -9,7 +9,7 @@ import {
   mergeProps,
   type ListBoxItemProps,
   type ListBoxProps,
-} from '#/components/aria'
+} from "#/components/aria";
 import {
   Form,
   type FieldPath,
@@ -17,91 +17,94 @@ import {
   type FieldStateProps,
   type FieldValues,
   type TSchema,
-} from '#/components/AriaComponents'
-import { mergeRefs } from '#/utilities/mergeRefs'
-import { forwardRef } from '#/utilities/react'
-import { tv, type VariantProps } from '#/utilities/tailwindVariants'
-import { MultiSelectorOption, type MultiSelectorOptionProps } from './MultiSelectorOption'
+} from "#/components/AriaComponents";
+import { mergeRefs } from "#/utilities/mergeRefs";
+import type { RefProp } from "#/components/AriaComponents/types";
+import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { MultiSelectorOption, type MultiSelectorOptionProps } from "./MultiSelectorOption";
 
 const OPTION_VARIANTS: Record<
-  MultiSelectorProps<never, never, never>['variant'] & {},
-  MultiSelectorOptionProps['variant'] & {}
+  MultiSelectorProps<never, never, never>["variant"] & {},
+  MultiSelectorOptionProps["variant"] & {}
 > = {
-  outline: 'default',
+  outline: "default",
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  'separate-outline': 'outline',
-}
+  "separate-outline": "outline",
+};
 
 /** * Props for the MultiSelector component. */
 export interface MultiSelectorProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, readonly T[]>,
   T,
-> extends FieldStateProps<
-      Omit<ListBoxItemProps, 'children' | 'value'> & { value: FieldValues<Schema>[TFieldName] },
+>
+  extends
+    FieldStateProps<
+      Omit<ListBoxItemProps, "children" | "value"> & { value: FieldValues<Schema>[TFieldName] },
       Schema,
       TFieldName,
       readonly T[]
     >,
     FieldProps,
-    Omit<VariantProps<typeof MULTI_SELECTOR_STYLES>, 'disabled' | 'invalid'> {
-  readonly items: readonly T[]
-  readonly children?: (item: T) => string
-  readonly columns?: number
-  readonly className?: string
-  readonly style?: CSSProperties
-  readonly inputRef?: Ref<HTMLDivElement>
-  readonly placeholder?: string
+    Omit<VariantProps<typeof MULTI_SELECTOR_STYLES>, "disabled" | "invalid">,
+    RefProp<HTMLDivElement> {
+  readonly items: readonly T[];
+  readonly children?: (item: T) => string;
+  readonly columns?: number;
+  readonly className?: string;
+  readonly style?: CSSProperties;
+  readonly inputRef?: Ref<HTMLDivElement>;
+  readonly placeholder?: string;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const MULTI_SELECTOR_STYLES = tv({
-  base: 'block w-full bg-transparent transition-[border-color,outline] duration-200',
+  base: "block w-full bg-transparent transition-[border-color,outline] duration-200",
   variants: {
     disabled: {
-      true: { base: 'cursor-default opacity-50', textArea: 'cursor-default' },
-      false: { base: 'cursor-text', textArea: 'cursor-text' },
+      true: { base: "cursor-default opacity-50", textArea: "cursor-default" },
+      false: { base: "cursor-text", textArea: "cursor-text" },
     },
-    readOnly: { true: 'cursor-default' },
+    readOnly: { true: "cursor-default" },
     size: {
-      medium: '',
+      medium: "",
     },
     rounded: {
-      none: 'rounded-none',
-      small: 'rounded-sm',
-      medium: 'rounded-md',
-      large: 'rounded-lg',
-      xlarge: 'rounded-xl',
-      xxlarge: 'rounded-2xl',
-      xxxlarge: 'rounded-3xl',
-      full: 'rounded-full',
+      none: "rounded-none",
+      small: "rounded-sm",
+      medium: "rounded-md",
+      large: "rounded-lg",
+      xlarge: "rounded-xl",
+      xxlarge: "rounded-2xl",
+      xxxlarge: "rounded-3xl",
+      full: "rounded-full",
     },
     variant: {
-      outline: 'border-[0.5px] border-primary/20',
+      outline: "border-[0.5px] border-primary/20",
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      'separate-outline': { listBox: 'gap-2' },
+      "separate-outline": { listBox: "gap-2" },
     },
   },
   defaultVariants: {
-    size: 'medium',
-    rounded: 'xxlarge',
-    variant: 'outline',
+    size: "medium",
+    rounded: "xxlarge",
+    variant: "outline",
   },
   slots: {
-    listBox: 'grid',
+    listBox: "grid",
   },
-})
+});
 
 // This is a function, even though it does not contain function syntax.
 // eslint-disable-next-line no-restricted-syntax, @typescript-eslint/no-explicit-any
-const useReadonlyArrayField = Form.makeUseField<readonly any[]>()
+const useReadonlyArrayField = Form.makeUseField<readonly any[]>();
 
 /** A horizontal multi-selector. */
-export const MultiSelector = forwardRef(function MultiSelector<
+export function MultiSelector<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, readonly T[]>,
   T,
->(props: MultiSelectorProps<Schema, TFieldName, T>, ref: ForwardedRef<HTMLDivElement>) {
+>(props: MultiSelectorProps<Schema, TFieldName, T>) {
   const {
     name,
     items,
@@ -116,10 +119,11 @@ export const MultiSelector = forwardRef(function MultiSelector<
     rounded,
     isRequired = false,
     variant,
+    ref: forwardedRef,
     ...inputProps
-  } = props
+  } = props;
 
-  const privateInputRef = useRef<HTMLDivElement>(null)
+  const privateInputRef = useRef<HTMLDivElement>(null);
 
   // eslint-disable-next-line no-restricted-syntax
   const { fieldState, formInstance } = useReadonlyArrayField({
@@ -127,7 +131,7 @@ export const MultiSelector = forwardRef(function MultiSelector<
     isDisabled,
     form,
     defaultValue,
-  }) as unknown as ReturnType<ReturnType<typeof Form.makeUseField<readonly T[]>>>
+  }) as unknown as ReturnType<ReturnType<typeof Form.makeUseField<readonly T[]>>>;
 
   const classes = MULTI_SELECTOR_STYLES({
     size,
@@ -135,9 +139,9 @@ export const MultiSelector = forwardRef(function MultiSelector<
     readOnly: inputProps.readOnly,
     disabled: isDisabled || formInstance.formState.isSubmitting,
     variant,
-  })
+  });
 
-  const optionVariant = OPTION_VARIANTS[variant ?? 'outline']
+  const optionVariant = OPTION_VARIANTS[variant ?? "outline"];
 
   return (
     <Form.Field
@@ -145,13 +149,13 @@ export const MultiSelector = forwardRef(function MultiSelector<
       name={name}
       fullWidth
       label={label}
-      aria-label={props['aria-label']}
-      aria-labelledby={props['aria-labelledby']}
-      aria-describedby={props['aria-describedby']}
+      aria-label={props["aria-label"]}
+      aria-labelledby={props["aria-labelledby"]}
+      aria-describedby={props["aria-describedby"]}
       isRequired={isRequired}
       isInvalid={fieldState.invalid}
-      aria-details={props['aria-details']}
-      ref={ref}
+      aria-details={props["aria-details"]}
+      ref={forwardedRef}
       style={props.style}
       className={props.className}
     >
@@ -163,7 +167,7 @@ export const MultiSelector = forwardRef(function MultiSelector<
           control={formInstance.control}
           name={name}
           render={(renderProps) => {
-            const { ref: fieldRef, value, onChange, ...field } = renderProps.field
+            const { ref: fieldRef, value, onChange, ...field } = renderProps.field;
             return (
               <ListBox
                 ref={mergeRefs(inputRef, privateInputRef, fieldRef)}
@@ -175,11 +179,11 @@ export const MultiSelector = forwardRef(function MultiSelector<
                     className: classes.listBox(),
                     style: { gridTemplateColumns: `repeat(${columns ?? items.length}, 1fr)` },
                   },
-                  unsafeRemoveUndefined(omit(inputProps, 'id')),
+                  unsafeRemoveUndefined(omit(inputProps, "id")),
                   field,
                 )}
                 // eslint-disable-next-line no-restricted-syntax
-                aria-label={props['aria-label'] ?? (typeof label === 'string' ? label : '')}
+                aria-label={props["aria-label"] ?? (typeof label === "string" ? label : "")}
                 // This is SAFE, as there is a constraint on `items` that prevents using keys
                 // that do not correspond to array values.
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
@@ -187,7 +191,7 @@ export const MultiSelector = forwardRef(function MultiSelector<
                   items.indexOf(item),
                 )}
                 onSelectionChange={(selection) => {
-                  onChange([...selection].map((key) => items[Number(key)]))
+                  onChange([...selection].map((key) => items[Number(key)]));
                 }}
               >
                 {items.map((item, i) => (
@@ -200,11 +204,11 @@ export const MultiSelector = forwardRef(function MultiSelector<
                   />
                 ))}
               </ListBox>
-            )
+            );
           }}
         />
       </div>
       <FieldError />
     </Form.Field>
-  )
-})
+  );
+}

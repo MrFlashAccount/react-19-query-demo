@@ -6,4 +6,3 @@ export default {
   plugins: [anchors],
   future: "all",
 };
-

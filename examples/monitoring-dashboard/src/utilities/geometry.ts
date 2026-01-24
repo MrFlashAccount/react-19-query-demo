@@ -2,32 +2,32 @@
 
 /** A 2D coordinate. */
 export interface Coordinate2D {
-  readonly left: number
-  readonly top: number
+  readonly left: number;
+  readonly top: number;
 }
 
 /**
  * A rectangle, including coordinates of every corner.
  */
 export interface Rectangle {
-  readonly left: number
-  readonly top: number
-  readonly right: number
-  readonly bottom: number
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
 }
 
 /**
  * A bounding box, including all common measurements.
  */
 export interface BoundingBox extends Rectangle {
-  readonly width: number
-  readonly height: number
+  readonly width: number;
+  readonly height: number;
 }
 
 /** A rectangle, including all common measurements. */
 export interface DetailedRectangle extends BoundingBox {
-  readonly signedWidth: number
-  readonly signedHeight: number
+  readonly signedWidth: number;
+  readonly signedHeight: number;
 }
 
 /**
@@ -42,7 +42,7 @@ export function getRectangle(start: Coordinate2D, end: Coordinate2D): Rectangle 
     top: Math.min(start.top, end.top),
     right: Math.max(start.left, end.left),
     bottom: Math.max(start.top, end.top),
-  }
+  };
 }
 
 /**
@@ -56,7 +56,7 @@ export function getBoundingBox(start: Coordinate2D, end: Coordinate2D): Bounding
     ...getRectangle(start, end),
     width: Math.abs(start.left - end.left),
     height: Math.abs(start.top - end.top),
-  }
+  };
 }
 
 /**
@@ -70,7 +70,7 @@ export function getDetailedRectangle(start: Coordinate2D, end: Coordinate2D): De
     ...getBoundingBox(start, end),
     signedWidth: end.left - start.left,
     signedHeight: end.top - start.top,
-  }
+  };
 }
 
 /**
@@ -83,7 +83,7 @@ export function getBoundingBoxFromRectangle(rectangle: Rectangle): BoundingBox {
     ...rectangle,
     width: rectangle.right - rectangle.left,
     height: rectangle.bottom - rectangle.top,
-  }
+  };
 }
 
 /**
@@ -96,5 +96,5 @@ export function getDetailedRectangleFromRectangle(rectangle: Rectangle): Detaile
     ...getBoundingBoxFromRectangle(rectangle),
     signedWidth: rectangle.right - rectangle.left,
     signedHeight: rectangle.bottom - rectangle.top,
-  }
+  };
 }

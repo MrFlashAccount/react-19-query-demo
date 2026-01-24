@@ -2,7 +2,7 @@
  * @file
  * Types for the Portal component
  */
-import type * as React from 'react'
+import type * as React from "react";
 
 /** The props for the Portal component */
 export interface PortalProps {
@@ -11,13 +11,13 @@ export interface PortalProps {
    * By default it renders under `<Root />`
    * @default null
    */
-  readonly root?: React.MutableRefObject<HTMLElement | null> | React.RefObject<HTMLElement | null>
+  readonly root?: React.MutableRefObject<HTMLElement | null> | React.RefObject<HTMLElement | null>;
   /**
    * Disables portal's API
    * @default false
    */
-  readonly isDisabled?: boolean
+  readonly isDisabled?: boolean;
   /** Callback, will be called after portal's children mounted */
-  readonly onMount?: () => void
-  readonly children?: React.ReactNode
+  readonly onMount?: () => void;
+  readonly children?: React.ReactNode;
 }

@@ -1,38 +1,38 @@
-import { iconNames } from '@/util/iconMetadata/iconName'
-import type { Meta, StoryObj } from '@storybook/react'
-import { Text } from '../AriaComponents/Text'
-import { Icon, type IconProps } from './Icon'
+import { iconNames } from "@/util/iconMetadata/iconName";
+import type { Meta, StoryObj } from "@storybook/react";
+import { Text } from "../AriaComponents/Text";
+import { Icon, type IconProps } from "./Icon";
 
 const meta = {
-  title: 'Components/Icon',
+  title: "Components/Icon",
   component: Icon,
   parameters: {
-    layout: 'centered',
+    layout: "centered",
   },
-} satisfies Meta<typeof Icon>
+} satisfies Meta<typeof Icon>;
 
 const sizes = [
-  'xsmall',
-  'small',
-  'medium',
-  'large',
-  'xlarge',
-  'xxlarge',
-] satisfies IconProps['size'][]
+  "xsmall",
+  "small",
+  "medium",
+  "large",
+  "xlarge",
+  "xxlarge",
+] satisfies IconProps["size"][];
 const colors = [
-  'primary',
-  'danger',
-  'success',
-  'accent',
-  'muted',
-  'disabled',
-  'invert',
-  'inherit',
-  'current',
-] satisfies IconProps['color'][]
+  "primary",
+  "danger",
+  "success",
+  "accent",
+  "muted",
+  "disabled",
+  "invert",
+  "inherit",
+  "current",
+] satisfies IconProps["color"][];
 
-export default meta
-type Story = StoryObj<typeof meta>
+export default meta;
+type Story = StoryObj<typeof meta>;
 
 const CustomSvgIcon = () => (
   <svg viewBox="0 0 16 16" fill="none">
@@ -45,18 +45,18 @@ const CustomSvgIcon = () => (
       strokeLinejoin="round"
     />
   </svg>
-)
+);
 
 interface RenderProps {
-  color: string | undefined
+  color: string | undefined;
 }
 
-const RenderPropIcon = ({ color = '#000' }: RenderProps) => (
+const RenderPropIcon = ({ color = "#000" }: RenderProps) => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
     <circle cx="8" cy="8" r="7" stroke={color} strokeWidth="2" />
     <path d="M8 4V12M4 8H12" stroke={color} strokeWidth="2" strokeLinecap="round" />
   </svg>
-)
+);
 
 export const Icons: Story = {
   render: () => (
@@ -71,12 +71,12 @@ export const Icons: Story = {
             <Icon key={color} color={color} icon={CustomSvgIcon} />
           ))}
           <Icon
-            renderProps={{ color: 'blue' }}
+            renderProps={{ color: "blue" }}
             icon={(props) => <RenderPropIcon color={props.color} />}
           />
           <Icon
             color="accent"
-            renderProps={{ color: 'red' }}
+            renderProps={{ color: "red" }}
             icon={(props) => <RenderPropIcon color={props.color} />}
           />
         </div>
@@ -101,7 +101,7 @@ export const Icons: Story = {
       </div>
     </div>
   ),
-}
+};
 
 export const AvailableIcons: Story = {
   render: () => (
@@ -118,4 +118,4 @@ export const AvailableIcons: Story = {
       </div>
     </div>
   ),
-}
+};

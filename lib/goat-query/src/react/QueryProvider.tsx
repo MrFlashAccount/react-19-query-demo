@@ -1,10 +1,11 @@
 import {
-  createContext,
   type PropsWithChildren,
+  createContext,
   useState,
   use,
   startTransition,
   useEffect,
+  type Context,
 } from "react";
 
 import { type DependencyGraph } from "../DependencyGraph";
@@ -20,7 +21,8 @@ export type QueryContextValue = {
  * Query Context - exposed for testing purposes.
  * In production code, use the useQuery hook instead of accessing this directly.
  */
-export const QueryContext = createContext<QueryContextValue | null>(null);
+export const QueryContext: Context<QueryContextValue | null> =
+  createContext<QueryContextValue | null>(null);
 
 /**
  * Props for {@link QueryProvider}
@@ -52,7 +54,7 @@ export type QueryProviderProps = {
  * </QueryProvider>
  * ```
  */
-export function QueryProvider(props: QueryProviderProps) {
+export function QueryProvider(props: QueryProviderProps): React.JSX.Element {
   const queryClient = useQueryProviderFactory(props);
   return <QueryContext value={{ queryClient }}>{props.children}</QueryContext>;
 }

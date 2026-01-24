@@ -139,6 +139,14 @@ export default defineConfig(({ mode }) => ({
   ],
   resolve: {
     alias: {
+      // monitoring-dashboard path aliases (so it can be built from repo root)
+      "#": path.resolve(rootDir, "examples/monitoring-dashboard/src"),
+      "@db": path.resolve(rootDir, "examples/monitoring-dashboard/src/db"),
+      "@api": path.resolve(rootDir, "examples/monitoring-dashboard/src/api"),
+      "@components": path.resolve(rootDir, "examples/monitoring-dashboard/src/components"),
+      "@queries": path.resolve(rootDir, "examples/monitoring-dashboard/src/queries"),
+      "@hooks": path.resolve(rootDir, "examples/monitoring-dashboard/src/hooks"),
+
       "@lib/goat-query/react": path.resolve(rootDir, "lib/goat-query/react.ts"),
       "@lib/goat-query/devtools": path.resolve(rootDir, "lib/goat-query/devtools/index.ts"),
       "@lib/brand": path.resolve(rootDir, "lib/brand/brand.ts"),
@@ -154,6 +162,8 @@ export default defineConfig(({ mode }) => ({
     rolldownOptions: {
       input: {
         main: path.resolve(rootDir, "index.html"),
+        "movies-db": path.resolve(rootDir, "movies-db/index.html"),
+        "monitoring-dashboard": path.resolve(rootDir, "monitoring-dashboard/index.html"),
         "perf-monitor": path.resolve(rootDir, "lib/performance-monitor/test/index.html"),
         "rsc-playground": path.resolve(rootDir, "lib/rsc-service-worker-bff/test/index.html"),
       },

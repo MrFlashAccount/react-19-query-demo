@@ -32,4 +32,3 @@ test.describe("Dashboard", () => {
     await expect(page.locator("text=Alert Rules")).toBeVisible();
   });
 });
-

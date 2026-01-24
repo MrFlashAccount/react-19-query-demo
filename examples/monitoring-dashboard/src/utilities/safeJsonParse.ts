@@ -6,7 +6,7 @@
  * Also provides a type for the parsed JSON.
  */
 
-import { ZodSchema } from 'zod'
+import { ZodSchema } from "zod";
 
 /**
  * Safely parse a JSON string.
@@ -19,28 +19,28 @@ export function safeJsonParse<T = unknown>(
   predicate?: ZodSchema<T> | ((parsed: unknown) => parsed is T),
 ): T {
   try {
-    if (typeof value !== 'string') {
-      return defaultValue
+    if (typeof value !== "string") {
+      return defaultValue;
     }
-    const parsed: unknown = JSON.parse(value)
+    const parsed: unknown = JSON.parse(value);
 
     if (predicate != null) {
       if (predicate instanceof ZodSchema) {
-        return predicate.parse(parsed)
+        return predicate.parse(parsed);
       }
 
       if (predicate(parsed)) {
-        return parsed
+        return parsed;
       }
 
-      return defaultValue
+      return defaultValue;
     }
 
     // This is safe because if we don't pass a predicate,
     // we know that the parsed value is of type `T`.
     // eslint-disable-next-line no-restricted-syntax
-    return parsed as T
+    return parsed as T;
   } catch {
-    return defaultValue
+    return defaultValue;
   }
 }

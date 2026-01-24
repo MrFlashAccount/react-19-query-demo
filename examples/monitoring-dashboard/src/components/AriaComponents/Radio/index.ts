@@ -4,5 +4,5 @@
  * Barrel file for the Radio component.
  */
 
-export * from './Radio'
-export * from './RadioGroup'
+export * from "./Radio";
+export * from "./RadioGroup";

@@ -1,5 +1,5 @@
 /** @file A styled dropdown. */
-import { useEffect, useMemo, useRef, useState, type ForwardedRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import CheckMarkIcon from "#/assets/check_mark.svg";
 import ArrowIcon from "#/assets/folder_arrow.svg";
@@ -12,11 +12,10 @@ import {
   useFocusWithin,
   type InputProps,
 } from "#/components/aria";
-import FocusRing from "#/components/styled/FocusRing";
 import SvgMask from "#/components/SvgMask";
 import { useLatest } from "#/hooks/useLatest";
 import { mergeRefs } from "#/utilities/mergeRefs";
-import { forwardRef } from "#/utilities/react";
+import type { RefProp } from "#/components/AriaComponents/types";
 import { tv, type VariantProps } from "#/utilities/tailwindVariants";
 import {
   Form,
@@ -140,10 +139,7 @@ interface InternalMultipleDropdownProps<T> extends InternalBaseDropdownProps<T> 
 export type DropdownProps<T> = InternalMultipleDropdownProps<T> | InternalSingleDropdownProps<T>;
 
 /** A styled dropdown. */
-export const Dropdown = forwardRef(function Dropdown<T>(
-  props: DropdownProps<T>,
-  ref: ForwardedRef<HTMLDivElement>,
-) {
+export function Dropdown<T>(props: DropdownProps<T> & RefProp<HTMLDivElement>) {
   const {
     readOnly = false,
     className,
@@ -153,6 +149,7 @@ export const Dropdown = forwardRef(function Dropdown<T>(
     variants = DROPDOWN_STYLES,
     children: Child,
   } = props;
+  const { ref: forwardedRef } = props;
   const listBoxItems = useMemo(() => items.map((item, i) => ({ item, i })), [items]);
   const [tempSelectedIndex, setTempSelectedIndex] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -220,109 +217,107 @@ export const Dropdown = forwardRef(function Dropdown<T>(
   }, [isFocused]);
 
   return (
-    <FocusRing placement="outset">
-      <div
-        ref={(el) => {
-          mergeRefs(ref, rootRef)(el);
-        }}
-        onMouseDown={() => {
-          isSelfMouseDownRef.current = true;
-          // `isFocused` cannot be used as `isFocusWithin` is set to `false` immediately before
-          // this event handler is called.
-          setIsMouseFocused(!delayedIsFocused.current);
-        }}
-        tabIndex={-1}
-        className={styles.base({ className })}
-        {...mergeProps<React.JSX.IntrinsicElements["div"]>()(focusWithinProps, {
-          onBlur: (event) => {
-            if (!event.currentTarget.contains(event.relatedTarget)) {
-              setIsMouseFocused(false);
-            }
-          },
-        })}
-      >
-        <div className={styles.container()}>
-          <div className={styles.options()}>
-            {/* Spacing. */}
-            <div className={styles.input()}>&nbsp;</div>
-            <div className={styles.optionsContainer()}>
-              <ListBox
-                aria-label={props["aria-label"] ?? "Dropdown"}
-                selectionMode={multiple ? "multiple" : "single"}
-                selectionBehavior={multiple ? "toggle" : "replace"}
-                items={listBoxItems}
-                dependencies={[selectedIndices]}
-                className={styles.optionsList()}
-                onSelectionChange={(keys) => {
-                  if (multiple) {
-                    const indices = Array.from(keys, (i) => Number(i));
-                    props.onChange(
-                      indices.flatMap((i) => {
-                        const item = items[i];
-                        return item === undefined ? [] : [item];
-                      }),
-                      indices,
-                    );
-                  } else {
-                    const [key] = keys;
-                    if (key != null) {
-                      const i = Number(key);
+    <div
+      ref={(el) => {
+        mergeRefs(forwardedRef, rootRef)(el);
+      }}
+      onMouseDown={() => {
+        isSelfMouseDownRef.current = true;
+        // `isFocused` cannot be used as `isFocusWithin` is set to `false` immediately before
+        // this event handler is called.
+        setIsMouseFocused(!delayedIsFocused.current);
+      }}
+      tabIndex={-1}
+      className={styles.base({ className })}
+      {...mergeProps<React.JSX.IntrinsicElements["div"]>()(focusWithinProps, {
+        onBlur: (event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) {
+            setIsMouseFocused(false);
+          }
+        },
+      })}
+    >
+      <div className={styles.container()}>
+        <div className={styles.options()}>
+          {/* Spacing. */}
+          <div className={styles.input()}>&nbsp;</div>
+          <div className={styles.optionsContainer()}>
+            <ListBox
+              aria-label={props["aria-label"] ?? "Dropdown"}
+              selectionMode={multiple ? "multiple" : "single"}
+              selectionBehavior={multiple ? "toggle" : "replace"}
+              items={listBoxItems}
+              dependencies={[selectedIndices]}
+              className={styles.optionsList()}
+              onSelectionChange={(keys) => {
+                if (multiple) {
+                  const indices = Array.from(keys, (i) => Number(i));
+                  props.onChange(
+                    indices.flatMap((i) => {
                       const item = items[i];
-                      if (item !== undefined) {
-                        props.onChange(item, i);
-                        setIsMouseFocused(false);
-                        rootRef.current?.blur();
-                      }
+                      return item === undefined ? [] : [item];
+                    }),
+                    indices,
+                  );
+                } else {
+                  const [key] = keys;
+                  if (key != null) {
+                    const i = Number(key);
+                    const item = items[i];
+                    if (item !== undefined) {
+                      props.onChange(item, i);
+                      setIsMouseFocused(false);
+                      rootRef.current?.blur();
                     }
                   }
-                }}
-              >
-                {({ item, i }) => (
-                  <ListBoxItem
-                    key={i}
-                    id={i}
-                    textValue={typeof item === "string" ? item : `${i}`}
-                    className={styles.optionsItem()}
-                  >
-                    <SvgMask
-                      src={CheckMarkIcon}
-                      className={styles.icon({
-                        className: selectedIndices.includes(i) ? "" : "invisible",
-                      })}
-                    />
-                    <Child item={item} />
-                  </ListBoxItem>
-                )}
-              </ListBox>
-            </div>
+                }
+              }}
+            >
+              {({ item, i }) => (
+                <ListBoxItem
+                  key={i}
+                  id={i}
+                  textValue={typeof item === "string" ? item : `${i}`}
+                  className={styles.optionsItem()}
+                >
+                  <SvgMask
+                    src={CheckMarkIcon}
+                    className={styles.icon({
+                      className: selectedIndices.includes(i) ? "" : "invisible",
+                    })}
+                  />
+                  <Child item={item} />
+                </ListBoxItem>
+              )}
+            </ListBox>
           </div>
-        </div>
-        <div className={styles.input()}>
-          <SvgMask src={ArrowIcon} className={styles.dropdownArrow()} />
-          <div className={styles.inputDisplay()}>
-            {isMouseFocused && !multiple ? (
-              "\u00a0"
-            ) : visuallySelectedItem != null ? (
-              <Child item={visuallySelectedItem} />
-            ) : (
-              multiple && <props.renderMultiple items={selectedItems}>{Child}</props.renderMultiple>
-            )}
-          </div>
-        </div>
-        {/* Hidden, but required to exist for the width of the parent element to be correct.
-         * Classes that do not affect width have been removed. */}
-        <div className={styles.hiddenOptions()}>
-          {items.map((item, i) => (
-            <div key={i} className={styles.hiddenOption()}>
-              <SvgMask src={CheckMarkIcon} />
-              <Child item={item} />
-            </div>
-          ))}
         </div>
       </div>
-    </FocusRing>
+      <div className={styles.input()}>
+        <SvgMask src={ArrowIcon} className={styles.dropdownArrow()} />
+        <div className={styles.inputDisplay()}>
+          {isMouseFocused && !multiple ? (
+            "\u00a0"
+          ) : visuallySelectedItem != null ? (
+            <Child item={visuallySelectedItem} />
+          ) : (
+            multiple && <props.renderMultiple items={selectedItems}>{Child}</props.renderMultiple>
+          )}
+        </div>
+      </div>
+      {/* Hidden, but required to exist for the width of the parent element to be correct.
+       * Classes that do not affect width have been removed. */}
+      <div className={styles.hiddenOptions()}>
+        {items.map((item, i) => (
+          <div key={i} className={styles.hiddenOption()}>
+            <SvgMask src={CheckMarkIcon} />
+            <Child item={item} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
-});
+}
 
 /** Props for a {@link FormDropdown}. */
 export interface FormDropdownProps<

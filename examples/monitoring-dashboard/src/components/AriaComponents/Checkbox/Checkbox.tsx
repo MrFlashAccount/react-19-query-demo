@@ -3,24 +3,23 @@
  *
  * Checkboxes allow users to select multiple items from a list of individual items, or to mark one individual item as selected.
  */
-import type { CheckboxProps as AriaCheckboxProps } from '#/components/aria'
-import { Checkbox as AriaCheckbox, CheckboxGroupStateContext } from '#/components/aria'
-import { mergeRefs, useMergedRef } from '#/utilities/mergeRefs'
-import { forwardRef } from '#/utilities/react'
-import type { VariantProps } from '#/utilities/tailwindVariants'
-import { tv } from '#/utilities/tailwindVariants'
-import { useStore } from '#/utilities/zustand'
+import type { CheckboxProps as AriaCheckboxProps } from "#/components/aria";
+import { Checkbox as AriaCheckbox, CheckboxGroupStateContext } from "#/components/aria";
+import { mergeRefs, useMergedRef } from "#/utilities/mergeRefs";
+import type { RefProp } from "#/components/AriaComponents/types";
+import type { VariantProps } from "#/utilities/tailwindVariants";
+import { tv } from "#/utilities/tailwindVariants";
+import { useStore } from "#/utilities/zustand";
 import {
   useContext,
   type CSSProperties,
   type ForwardedRef,
   type MutableRefObject,
   type ReactElement,
-  type RefAttributes,
-} from 'react'
-import type { CheckboxGroupState } from 'react-stately'
-import invariant from 'tiny-invariant'
-import { Check } from '../Check/Check'
+} from "react";
+import type { CheckboxGroupState } from "react-stately";
+import invariant from "tiny-invariant";
+import { Check } from "../Check/Check";
 import type {
   FieldPath,
   FieldProps,
@@ -28,100 +27,104 @@ import type {
   FieldVariantProps,
   TSchema,
   UseFormRegisterReturn,
-} from '../Form'
-import { Form } from '../Form'
-import { Text } from '../Text'
-import type { TestIdProps } from '../types'
-import { CheckboxStandaloneProvider, useCheckboxContext } from './CheckboxContext'
-import { CheckboxGroup } from './CheckboxGroup'
+} from "../Form";
+import { Form } from "../Form";
+import { Text } from "../Text";
+import type { TestIdProps } from "../types";
+import { CheckboxStandaloneProvider, useCheckboxContext } from "./CheckboxContext";
+import { CheckboxGroup } from "./CheckboxGroup";
 
 /** Props for the {@link Checkbox} component. */
 export type CheckboxProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, boolean>,
-> = Omit<VariantProps<typeof CHECKBOX_STYLES>, 'isDisabled' | 'isInvalid'> &
+> = Omit<VariantProps<typeof CHECKBOX_STYLES>, "isDisabled" | "isInvalid"> &
   TestIdProps & {
-    readonly className?: string
-    readonly style?: CSSProperties
-    readonly checkboxRef?: MutableRefObject<HTMLInputElement>
-  } & (CheckboxGroupCheckboxProps | StandaloneCheckboxProps<Schema, TFieldName>)
+    readonly className?: string;
+    readonly style?: CSSProperties;
+    readonly checkboxRef?: MutableRefObject<HTMLInputElement>;
+  } & RefProp<HTMLLabelElement> &
+  (CheckboxGroupCheckboxProps | StandaloneCheckboxProps<Schema, TFieldName>);
 
 /** Props for the {@link Checkbox} component when used inside a {@link CheckboxGroup}. */
 interface CheckboxGroupCheckboxProps extends AriaCheckboxProps {
-  readonly value: string
-  readonly form?: never
-  readonly name?: never
+  readonly value: string;
+  readonly form?: never;
+  readonly name?: never;
 }
 
 /** Props for the {@link Checkbox} component when used outside of a {@link CheckboxGroup}. */
 type StandaloneCheckboxProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, boolean>,
-> = FieldProps & FieldStateProps<AriaCheckboxProps, Schema, TFieldName, boolean> & FieldVariantProps
+> = FieldProps &
+  FieldStateProps<AriaCheckboxProps, Schema, TFieldName, boolean> &
+  FieldVariantProps;
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const CHECKBOX_STYLES = tv({
-  base: 'group flex gap-2 items-center cursor-pointer select-none',
+  base: "group flex gap-2 items-center cursor-pointer select-none",
   variants: {
     isInvalid: {
       true: {
-        base: 'text-danger',
-        icon: 'border-danger focus-within:border-danger focus-within:outline-danger',
+        base: "text-danger",
+        icon: "border-danger focus-within:border-danger focus-within:outline-danger",
       },
     },
     isReadOnly: {
-      true: { icon: 'bg-primary/50 border-primary/50' },
+      true: { icon: "bg-primary/50 border-primary/50" },
     },
     isDisabled: {
-      true: { icon: 'bg-primary/30 border-primary/30 cursor-not-allowed' },
-      false: '',
+      true: { icon: "bg-primary/30 border-primary/30 cursor-not-allowed" },
+      false: "",
     },
     isSelected: {
-      true: { icon: 'bg-primary text-white' },
-      false: { icon: 'bg-transparent text-primary' },
+      true: { icon: "bg-primary text-white" },
+      false: { icon: "bg-transparent text-primary" },
     },
-    size: { medium: { icon: 'w-4 h-4' } },
+    size: { medium: { icon: "w-4 h-4" } },
   },
   slots: {
     icon: [
-      'border-[0.5px] rounded-md transition-[outline-offset,border-width] duration-200',
-      'outline -outline-offset-2 outline-transparent group-focus-visible:outline-offset-0 group-focus-visible:outline-primary',
-      'border-primary group-selected:border-transparent',
-      'group-pressed:border',
-      'shrink-0',
+      "border-[0.5px] rounded-md transition-[outline-offset,border-width] duration-200",
+      "outline -outline-offset-2 outline-transparent group-focus-visible:outline-offset-0 group-focus-visible:outline-primary",
+      "border-primary group-selected:border-transparent",
+      "group-pressed:border",
+      "shrink-0",
     ],
   },
   defaultVariants: {
-    size: 'medium',
+    size: "medium",
   },
   compoundVariants: [
     {
       isInvalid: true,
       isSelected: true,
       class: {
-        icon: 'bg-danger border-danger focus-within:border-danger focus-within:outline-danger',
+        icon: "bg-danger border-danger focus-within:border-danger focus-within:outline-danger",
       },
     },
   ],
-})
+});
 
 /** Checkboxes allow users to select multiple items from a list of individual items, or to mark one individual item as selected. */
 // eslint-disable-next-line no-restricted-syntax
-export const Checkbox = forwardRef(function Checkbox<
+export const Checkbox = function Checkbox<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, boolean>,
->(props: CheckboxProps<Schema, TFieldName>, ref: ForwardedRef<HTMLLabelElement>) {
-  const { form, name } = props
+>(props: CheckboxProps<Schema, TFieldName>) {
+  const { form, name } = props;
+  const { ref: forwardedRef } = props;
 
-  const { store } = useCheckboxContext()
-  const formInstance = Form.useFormContext(form)
+  const { store } = useCheckboxContext();
+  const formInstance = Form.useFormContext(form);
 
-  const isInsideGroup = useStore(store, (state) => state.insideGroup)
+  const isInsideGroup = useStore(store, (state) => state.insideGroup);
 
   if (!isInsideGroup) {
     // This should never happen, because a standalone checkbox should always have a name
     // and it specified in the props
-    invariant(name != null, 'Checkbox must have a name when placed inside a group')
+    invariant(name != null, "Checkbox must have a name when placed inside a group");
 
     const {
       defaultValue: defaultValueOverride,
@@ -136,7 +139,7 @@ export const Checkbox = forwardRef(function Checkbox<
       // This is safe, because we know that the checkbox is standalone, and
       // name is specified in the props.
       // eslint-disable-next-line no-restricted-syntax
-    } = props as StandaloneCheckboxProps<Schema, TFieldName>
+    } = props as StandaloneCheckboxProps<Schema, TFieldName>;
 
     return (
       <Form.Controller
@@ -144,7 +147,7 @@ export const Checkbox = forwardRef(function Checkbox<
         control={formInstance.control}
         {...(defaultValueOverride != null && { defaultValue: defaultValueOverride })}
         render={({ field, fieldState }) => {
-          const defaultValue = defaultValueOverride ?? formInstance.control._defaultValues[name]
+          const defaultValue = defaultValueOverride ?? formInstance.control._defaultValues[name];
           return (
             <>
               <CheckboxStandaloneProvider
@@ -152,8 +155,8 @@ export const Checkbox = forwardRef(function Checkbox<
                 field={field}
                 defaultValue={defaultValue}
                 onChange={(value) => {
-                  field.onChange({ target: { value } })
-                  void formInstance.trigger(name)
+                  field.onChange({ target: { value } });
+                  void formInstance.trigger(name);
                 }}
               >
                 <Form.Field
@@ -163,23 +166,23 @@ export const Checkbox = forwardRef(function Checkbox<
                   isInvalid={isInvalid ?? fieldState.invalid}
                   variants={fieldVariants}
                 >
-                  <CheckboxInternal ref={ref} value={name} {...props} />
+                  <CheckboxInternal ref={forwardedRef} value={name} {...props} />
                 </Form.Field>
               </CheckboxStandaloneProvider>
             </>
-          )
+          );
         }}
       />
-    )
+    );
   }
 
-  return <CheckboxInternal ref={ref} {...props} />
-}) as unknown as (<Schema extends TSchema, TFieldName extends FieldPath<Schema, boolean>>(
-  props: CheckboxProps<Schema, TFieldName> & RefAttributes<HTMLLabelElement>,
+  return <CheckboxInternal ref={forwardedRef} {...props} />;
+} as unknown as (<Schema extends TSchema, TFieldName extends FieldPath<Schema, boolean>>(
+  props: CheckboxProps<Schema, TFieldName>,
 ) => ReactElement) & {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  Group: typeof CheckboxGroup
-}
+  Group: typeof CheckboxGroup;
+};
 
 /**
  * Internal props for the {@link Checkbox} component.
@@ -187,15 +190,15 @@ export const Checkbox = forwardRef(function Checkbox<
 type CheckboxInternalProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, boolean>,
-> = Omit<CheckboxProps<Schema, TFieldName>, 'name'> & {
-  name?: string
-}
+> = Omit<CheckboxProps<Schema, TFieldName>, "name"> & {
+  name?: string;
+};
 
 // eslint-disable-next-line no-restricted-syntax
-const CheckboxInternal = forwardRef(function CheckboxInternal<
+const CheckboxInternal = function CheckboxInternal<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, boolean>,
->(props: CheckboxInternalProps<Schema, TFieldName>, ref: ForwardedRef<HTMLLabelElement>) {
+>(props: CheckboxInternalProps<Schema, TFieldName> & RefProp<HTMLLabelElement>) {
   const {
     variants = CHECKBOX_STYLES,
     isDisabled = false,
@@ -207,22 +210,23 @@ const CheckboxInternal = forwardRef(function CheckboxInternal<
     children,
     size,
     form,
-  } = props
+  } = props;
+  const { ref: forwardedRef } = props;
 
-  const { store, removeSelected, addSelected } = useCheckboxContext()
+  const { store, removeSelected, addSelected } = useCheckboxContext();
   // This is safe, because we're intentionally widening the type
   // eslint-disable-next-line no-restricted-syntax
-  const groupState = useContext(CheckboxGroupStateContext) as CheckboxGroupState | undefined
+  const groupState = useContext(CheckboxGroupStateContext) as CheckboxGroupState | undefined;
 
-  const formInstance = Form.useFormContext(form)
+  const formInstance = Form.useFormContext(form);
 
   const { isSelected, field, onChange, name } = useStore(store, (state) => {
-    const { insideGroup } = state
+    const { insideGroup } = state;
 
     if (insideGroup) {
-      const value = props.value
+      const value = props.value;
 
-      invariant(value != null, '`Checkbox` must have a value when placed inside a group')
+      invariant(value != null, "`Checkbox` must have a value when placed inside a group");
 
       return {
         isSelected: state.selected.has(value),
@@ -234,41 +238,41 @@ const CheckboxInternal = forwardRef(function CheckboxInternal<
         name: state.name as TFieldName,
         onChange: (checked: boolean) => {
           if (checked) {
-            addSelected(value)
+            addSelected(value);
           } else {
-            removeSelected(value)
+            removeSelected(value);
           }
         },
-      }
+      };
     }
 
     invariant(
       false,
       "CheckboxInternal can't be placed outside of either CheckboxGroup or CheckboxStandaloneProvider",
-    )
-  })
+    );
+  });
 
   const { hasError: fieldStateInvalid } = Form.useFieldState({
     name,
     // eslint-disable-next-line no-restricted-syntax
-    form: formInstance as unknown as Parameters<typeof Form.useField>[0]['form'],
-  })
+    form: formInstance as unknown as Parameters<typeof Form.useField>[0]["form"],
+  });
 
-  const invalid = isInvalid ?? groupState?.isInvalid ?? fieldStateInvalid
+  const invalid = isInvalid ?? groupState?.isInvalid ?? fieldStateInvalid;
 
   const classes = variants({
     isReadOnly: isReadOnly,
     isInvalid: invalid,
     isDisabled: isDisabled || field.disabled,
     size,
-  })
+  });
 
-  const testId = props['data-testid'] ?? props['testId']
+  const testId = props["data-testid"] ?? props["testId"];
 
   return (
     <AriaCheckbox
       ref={(el) => {
-        mergeRefs(ref, field.ref)(el)
+        mergeRefs(forwardedRef, field.ref)(el);
       }}
       {...props}
       inputRef={useMergedRef(checkboxRef, (input) => {
@@ -276,7 +280,7 @@ const CheckboxInternal = forwardRef(function CheckboxInternal<
         // react-aria-components adds this attribute, but it is a duplicate of the label's `data-testid`
         // which messes up the test selectors
         if (input != null) {
-          delete input.dataset.testid
+          delete input.dataset.testid;
         }
       })}
       className={(renderProps) => classes.base({ className, isSelected: renderProps.isSelected })}
@@ -293,7 +297,7 @@ const CheckboxInternal = forwardRef(function CheckboxInternal<
       {(renderProps) => (
         <>
           <Check
-            color={renderProps.isInvalid ? 'error' : 'primary'}
+            color={renderProps.isInvalid ? "error" : "primary"}
             isSelected={renderProps.isSelected}
             isPressed={renderProps.isPressed}
             isIndeterminate={isIndeterminate}
@@ -301,17 +305,17 @@ const CheckboxInternal = forwardRef(function CheckboxInternal<
           />
 
           <Text variant="body" color="current">
-            {typeof children === 'function' ? children(renderProps) : children}
+            {typeof children === "function" ? children(renderProps) : children}
           </Text>
         </>
       )}
     </AriaCheckbox>
-  )
-}) as unknown as (<Schema extends TSchema, TFieldName extends FieldPath<Schema, boolean>>(
-  props: CheckboxInternalProps<Schema, TFieldName> & RefAttributes<HTMLLabelElement>,
+  );
+} as unknown as (<Schema extends TSchema, TFieldName extends FieldPath<Schema, boolean>>(
+  props: CheckboxInternalProps<Schema, TFieldName> & RefProp<HTMLLabelElement>,
 ) => ReactElement) & {
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  Group: typeof CheckboxGroup
-}
+  Group: typeof CheckboxGroup;
+};
 
-Checkbox.Group = CheckboxGroup
+Checkbox.Group = CheckboxGroup;

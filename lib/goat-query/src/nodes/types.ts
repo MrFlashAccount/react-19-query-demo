@@ -1,4 +1,4 @@
-import type { ISpan } from "../../tracing";
+import type { ISpan } from "@lib/tracing";
 
 export interface Context {
   [key: string]: unknown;

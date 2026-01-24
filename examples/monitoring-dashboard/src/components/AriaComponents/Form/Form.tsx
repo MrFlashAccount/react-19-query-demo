@@ -1,12 +1,10 @@
 /** @file Form component. */
 import * as React from "react";
 
-import * as textProvider from "#/providers/TextProvider";
-
 import * as aria from "#/components/aria";
 
 import { useEvent } from "#/hooks/useEvent";
-import { forwardRef } from "#/utilities/react";
+import type { RefProp } from "#/components/AriaComponents/types";
 import * as dialog from "../Dialog";
 import * as components from "./components";
 import * as styles from "./styles";
@@ -19,10 +17,9 @@ import type * as types from "./types";
  */
 // There is no way to avoid type casting here
 // eslint-disable-next-line no-restricted-syntax
-export const Form = forwardRef(function Form<
-  Schema extends components.TSchema,
-  SubmitResult = void,
->(props: types.FormProps<Schema, SubmitResult>, ref: React.Ref<HTMLFormElement>) {
+export const Form = function Form<Schema extends components.TSchema, SubmitResult = void>(
+  props: types.FormProps<Schema, SubmitResult> & RefProp<HTMLFormElement>,
+): React.JSX.Element {
   /** Input values for this form. */
   type FieldValues = components.FieldValues<Schema>;
   const formId = React.useId();
@@ -44,10 +41,9 @@ export const Form = forwardRef(function Form<
     method,
     canSubmitOffline = false,
     testId = props["data-testid"],
+    ref: forwardedRef,
     ...formProps
   } = props;
-
-  const { getText } = textProvider.useText();
 
   const dialogContext = dialog.useDialogContext();
 
@@ -95,7 +91,7 @@ export const Form = forwardRef(function Form<
   // eslint-disable-next-line no-restricted-syntax
   const errors = Object.fromEntries(
     Object.entries(formState.errors).map(([key, error]) => {
-      const message = error?.message ?? getText("arbitraryFormErrorMessage");
+      const message = error?.message ?? "Something went wrong.";
       return [key, message];
     }),
   ) as Record<keyof FieldValues, string>;
@@ -104,7 +100,7 @@ export const Form = forwardRef(function Form<
     <form
       {...formProps}
       id={id}
-      ref={ref}
+      ref={forwardedRef}
       className={base}
       style={typeof style === "function" ? style(innerForm) : style}
       noValidate
@@ -118,8 +114,8 @@ export const Form = forwardRef(function Form<
       </aria.FormValidationContext.Provider>
     </form>
   );
-}) as unknown as (<Schema extends components.TSchema, SubmitResult = void>(
-  props: React.RefAttributes<HTMLFormElement> & types.FormProps<Schema, SubmitResult>,
+} as unknown as (<Schema extends components.TSchema, SubmitResult = void>(
+  props: types.FormProps<Schema, SubmitResult> & RefProp<HTMLFormElement>,
 ) => React.JSX.Element) & {
   /* eslint-disable @typescript-eslint/naming-convention */
   schema: typeof components.schema;

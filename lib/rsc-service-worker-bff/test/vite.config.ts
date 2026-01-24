@@ -10,7 +10,7 @@ const swCacheDir = resolve(rootDir, ".sw-cache");
 // Build the service worker
 async function buildServiceWorker(): Promise<void> {
   console.log("[SW] Building service worker...");
-  
+
   await viteBuild({
     configFile: false,
     root: rootDir,
@@ -38,7 +38,7 @@ async function buildServiceWorker(): Promise<void> {
       "process.env.NODE_ENV": JSON.stringify("development"),
     },
   });
-  
+
   console.log("[SW] Service worker built successfully");
 }
 

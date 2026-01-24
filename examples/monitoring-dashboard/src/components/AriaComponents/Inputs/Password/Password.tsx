@@ -1,8 +1,8 @@
 /** @file A component wrapping {@link Input} with the ability to show and hide password. */
-import { useState } from 'react'
+import { useState } from "react";
 
-import EyeIcon from '#/assets/eye.svg'
-import EyeCrossedIcon from '#/assets/eye_crossed.svg'
+import EyeIcon from "#/assets/eye.svg";
+import EyeCrossedIcon from "#/assets/eye_crossed.svg";
 import {
   Button,
   Form,
@@ -10,25 +10,27 @@ import {
   type FieldPath,
   type InputProps,
   type TSchema,
-} from '#/components/AriaComponents'
-import { AnimatePresence, motion } from 'framer-motion'
+} from "#/components/AriaComponents";
+import { AnimatePresence, motion } from "framer-motion";
 
 /** Props for a {@link Password}. */
-export interface PasswordProps<Schema extends TSchema, TFieldName extends FieldPath<Schema, string>>
-  extends Omit<InputProps<Schema, TFieldName, string>, 'type'> {}
+export interface PasswordProps<
+  Schema extends TSchema,
+  TFieldName extends FieldPath<Schema, string>,
+> extends Omit<InputProps<Schema, TFieldName, string>, "type"> {}
 
 /** A component wrapping {@link Input} with the ability to show and hide password. */
 export function Password<Schema extends TSchema, TFieldName extends FieldPath<Schema, string>>(
   props: PasswordProps<Schema, TFieldName>,
 ) {
-  const [showPassword, setShowPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
 
-  const form = Form.useFormContext(props.form)
+  const form = Form.useFormContext(props.form);
 
   return (
     <Input<Schema, TFieldName, string>
       {...props}
-      type={showPassword ? 'text' : 'password'}
+      type={showPassword ? "text" : "password"}
       addonEnd={
         <>
           {props.addonEnd}
@@ -44,7 +46,7 @@ export function Password<Schema extends TSchema, TFieldName extends FieldPath<Sc
                     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
                     exit={{ opacity: 0, x: 10, rotateY: 30 }}
                     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
                   >
                     <Button
                       size="medium"
@@ -52,7 +54,7 @@ export function Password<Schema extends TSchema, TFieldName extends FieldPath<Sc
                       extraClickZone
                       icon={showPassword ? EyeIcon : EyeCrossedIcon}
                       onPress={() => {
-                        setShowPassword(!showPassword)
+                        setShowPassword(!showPassword);
                       }}
                     />
                   </motion.div>
@@ -63,5 +65,5 @@ export function Password<Schema extends TSchema, TFieldName extends FieldPath<Sc
         </>
       }
     />
-  )
+  );
 }

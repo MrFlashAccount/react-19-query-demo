@@ -4,8 +4,17 @@ import { noop } from "../utils";
 
 import { useQueryContext } from "./QueryProvider";
 import { type UseQueryOptions } from "./useQuery";
+import type { Query } from "../Query";
 
-export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
+export interface UseQueriesResult {
+  isPending: boolean;
+  isFetching: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  queries: readonly Query<any, any>[];
+}
+
+export function useQueries(queries: readonly UseQueryOptions<any, any>[]): UseQueriesResult {
   const { queryClient } = useQueryContext();
 
   const queryInstances = queries.map((query) => {
@@ -22,7 +31,7 @@ export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
       isError: queryState.status === "rejected",
       state: queryState,
       promise: queryInstance.promise,
-      refetch: () => queryInstance.refetch(),
+      refetch: (): void => queryInstance.refetch(),
     };
   });
 
@@ -43,6 +52,6 @@ export function useQueries(queries: readonly UseQueryOptions<any, any>[]) {
     isFetching,
     isSuccess,
     isError,
-    queries: queryInstances,
+    queries: queryInstances.map(({ queryInstance }) => queryInstance),
   };
 }

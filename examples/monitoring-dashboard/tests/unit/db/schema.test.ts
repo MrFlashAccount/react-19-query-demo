@@ -173,4 +173,3 @@ describe("CreateServerSchema", () => {
     expect(result.success).toBe(true);
   });
 });
-

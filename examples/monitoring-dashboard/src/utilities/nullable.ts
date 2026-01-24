@@ -5,5 +5,5 @@ export function mapNonNullish<T extends NonNullable<unknown>, R>(
   value: T | null | undefined,
   map: (value: T) => R,
 ) {
-  return value != null ? map(value) : value
+  return value != null ? map(value) : value;
 }

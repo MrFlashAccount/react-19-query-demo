@@ -1,46 +1,46 @@
-import Enso from '#/assets/enso_logo.svg'
-import ArrowDownIcon from '#/assets/expand_arrow_down.svg'
-import Plus from '#/assets/plus.svg'
+import Enso from "#/assets/enso_logo.svg";
+import ArrowDownIcon from "#/assets/expand_arrow_down.svg";
+import Plus from "#/assets/plus.svg";
 
-import type * as aria from '#/components/aria'
-import { Popover, Separator, Text } from '#/components/AriaComponents'
-import type { Meta, StoryObj } from '@storybook/react'
-import { expect, userEvent, within } from '@storybook/test'
-import { Button, type BaseButtonProps } from '.'
-import { Badge } from '../../Badge'
+import type * as aria from "#/components/aria";
+import { Popover, Separator, Text } from "#/components/AriaComponents";
+import type { Meta, StoryObj } from "@storybook/react";
+import { expect, userEvent, within } from "@storybook/test";
+import { Button, type BaseButtonProps } from ".";
+import { Badge } from "../../Badge";
 
-type Story = StoryObj<BaseButtonProps<string, aria.ButtonRenderProps>>
+type Story = StoryObj<BaseButtonProps<string, aria.ButtonRenderProps>>;
 
 const variants = [
-  'primary',
-  'accent',
-  'delete',
-  'ghost-fading',
-  'ghost',
-  'link',
-  'submit',
-  'outline',
-  'icon',
-] as const
-const sizes = ['hero', 'large', 'medium', 'small', 'xsmall', 'xxsmall'] as const
+  "primary",
+  "accent",
+  "delete",
+  "ghost-fading",
+  "ghost",
+  "link",
+  "submit",
+  "outline",
+  "icon",
+] as const;
+const sizes = ["hero", "large", "medium", "small", "xsmall", "xxsmall"] as const;
 
 export default {
-  title: 'Components/Button',
+  title: "Components/Button",
   component: Button,
   render: (props) => <Button {...props} />,
   argTypes: {
     variant: {
-      control: 'radio',
+      control: "radio",
       options: variants,
     },
     size: {
-      control: 'radio',
+      control: "radio",
       options: sizes,
     },
     addonStart: { control: false },
     addonEnd: { control: false },
   },
-} satisfies Meta<BaseButtonProps<string, aria.ButtonRenderProps>>
+} satisfies Meta<BaseButtonProps<string, aria.ButtonRenderProps>>;
 
 export const Variants: Story = {
   render: () => (
@@ -76,7 +76,7 @@ export const Variants: Story = {
       </div>
     </div>
   ),
-}
+};
 
 export const Tooltips: Story = {
   render: () => (
@@ -93,30 +93,30 @@ export const Tooltips: Story = {
       </div>
     </div>
   ),
-}
+};
 
 export const LoadingOnPress: Story = {
   render: () => {
     return (
       <Button
         onPress={() => {
-          return new Promise((resolve) => setTimeout(resolve, 1000))
+          return new Promise((resolve) => setTimeout(resolve, 1000));
         }}
       >
         Click me to trigger loading
       </Button>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const { getByRole, findByTestId } = within(canvasElement)
+    const { getByRole, findByTestId } = within(canvasElement);
 
-    const button = getByRole('button', { name: 'Click me to trigger loading' })
-    await userEvent.click(button)
-    await expect(button).toHaveAttribute('disabled')
+    const button = getByRole("button", { name: "Click me to trigger loading" });
+    await userEvent.click(button);
+    await expect(button).toHaveAttribute("disabled");
     // then the spinner appears after some delay
-    await expect(await findByTestId('spinner')).toBeInTheDocument()
+    await expect(await findByTestId("spinner")).toBeInTheDocument();
   },
-}
+};
 
 export const Addons: Story = {
   args: {
@@ -162,7 +162,7 @@ export const Addons: Story = {
       </div>
     </>
   ),
-}
+};
 
 export const ButtonGroup: Story = {
   render: () => (
@@ -187,7 +187,7 @@ export const ButtonGroup: Story = {
           </Button.GroupJoin>
         ))}
 
-        <Button.GroupJoin buttonVariants={{ variant: 'primary' }}>
+        <Button.GroupJoin buttonVariants={{ variant: "primary" }}>
           <Button icon={Plus}>New Project</Button>
 
           <Popover.Trigger>
@@ -378,7 +378,7 @@ export const ButtonGroup: Story = {
 
       <div className="flex flex-col gap-2">
         <Text.Heading>Button Styles</Text.Heading>
-        <Button.Group buttonVariants={{ isDisabled: true, variant: 'outline' }}>
+        <Button.Group buttonVariants={{ isDisabled: true, variant: "outline" }}>
           <Button>Button 1</Button>
           <Button>Button 2</Button>
           <Button>Button 3</Button>
@@ -386,4 +386,4 @@ export const ButtonGroup: Story = {
       </div>
     </div>
   ),
-}
+};

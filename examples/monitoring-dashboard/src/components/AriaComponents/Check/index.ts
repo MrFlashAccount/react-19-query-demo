@@ -3,4 +3,4 @@
  *
  * Barrel export for the Check component
  */
-export * from './Check'
+export * from "./Check";

@@ -32,4 +32,3 @@ test.describe("Alerts Page", () => {
     await expect(page.locator("text=Edit Alert")).toBeVisible();
   });
 });
-

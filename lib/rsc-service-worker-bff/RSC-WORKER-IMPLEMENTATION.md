@@ -78,10 +78,7 @@ import {
 } from "react-server-dom-webpack/server";
 
 // Client-side (main thread)
-import {
-  createFromReadableStream,
-  encodeReply,
-} from "react-server-dom-webpack/client";
+import { createFromReadableStream, encodeReply } from "react-server-dom-webpack/client";
 ```
 
 ---
@@ -173,7 +170,7 @@ export type Response =
 ```typescript
 type ServerModule = {
   default?: React.ComponentType | React.ReactNode;
-  [key: string]: unknown;  // Server action functions
+  [key: string]: unknown; // Server action functions
 };
 
 // Deployed code and manifest
@@ -219,18 +216,23 @@ function deploy(
 ): ReadableStream<Uint8Array> {
   // Create proxy for client module imports
   const clientModule = createClientModuleProxy("client");
-  
+
   const modules: Record<string, unknown> = {
     react: React,
-    "./client": clientModule,  // Client components accessible via import
+    "./client": clientModule, // Client components accessible via import
   };
 
   // Append server reference registration for each action
   let code = compiledCode;
   if (actionNames.length > 0) {
-    code += "\n" + actionNames.map(
-      (name) => `__registerServerReference(${name}, "${name}", "${name}"); exports.${name} = ${name};`
-    ).join("\n");
+    code +=
+      "\n" +
+      actionNames
+        .map(
+          (name) =>
+            `__registerServerReference(${name}, "${name}", "${name}"); exports.${name} = ${name};`,
+        )
+        .join("\n");
   }
 
   // Execute compiled code in isolated scope
@@ -240,10 +242,13 @@ function deploy(
     return modules[id];
   };
 
-  new Function(
-    "module", "exports", "require", "React", "__registerServerReference",
-    code
-  )(module, module.exports, require, React, registerServerReference);
+  new Function("module", "exports", "require", "React", "__registerServerReference", code)(
+    module,
+    module.exports,
+    require,
+    React,
+    registerServerReference,
+  );
 
   deployed = { manifest, module: module.exports };
   return new ReadableStream({ start: (c) => c.close() });
@@ -266,15 +271,14 @@ Renders the deployed component to an RSC stream:
 function render(): ReadableStream<Uint8Array> {
   if (!deployed) throw new Error("No code deployed");
   const App = deployed.module.default as React.ComponentType;
-  return renderToReadableStream(
-    React.createElement(App), 
-    deployed.manifest,
-    { onError: () => "Switch to dev mode to see full error." }
-  );
+  return renderToReadableStream(React.createElement(App), deployed.manifest, {
+    onError: () => "Switch to dev mode to see full error.",
+  });
 }
 ```
 
 **`renderToReadableStream(element, manifest, options)`** is the core RSC API:
+
 - `element`: React element tree to serialize
 - `manifest`: Maps client module IDs to their chunk locations
 - Returns: `ReadableStream<Uint8Array>` of Flight protocol data
@@ -308,7 +312,7 @@ async function callAction(
   // Decode React's wire format back to JS values
   const decoded = await decodeReply(body, {});
   const args = Array.isArray(decoded) ? decoded : [decoded];
-  
+
   // Execute action and render result
   const result = await actionFn(...args);
   return renderToReadableStream(result, deployed.manifest);
@@ -320,11 +324,13 @@ async function callAction(
 ### Message Dispatcher
 
 ```typescript
-self.onmessage = (event: MessageEvent<{
-  requestId: string;
-  method: "deploy" | "render" | "action";
-  args: unknown[];
-}>) => {
+self.onmessage = (
+  event: MessageEvent<{
+    requestId: string;
+    method: "deploy" | "render" | "action";
+    args: unknown[];
+  }>,
+) => {
   const req = event.data;
   switch (req.method) {
     case "deploy":
@@ -365,7 +371,7 @@ export class WorkerClient {
 
   constructor(signal: AbortSignal) {
     this.worker = new Worker(workerUrl);
-    
+
     const dispose = (reason: unknown) => {
       for (const controller of this.requests.values()) {
         controller.error(reason);
@@ -381,7 +387,7 @@ export class WorkerClient {
         dispose(signal.reason);
       });
     });
-    
+
     this.worker.onmessage = (msg) => this.handleMessage(msg);
     this.worker.onerror = (e) => dispose(e.error);
   }
@@ -399,7 +405,7 @@ export class WorkerClient {
 
     switch (msg.type) {
       case "next":
-        controller.enqueue(msg.value);  // Stream chunk
+        controller.enqueue(msg.value); // Stream chunk
         break;
       case "done":
         controller.close();
@@ -417,12 +423,14 @@ export class WorkerClient {
   private async request(body: Record<string, unknown>): Promise<ReadableStream<Uint8Array>> {
     await this.readyPromise;
     const requestId = String(this.nextRequestId++);
-    
+
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({
-      start: (c) => { controller = c; },
+      start: (c) => {
+        controller = c;
+      },
     });
-    
+
     this.requests.set(requestId, controller);
     this.worker.postMessage({ ...body, requestId });
     return stream;
@@ -466,7 +474,7 @@ export default defineConfig({
   plugins: [react()],
   worker: {
     format: "es",
-    plugins: () => [react()],  // Enable JSX in workers
+    plugins: () => [react()], // Enable JSX in workers
   },
 });
 ```
@@ -506,7 +514,7 @@ Still needed - maps client component IDs to their modules:
 export type ClientManifest = Record<string, { id: string; chunks: string[]; name: string }>;
 
 export const clientManifest: ClientManifest = {
-  "client": { id: "client", chunks: [], name: "*" },
+  client: { id: "client", chunks: [], name: "*" },
   "client#Counter": { id: "client", chunks: [], name: "Counter" },
   "client#Button": { id: "client", chunks: [], name: "Button" },
 };
@@ -533,11 +541,14 @@ export function evaluateClientModule(compiledCode: string): Record<string, unkno
     if (id === "react") return React;
     throw new Error(`Module "${id}" not found in client context`);
   };
-  
+
   new Function("module", "exports", "require", "React", compiledCode)(
-    module, module.exports, require, React
+    module,
+    module.exports,
+    require,
+    React,
   );
-  
+
   return module.exports;
 }
 ```
@@ -577,7 +588,10 @@ export interface ParsedRow {
   raw: Uint8Array;
 }
 
-export function parseRows(buffer: Uint8Array, final: boolean = false): {
+export function parseRows(
+  buffer: Uint8Array,
+  final: boolean = false,
+): {
   rows: ParsedRow[];
   remainder: Uint8Array;
 } {
@@ -662,10 +676,10 @@ import { encodeReply } from "react-server-dom-webpack/client";
 async function callServer(actionId: string, args: unknown[]): Promise<unknown> {
   // Encode arguments to React's wire format
   const encodedArgs = await encodeReply(args);
-  
+
   // Send to worker
   const stream = await worker.callAction(actionId, encodeArgs(encodedArgs));
-  
+
   // Parse RSC response
   return createFromReadableStream(stream, { callServer });
 }
@@ -731,7 +745,7 @@ With Vite, server components are **pre-compiled and bundled** into the worker. N
 ```typescript
 // === src/worker/rsc-worker.ts ===
 
-import "../shared/webpack-shim";  // MUST be first!
+import "../shared/webpack-shim"; // MUST be first!
 import { polyfillReady } from "../shared/polyfill";
 import React from "react";
 import {
@@ -810,10 +824,12 @@ async function callAction(
 ): Promise<ReadableStream<Uint8Array>> {
   // Handle "module#export" format
   const actionName = actionId.split("#")[0] ?? actionId;
-  
+
   const actionFn = actionRegistry[actionName];
   if (!actionFn) {
-    throw new Error(`Action "${actionName}" not found. Available: ${Object.keys(actionRegistry).join(", ")}`);
+    throw new Error(
+      `Action "${actionName}" not found. Available: ${Object.keys(actionRegistry).join(", ")}`,
+    );
   }
 
   // Reconstruct body from encoded format
@@ -835,7 +851,7 @@ async function callAction(
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Failed to decode action arguments: ${msg}`);
   }
-  
+
   const args = Array.isArray(decoded) ? decoded : [decoded];
   const result = await actionFn(...args);
 
@@ -844,19 +860,21 @@ async function callAction(
 
 // --- Message Dispatcher ---
 
-self.onmessage = (event: MessageEvent<{
-  requestId: string;
-  method: "render" | "action";
-  args: unknown[];
-}>) => {
+self.onmessage = (
+  event: MessageEvent<{
+    requestId: string;
+    method: "render" | "action";
+    args: unknown[];
+  }>,
+) => {
   const req = event.data;
   switch (req.method) {
     case "render":
       sendStream(req.requestId, () => render());
       break;
     case "action":
-      sendStream(req.requestId, () => 
-        callAction(req.args[0] as string, req.args[1] as EncodedArgs)
+      sendStream(req.requestId, () =>
+        callAction(req.args[0] as string, req.args[1] as EncodedArgs),
       );
       break;
   }
@@ -913,6 +931,7 @@ export const Button = createClientRef<ComponentType<ButtonProps>>("Button");
 ```
 
 **How client references work**:
+
 1. `registerClientReference()` creates a special object with `$$typeof: Symbol(react.client.reference)`
 2. When RSC serializes `<Counter />`, it outputs a reference to `"client#Counter"`
 3. On the main thread, `__webpack_require__("client")` resolves to actual component
@@ -925,7 +944,7 @@ With Vite, no `deploy()` needed - server code is pre-bundled into the worker.
 ```typescript
 // === src/client/rsc-client.ts ===
 
-import "../shared/webpack-shim";  // MUST be first!
+import "../shared/webpack-shim"; // MUST be first!
 import { polyfillReady } from "../shared/polyfill";
 import { createFromReadableStream, encodeReply } from "react-server-dom-webpack/client";
 
@@ -964,7 +983,7 @@ export class RSCWorkerClient {
   constructor(signal?: AbortSignal) {
     // Vite handles worker URL
     this.worker = new RscWorker();
-    
+
     const dispose = (reason: unknown) => {
       for (const controller of this.requests.values()) {
         controller.error(reason);
@@ -980,7 +999,7 @@ export class RSCWorkerClient {
         dispose(signal.reason);
       });
     });
-    
+
     this.worker.onmessage = (msg) => this.handleMessage(msg);
     this.worker.onerror = (e) => dispose(e.error);
   }
@@ -1019,13 +1038,15 @@ export class RSCWorkerClient {
 
   private async request(body: Record<string, unknown>): Promise<ReadableStream<Uint8Array>> {
     await Promise.all([this.readyPromise, polyfillReady]);
-    
+
     const requestId = String(this.nextRequestId++);
     let controller!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({
-      start: (c) => { controller = c; },
+      start: (c) => {
+        controller = c;
+      },
     });
-    
+
     this.requests.set(requestId, controller);
     this.worker.postMessage({ ...body, requestId });
     return stream;
@@ -1080,17 +1101,14 @@ export type ClientManifest = Record<string, { id: string; chunks: string[]; name
 
 // Define your client component exports here
 export const clientManifest: ClientManifest = {
-  "client": { id: "client", chunks: [], name: "*" },
+  client: { id: "client", chunks: [], name: "*" },
   // Add each client component export:
   "client#Counter": { id: "client", chunks: [], name: "Counter" },
   "client#Button": { id: "client", chunks: [], name: "Button" },
 };
 
 // Helper to build manifest programmatically if needed
-export function buildManifest(
-  moduleId: string, 
-  exportNames: string[]
-): ClientManifest {
+export function buildManifest(moduleId: string, exportNames: string[]): ClientManifest {
   const manifest: ClientManifest = {
     [moduleId]: { id: moduleId, chunks: [], name: "*" },
   };
@@ -1139,11 +1157,14 @@ export function evaluateClientModule(compiledCode: string): Record<string, unkno
     if (id === "react") return React;
     throw new Error(`Module "${id}" not found in client context`);
   };
-  
+
   new Function("module", "exports", "require", "React", compiledCode)(
-    module, module.exports, require, React
+    module,
+    module.exports,
+    require,
+    React,
   );
-  
+
   return module.exports;
 }
 ```
@@ -1152,14 +1173,14 @@ export function evaluateClientModule(compiledCode: string): Record<string, unkno
 
 ## Summary
 
-| Component | Purpose |
-|-----------|---------|
-| **Webpack Shim** | Provides `__webpack_require__` and `__webpack_module_cache__` globals |
-| **Worker Server** | Executes `renderToReadableStream`, `registerServerReference`, `decodeReply` |
-| **Worker Client** | Converts postMessage to ReadableStreams |
-| **Compiler** | Transforms JSX, ESM→CJS, detects `"use server"` |
-| **Module Registry** | Registers client modules in webpack cache |
-| **Flight Parser** | Parses RSC binary/text protocol for debugging |
+| Component           | Purpose                                                                     |
+| ------------------- | --------------------------------------------------------------------------- |
+| **Webpack Shim**    | Provides `__webpack_require__` and `__webpack_module_cache__` globals       |
+| **Worker Server**   | Executes `renderToReadableStream`, `registerServerReference`, `decodeReply` |
+| **Worker Client**   | Converts postMessage to ReadableStreams                                     |
+| **Compiler**        | Transforms JSX, ESM→CJS, detects `"use server"`                             |
+| **Module Registry** | Registers client modules in webpack cache                                   |
+| **Flight Parser**   | Parses RSC binary/text protocol for debugging                               |
 
 The key insight: **RSC can run anywhere with proper webpack shims**. The actual server environment is simulated—no Node.js required. This enables RSC execution in:
 
@@ -1169,6 +1190,7 @@ The key insight: **RSC can run anywhere with proper webpack shims**. The actual 
 - Edge runtimes
 
 The minimal requirements are:
+
 1. Webpack shim globals
 2. `react-server-dom-webpack/server` for rendering
 3. `react-server-dom-webpack/client` for consuming
@@ -1182,13 +1204,14 @@ The minimal requirements are:
 
 ### Phase 1: Project Setup
 
-| Step | Action | Files |
-|------|--------|-------|
-| 1.1 | Create new project with TypeScript | `package.json`, `tsconfig.json` |
-| 1.2 | Install dependencies | See below |
-| 1.3 | Configure Vite for worker builds | `vite.config.ts` |
+| Step | Action                             | Files                           |
+| ---- | ---------------------------------- | ------------------------------- |
+| 1.1  | Create new project with TypeScript | `package.json`, `tsconfig.json` |
+| 1.2  | Install dependencies               | See below                       |
+| 1.3  | Configure Vite for worker builds   | `vite.config.ts`                |
 
 **package.json essentials**:
+
 ```json
 {
   "type": "module",
@@ -1207,6 +1230,7 @@ The minimal requirements are:
 ```
 
 **vite.config.ts**:
+
 ```typescript
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -1233,6 +1257,7 @@ export default defineConfig({
 ```
 
 **Or simpler - use Vite's built-in worker support**:
+
 ```typescript
 // In your main code, import worker like this:
 import RscWorker from "./worker/rsc-worker.ts?worker";
@@ -1242,49 +1267,52 @@ const worker = new RscWorker();
 
 ### Phase 2: Core Infrastructure
 
-| Step | Action | Output |
-|------|--------|--------|
-| 2.1 | Create webpack shim | `src/shared/webpack-shim.ts` |
-| 2.2 | Create polyfill module | `src/shared/polyfill.ts` |
-| 2.3 | Create types file | `src/shared/types.ts` |
+| Step | Action                 | Output                       |
+| ---- | ---------------------- | ---------------------------- |
+| 2.1  | Create webpack shim    | `src/shared/webpack-shim.ts` |
+| 2.2  | Create polyfill module | `src/shared/polyfill.ts`     |
+| 2.3  | Create types file      | `src/shared/types.ts`        |
 
 **Checklist**:
+
 - [ ] `__webpack_module_cache__` global defined
-- [ ] `__webpack_require__` global defined  
+- [ ] `__webpack_require__` global defined
 - [ ] `__webpack_chunk_load__` global defined
 - [ ] `polyfillReady` promise exported
 - [ ] Shared types for `EncodedArgs`, `Response`, `ClientManifest`
 
 ### Phase 3: Worker Implementation
 
-| Step | Action | Output |
-|------|--------|--------|
-| 3.1 | Create worker entry point | `src/worker/rsc-worker.ts` |
-| 3.2 | Implement `sendStream()` helper | Stream → postMessage bridge |
-| 3.3 | Implement `deploy()` | Code loading + action registration |
-| 3.4 | Implement `render()` | RSC stream generation |
-| 3.5 | Implement `callAction()` | Action execution + response |
-| 3.6 | Implement message dispatcher | `self.onmessage` handler |
-| 3.7 | Add initialization handshake | `polyfillReady` → `{ type: "ready" }` |
+| Step | Action                          | Output                                |
+| ---- | ------------------------------- | ------------------------------------- |
+| 3.1  | Create worker entry point       | `src/worker/rsc-worker.ts`            |
+| 3.2  | Implement `sendStream()` helper | Stream → postMessage bridge           |
+| 3.3  | Implement `deploy()`            | Code loading + action registration    |
+| 3.4  | Implement `render()`            | RSC stream generation                 |
+| 3.5  | Implement `callAction()`        | Action execution + response           |
+| 3.6  | Implement message dispatcher    | `self.onmessage` handler              |
+| 3.7  | Add initialization handshake    | `polyfillReady` → `{ type: "ready" }` |
 
 **Validation**:
+
 - [ ] Worker loads without errors
 - [ ] Worker sends "ready" message
 - [ ] Worker handles unknown methods gracefully
 
 ### Phase 4: Client Implementation
 
-| Step | Action | Output |
-|------|--------|--------|
-| 4.1 | Create `RSCWorkerClient` class | `src/client/rsc-client.ts` |
-| 4.2 | Implement request/response mapping | `Map<requestId, StreamController>` |
-| 4.3 | Implement `deploy()` | Async deployment |
-| 4.4 | Implement `render()` | Returns `ReadableStream` |
-| 4.5 | Implement `callAction()` | Returns `ReadableStream` |
-| 4.6 | Add `consumeRSCStream()` helper | Stream → React elements |
-| 4.7 | Add `createCallServer()` helper | For recursive action calls |
+| Step | Action                             | Output                             |
+| ---- | ---------------------------------- | ---------------------------------- |
+| 4.1  | Create `RSCWorkerClient` class     | `src/client/rsc-client.ts`         |
+| 4.2  | Implement request/response mapping | `Map<requestId, StreamController>` |
+| 4.3  | Implement `deploy()`               | Async deployment                   |
+| 4.4  | Implement `render()`               | Returns `ReadableStream`           |
+| 4.5  | Implement `callAction()`           | Returns `ReadableStream`           |
+| 4.6  | Add `consumeRSCStream()` helper    | Stream → React elements            |
+| 4.7  | Add `createCallServer()` helper    | For recursive action calls         |
 
 **Validation**:
+
 - [ ] Client waits for worker ready
 - [ ] Client waits for polyfill ready
 - [ ] Streams are properly closed on completion
@@ -1294,16 +1322,17 @@ const worker = new RscWorker();
 
 Since Vite handles compilation, this phase is about **build configuration**, not runtime compilation.
 
-| Step | Action | Output |
-|------|--------|--------|
-| 5.1 | Configure Vite worker build | `vite.config.ts` |
-| 5.2 | Create server components file | `src/server/App.tsx` (pre-compiled) |
-| 5.3 | Export action names statically | `src/server/actions.ts` |
-| 5.4 | Create manifest at build time | `src/shared/manifest.ts` |
+| Step | Action                         | Output                              |
+| ---- | ------------------------------ | ----------------------------------- |
+| 5.1  | Configure Vite worker build    | `vite.config.ts`                    |
+| 5.2  | Create server components file  | `src/server/App.tsx` (pre-compiled) |
+| 5.3  | Export action names statically | `src/server/actions.ts`             |
+| 5.4  | Create manifest at build time  | `src/shared/manifest.ts`            |
 
 **Key difference**: Server code is bundled into the worker at build time. No dynamic code loading needed.
 
 **Option A: Static server code in worker**
+
 ```typescript
 // src/worker/rsc-worker.ts
 import App from "../server/App";
@@ -1320,31 +1349,34 @@ for (const [name, fn] of Object.entries(actions)) {
 ```
 
 **Option B: Dynamic code loading (if needed)**
+
 ```typescript
 // src/shared/manifest.ts
 export const clientManifest = {
-  "client": { id: "client", chunks: [], name: "*" },
+  client: { id: "client", chunks: [], name: "*" },
   "client#Counter": { id: "client", chunks: [], name: "Counter" },
 };
 
-// src/shared/actions.ts  
+// src/shared/actions.ts
 export const serverActions = ["incrementAction", "submitAction"];
 ```
 
 **Validation**:
+
 - [ ] Worker builds successfully with Vite
 - [ ] JSX transformed at build time
 - [ ] Server actions exported and registered
 
 ### Phase 6: Module Registry
 
-| Step | Action | Output |
-|------|--------|--------|
-| 6.1 | Create module registry | `src/client/module-registry.ts` |
-| 6.2 | Implement `registerClientModule()` | Add to webpack cache |
-| 6.3 | Implement `evaluateClientModule()` | Execute compiled code |
+| Step | Action                             | Output                          |
+| ---- | ---------------------------------- | ------------------------------- |
+| 6.1  | Create module registry             | `src/client/module-registry.ts` |
+| 6.2  | Implement `registerClientModule()` | Add to webpack cache            |
+| 6.3  | Implement `evaluateClientModule()` | Execute compiled code           |
 
 **Validation**:
+
 - [ ] Client modules accessible via `__webpack_require__`
 - [ ] Modules receive React as dependency
 
@@ -1352,7 +1384,12 @@ export const serverActions = ["incrementAction", "submitAction"];
 
 ```typescript
 // === Example test flow (Vite) ===
-import { RSCWorkerClient, consumeRSCStream, createCallServer, encodeArgs } from "./client/rsc-client";
+import {
+  RSCWorkerClient,
+  consumeRSCStream,
+  createCallServer,
+  encodeArgs,
+} from "./client/rsc-client";
 import { registerClientModule } from "./client/module-registry";
 import * as ClientComponents from "./client/components";
 
@@ -1377,6 +1414,7 @@ console.log("Action result:", actionResult);
 ```
 
 **Test Cases**:
+
 - [ ] Worker loads and sends "ready"
 - [ ] Simple component renders
 - [ ] Nested components render
@@ -1390,13 +1428,13 @@ console.log("Action result:", actionResult);
 
 ### Phase 8: Optional Enhancements
 
-| Enhancement | Description |
-|-------------|-------------|
-| Flight Parser | Parse RSC protocol for debugging (Section 9) |
-| Multiple client modules | Support `"./moduleA"`, `"./moduleB"` |
-| Hot reloading | Re-deploy without full reload |
-| Action caching | Cache action results |
-| Error boundaries | Graceful error UI |
+| Enhancement             | Description                                  |
+| ----------------------- | -------------------------------------------- |
+| Flight Parser           | Parse RSC protocol for debugging (Section 9) |
+| Multiple client modules | Support `"./moduleA"`, `"./moduleB"`         |
+| Hot reloading           | Re-deploy without full reload                |
+| Action caching          | Cache action results                         |
+| Error boundaries        | Graceful error UI                            |
 
 ---
 
@@ -1430,6 +1468,7 @@ npm run dev
 ```
 
 **vite.config.ts**:
+
 ```typescript
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
@@ -1444,6 +1483,7 @@ export default defineConfig({
 ```
 
 **Example main.tsx**:
+
 ```typescript
 import { RSCWorkerClient, consumeRSCStream, createCallServer } from "./client/rsc-client";
 import { registerClientModule } from "./client/module-registry";
@@ -1455,11 +1495,11 @@ registerClientModule("client", ClientComponents);
 async function main() {
   const client = new RSCWorkerClient();
   const callServer = createCallServer(client);
-  
+
   // Render initial RSC
   const stream = await client.render();
   const result = await consumeRSCStream(stream, callServer);
-  
+
   console.log("RSC Result:", result);
   // Use with React: root.render(use(result))
 }
@@ -1471,18 +1511,17 @@ main();
 
 ## Gaps Fixed in This Report
 
-| Issue | Fix |
-|-------|-----|
-| Missing Safari polyfill | Added Section 3 + polyfill in all code |
-| Incomplete minimal worker | Full working version in Section 11 |
-| Missing `readyResolve` declaration | Added to `RSCWorkerClient` |
-| Buggy require function | Removed - Vite handles bundling |
-| Missing action ID split on `#` | Added to `callAction()` |
-| Missing `createFromReadableStream` usage | Added `consumeRSCStream()` helper |
-| Flight Parser presented as required | Clarified it's optional |
-| No implementation plan | Added Phase 1-8 with checklist |
-| Runtime Babel compilation | Replaced with Vite static build |
-| Dynamic code deployment | Replaced with static imports |
-| No Vite config example | Added `vite.config.ts` |
-| No example App component | Added `App.tsx` example |
-
+| Issue                                    | Fix                                    |
+| ---------------------------------------- | -------------------------------------- |
+| Missing Safari polyfill                  | Added Section 3 + polyfill in all code |
+| Incomplete minimal worker                | Full working version in Section 11     |
+| Missing `readyResolve` declaration       | Added to `RSCWorkerClient`             |
+| Buggy require function                   | Removed - Vite handles bundling        |
+| Missing action ID split on `#`           | Added to `callAction()`                |
+| Missing `createFromReadableStream` usage | Added `consumeRSCStream()` helper      |
+| Flight Parser presented as required      | Clarified it's optional                |
+| No implementation plan                   | Added Phase 1-8 with checklist         |
+| Runtime Babel compilation                | Replaced with Vite static build        |
+| Dynamic code deployment                  | Replaced with static imports           |
+| No Vite config example                   | Added `vite.config.ts`                 |
+| No example App component                 | Added `App.tsx` example                |

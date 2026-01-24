@@ -2,22 +2,24 @@
  * @file
  * Types for the Form component.
  */
-import type * as React from 'react'
+import type * as React from "react";
 
-import type * as reactHookForm from 'react-hook-form'
-import type * as z from 'zod'
+import type * as reactHookForm from "react-hook-form";
+import type * as z from "zod";
 
-import type { Path } from '#/utilities/objectPath'
-import type { FormEvent } from 'react'
-import type * as schemaModule from './schema'
+import type { Path } from "#/utilities/objectPath";
+import type { FormEvent } from "react";
+import type * as schemaModule from "./schema";
 
 /** The type of the inputs to the form, used for UI inputs. */
-export type FieldValues<Schema extends TSchema | undefined> =
-  Schema extends TSchema ? z.input<Schema> : reactHookForm.FieldValues
+export type FieldValues<Schema extends TSchema | undefined> = Schema extends TSchema
+  ? z.input<Schema>
+  : reactHookForm.FieldValues;
 
 /** The type of the outputs of the form, used for the callback. */
-export type TransformedValues<Schema extends TSchema | undefined> =
-  Schema extends TSchema ? z.output<Schema> : reactHookForm.FieldValues
+export type TransformedValues<Schema extends TSchema | undefined> = Schema extends TSchema
+  ? z.output<Schema>
+  : reactHookForm.FieldValues;
 
 /**
  * Field path type.
@@ -26,19 +28,19 @@ export type TransformedValues<Schema extends TSchema | undefined> =
 export type FieldPath<Schema extends TSchema, Constraint = unknown> = Extract<
   Path<FieldValues<Schema>, Constraint>,
   reactHookForm.FieldPath<FieldValues<Schema>>
->
+>;
 
 /** Schema type */
 export type TSchema =
   | z.AnyZodObject
   | z.ZodEffects<z.AnyZodObject>
-  | z.ZodEffects<z.ZodEffects<z.AnyZodObject>>
+  | z.ZodEffects<z.ZodEffects<z.AnyZodObject>>;
 
 /** A callback that returns a schema. */
-export type SchemaCallback<Schema extends TSchema = TSchema> = (z: SchemaBuilder) => Schema
+export type SchemaCallback<Schema extends TSchema = TSchema> = (z: SchemaBuilder) => Schema;
 
 /** The schema builder. */
-export type SchemaBuilder = typeof schemaModule.schema
+export type SchemaBuilder = typeof schemaModule.schema;
 
 /** OnSubmitCallbacks type. */
 export interface OnSubmitCallbacks<Schema extends TSchema, SubmitResult = void> {
@@ -47,7 +49,7 @@ export interface OnSubmitCallbacks<Schema extends TSchema, SubmitResult = void> 
         values: TransformedValues<Schema>,
         form: UseFormReturn<Schema>,
       ) => Promise<SubmitResult> | SubmitResult)
-    | undefined
+    | undefined;
 
   readonly onSubmitFailed?:
     | ((
@@ -55,14 +57,14 @@ export interface OnSubmitCallbacks<Schema extends TSchema, SubmitResult = void> 
         values: TransformedValues<Schema>,
         form: UseFormReturn<Schema>,
       ) => Promise<void> | void)
-    | undefined
+    | undefined;
   readonly onSubmitSuccess?:
     | ((
         data: SubmitResult,
         values: TransformedValues<Schema>,
         form: UseFormReturn<Schema>,
       ) => Promise<void> | void)
-    | undefined
+    | undefined;
   readonly onSubmitted?:
     | ((
         data: SubmitResult | undefined,
@@ -70,29 +72,30 @@ export interface OnSubmitCallbacks<Schema extends TSchema, SubmitResult = void> 
         values: TransformedValues<Schema>,
         form: UseFormReturn<Schema>,
       ) => Promise<void> | void)
-    | undefined
+    | undefined;
 }
 
 /** Props for the useForm hook. */
 export interface UseFormOptions<Schema extends TSchema, SubmitResult = void>
-  extends Omit<
+  extends
+    Omit<
       reactHookForm.UseFormProps<FieldValues<Schema>>,
-      'handleSubmit' | 'resetOptions' | 'resolver'
+      "handleSubmit" | "resetOptions" | "resolver"
     >,
     OnSubmitCallbacks<Schema, SubmitResult> {
-  readonly schema: Schema | SchemaCallback<Schema>
+  readonly schema: Schema | SchemaCallback<Schema>;
   /**
    * Whether the form can submit offline.
    * @default false
    */
-  readonly canSubmitOffline?: boolean
+  readonly canSubmitOffline?: boolean;
 
   /** Debug name for the form. Use it to identify the form in the tanstack query devtools. */
-  readonly debugName?: string
+  readonly debugName?: string;
 
   /** When set to `dialog`, form submission will close the parent dialog on successful submission. */
-  readonly method?: 'dialog' | (string & {}) | undefined
-  readonly resetOnSubmit?: boolean
+  readonly method?: "dialog" | (string & {}) | undefined;
+  readonly resetOnSubmit?: boolean;
 }
 
 /** Register function for a form field. */
@@ -102,23 +105,23 @@ export type UseFormRegister<Schema extends TSchema> = <
 >(
   name: TFieldName,
   options?: reactHookForm.RegisterOptions<FieldValues<Schema>, TFieldName>,
-) => UseFormRegisterReturn<Schema, TFieldName>
+) => UseFormRegisterReturn<Schema, TFieldName>;
 
 /** UseFormRegister return type. */
 export interface UseFormRegisterReturn<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema> = FieldPath<Schema>,
-> extends Omit<reactHookForm.UseFormRegisterReturn<TFieldName>, 'onBlur' | 'onChange'> {
+> extends Omit<reactHookForm.UseFormRegisterReturn<TFieldName>, "onBlur" | "onChange"> {
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-  readonly onChange: <Value>(value: Value) => Promise<boolean | void>
+  readonly onChange: <Value>(value: Value) => Promise<boolean | void>;
   // eslint-disable-next-line @typescript-eslint/no-invalid-void-type
-  readonly onBlur: <Value>(value: Value) => Promise<boolean | void>
-  readonly isDisabled: boolean
-  readonly isRequired: boolean
-  readonly isInvalid: boolean
-  readonly disabled: boolean
-  readonly required: boolean
-  readonly invalid: boolean
+  readonly onBlur: <Value>(value: Value) => Promise<boolean | void>;
+  readonly isDisabled: boolean;
+  readonly isRequired: boolean;
+  readonly isInvalid: boolean;
+  readonly disabled: boolean;
+  readonly required: boolean;
+  readonly invalid: boolean;
 }
 
 /**
@@ -127,33 +130,32 @@ export interface UseFormRegisterReturn<
  */
 // @ts-expect-error This is type-safe, we are just using a narrower definition of `FieldPath` in
 // `UseFormRegister<Schema>`.
-export interface UseFormReturn<Schema extends TSchema>
-  extends Omit<
-    reactHookForm.UseFormReturn<FieldValues<Schema>, unknown, TransformedValues<Schema>>,
-    'onSubmit' | 'resetOptions' | 'resolver'
-  > {
-  readonly register: UseFormRegister<Schema>
-  readonly submit: (event?: FormEvent<HTMLFormElement> | null) => Promise<void>
-  readonly schema: Schema
-  readonly setFormError: (error: string) => void
-  readonly closeRef: React.MutableRefObject<() => void>
+export interface UseFormReturn<Schema extends TSchema> extends Omit<
+  reactHookForm.UseFormReturn<FieldValues<Schema>, unknown, TransformedValues<Schema>>,
+  "onSubmit" | "resetOptions" | "resolver"
+> {
+  readonly register: UseFormRegister<Schema>;
+  readonly submit: (event?: FormEvent<HTMLFormElement> | null) => Promise<void>;
+  readonly schema: Schema;
+  readonly setFormError: (error: string) => void;
+  readonly closeRef: React.MutableRefObject<() => void>;
   readonly formProps: {
-    readonly onSubmit: (event?: FormEvent<HTMLFormElement> | null) => Promise<void>
-    readonly noValidate: boolean
-  }
+    readonly onSubmit: (event?: FormEvent<HTMLFormElement> | null) => Promise<void>;
+    readonly noValidate: boolean;
+  };
 }
 
 /**
  * Form state type.
  * @alias reactHookForm.FormState
  */
-export type FormState<Schema extends TSchema> = reactHookForm.FormState<FieldValues<Schema>>
+export type FormState<Schema extends TSchema> = reactHookForm.FormState<FieldValues<Schema>>;
 
 /**
  * Form instance type
  * @alias UseFormReturn
  */
-export type FormInstance<Schema extends TSchema> = UseFormReturn<Schema>
+export type FormInstance<Schema extends TSchema> = UseFormReturn<Schema>;
 
 /** Form type interface that check if FieldValues type is compatible with the value type from component */
 export interface FormWithValueValidation<
@@ -165,16 +167,16 @@ export interface FormWithValueValidation<
   // to avoid distributive conditional types to affect the error message. We want distributivity
   // to happen, just not for the error message itself.
   ErrorType = [
-    'Type mismatch: Expected',
+    "Type mismatch: Expected",
     FieldValues<Schema>[TFieldName],
-    'got',
+    "got",
     BaseValueType,
-    'instead.',
+    "instead.",
   ],
 > {
   readonly form?:
     | (BaseValueType extends FieldValues<Schema>[TFieldName] ? FormInstance<Schema> : ErrorType)
-    | undefined
+    | undefined;
 }
 
 /**
@@ -185,38 +187,38 @@ export type FormInstanceValidated<
   Schema extends TSchema,
   // We use any here because we want to bypass the type check for Error type as it won't be a case here
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-> = FormInstance<Schema> | (any[] & NonNullable<unknown>)
+> = FormInstance<Schema> | (any[] & NonNullable<unknown>);
 
 /**
  * Form instance with unknown schema.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyFormInstance = FormInstance<any>
+export type AnyFormInstance = FormInstance<any>;
 
 /** Props for the Field component. */
 // Readonly omitted here to avoid type mismatch with native HTML attributes
 // eslint-disable-next-line no-restricted-syntax
 export interface FieldProps {
-  readonly isRequired?: boolean | undefined
-  readonly label?: React.ReactNode | undefined
-  readonly description?: React.ReactNode | undefined
-  readonly error?: React.ReactNode | undefined
+  readonly isRequired?: boolean | undefined;
+  readonly label?: React.ReactNode | undefined;
+  readonly description?: React.ReactNode | undefined;
+  readonly error?: React.ReactNode | undefined;
 
   /** Defines a string value that labels the current element. */
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  'aria-label'?: string | undefined
+  "aria-label"?: string | undefined;
 
   /** Identifies the element (or elements) that labels the current element. */
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  'aria-labelledby'?: string | undefined
+  "aria-labelledby"?: string | undefined;
 
   /** Identifies the element (or elements) that describes the object. */
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  'aria-describedby'?: string | undefined
+  "aria-describedby"?: string | undefined;
 
   /** Identifies the element (or elements) that provide a detailed, extended description for the object. */
   // eslint-disable-next-line @typescript-eslint/naming-convention
-  'aria-details'?: string | undefined
+  "aria-details"?: string | undefined;
 }
 /**
  * Base Props for a Form Field.
@@ -228,13 +230,14 @@ export interface FormFieldProps<
   TFieldName extends FieldPath<Schema, Constraint>,
   Constraint,
 > extends FormWithValueValidation<BaseValueType, Schema, TFieldName, Constraint> {
-  readonly name: TFieldName
-  readonly value?: BaseValueType extends FieldValues<Schema> ? FieldValues<Schema>[TFieldName]
-  : never
-  readonly defaultValue?: FieldValues<Schema>[TFieldName] | undefined
-  readonly isDisabled?: boolean | undefined
-  readonly isRequired?: boolean | undefined
-  readonly isInvalid?: boolean | undefined
+  readonly name: TFieldName;
+  readonly value?: BaseValueType extends FieldValues<Schema>
+    ? FieldValues<Schema>[TFieldName]
+    : never;
+  readonly defaultValue?: FieldValues<Schema>[TFieldName] | undefined;
+  readonly isDisabled?: boolean | undefined;
+  readonly isRequired?: boolean | undefined;
+  readonly isInvalid?: boolean | undefined;
 }
 
 /** Field State Props */
@@ -243,10 +246,10 @@ export type FieldStateProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, Constraint>,
   Constraint,
-> = FormFieldProps<BaseProps['value'], Schema, TFieldName, Constraint> & {
+> = FormFieldProps<BaseProps["value"], Schema, TFieldName, Constraint> & {
   // to avoid conflicts with the FormFieldProps we need to omit the FormFieldProps from the BaseProps
   [K in keyof Omit<
     BaseProps,
-    keyof FormFieldProps<BaseProps['value'], Schema, TFieldName, Constraint>
-  >]: BaseProps[K]
-}
+    keyof FormFieldProps<BaseProps["value"], Schema, TFieldName, Constraint>
+  >]: BaseProps[K];
+};

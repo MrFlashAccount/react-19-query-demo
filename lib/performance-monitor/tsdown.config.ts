@@ -1,12 +1,13 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["index.ts"],
+  entry: ["src/index.ts"],
   outDir: "dist",
   format: "esm",
   platform: "browser",
-  sourcemap: true,
   clean: true,
-  external: ["lit-html", "lit-html/directives/ref.js"],
+  // Bundle node_modules (including lit-html) into dist.
+  skipNodeModulesBundle: false,
+  dts: false,
+  noExternal: ["lit-html"],
 });
-

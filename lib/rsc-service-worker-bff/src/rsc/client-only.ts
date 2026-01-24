@@ -41,8 +41,4 @@ export { polyfillReady, isPolyfillRequired } from "./polyfill";
 export { moduleCache } from "./webpack-shim";
 
 // Types (no runtime, just TS)
-export type {
-  ClientManifest,
-  ClientManifestEntry,
-} from "./types";
-
+export type { ClientManifest, ClientManifestEntry } from "./types";

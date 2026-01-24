@@ -7,13 +7,14 @@ import {
   type FieldValues,
   type FieldVariantProps,
   type TSchema,
-} from '#/components/AriaComponents'
-import { Input, type InputProps } from '#/components/aria'
+} from "#/components/AriaComponents";
+import { Input, type InputProps } from "#/components/aria";
 
 /** Props for {@link HiddenFile}. */
 export interface HiddenFileProps<Schema extends TSchema, TFieldName extends FieldPath<Schema, File>>
-  extends FieldStateProps<
-      Omit<InputProps, 'children' | 'value'> & { value: FieldValues<Schema>[TFieldName] },
+  extends
+    FieldStateProps<
+      Omit<InputProps, "children" | "value"> & { value: FieldValues<Schema>[TFieldName] },
       Schema,
       TFieldName,
       File
@@ -21,8 +22,8 @@ export interface HiddenFileProps<Schema extends TSchema, TFieldName extends Fiel
     FieldProps,
     FieldVariantProps {
   /** When true, triggers `form.submit()` on input. */
-  readonly autoSubmit?: boolean | undefined
-  readonly accept?: string | undefined
+  readonly autoSubmit?: boolean | undefined;
+  readonly accept?: string | undefined;
 }
 
 /** A hidden file input. */
@@ -38,8 +39,8 @@ export function HiddenFile<Schema extends TSchema, TFieldName extends FieldPath<
     // eslint-disable-next-line @typescript-eslint/naming-convention
     disabled: _disabled,
     ...inputProps
-  } = props
-  const formInstance = Form.useFormContext(form)
+  } = props;
+  const formInstance = Form.useFormContext(form);
 
   return (
     <Form.Controller
@@ -51,13 +52,13 @@ export function HiddenFile<Schema extends TSchema, TFieldName extends FieldPath<
           className="focus-child w-0"
           accept={accept}
           onChange={(event) => {
-            field.onChange(event.target.files?.[0])
+            field.onChange(event.target.files?.[0]);
             if (autoSubmit) {
-              void formInstance.submit()
+              void formInstance.submit();
             }
           }}
         />
       )}
     />
-  )
+  );
 }

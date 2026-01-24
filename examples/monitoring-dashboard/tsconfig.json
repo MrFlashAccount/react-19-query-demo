@@ -7,8 +7,6 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "composite": true,
-    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo",
-    "incremental": true,
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
@@ -26,14 +24,8 @@
       "@api/*": ["./src/api/*"],
       "@components/*": ["./src/components/*"],
       "@queries/*": ["./src/queries/*"],
-      "@hooks/*": ["./src/hooks/*"],
-      "@lib/goat-query": ["../../lib/goat-query/index.ts"],
-      "@lib/goat-query/react": ["../../lib/goat-query/react.ts"],
-      "@lib/goat-query/devtools": ["../../lib/goat-query/devtools/index.ts"],
-      "@lib/rsc-service-worker-bff": ["../../lib/rsc-service-worker-bff/index.ts"],
-      "tracing": ["../../lib/tracing/index.ts"],
-      "performance-monitor": ["../../lib/performance-monitor/index.ts"]
+      "@hooks/*": ["./src/hooks/*"]
     }
   },
-  "include": ["src", "../../lib/**/*.ts", "../../lib/**/*.tsx"]
+  "include": ["src/*.ts", "src/*.tsx", "src/**/*.ts", "src/**/*.tsx"]
 }

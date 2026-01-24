@@ -13,8 +13,18 @@ function HeaderFallback() {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500">
-            <svg className="h-5 w-5 text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M3 18 L7 10 L11 14 L17 4 L21 12" strokeLinecap="round" strokeLinejoin="round" />
+            <svg
+              className="h-5 w-5 text-slate-900"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
+              <path
+                d="M3 18 L7 10 L11 14 L17 4 L21 12"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </div>
           <span className="text-lg font-semibold text-slate-100">Infrastructure Monitor</span>

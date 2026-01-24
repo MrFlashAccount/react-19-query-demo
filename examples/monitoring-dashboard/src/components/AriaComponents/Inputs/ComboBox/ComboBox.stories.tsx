@@ -1,37 +1,37 @@
-import { Text } from '#/components/AriaComponents/Text'
-import { roundedVariants } from '#/components/AriaComponents/utilities'
-import type { Meta, StoryObj } from '@storybook/react'
-import { z } from 'zod'
-import { Form } from '../../Form/index'
-import type { ComboBoxProps } from './ComboBox'
-import { ComboBox } from './ComboBox'
+import { Text } from "#/components/AriaComponents/Text";
+import { roundedVariants } from "#/components/AriaComponents/utilities";
+import type { Meta, StoryObj } from "@storybook/react";
+import { z } from "zod";
+import { Form } from "../../Form/index";
+import type { ComboBoxProps } from "./ComboBox";
+import { ComboBox } from "./ComboBox";
 
-type Props = ComboBoxProps<typeof schema, 'value'>
-type Story = StoryObj<Props>
+type Props = ComboBoxProps<typeof schema, "value">;
+type Story = StoryObj<Props>;
 
-const schema = z.object({ value: z.string() })
+const schema = z.object({ value: z.string() });
 
-const sizes = ['medium', 'small'] as const
-const roundeds = roundedVariants()
+const sizes = ["medium", "small"] as const;
+const roundeds = roundedVariants();
 
 export default {
-  title: 'Components/Inputs/ComboBox',
+  title: "Components/Inputs/ComboBox",
   component: ComboBox,
   render: (args) => <ComboBox {...args} />,
-  tags: ['autodocs'],
+  tags: ["autodocs"],
   decorators: [(Story, context) => <Form schema={schema}>{Story(context)}</Form>],
   args: {
-    name: 'value',
-    items: ['one', 'two', 'three'],
-    className: 'w-40',
+    name: "value",
+    items: ["one", "two", "three"],
+    className: "w-40",
     children: (x: string) => x,
   },
   parameters: {
-    layout: 'centered',
+    layout: "centered",
   },
-} as Meta<Props>
+} as Meta<Props>;
 
-export const Default: Story = {}
+export const Default: Story = {};
 
 export const Rounded: Story = {
   render: (_Story, context) => (
@@ -44,7 +44,7 @@ export const Rounded: Story = {
       ))}
     </div>
   ),
-}
+};
 
 export const Size: Story = {
   render: (_Story, context) => (
@@ -57,4 +57,4 @@ export const Size: Story = {
       ))}
     </div>
   ),
-}
+};

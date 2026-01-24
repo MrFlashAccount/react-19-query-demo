@@ -1,17 +1,17 @@
-import type { Meta, StoryObj } from '@storybook/react'
-import { useState } from 'react'
-import { Check } from './Check'
+import type { Meta, StoryObj } from "@storybook/react";
+import { useState } from "react";
+import { Check } from "./Check";
 
 const meta = {
-  title: 'Components/Check',
+  title: "Components/Check",
   component: Check,
   parameters: {
-    layout: 'centered',
+    layout: "centered",
   },
-} satisfies Meta<typeof Check>
+} satisfies Meta<typeof Check>;
 
-export default meta
-type Story = StoryObj<typeof Check>
+export default meta;
+type Story = StoryObj<typeof Check>;
 
 // Basic states
 export const States: Story = {
@@ -24,7 +24,7 @@ export const States: Story = {
       <Check isPressed />
     </div>
   ),
-}
+};
 
 // Different sizes
 export const Sizes: Story = {
@@ -35,7 +35,7 @@ export const Sizes: Story = {
       <Check isSelected={true} size="large" />
     </div>
   ),
-}
+};
 
 // Different colors
 export const Colors: Story = {
@@ -46,7 +46,7 @@ export const Colors: Story = {
       <Check isSelected={true} color="error" />
     </div>
   ),
-}
+};
 
 // Different border radius options
 export const BorderRadius: Story = {
@@ -62,7 +62,7 @@ export const BorderRadius: Story = {
       <Check isSelected={true} rounded="full" />
     </div>
   ),
-}
+};
 
 // Combined variations
 export const CombinedVariations: Story = {
@@ -105,34 +105,34 @@ export const CombinedVariations: Story = {
       </div>
     </div>
   ),
-}
+};
 
 // Interactive example
 function InteractiveCheck() {
-  const [isSelected, setIsSelected] = useState(false)
-  const [isPressed, setIsPressed] = useState(false)
+  const [isSelected, setIsSelected] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
 
   return (
     <div
       className="cursor-pointer"
       onMouseDown={() => {
-        setIsPressed(true)
+        setIsPressed(true);
       }}
       onMouseUp={() => {
-        setIsPressed(false)
+        setIsPressed(false);
       }}
       onMouseLeave={() => {
-        setIsPressed(false)
+        setIsPressed(false);
       }}
       onClick={() => {
-        setIsSelected(!isSelected)
+        setIsSelected(!isSelected);
       }}
     >
       <Check isSelected={isSelected} isPressed={isPressed} size="large" color="primary" />
     </div>
-  )
+  );
 }
 
 export const Interactive: Story = {
   render: () => <InteractiveCheck />,
-}
+};

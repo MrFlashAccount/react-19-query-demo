@@ -7,8 +7,8 @@ import * as mergeRefs from "#/utilities/mergeRefs";
 import * as twv from "#/utilities/tailwindVariants";
 
 import type { TooltipElementType } from "#/components/AriaComponents";
+import type { RefProp } from "#/components/AriaComponents/types";
 import { useEvent } from "#/hooks/useEvent";
-import { forwardRef } from "#/utilities/react";
 import { memo } from "react";
 import type { TestIdProps } from "../types";
 import * as visualTooltip from "../VisualTooltip";
@@ -16,7 +16,11 @@ import * as textProvider from "./TextProvider";
 
 /** Props for the Text component */
 export interface TextProps
-  extends Omit<aria.TextProps, "color">, twv.VariantProps<typeof TEXT_STYLE>, TestIdProps {
+  extends
+    Omit<aria.TextProps, "color">,
+    twv.VariantProps<typeof TEXT_STYLE>,
+    TestIdProps,
+    RefProp<HTMLSpanElement> {
   readonly elementType?: keyof HTMLElementTagNameMap;
   readonly lineClamp?: number;
   readonly tooltip?: TooltipElementType;
@@ -145,112 +149,112 @@ export const TEXT_STYLE = twv.tv({
 
 /** Text component that supports truncation and show a tooltip on hover when text is truncated */
 // eslint-disable-next-line no-restricted-syntax
-export const Text = memo(
-  forwardRef(function Text(props: TextProps, ref: React.Ref<HTMLSpanElement>) {
-    const {
-      className,
-      variant,
-      font,
-      italic,
-      weight,
-      nowrap,
-      monospace,
-      transform,
-      truncate,
-      lineClamp = 1,
-      children,
-      color,
-      balance,
-      testId,
-      elementType: ElementType = "span",
-      tooltip: tooltipElement = children,
-      tooltipDisplay = "whenOverflowing",
-      tooltipPlacement,
-      tooltipOffset,
-      tooltipCrossOffset,
-      textSelection,
-      disableLineHeightCompensation = false,
-      align,
-      ...ariaProps
-    } = props;
+export const Text = memo(function Text(props: TextProps) {
+  const {
+    className,
+    variant,
+    font,
+    italic,
+    weight,
+    nowrap,
+    monospace,
+    transform,
+    truncate,
+    lineClamp = 1,
+    children,
+    color,
+    balance,
+    testId,
+    elementType: ElementType = "span",
+    tooltip: tooltipElement = children,
+    tooltipDisplay = "whenOverflowing",
+    tooltipPlacement,
+    tooltipOffset,
+    tooltipCrossOffset,
+    textSelection,
+    disableLineHeightCompensation = false,
+    align,
+    ref: forwardedRef,
+    ...ariaProps
+  } = props;
 
-    const textElementRef = React.useRef<HTMLElement>(null);
-    const textContext = textProvider.useTextContext();
+  const textElementRef = React.useRef<HTMLElement | null>(null);
+  const textContext = textProvider.useTextContext();
 
-    const textClasses = TEXT_STYLE({
-      variant,
-      font,
-      weight,
-      transform,
-      monospace,
-      italic,
-      nowrap,
-      truncate,
-      color,
-      balance,
-      textSelection,
-      disableLineHeightCompensation:
-        disableLineHeightCompensation === false
-          ? textContext.isInsideTextComponent
-          : disableLineHeightCompensation,
-      className,
-      align,
-    });
+  const textClasses = TEXT_STYLE({
+    variant,
+    font,
+    weight,
+    transform,
+    monospace,
+    italic,
+    nowrap,
+    truncate,
+    color,
+    balance,
+    textSelection,
+    disableLineHeightCompensation:
+      disableLineHeightCompensation === false
+        ? textContext.isInsideTextComponent
+        : disableLineHeightCompensation,
+    className,
+    align,
+  });
 
-    const isTooltipDisabled = useEvent(() => {
-      if (tooltipDisplay === "whenOverflowing") {
-        return truncate == null;
-      }
-      if (tooltipDisplay === "always") {
-        return tooltipElement === false || tooltipElement == null;
-      }
+  const isTooltipDisabled = useEvent(() => {
+    if (tooltipDisplay === "whenOverflowing") {
+      return truncate == null;
+    }
+    if (tooltipDisplay === "always") {
+      return tooltipElement === false || tooltipElement == null;
+    }
 
-      return tooltipDisplay === "never";
-    });
+    return tooltipDisplay === "never";
+  });
 
-    const { tooltip, targetProps } = visualTooltip.useVisualTooltip({
-      isDisabled: isTooltipDisabled(),
-      targetRef: textElementRef,
-      display: tooltipDisplay === "never" ? () => false : tooltipDisplay,
-      children: tooltipElement,
-      ...(tooltipPlacement || tooltipOffset != null || tooltipCrossOffset != null
-        ? {
-            overlayPositionProps: {
-              ...(tooltipPlacement && { placement: tooltipPlacement }),
-              ...(tooltipOffset != null && { offset: tooltipOffset }),
-              ...(tooltipCrossOffset != null && { crossOffset: tooltipCrossOffset }),
-            },
-          }
-        : {}),
-    });
+  const { tooltip, targetProps } = visualTooltip.useVisualTooltip({
+    isDisabled: isTooltipDisabled(),
+    // React 19 `useRef(null)` returns `RefObject<T | null>`, but this hook expects `T`.
+    targetRef: textElementRef as unknown as React.RefObject<HTMLElement>,
+    display: tooltipDisplay === "never" ? () => false : tooltipDisplay,
+    children: tooltipElement,
+    ...(tooltipPlacement || tooltipOffset != null || tooltipCrossOffset != null
+      ? {
+          overlayPositionProps: {
+            ...(tooltipPlacement && { placement: tooltipPlacement }),
+            ...(tooltipOffset != null && { offset: tooltipOffset }),
+            ...(tooltipCrossOffset != null && { crossOffset: tooltipCrossOffset }),
+          },
+        }
+      : {}),
+  });
 
-    return (
-      <textProvider.TextProvider value={{ isInsideTextComponent: true }}>
-        <ElementType
-          // @ts-expect-error This is caused by the type-safe `elementType` type.
-          ref={(el) => {
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-            mergeRefs.mergeRefs(ref, textElementRef)(el);
-          }}
-          data-testid={testId}
-          className={textClasses}
-          {...aria.mergeProps<React.HTMLAttributes<HTMLElement>>()(
-            ariaProps,
-            targetProps,
-            truncate === "custom"
-              ? // eslint-disable-next-line @typescript-eslint/naming-convention,no-restricted-syntax
-                ({ style: { "--line-clamp": `${lineClamp}` } } as React.HTMLAttributes<HTMLElement>)
-              : {},
-          )}
-        >
-          {children}
-        </ElementType>
+  return (
+    <textProvider.TextProvider value={{ isInsideTextComponent: true }}>
+      <ElementType
+        // @ts-expect-error This is caused by the type-safe `elementType` type.
+        ref={(el) => {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+          mergeRefs.mergeRefs(forwardedRef, textElementRef)(el);
+        }}
+        data-testid={testId}
+        className={textClasses}
+        {...aria.mergeProps<React.HTMLAttributes<HTMLElement>>()(
+          ariaProps,
+          targetProps,
+          truncate === "custom"
+            ? // eslint-disable-next-line @typescript-eslint/naming-convention,no-restricted-syntax
+              ({ style: { "--line-clamp": `${lineClamp}` } } as React.HTMLAttributes<HTMLElement>)
+            : {},
+        )}
+      >
+        {children}
+      </ElementType>
 
-        {tooltip}
-      </textProvider.TextProvider>
-    );
-  }),
-) as unknown as React.FC<React.RefAttributes<HTMLSpanElement> & TextProps> & {
+      {tooltip}
+    </textProvider.TextProvider>
+  );
+}) as unknown as React.FC<TextProps> & {
   // eslint-disable-next-line @typescript-eslint/naming-convention
   Heading: typeof Heading;
   // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -258,18 +262,25 @@ export const Text = memo(
 };
 
 /** Heading props */
-export interface HeadingProps extends Omit<TextProps, "elementType"> {
+export interface HeadingProps
+  extends Omit<TextProps, "elementType" | "ref">, RefProp<HTMLHeadingElement> {
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers
   readonly level?: "1" | "2" | "3" | "4" | "5" | "6" | 1 | 2 | 3 | 4 | 5 | 6;
 }
 
 /** Heading component */
-const Heading = memo(
-  forwardRef(function Heading(props: HeadingProps, ref: React.Ref<HTMLHeadingElement>) {
-    const { level = 1, ...textProps } = props;
-    return <Text ref={ref} elementType={`h${level}`} variant="h1" balance {...textProps} />;
-  }),
-);
+const Heading = memo(function Heading(props: HeadingProps) {
+  const { level = 1, ref: forwardedRef, ...textProps } = props;
+  return (
+    <Text
+      ref={forwardedRef as unknown as TextProps["ref"]}
+      elementType={`h${level}`}
+      variant="h1"
+      balance
+      {...textProps}
+    />
+  );
+});
 
 /** Text group component. It's used to visually group text elements together */
 function TextGroup(props: React.PropsWithChildren) {

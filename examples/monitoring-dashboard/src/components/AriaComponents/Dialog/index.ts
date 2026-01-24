@@ -3,15 +3,15 @@
  *
  * Re-exports the Dialog component.
  */
-export * from './Close'
-export * from './Dialog'
-export * from './DialogDismiss'
-export { useDialogContext, type DialogContextValue } from './DialogProvider'
+export * from "./Close";
+export * from "./Dialog";
+export * from "./DialogDismiss";
+export { useDialogContext, type DialogContextValue } from "./DialogProvider";
 export {
   DialogStackProvider,
   type DialogStackContextType,
   type DialogStackItem,
-} from './DialogStackProvider'
-export * from './DialogTrigger'
-export * from './Popover'
-export * from './variants'
+} from "./DialogStackProvider";
+export * from "./DialogTrigger";
+export * from "./Popover";
+export * from "./variants";

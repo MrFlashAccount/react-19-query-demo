@@ -68,4 +68,3 @@ export function error(message: string, status: number = 500): Response {
 export function passthrough(request: Request): Promise<Response> {
   return fetch(request);
 }
-

@@ -1,23 +1,23 @@
-import type { Meta, StoryObj } from '@storybook/react'
-import { expect, userEvent, within } from '@storybook/test'
-import { useState } from 'react'
-import { z } from 'zod'
-import { Button } from '../Button'
-import { Form } from '../Form'
-import { Text } from '../Text'
-import { Checkbox } from './Checkbox'
+import type { Meta, StoryObj } from "@storybook/react";
+import { expect, userEvent, within } from "@storybook/test";
+import { useState } from "react";
+import { z } from "zod";
+import { Button } from "../Button";
+import { Form } from "../Form";
+import { Text } from "../Text";
+import { Checkbox } from "./Checkbox";
 // Schema for our form
 const defaultFormSchema = z.object({
   singleCheckbox: z.boolean(),
   multipleChoices: z.array(z.string()),
-})
+});
 
-type Props = unknown
+type Props = unknown;
 
 export default {
-  title: 'Components/Checkbox',
+  title: "Components/Checkbox",
   component: Checkbox,
-  parameters: { layout: 'centered' },
+  parameters: { layout: "centered" },
   decorators: [
     (Story) => (
       <div className="w-[300px]">
@@ -27,79 +27,79 @@ export default {
   ],
   argTypes: {
     isDisabled: {
-      control: 'boolean',
-      description: 'Whether the checkbox is disabled',
+      control: "boolean",
+      description: "Whether the checkbox is disabled",
       defaultValue: false,
     },
     isReadOnly: {
-      control: 'boolean',
-      description: 'Whether the checkbox is read-only',
+      control: "boolean",
+      description: "Whether the checkbox is read-only",
       defaultValue: false,
     },
     isInvalid: {
-      control: 'boolean',
-      description: 'Whether the checkbox has an invalid state',
+      control: "boolean",
+      description: "Whether the checkbox has an invalid state",
       defaultValue: false,
     },
     isIndeterminate: {
-      control: 'boolean',
-      description: 'Whether the checkbox is in an indeterminate state',
+      control: "boolean",
+      description: "Whether the checkbox is in an indeterminate state",
       defaultValue: false,
     },
     children: {
-      control: 'text',
-      description: 'The label content for the checkbox',
+      control: "text",
+      description: "The label content for the checkbox",
     },
     name: {
-      control: 'text',
-      description: 'The name of the checkbox field',
+      control: "text",
+      description: "The name of the checkbox field",
     },
     value: {
-      control: 'text',
-      description: 'The value of the checkbox (required when used in a group)',
+      control: "text",
+      description: "The value of the checkbox (required when used in a group)",
     },
   },
-} satisfies Meta<Props>
+} satisfies Meta<Props>;
 
-type Story = StoryObj<Props>
+type Story = StoryObj<Props>;
 
 export const Default: Story = {
   args: {
-    name: 'singleCheckbox',
-    children: 'Accept terms and conditions',
+    name: "singleCheckbox",
+    children: "Accept terms and conditions",
   },
   render: (args) => {
     return (
       <Form defaultValues={{ singleCheckbox: false }} schema={defaultFormSchema}>
         <Checkbox {...args} />
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement, step }) => {
-    const canvas = within(canvasElement)
+    const canvas = within(canvasElement);
 
-    const checkbox = canvas.getByRole('checkbox')
+    const checkbox = canvas.getByRole("checkbox");
 
-    await step('Checkbox should be initially unchecked', async () => {
-      await expect(checkbox).not.toBeChecked()
-    })
+    await step("Checkbox should be initially unchecked", async () => {
+      await expect(checkbox).not.toBeChecked();
+    });
 
-    await step('Checkbox can be checked', async () => {
-      await userEvent.click(checkbox)
-      await expect(checkbox).toBeChecked()
-    })
+    await step("Checkbox can be checked", async () => {
+      await userEvent.click(checkbox);
+      await expect(checkbox).toBeChecked();
+    });
 
-    await step('Checkbox can be unchecked', async () => {
-      await userEvent.click(checkbox)
-      await expect(checkbox).not.toBeChecked()
-    })
+    await step("Checkbox can be unchecked", async () => {
+      await userEvent.click(checkbox);
+      await expect(checkbox).not.toBeChecked();
+    });
   },
-}
+};
 
 export const Disabled: Story = {
   args: {
-    name: 'singleCheckbox',
-    children: 'Disabled checkbox',
+    name: "singleCheckbox",
+    children: "Disabled checkbox",
     isDisabled: true,
   },
   render: (args) => {
@@ -107,41 +107,41 @@ export const Disabled: Story = {
       <Form defaultValues={{ singleCheckbox: false }} schema={defaultFormSchema}>
         <Checkbox {...args} />
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkbox = canvas.getByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkbox = canvas.getByRole("checkbox");
 
-    await expect(checkbox).toBeDisabled()
-    await expect(checkbox).not.toBeChecked()
+    await expect(checkbox).toBeDisabled();
+    await expect(checkbox).not.toBeChecked();
   },
-}
+};
 
 export const Selected: Story = {
   args: {
-    name: 'singleCheckbox',
-    children: 'Selected checkbox',
+    name: "singleCheckbox",
+    children: "Selected checkbox",
   },
   render: (args) => {
     return (
       <Form defaultValues={{ singleCheckbox: true }} schema={defaultFormSchema}>
         <Checkbox {...args} />
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkbox = canvas.getByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkbox = canvas.getByRole("checkbox");
 
-    await expect(checkbox).toBeChecked()
+    await expect(checkbox).toBeChecked();
   },
-}
+};
 
 export const Invalid: Story = {
   args: {
-    name: 'singleCheckbox',
-    children: 'Invalid checkbox',
+    name: "singleCheckbox",
+    children: "Invalid checkbox",
     isInvalid: true,
   },
   render: (args) => {
@@ -149,20 +149,20 @@ export const Invalid: Story = {
       <Form defaultValues={{ singleCheckbox: false }} schema={defaultFormSchema}>
         <Checkbox {...args} />
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkbox = canvas.getByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkbox = canvas.getByRole("checkbox");
 
-    await expect(checkbox).toHaveAttribute('aria-invalid', 'true')
+    await expect(checkbox).toHaveAttribute("aria-invalid", "true");
   },
-}
+};
 
 export const ReadOnly: Story = {
   args: {
-    name: 'singleCheckbox',
-    children: 'Read-only checkbox',
+    name: "singleCheckbox",
+    children: "Read-only checkbox",
     isReadOnly: true,
   },
   render: (args) => {
@@ -170,21 +170,21 @@ export const ReadOnly: Story = {
       <Form defaultValues={{ singleCheckbox: true }} schema={defaultFormSchema}>
         <Checkbox {...args} />
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkbox = canvas.getByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkbox = canvas.getByRole("checkbox");
 
-    await expect(checkbox).toHaveAttribute('aria-readonly', 'true')
-    await expect(checkbox).toBeChecked()
+    await expect(checkbox).toHaveAttribute("aria-readonly", "true");
+    await expect(checkbox).toBeChecked();
   },
-}
+};
 
 export const Indeterminate: Story = {
   args: {
-    name: 'singleCheckbox',
-    children: 'Indeterminate checkbox',
+    name: "singleCheckbox",
+    children: "Indeterminate checkbox",
     isIndeterminate: true,
   },
   render: (args) => {
@@ -192,72 +192,72 @@ export const Indeterminate: Story = {
       <Form defaultValues={{ singleCheckbox: false }} schema={defaultFormSchema}>
         <Checkbox {...args} />
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkbox = canvas.getByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkbox = canvas.getByRole("checkbox");
 
-    await userEvent.click(checkbox)
+    await userEvent.click(checkbox);
   },
-}
+};
 
-type GroupStory = StoryObj<unknown>
+type GroupStory = StoryObj<unknown>;
 
 export const CheckboxGroup: GroupStory = {
   render: () => {
     return (
-      <Form defaultValues={{ multipleChoices: ['option1'] }} schema={defaultFormSchema}>
+      <Form defaultValues={{ multipleChoices: ["option1"] }} schema={defaultFormSchema}>
         <Checkbox.Group name="multipleChoices" label="Select multiple options">
           <Checkbox value="option1">Option 1</Checkbox>
           <Checkbox value="option2">Option 2</Checkbox>
           <Checkbox value="option3">Option 3</Checkbox>
         </Checkbox.Group>
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement, step }) => {
-    const canvas = within(canvasElement)
-    const checkboxes = canvas.getAllByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkboxes = canvas.getAllByRole("checkbox");
 
-    await step('First checkbox should be initially checked', async () => {
-      await expect(checkboxes[0]).toBeChecked()
-      await expect(checkboxes[1]).not.toBeChecked()
-      await expect(checkboxes[2]).not.toBeChecked()
-    })
+    await step("First checkbox should be initially checked", async () => {
+      await expect(checkboxes[0]).toBeChecked();
+      await expect(checkboxes[1]).not.toBeChecked();
+      await expect(checkboxes[2]).not.toBeChecked();
+    });
 
-    await step('Can select multiple checkboxes', async () => {
+    await step("Can select multiple checkboxes", async () => {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      await userEvent.click(checkboxes[1]!)
+      await userEvent.click(checkboxes[1]!);
 
-      await expect(checkboxes[0]).toBeChecked()
-      await expect(checkboxes[1]).toBeChecked()
-      await expect(checkboxes[2]).not.toBeChecked()
-    })
+      await expect(checkboxes[0]).toBeChecked();
+      await expect(checkboxes[1]).toBeChecked();
+      await expect(checkboxes[2]).not.toBeChecked();
+    });
   },
-}
+};
 
 export const DisabledGroup: GroupStory = {
   render: () => {
     return (
-      <Form defaultValues={{ multipleChoices: ['option1'] }} schema={defaultFormSchema}>
+      <Form defaultValues={{ multipleChoices: ["option1"] }} schema={defaultFormSchema}>
         <Checkbox.Group name="multipleChoices" label="Disabled group" isDisabled>
           <Checkbox value="option1">Option 1</Checkbox>
           <Checkbox value="option2">Option 2</Checkbox>
           <Checkbox value="option3">Option 3</Checkbox>
         </Checkbox.Group>
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkboxes = canvas.getAllByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkboxes = canvas.getAllByRole("checkbox");
 
     for (const checkbox of checkboxes) {
-      await expect(checkbox).toBeDisabled()
+      await expect(checkbox).toBeDisabled();
     }
   },
-}
+};
 
 export const InvalidGroup: GroupStory = {
   render: () => {
@@ -274,28 +274,28 @@ export const InvalidGroup: GroupStory = {
           <Checkbox value="option3">Option 3</Checkbox>
         </Checkbox.Group>
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkboxes = canvas.getAllByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkboxes = canvas.getAllByRole("checkbox");
 
     for (const checkbox of checkboxes) {
-      await expect(checkbox).toHaveAttribute('aria-invalid', 'true')
+      await expect(checkbox).toHaveAttribute("aria-invalid", "true");
     }
   },
-}
+};
 
 export const InvalidGroupFromForm: GroupStory = {
   render: () => {
     return (
       <Form
-        defaultValues={{ multipleChoices: ['option1'] }}
+        defaultValues={{ multipleChoices: ["option1"] }}
         schema={(schema) =>
           schema.object({
             multipleChoices: z
               .array(z.string())
-              .min(1, { message: 'Please select at least one option' }),
+              .min(1, { message: "Please select at least one option" }),
           })
         }
       >
@@ -305,30 +305,32 @@ export const InvalidGroupFromForm: GroupStory = {
           <Checkbox value="option3">Option 3</Checkbox>
         </Checkbox.Group>
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const checkboxes = canvas.getAllByRole('checkbox')
+    const canvas = within(canvasElement);
+    const checkboxes = canvas.getAllByRole("checkbox");
 
-    await expect(checkboxes[0]).toBeChecked()
-    await expect(checkboxes[1]).not.toBeChecked()
-    await expect(checkboxes[2]).not.toBeChecked()
+    await expect(checkboxes[0]).toBeChecked();
+    await expect(checkboxes[1]).not.toBeChecked();
+    await expect(checkboxes[2]).not.toBeChecked();
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    await userEvent.click(checkboxes[0]!)
+    await userEvent.click(checkboxes[0]!);
 
-    await expect(canvas.getByTestId('error')).toHaveTextContent('Please select at least one option')
+    await expect(canvas.getByTestId("error")).toHaveTextContent(
+      "Please select at least one option",
+    );
 
-    await expect(checkboxes[0]).not.toBeChecked()
-    await expect(checkboxes[1]).not.toBeChecked()
-    await expect(checkboxes[2]).not.toBeChecked()
+    await expect(checkboxes[0]).not.toBeChecked();
+    await expect(checkboxes[1]).not.toBeChecked();
+    await expect(checkboxes[2]).not.toBeChecked();
   },
-}
+};
 
 export const CheckboxGroupWithDynamicOptions: GroupStory = {
   render: () => {
-    const [options, setOptions] = useState(['option1', 'option2', 'option3'])
+    const [options, setOptions] = useState(["option1", "option2", "option3"]);
     return (
       <Form schema={defaultFormSchema}>
         <Checkbox.Group name="multipleChoices" label="Dynamic options">
@@ -344,7 +346,7 @@ export const CheckboxGroupWithDynamicOptions: GroupStory = {
           <Button
             variant="outline"
             onPress={() => {
-              setOptions([...options, `option${options.length + 1}`])
+              setOptions([...options, `option${options.length + 1}`]);
             }}
           >
             Add option
@@ -357,25 +359,25 @@ export const CheckboxGroupWithDynamicOptions: GroupStory = {
           {(field) => (
             <Text variant="caption" data-testid="selected-options">
               {/* eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */}
-              {field.join(', ')}
+              {field.join(", ")}
             </Text>
           )}
         </Form.FieldValue>
       </Form>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const addButton = canvas.getByRole('button', { name: 'Add option' })
+    const canvas = within(canvasElement);
+    const addButton = canvas.getByRole("button", { name: "Add option" });
 
-    await userEvent.click(canvas.getByRole('checkbox', { name: 'option1' }))
-    await userEvent.click(addButton)
-    await userEvent.click(canvas.getByRole('checkbox', { name: 'option4' }))
+    await userEvent.click(canvas.getByRole("checkbox", { name: "option1" }));
+    await userEvent.click(addButton);
+    await userEvent.click(canvas.getByRole("checkbox", { name: "option4" }));
 
-    await userEvent.click(canvas.getByRole('checkbox', { name: 'option2' }))
+    await userEvent.click(canvas.getByRole("checkbox", { name: "option2" }));
 
-    await userEvent.click(addButton)
+    await userEvent.click(addButton);
 
-    await expect(canvas.getByTestId('selected-options')).toHaveTextContent('option4, option2')
+    await expect(canvas.getByTestId("selected-options")).toHaveTextContent("option4, option2");
   },
-}
+};

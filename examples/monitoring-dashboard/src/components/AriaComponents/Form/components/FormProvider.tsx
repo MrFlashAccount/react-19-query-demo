@@ -3,32 +3,32 @@
  *
  * Context that injects form instance into the component tree.
  */
-import { createContext, useContext } from 'react'
-import invariant from 'tiny-invariant'
-import type * as types from './types'
-import type { FormInstance, FormInstanceValidated } from './types'
+import { createContext, useContext } from "react";
+import invariant from "tiny-invariant";
+import type * as types from "./types";
+import type { FormInstance, FormInstanceValidated } from "./types";
 
 /** Context type for the form provider. */
 interface FormContextType<Schema extends types.TSchema> {
-  readonly form: types.UseFormReturn<Schema>
+  readonly form: types.UseFormReturn<Schema>;
 }
 
 // at this moment, we don't know the type of the form context
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const FormContext = createContext<FormContextType<any> | null>(null)
+const FormContext = createContext<FormContextType<any> | null>(null);
 
 /** Provides the form instance to the component tree. */
 export function FormProvider<Schema extends types.TSchema>(
   props: FormContextType<Schema> & { children: React.ReactNode },
 ) {
-  const { children, form } = props
+  const { children, form } = props;
 
   return (
     // eslint-disable-next-line no-restricted-syntax, @typescript-eslint/no-explicit-any
     <FormContext.Provider value={{ form: form as types.UseFormReturn<any> }}>
       {children}
     </FormContext.Provider>
-  )
+  );
 }
 
 /** Returns the form instance from the context. */
@@ -36,18 +36,18 @@ export function FormProvider<Schema extends types.TSchema>(
 export function useFormContext<Schema extends types.TSchema>(
   form?: FormInstanceValidated<Schema>,
 ): FormInstance<Schema> {
-  if (form != null && 'control' in form) {
-    return form
+  if (form != null && "control" in form) {
+    return form;
   } else {
     // eslint-disable-next-line react-compiler/react-compiler
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const ctx = useContext(FormContext)
+    const ctx = useContext(FormContext);
 
-    invariant(ctx, 'FormContext not found')
+    invariant(ctx, "FormContext not found");
 
     // This is safe, as we pass the value transparently and it is typed outside
     // eslint-disable-next-line no-restricted-syntax
-    return ctx.form as unknown as types.UseFormReturn<Schema>
+    return ctx.form as unknown as types.UseFormReturn<Schema>;
   }
 }
 
@@ -59,9 +59,9 @@ export function useOptionalFormContext<
 >(form?: Form): Form extends undefined ? FormInstance<Schema> | null : FormInstance<Schema> {
   try {
     // eslint-disable-next-line react-compiler/react-compiler
-    return useFormContext<Schema>(form)
+    return useFormContext<Schema>(form);
   } catch {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return null!
+    return null!;
   }
 }

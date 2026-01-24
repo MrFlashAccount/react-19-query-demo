@@ -5,7 +5,7 @@
 /**
  * A type that represents an HTML or SVG element.
  */
-export type HTMLOrSVGElement = HTMLElement | SVGElement
+export type HTMLOrSVGElement = HTMLElement | SVGElement;
 
 /**
  * Finds all scroll containers that have overflow set to 'auto' or 'scroll'
@@ -20,34 +20,34 @@ export function findScrollContainers(element: HTMLOrSVGElement | null): HTMLOrSV
    * @returns An array of scroll containers
    */
   const recurse = (nextElement: HTMLOrSVGElement): HTMLOrSVGElement[] => {
-    return [nextElement, ...findScrollContainers(nextElement.parentElement)]
-  }
+    return [nextElement, ...findScrollContainers(nextElement.parentElement)];
+  };
 
-  if (!element || element === document.body) return []
+  if (!element || element === document.body) return [];
 
   if (hasTailwindOverflowHidden(element)) {
-    return findScrollContainers(element.parentElement)
+    return findScrollContainers(element.parentElement);
   }
 
   if (hasInlineOverflowHidden(element)) {
-    return findScrollContainers(element.parentElement)
+    return findScrollContainers(element.parentElement);
   }
 
   if (hasTailwindOverflow(element)) {
-    return recurse(element)
+    return recurse(element);
   }
 
   if (hasInlineOverflow(element)) {
-    return recurse(element)
+    return recurse(element);
   }
 
-  const { overflow, overflowX, overflowY } = window.getComputedStyle(element)
+  const { overflow, overflowX, overflowY } = window.getComputedStyle(element);
 
-  if ([overflow, overflowX, overflowY].some((prop) => prop === 'auto' || prop === 'scroll')) {
-    return recurse(element)
+  if ([overflow, overflowX, overflowY].some((prop) => prop === "auto" || prop === "scroll")) {
+    return recurse(element);
   }
 
-  return findScrollContainers(element.parentElement)
+  return findScrollContainers(element.parentElement);
 }
 
 /**
@@ -56,15 +56,15 @@ export function findScrollContainers(element: HTMLOrSVGElement | null): HTMLOrSV
  * @returns An array of containers that possbly have overflow
  */
 export function findOverflowContainers(element: HTMLOrSVGElement | null): HTMLOrSVGElement[] {
-  const result: HTMLOrSVGElement[] = []
+  const result: HTMLOrSVGElement[] = [];
 
-  if (!element || element === document.body) return result
+  if (!element || element === document.body) return result;
 
   if (hasPossibleOverflow(element)) {
-    result.push(element)
+    result.push(element);
   }
 
-  return [...result, ...findOverflowContainers(element.parentElement)]
+  return [...result, ...findOverflowContainers(element.parentElement)];
 }
 
 /**
@@ -77,15 +77,15 @@ export function findOverflowContainers(element: HTMLOrSVGElement | null): HTMLOr
 export function findScrollContainersUsingTailwind(
   element: HTMLOrSVGElement | null,
 ): HTMLOrSVGElement[] {
-  const result: HTMLOrSVGElement[] = []
+  const result: HTMLOrSVGElement[] = [];
 
-  if (!element || element === document.body) return result
+  if (!element || element === document.body) return result;
 
   if (hasTailwindOverflow(element)) {
-    result.push(element)
+    result.push(element);
   }
 
-  return [...result, ...findScrollContainersUsingTailwind(element.parentElement)]
+  return [...result, ...findScrollContainersUsingTailwind(element.parentElement)];
 }
 
 /**
@@ -96,15 +96,15 @@ export function findScrollContainersUsingTailwind(
 export function findOverflowContainersUsingComputedStyle(
   element: HTMLOrSVGElement | null,
 ): HTMLOrSVGElement[] {
-  const result: HTMLOrSVGElement[] = []
+  const result: HTMLOrSVGElement[] = [];
 
-  if (!element || element === document.body) return result
+  if (!element || element === document.body) return result;
 
   if (hasComputedStyleOverflow(element)) {
-    result.push(element)
+    result.push(element);
   }
 
-  return [...result, ...findOverflowContainersUsingComputedStyle(element.parentElement)]
+  return [...result, ...findOverflowContainersUsingComputedStyle(element.parentElement)];
 }
 
 /**
@@ -113,8 +113,8 @@ export function findOverflowContainersUsingComputedStyle(
  * @returns True if the element has overflow set to 'auto' or 'scroll', false otherwise
  */
 function hasComputedStyleOverflow(element: HTMLOrSVGElement): boolean {
-  const { overflow, overflowX, overflowY } = window.getComputedStyle(element)
-  return [overflow, overflowX, overflowY].some((prop) => prop === 'auto' || prop === 'scroll')
+  const { overflow, overflowX, overflowY } = window.getComputedStyle(element);
+  return [overflow, overflowX, overflowY].some((prop) => prop === "auto" || prop === "scroll");
 }
 
 /**
@@ -123,15 +123,15 @@ function hasComputedStyleOverflow(element: HTMLOrSVGElement): boolean {
  * @returns True if the element has inline overflow, false otherwise
  */
 export function hasInlineOverflow(element: HTMLOrSVGElement): boolean {
-  const { overflow, overflowX, overflowY } = element.style
+  const { overflow, overflowX, overflowY } = element.style;
   return (
-    overflow === 'auto' ||
-    overflow === 'scroll' ||
-    overflowX === 'auto' ||
-    overflowX === 'scroll' ||
-    overflowY === 'auto' ||
-    overflowY === 'scroll'
-  )
+    overflow === "auto" ||
+    overflow === "scroll" ||
+    overflowX === "auto" ||
+    overflowX === "scroll" ||
+    overflowY === "auto" ||
+    overflowY === "scroll"
+  );
 }
 
 /**
@@ -141,13 +141,13 @@ export function hasInlineOverflow(element: HTMLOrSVGElement): boolean {
  */
 export function hasTailwindOverflow(element: HTMLOrSVGElement): boolean {
   return (
-    element.classList.contains('overflow-auto') ||
-    element.classList.contains('overflow-scroll') ||
-    element.classList.contains('overflow-x-auto') ||
-    element.classList.contains('overflow-y-auto') ||
-    element.classList.contains('overflow-x-scroll') ||
-    element.classList.contains('overflow-y-scroll')
-  )
+    element.classList.contains("overflow-auto") ||
+    element.classList.contains("overflow-scroll") ||
+    element.classList.contains("overflow-x-auto") ||
+    element.classList.contains("overflow-y-auto") ||
+    element.classList.contains("overflow-x-scroll") ||
+    element.classList.contains("overflow-y-scroll")
+  );
 }
 
 /**
@@ -156,8 +156,8 @@ export function hasTailwindOverflow(element: HTMLOrSVGElement): boolean {
  * @returns True if the element has possible overflow, false otherwise
  */
 export function hasPossibleOverflow(element: HTMLOrSVGElement): boolean {
-  const { scrollHeight, scrollWidth, clientHeight, clientWidth } = element
-  return scrollHeight > clientHeight || scrollWidth > clientWidth
+  const { scrollHeight, scrollWidth, clientHeight, clientWidth } = element;
+  return scrollHeight > clientHeight || scrollWidth > clientWidth;
 }
 
 /**
@@ -167,12 +167,12 @@ export function hasPossibleOverflow(element: HTMLOrSVGElement): boolean {
  */
 export function hasTailwindOverflowHidden(element: HTMLOrSVGElement): boolean {
   return (
-    element.classList.contains('overflow-hidden') ||
-    element.classList.contains('overflow-x-hidden') ||
-    element.classList.contains('overflow-y-hidden') ||
-    element.classList.contains('overflow-x-clip') ||
-    element.classList.contains('overflow-y-clip')
-  )
+    element.classList.contains("overflow-hidden") ||
+    element.classList.contains("overflow-x-hidden") ||
+    element.classList.contains("overflow-y-hidden") ||
+    element.classList.contains("overflow-x-clip") ||
+    element.classList.contains("overflow-y-clip")
+  );
 }
 
 /**
@@ -181,13 +181,13 @@ export function hasTailwindOverflowHidden(element: HTMLOrSVGElement): boolean {
  * @returns True if the element has inline overflow hidden, false otherwise
  */
 export function hasInlineOverflowHidden(element: HTMLOrSVGElement): boolean {
-  const { overflow, overflowX, overflowY } = element.style
+  const { overflow, overflowX, overflowY } = element.style;
   return (
-    overflow === 'hidden' ||
-    overflowX === 'hidden' ||
-    overflowY === 'hidden' ||
-    overflow === 'clip' ||
-    overflowX === 'clip' ||
-    overflowY === 'clip'
-  )
+    overflow === "hidden" ||
+    overflowX === "hidden" ||
+    overflowY === "hidden" ||
+    overflow === "clip" ||
+    overflowX === "clip" ||
+    overflowY === "clip"
+  );
 }

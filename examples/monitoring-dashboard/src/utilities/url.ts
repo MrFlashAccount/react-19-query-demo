@@ -7,9 +7,9 @@
  */
 export function isAbsoluteUrl(url: string) {
   try {
-    new URL(url)
-    return true
+    new URL(url);
+    return true;
   } catch {
-    return false
+    return false;
   }
 }

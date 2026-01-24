@@ -2,12 +2,13 @@
 import { mergeProps } from "#/components/aria";
 import { useEvent } from "#/hooks/useEvent";
 import { mergeRefs } from "#/utilities/mergeRefs";
+import type { RefProp } from "#/components/AriaComponents/types";
 import type { VariantProps } from "#/utilities/tailwindVariants";
 import { tv } from "#/utilities/tailwindVariants";
 import type { OTPInputProps } from "input-otp";
 import { OTPInput as BaseOTPInput, type SlotProps as OTPInputSlotProps } from "input-otp";
-import type { ForwardedRef, Ref } from "react";
-import { forwardRef, useRef } from "react";
+import type { Ref } from "react";
+import { useRef } from "react";
 import type {
   FieldComponentProps,
   FieldPath,
@@ -29,7 +30,8 @@ export interface OtpInputProps<Schema extends TSchema, TFieldName extends FieldP
     FieldProps,
     FieldVariantProps,
     Omit<VariantProps<typeof STYLES>, "disabled" | "invalid">,
-    TestIdProps {
+    TestIdProps,
+    RefProp<HTMLDivElement> {
   readonly inputRef?: Ref<HTMLInputElement>;
   readonly maxLength: number;
   readonly className?: string;
@@ -69,10 +71,9 @@ const SLOT_STYLES = tv({
 });
 
 /** Accessible one-time password component with copy paste functionality. */
-export const OTPInput = forwardRef(function OTPInput<
-  Schema extends TSchema,
-  TFieldName extends FieldPath<Schema, string>,
->(props: OtpInputProps<Schema, TFieldName>, ref: ForwardedRef<HTMLDivElement>) {
+export function OTPInput<Schema extends TSchema, TFieldName extends FieldPath<Schema, string>>(
+  props: OtpInputProps<Schema, TFieldName>,
+) {
   const {
     maxLength,
     variants = STYLES,
@@ -84,6 +85,7 @@ export const OTPInput = forwardRef(function OTPInput<
     onComplete,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     form: _,
+    ref: forwardedRef,
     ...inputProps
   } = props;
 
@@ -127,7 +129,7 @@ export const OTPInput = forwardRef(function OTPInput<
         variants: fieldVariants,
         form: formInstance,
       })}
-      ref={ref}
+      ref={forwardedRef}
       name={name}
     >
       <BaseOTPInput
@@ -151,7 +153,7 @@ export const OTPInput = forwardRef(function OTPInput<
       />
     </Form.Field>
   );
-});
+}
 
 /** Props for an {@link OTPInputRenderer}. */
 interface OTPInputRendererProps {

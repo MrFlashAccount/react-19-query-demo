@@ -4,42 +4,121 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MovieDB - Search thousands of movies</title>
+    <title>Examples</title>
     <style>
-      .dev-nav {
-        position: fixed;
-        bottom: 12px;
-        left: 12px;
-        display: flex;
-        gap: 8px;
-        z-index: 9999;
-        font-family: system-ui, sans-serif;
-        font-size: 12px;
+      :root {
+        color-scheme: dark;
+        --bg: #0b0d12;
+        --panel: rgba(255, 255, 255, 0.06);
+        --border: rgba(255, 255, 255, 0.12);
+        --text: #e6e7eb;
+        --muted: #a1a1aa;
+        --accent: #22d3ee;
       }
-      .dev-nav a {
-        padding: 6px 12px;
-        background: rgba(15, 15, 20, 0.9);
-        color: #a1a1aa;
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: radial-gradient(1200px 800px at 30% 20%, rgba(34, 211, 238, 0.12), transparent 55%),
+          radial-gradient(900px 700px at 80% 30%, rgba(52, 211, 153, 0.1), transparent 60%),
+          var(--bg);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 48px 20px 64px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0 0 24px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        display: block;
+        padding: 14px 14px 12px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
         text-decoration: none;
-        border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        transition: all 0.15s;
+        color: inherit;
+        transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
       }
-      .dev-nav a:hover {
-        background: rgba(25, 25, 35, 0.95);
-        color: #e4e4e7;
-        border-color: rgba(255, 255, 255, 0.2);
+      .card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(34, 211, 238, 0.35);
+        background: rgba(255, 255, 255, 0.075);
+      }
+      .card .title {
+        font-weight: 650;
+        margin-bottom: 6px;
+      }
+      .card .desc {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.4;
+      }
+      .card .meta {
+        margin-top: 10px;
+        font-size: 12px;
+        color: rgba(34, 211, 238, 0.9);
+      }
+      .footer {
+        margin-top: 22px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+          monospace;
+        font-size: 12px;
+        color: rgba(230, 231, 235, 0.9);
       }
     </style>
   </head>
   <body>
-    <div id="root"></div>
-    <nav class="dev-nav">
-      <a href="/lib/performance-monitor/test/">Perf Monitor</a>
-      <a href="/lib/rsc-service-worker-bff/test/">RSC Playground</a>
-    </nav>
-    <script type="module" src="/examples/movies-db/src/main.tsx"></script>
-    <script type="module" src="/lib/performance-monitor/index.ts"></script>
-    <performance-overlay level="2" position="top"></performance-overlay>
+    <div class="wrap">
+      <h1>Examples</h1>
+      <p>Pick an example to run in this Vite instance.</p>
+
+      <div class="grid">
+        <a class="card" href="/movies-db/">
+          <div class="title">Movies DB</div>
+          <div class="desc">React 19 playground (queries, RSC, service worker).</div>
+          <div class="meta">Open →</div>
+        </a>
+
+        <a class="card" href="/monitoring-dashboard/">
+          <div class="title">Monitoring Dashboard</div>
+          <div class="desc">UI-heavy dashboard example.</div>
+          <div class="meta">Open →</div>
+        </a>
+
+        <a class="card" href="/lib/performance-monitor/test/">
+          <div class="title">Perf Monitor</div>
+          <div class="desc">Overlay + settings playground.</div>
+          <div class="meta">Open →</div>
+        </a>
+
+        <a class="card" href="/lib/rsc-service-worker-bff/test/">
+          <div class="title">RSC Playground</div>
+          <div class="desc">Service worker + RSC worker BFF test app.</div>
+          <div class="meta">Open →</div>
+        </a>
+      </div>
+
+      <div class="footer">
+        Tip: start the root dev server with <code>pnpm dev:watch</code>.
+      </div>
+    </div>
   </body>
 </html>

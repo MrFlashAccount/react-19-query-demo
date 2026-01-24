@@ -3,11 +3,12 @@
  *
  * Set of hooks to work with native event listeners.
  */
-import { IS_DEV_MODE } from "enso-common/src/detect";
 import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
 
 import { useEvent } from "./useEvent";
+
+const IS_DEV_MODE = import.meta.env.DEV;
 
 /**
  * Options to pass to the event listener.

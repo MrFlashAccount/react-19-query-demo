@@ -1,19 +1,19 @@
-import type { Meta, StoryObj } from '@storybook/react'
-import { expect, userEvent, waitFor, within } from '@storybook/test'
-import { useSuspenseQuery } from '@tanstack/react-query'
-import { useLayoutEffect, useRef, useState } from 'react'
-import { Button } from '../Button'
-import { Form } from '../Form'
-import { Input } from '../Inputs'
-import { Text } from '../Text'
-import { Dialog, type DialogProps } from './Dialog'
-import { DialogTrigger } from './DialogTrigger'
-import { Popover } from './Popover'
+import type { Meta, StoryObj } from "@storybook/react";
+import { expect, userEvent, waitFor, within } from "@storybook/test";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { useLayoutEffect, useRef, useState } from "react";
+import { Button } from "../Button";
+import { Form } from "../Form";
+import { Input } from "../Inputs";
+import { Text } from "../Text";
+import { Dialog, type DialogProps } from "./Dialog";
+import { DialogTrigger } from "./DialogTrigger";
+import { Popover } from "./Popover";
 
-type Story = StoryObj<DialogProps>
+type Story = StoryObj<DialogProps>;
 
 export default {
-  title: 'Components/Dialog',
+  title: "Components/Dialog",
   component: Dialog,
   render: (args) => (
     <DialogTrigger defaultOpen>
@@ -23,16 +23,16 @@ export default {
     </DialogTrigger>
   ),
   args: {
-    type: 'modal',
-    title: 'Dialog Title',
-    children: 'Dialog Content',
+    type: "modal",
+    title: "Dialog Title",
+    children: "Dialog Content",
   },
-} as Meta<DialogProps>
+} as Meta<DialogProps>;
 
-export const Default = {}
+export const Default = {};
 
 // Use a random query key to avoid caching
-const QUERY_KEY = Math.random().toString()
+const QUERY_KEY = Math.random().toString();
 
 function SuspenseContent({ delay = 10_000 }: { delay?: number }): React.ReactNode {
   useSuspenseQuery({
@@ -42,52 +42,52 @@ function SuspenseContent({ delay = 10_000 }: { delay?: number }): React.ReactNod
     queryFn: () =>
       new Promise((resolve) => {
         setTimeout(() => {
-          resolve('resolved')
-        }, delay)
+          resolve("resolved");
+        }, delay);
       }),
-  })
+  });
 
   return (
     <div className="flex h-[250px] flex-col items-center justify-center text-center">
       Unsuspended content
     </div>
-  )
+  );
 }
 
 export const Suspened = {
   args: {
     children: <SuspenseContent delay={10_000_000_000} />,
   },
-}
+};
 
 function BrokenContent(): React.ReactNode {
-  throw new Error('💣')
+  throw new Error("💣");
 }
 
 export const Broken = {
   args: {
     children: <BrokenContent />,
   },
-}
+};
 
-const sizes = [600, 300, 150, 450]
+const sizes = [600, 300, 150, 450];
 function ResizableContent() {
-  const [sizeIndex, setSizeIndex] = useState(0)
-  const divRef = useRef<HTMLDivElement>(null)
+  const [sizeIndex, setSizeIndex] = useState(0);
+  const divRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const interval = setTimeout(() => {
-      const nextSizeIndex = sizeIndex + 1
+      const nextSizeIndex = sizeIndex + 1;
 
       if (nextSizeIndex < sizes.length) {
-        setSizeIndex(nextSizeIndex)
+        setSizeIndex(nextSizeIndex);
       }
-    }, 150)
+    }, 150);
 
     return () => {
-      clearTimeout(interval)
-    }
-  }, [sizeIndex])
+      clearTimeout(interval);
+    };
+  }, [sizeIndex]);
 
   return (
     <div
@@ -95,10 +95,10 @@ function ResizableContent() {
       style={{ height: sizes[sizeIndex] }}
       className="flex flex-none items-center justify-center text-center"
     >
-      This dialog should resize with animation, and the content should be centered. Height:{' '}
+      This dialog should resize with animation, and the content should be centered. Height:{" "}
       {sizes[sizeIndex]}
     </div>
-  )
+  );
 }
 
 export const AnimateSize: Story = {
@@ -108,17 +108,17 @@ export const AnimateSize: Story = {
   parameters: {
     chromatic: { disableSnapshot: true },
   },
-}
+};
 
 export const Fullscreen = {
   args: {
-    type: 'fullscreen',
+    type: "fullscreen",
   },
-}
+};
 
 export const FullscreenWithStretchChildren: Story = {
   args: {
-    type: 'fullscreen',
+    type: "fullscreen",
     children: () => {
       return (
         <div className="flex h-full w-full flex-col items-center justify-center rounded-3xl bg-primary text-center">
@@ -126,10 +126,10 @@ export const FullscreenWithStretchChildren: Story = {
             This dialog should stretch to fit the screen.
           </Text>
         </div>
-      )
+      );
     },
   },
-}
+};
 
 export const PopoverInDialog: Story = {
   render: () => {
@@ -146,7 +146,7 @@ export const PopoverInDialog: Story = {
               })
             }
             defaultValues={{
-              test: 'test',
+              test: "test",
             }}
           >
             <Form.FieldValue name="test">{(value) => <Text>{value}</Text>}</Form.FieldValue>
@@ -167,15 +167,15 @@ export const PopoverInDialog: Story = {
           </Form>
         </Dialog>
       </Dialog.Trigger>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    await userEvent.click(canvas.getByRole('button', { name: 'Open Dialog' }))
-    await userEvent.click(canvas.getByRole('button', { name: 'Open Popover' }))
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Open Dialog" }));
+    await userEvent.click(canvas.getByRole("button", { name: "Open Popover" }));
 
     await waitFor(() => {
-      return expect(canvas.getByText('Popover Content')).toBeInTheDocument()
-    })
+      return expect(canvas.getByText("Popover Content")).toBeInTheDocument();
+    });
   },
-}
+};

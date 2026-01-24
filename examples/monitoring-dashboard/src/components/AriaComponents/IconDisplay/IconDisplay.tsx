@@ -1,39 +1,40 @@
 /** @file A text display with an icon. */
-import { Icon } from '#/components/Icon'
-import { tv, type VariantProps } from '#/utilities/tailwindVariants'
-import { Text, VisualTooltip, type IconProp, type TextProps, type TooltipElementType } from '..'
+import { Icon } from "#/components/Icon";
+import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { Text, VisualTooltip, type IconProp, type TextProps, type TooltipElementType } from "..";
 
 const ICON_DISPLAY_STYLES = tv({
-  base: 'flex items-center gap-2 max-w-[14.5rem] min-w-4 px-[7px] border-0.5 border-transparent',
+  base: "flex items-center gap-2 max-w-[14.5rem] min-w-4 px-[7px] border-0.5 border-transparent",
   slots: {
-    icon: '',
+    icon: "",
     // For some reason `min-w-0` is required for the ellipsis to appear.
-    container: 'flex mx-auto min-w-0',
-    text: 'block truncate',
+    container: "flex mx-auto min-w-0",
+    text: "block truncate",
   },
   variants: {
     variant: {
-      custom: '',
-      link: 'inline-block px-0 py-0 rounded-sm text-primary/50 underline border-0',
-      primary: 'bg-primary text-white',
-      accent: 'bg-accent text-white',
-      ghost: 'text-primary',
-      submit: 'bg-invite text-white opacity-80',
-      outline: 'border-0.5 rounded-full border-primary/20 text-primary px-1 mx-1',
+      custom: "",
+      link: "inline-block px-0 py-0 rounded-sm text-primary/50 underline border-0",
+      primary: "bg-primary text-white",
+      accent: "bg-accent text-white",
+      ghost: "text-primary",
+      submit: "bg-invite text-white opacity-80",
+      outline: "border-0.5 rounded-full border-primary/20 text-primary px-1 mx-1",
     },
   },
   defaultVariants: {
-    variant: 'custom',
-    iconPosition: 'default',
+    variant: "custom",
+    iconPosition: "default",
   },
-})
+});
 
 /** Props for an {@link IconDisplay}. */
 export interface IconDisplayProps<IconType extends string>
-  extends Omit<TextProps, 'children' | 'variant' | 'variants'>,
+  extends
+    Omit<TextProps, "children" | "variant" | "variants">,
     VariantProps<typeof ICON_DISPLAY_STYLES> {
-  readonly icon: IconProp<IconType>
-  readonly children: TooltipElementType
+  readonly icon: IconProp<IconType>;
+  readonly children: TooltipElementType;
 }
 
 /** A text display with an icon. */
@@ -46,9 +47,9 @@ export function IconDisplay<IconType extends string>(props: IconDisplayProps<Ico
     tooltip,
     className,
     ...textProps
-  } = props
+  } = props;
 
-  const styles = variants({ variant })
+  const styles = variants({ variant });
 
   return (
     <div className={styles.base({ className })}>
@@ -63,5 +64,5 @@ export function IconDisplay<IconType extends string>(props: IconDisplayProps<Ico
         </Text>
       </div>
     </div>
-  )
+  );
 }

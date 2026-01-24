@@ -1,10 +1,10 @@
 /** @file Utilities related to sorting. */
-import type { SvgUseIcon } from '#/components/AriaComponents'
+import type { SvgUseIcon } from "#/components/AriaComponents";
 
 /** Sort direction. */
 export enum SortDirection {
-  ascending = 'ascending',
-  descending = 'descending',
+  ascending = "ascending",
+  descending = "descending",
 }
 
 /**
@@ -14,13 +14,13 @@ export enum SortDirection {
 export function nextSortDirection(sortDirection: SortDirection | null) {
   switch (sortDirection) {
     case null: {
-      return SortDirection.ascending
+      return SortDirection.ascending;
     }
     case SortDirection.ascending: {
-      return SortDirection.descending
+      return SortDirection.descending;
     }
     case SortDirection.descending: {
-      return null
+      return null;
     }
   }
 }
@@ -31,24 +31,24 @@ export function iconIdFor(
   sortInfoAppliesToCurrentColumn = true,
 ): SvgUseIcon {
   if (!sortInfoAppliesToCurrentColumn) {
-    return 'sort'
+    return "sort";
   }
   switch (sortDirection) {
     case null:
     case undefined: {
-      return 'sort'
+      return "sort";
     }
     case SortDirection.ascending: {
-      return 'sort_ascending'
+      return "sort_ascending";
     }
     case SortDirection.descending: {
-      return 'sort_descending'
+      return "sort_descending";
     }
   }
 }
 
 /** Sort information. */
 export interface SortInfo<Field> {
-  readonly field: Field
-  readonly direction: SortDirection
+  readonly field: Field;
+  readonly direction: SortDirection;
 }

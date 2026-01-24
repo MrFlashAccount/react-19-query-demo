@@ -1,56 +1,49 @@
 /** @file A button that copies text to the clipboard. */
-import Error from '#/assets/cross.svg'
-import CopyIcon from '#/assets/duplicate.svg'
-import Done from '#/assets/tick.svg'
-import { useCopy } from '#/hooks/copyHooks'
-import * as textProvider from '#/providers/TextProvider'
-import { Button } from './Button'
-import type { ButtonProps } from './types'
+import Error from "#/assets/cross.svg";
+import CopyIcon from "#/assets/duplicate.svg";
+import Done from "#/assets/tick.svg";
+import { useCopy } from "#/hooks/copyHooks";
+import { Button } from "./Button";
+import type { ButtonProps } from "./types";
 
 /** Props for a {@link CopyButton}. */
-export interface CopyButtonProps<IconType extends string>
-  extends Omit<ButtonProps<IconType>, 'icon' | 'loading' | 'onPress'> {
+export interface CopyButtonProps<IconType extends string> extends Omit<
+  ButtonProps<IconType>,
+  "icon" | "loading" | "onPress"
+> {
   /** The text to copy to the clipboard. */
-  readonly copyText: string
+  readonly copyText: string;
   /**
    * Custom icon
    * If `false` is provided, no icon will be shown.
    */
-  readonly copyIcon?: string | false
-  readonly errorIcon?: string
-  readonly successIcon?: string
-  readonly onCopy?: () => void
+  readonly copyIcon?: string | false;
+  readonly errorIcon?: string;
+  readonly successIcon?: string;
+  readonly onCopy?: () => void;
   /**
    * Show a toast message when the copy is successful.
    * If a string is provided, it will be used as the toast message.
    * If `true` is provided, a default toast message will be shown with the text "Copied to clipboard".
    * If `false` is provided, no toast message will be shown.
    */
-  readonly successToastMessage?: boolean | string
+  readonly successToastMessage?: boolean | string;
 }
 
 /** A button that copies text to the clipboard. */
 export function CopyButton<IconType extends string>(props: CopyButtonProps<IconType>) {
   const {
-    variant = 'icon',
+    variant = "icon",
     copyIcon = CopyIcon,
     successIcon = Done,
     errorIcon = Error,
     copyText,
     onCopy,
     ...buttonProps
-  } = props
-  const { getText } = textProvider.useText()
-  const copyQuery = useCopy({ onCopy })
-  const successfullyCopied = copyQuery.isSuccess
-  const isError = copyQuery.isError
-  const showIcon = copyIcon !== false
-  const icon =
-    showIcon ?
-      isError ? errorIcon
-      : successfullyCopied ? successIcon
-      : copyIcon
-    : null
+  } = props;
+  const { copy, isSuccess, isError } = useCopy({ onCopy });
+  const showIcon = copyIcon !== false;
+  const icon = showIcon ? (isError ? errorIcon : isSuccess ? successIcon : copyIcon) : null;
 
   return (
     <Button
@@ -58,9 +51,9 @@ export function CopyButton<IconType extends string>(props: CopyButtonProps<IconT
       /* eslint-disable-next-line @typescript-eslint/no-explicit-any,no-restricted-syntax */
       {...(buttonProps as any)}
       variant={variant}
-      aria-label={props['aria-label'] ?? getText('copyShortcut')}
-      onPress={() => copyQuery.mutateAsync(copyText)}
+      aria-label={props["aria-label"] ?? "Copy"}
+      onPress={() => copy(copyText)}
       icon={icon}
     />
-  )
+  );
 }

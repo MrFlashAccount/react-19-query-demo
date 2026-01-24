@@ -1,5 +1,5 @@
 /** @file Module containing common custom React hooks used throughout out Dashboard. */
-import * as React from 'react'
+import * as React from "react";
 
 // `console.*` is allowed because these are for debugging purposes only.
 /* eslint-disable no-restricted-properties */
@@ -11,35 +11,35 @@ export function useDebugState<T>(
   initialState: T | (() => T),
   name?: string,
 ): [state: T, setState: (valueOrUpdater: React.SetStateAction<T>, source?: string) => void] {
-  const [state, rawSetState] = React.useState(initialState)
+  const [state, rawSetState] = React.useState(initialState);
 
-  const description = name != null ? `state for '${name}'` : 'state'
+  const description = name != null ? `state for '${name}'` : "state";
 
   const setState = React.useCallback(
     (valueOrUpdater: React.SetStateAction<T>, source?: string) => {
-      const fullDescription = `${description}${source != null ? ` from '${source}'` : ''}`
+      const fullDescription = `${description}${source != null ? ` from '${source}'` : ""}`;
       rawSetState((oldState) => {
         const newState =
-          typeof valueOrUpdater === 'function' ?
-            // This is UNSAFE when `T` is itself a function type,
-            // however React makes the same assumption.
-            // eslint-disable-next-line no-restricted-syntax
-            (valueOrUpdater as (prevState: T) => T)(oldState)
-          : valueOrUpdater
+          typeof valueOrUpdater === "function"
+            ? // This is UNSAFE when `T` is itself a function type,
+              // however React makes the same assumption.
+              // eslint-disable-next-line no-restricted-syntax
+              (valueOrUpdater as (prevState: T) => T)(oldState)
+            : valueOrUpdater;
         if (!Object.is(oldState, newState)) {
-          console.group(description)
-          console.trace(description)
-          console.log(`Old ${fullDescription}:`, oldState)
-          console.log(`New ${fullDescription}:`, newState)
-          console.groupEnd()
+          console.group(description);
+          console.trace(description);
+          console.log(`Old ${fullDescription}:`, oldState);
+          console.log(`New ${fullDescription}:`, newState);
+          console.groupEnd();
         }
-        return newState
-      })
+        return newState;
+      });
     },
     [description],
-  )
+  );
 
-  return [state, setState]
+  return [state, setState];
 }
 
 // === useMonitorDependencies ===
@@ -51,26 +51,26 @@ export function useMonitorDependencies(
   dependencyDescriptions?: readonly string[],
   active = true,
 ) {
-  const oldDependenciesRef = React.useRef(dependencies)
+  const oldDependenciesRef = React.useRef(dependencies);
   if (active) {
     const indicesOfChangedDependencies = dependencies.flatMap((dep, i) =>
       Object.is(dep, oldDependenciesRef.current[i]) ? [] : [i],
-    )
+    );
     if (indicesOfChangedDependencies.length !== 0) {
-      const descriptionText = description == null ? '' : ` for '${description}'`
-      console.group(`dependencies changed${descriptionText}`)
+      const descriptionText = description == null ? "" : ` for '${description}'`;
+      console.group(`dependencies changed${descriptionText}`);
       for (const i of indicesOfChangedDependencies) {
-        console.group(dependencyDescriptions?.[i] ?? `dependency #${i + 1}`)
-        console.log('old value:', oldDependenciesRef.current[i])
-        console.log('new value:', dependencies[i])
-        console.groupEnd()
+        console.group(dependencyDescriptions?.[i] ?? `dependency #${i + 1}`);
+        console.log("old value:", oldDependenciesRef.current[i]);
+        console.log("new value:", dependencies[i]);
+        console.groupEnd();
       }
-      console.groupEnd()
+      console.groupEnd();
     }
   }
   // Unavoidable. The ref must be updated only after logging is complete.
   // eslint-disable-next-line react-compiler/react-compiler
-  oldDependenciesRef.current = dependencies
+  oldDependenciesRef.current = dependencies;
 }
 
 /* eslint-enable no-restricted-properties */
@@ -84,11 +84,11 @@ export function useDebugEffect(
   description?: string,
   dependencyDescriptions?: readonly string[],
 ) {
-  useMonitorDependencies(dependencies, description, dependencyDescriptions)
+  useMonitorDependencies(dependencies, description, dependencyDescriptions);
   // Unavoidable as this is a wrapped hook.
   // eslint-disable-next-line react-compiler/react-compiler
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(effect, dependencies)
+  React.useEffect(effect, dependencies);
 }
 
 // === useDebugMemo ===
@@ -100,11 +100,11 @@ export function useDebugMemo<T>(
   description?: string,
   dependencyDescriptions?: readonly string[],
 ) {
-  useMonitorDependencies(dependencies, description, dependencyDescriptions)
+  useMonitorDependencies(dependencies, description, dependencyDescriptions);
   // Unavoidable as this is a wrapped hook.
   // eslint-disable-next-line react-compiler/react-compiler
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return React.useMemo<T>(factory, dependencies)
+  return React.useMemo<T>(factory, dependencies);
 }
 
 // === useDebugCallback ===
@@ -116,9 +116,9 @@ export function useDebugCallback<T extends (...args: never[]) => unknown>(
   description?: string,
   dependencyDescriptions?: readonly string[],
 ) {
-  useMonitorDependencies(dependencies, description, dependencyDescriptions)
+  useMonitorDependencies(dependencies, description, dependencyDescriptions);
   // Unavoidable as this is a wrapped hook.
   // eslint-disable-next-line react-compiler/react-compiler
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return React.useCallback<T>(callback, dependencies)
+  return React.useCallback<T>(callback, dependencies);
 }

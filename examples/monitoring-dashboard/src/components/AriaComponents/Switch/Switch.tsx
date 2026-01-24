@@ -3,72 +3,72 @@
  *
  * A switch allows a user to turn a setting on or off.
  */
-import { useRef, type CSSProperties, type ForwardedRef } from 'react'
+import { useRef, type CSSProperties } from "react";
 
 import {
   Switch as AriaSwitch,
   mergeProps,
   type SwitchProps as AriaSwitchProps,
-} from '#/components/aria'
-import { mergeRefs } from '#/utilities/mergeRefs'
-import { forwardRef } from '#/utilities/react'
-import { tv, type VariantProps } from '#/utilities/tailwindVariants'
-import { Form, type FieldPath, type FieldProps, type FieldStateProps, type TSchema } from '../Form'
-import { TEXT_STYLE } from '../Text'
+} from "#/components/aria";
+import { mergeRefs } from "#/utilities/mergeRefs";
+import type { RefProp } from "#/components/AriaComponents/types";
+import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { Form, type FieldPath, type FieldProps, type FieldStateProps, type TSchema } from "../Form";
+import { TEXT_STYLE } from "../Text";
 
 /** Props for a {@link Switch}. */
 export interface SwitchProps<Schema extends TSchema, TFieldName extends FieldPath<Schema, boolean>>
-  extends FieldStateProps<
-      Omit<AriaSwitchProps, 'children' | 'size' | 'value'> & { value: boolean },
+  extends
+    FieldStateProps<
+      Omit<AriaSwitchProps, "children" | "size" | "value"> & { value: boolean },
       Schema,
       TFieldName,
       boolean
     >,
     FieldProps,
-    Omit<VariantProps<typeof SWITCH_STYLES>, 'disabled' | 'invalid'> {
-  readonly className?: string
-  readonly style?: CSSProperties
-  readonly labelPosition?: 'after' | 'before' | undefined
+    Omit<VariantProps<typeof SWITCH_STYLES>, "disabled" | "invalid"> {
+  readonly className?: string;
+  readonly style?: CSSProperties;
+  readonly labelPosition?: "after" | "before" | undefined;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const SWITCH_STYLES = tv({
-  base: '',
+  base: "",
   variants: {
-    disabled: { true: 'cursor-not-allowed opacity-50' },
+    disabled: { true: "cursor-not-allowed opacity-50" },
     size: {
       small: {
-        background: 'h-4 w-7 p-0.5',
+        background: "h-4 w-7 p-0.5",
       },
     },
   },
   slots: {
-    switch: 'group flex items-center gap-1',
+    switch: "group flex items-center gap-1",
     label: TEXT_STYLE({
-      variant: 'body',
-      color: 'primary',
-      className: 'flex-1',
+      variant: "body",
+      color: "primary",
+      className: "flex-1",
     }),
     background:
-      'flex shrink-0 cursor-default items-center rounded-full bg-primary/30 bg-clip-padding shadow-inner outline-none ring-black transition duration-200 ease-in-out group-focus-visible:ring-2 group-pressed:bg-primary/60 group-selected:bg-primary group-selected:group-pressed:bg-primary/50',
+      "flex shrink-0 cursor-default items-center rounded-full bg-primary/30 bg-clip-padding shadow-inner outline-none ring-black transition duration-200 ease-in-out group-focus-visible:ring-2 group-pressed:bg-primary/60 group-selected:bg-primary group-selected:group-pressed:bg-primary/50",
     thumb:
-      'aspect-square h-full flex-none translate-x-0 transform rounded-full bg-white transition duration-200 ease-in-out group-selected:translate-x-[100%]',
+      "aspect-square h-full flex-none translate-x-0 transform rounded-full bg-white transition duration-200 ease-in-out group-selected:translate-x-[100%]",
   },
   defaultVariants: {
-    size: 'small',
+    size: "small",
     disabled: false,
   },
-})
+});
 
 // This is a function, even though it does not contain function syntax.
 // eslint-disable-next-line no-restricted-syntax
-const useBooleanField = Form.makeUseField<boolean>()
+const useBooleanField = Form.makeUseField<boolean>();
 
 /** A switch allows a user to turn a setting on or off. */
-export const Switch = forwardRef(function Switch<
-  Schema extends TSchema,
-  TFieldName extends FieldPath<Schema, boolean>,
->(props: SwitchProps<Schema, TFieldName>, ref: ForwardedRef<HTMLDivElement>) {
+export function Switch<Schema extends TSchema, TFieldName extends FieldPath<Schema, boolean>>(
+  props: SwitchProps<Schema, TFieldName> & RefProp<HTMLDivElement>,
+) {
   const {
     label,
     isDisabled = false,
@@ -80,18 +80,19 @@ export const Switch = forwardRef(function Switch<
     description,
     error,
     size,
-    labelPosition = 'after',
+    labelPosition = "after",
+    ref: forwardedRef,
     ...ariaSwitchProps
-  } = props
+  } = props;
 
-  const switchRef = useRef<HTMLInputElement>(null)
+  const switchRef = useRef<HTMLInputElement>(null);
 
   const { fieldState, formInstance, field } = useBooleanField({
     name,
     isDisabled,
     form,
     defaultValue,
-  })
+  });
 
   const { ref: fieldRef, ...fieldProps } = formInstance.register(name, {
     disabled: isDisabled,
@@ -100,30 +101,30 @@ export const Switch = forwardRef(function Switch<
     ...(props.onChange && {
       onChange: (event: { target: { value: boolean } }) => props.onChange?.(event.target.value),
     }),
-  })
+  });
 
-  const styles = SWITCH_STYLES({ size, disabled: fieldProps.disabled })
+  const styles = SWITCH_STYLES({ size, disabled: fieldProps.disabled });
 
   return (
     <Form.Field
-      ref={ref}
+      ref={forwardedRef}
       form={formInstance}
       name={name}
       className={styles.base({ className })}
       fullWidth
       description={description}
       error={error}
-      aria-label={props['aria-label']}
-      aria-labelledby={props['aria-labelledby']}
-      aria-describedby={props['aria-describedby']}
+      aria-label={props["aria-label"]}
+      aria-labelledby={props["aria-labelledby"]}
+      aria-describedby={props["aria-describedby"]}
       isRequired={fieldProps.required}
       isInvalid={fieldState.invalid}
-      aria-details={props['aria-details']}
+      aria-details={props["aria-details"]}
       style={props.style}
     >
       <AriaSwitch
         ref={(el) => {
-          mergeRefs(switchRef, fieldRef)(el)
+          mergeRefs(switchRef, fieldRef)(el);
         }}
         {...mergeProps<AriaSwitchProps>()(ariaSwitchProps, fieldProps, {
           defaultSelected: field.value,
@@ -132,14 +133,14 @@ export const Switch = forwardRef(function Switch<
           onBlur: field.onBlur,
         })}
       >
-        {labelPosition === 'before' && <div className={styles.label()}>{label}</div>}
+        {labelPosition === "before" && <div className={styles.label()}>{label}</div>}
 
         <div className={styles.background()} role="presentation">
           <span className={styles.thumb()} />
         </div>
 
-        {labelPosition === 'after' && <div className={styles.label()}>{label}</div>}
+        {labelPosition === "after" && <div className={styles.label()}>{label}</div>}
       </AriaSwitch>
     </Form.Field>
-  )
-})
+  );
+}

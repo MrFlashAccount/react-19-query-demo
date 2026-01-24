@@ -5,14 +5,14 @@
  * showing a fallback to the user while waiting for the data to load.
  */
 
-import * as React from 'react'
+import * as React from "react";
 
-import * as loader from './Loader'
+import * as loader from "./Loader";
 
 /** Props for {@link Suspense} component. */
 export interface SuspenseProps extends React.PropsWithChildren {
-  readonly fallback?: React.ReactNode | undefined
-  readonly loaderProps?: loader.LoaderProps | undefined
+  readonly fallback?: React.ReactNode | undefined;
+  readonly loaderProps?: loader.LoaderProps | undefined;
 }
 
 /**
@@ -23,20 +23,20 @@ export interface SuspenseProps extends React.PropsWithChildren {
  * And handles offline scenarios.
  */
 export function Suspense(props: SuspenseProps) {
-  const { children, loaderProps, fallback } = props
+  const { children, loaderProps, fallback } = props;
 
   return (
     <React.Suspense fallback={<Loader {...loaderProps} fallback={fallback} />}>
       {children}
     </React.Suspense>
-  )
+  );
 }
 
 /**
  * Props for {@link Loader} component.
  */
 interface LoaderProps extends loader.LoaderProps {
-  readonly fallback?: SuspenseProps['fallback']
+  readonly fallback?: SuspenseProps["fallback"];
 }
 
 /**
@@ -51,7 +51,7 @@ interface LoaderProps extends loader.LoaderProps {
  * we want to know if there are ongoing requests once React renders the fallback in suspense
  */
 export function Loader(props: LoaderProps) {
-  const { fallback, ...loaderProps } = props
+  const { fallback, ...loaderProps } = props;
 
-  return fallback ?? <loader.Loader minHeight="h24" size="medium" {...loaderProps} />
+  return fallback ?? <loader.Loader minHeight="h24" size="medium" {...loaderProps} />;
 }

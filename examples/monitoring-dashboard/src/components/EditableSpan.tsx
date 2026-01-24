@@ -1,42 +1,41 @@
 /** @file A text `<span>` which turns into an `input` when desired. */
-import * as React from 'react'
+import * as React from "react";
 
-import CrossIcon from '#/assets/cross.svg'
-import TickIcon from '#/assets/tick.svg'
+import CrossIcon from "#/assets/cross.svg";
+import TickIcon from "#/assets/tick.svg";
 
-import { Button, Form, Input, Text, Underlay } from '#/components/AriaComponents'
-import * as textProvider from '#/providers/TextProvider'
-import * as tailwindMerge from '#/utilities/tailwindMerge'
+import { Button, Form, Input, Text, Underlay } from "#/components/AriaComponents";
+import * as tailwindMerge from "#/utilities/tailwindMerge";
 
-import { useInteractOutside } from '#/components/aria'
-import { useAutoFocus } from '#/hooks/autoFocusHooks'
-import { useMeasure } from '#/hooks/measureHooks'
-import { AnimatePresence, motion, type Variants } from 'framer-motion'
-import { useLayoutEffect } from 'react'
-import type { z } from 'zod'
+import { useInteractOutside } from "#/components/aria";
+import { useAutoFocus } from "#/hooks/autoFocusHooks";
+import { useMeasure } from "#/hooks/measureHooks";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
+import { useLayoutEffect } from "react";
+import type { z } from "zod";
 
 // eslint-disable-next-line no-restricted-syntax, @typescript-eslint/no-unsafe-assignment
-const MotionText = motion(Text)
+const MotionText = motion(Text);
 
 /**
  * Props for {@link EditableSpan}.
  */
 export interface EditableSpanProps {
-  readonly 'data-testid'?: string
-  readonly className?: string
-  readonly editable?: boolean
-  readonly onSubmit: (value: string) => Promise<void>
-  readonly onCancel: () => void
-  readonly children: string
+  readonly "data-testid"?: string;
+  readonly className?: string;
+  readonly editable?: boolean;
+  readonly onSubmit: (value: string) => Promise<void>;
+  readonly onCancel: () => void;
+  readonly children: string;
   /**
    * Additional schema to validate the value.
    */
-  readonly schema?: (schema: z.ZodType<string>) => z.ZodType<string>
+  readonly schema?: (schema: z.ZodType<string>) => z.ZodType<string>;
 }
 
 /** A `<span>` that can turn into an `<input type="text">`. */
 export default function EditableSpan(props: EditableSpanProps) {
-  const { className = '', editable = false, children } = props
+  const { className = "", editable = false, children } = props;
 
   return (
     <AnimatePresence initial={false}>
@@ -44,8 +43,8 @@ export default function EditableSpan(props: EditableSpanProps) {
 
       {!editable && (
         <MotionText
-          className={tailwindMerge.twJoin('min-w-0', className)}
-          testId={props['data-testid']}
+          className={tailwindMerge.twJoin("min-w-0", className)}
+          testId={props["data-testid"]}
           truncate="1"
           initial={{ opacity: 0, y: 5 }}
           animate={{ opacity: 1, y: 0 }}
@@ -55,7 +54,7 @@ export default function EditableSpan(props: EditableSpanProps) {
         </MotionText>
       )}
     </AnimatePresence>
-  )
+  );
 }
 
 /**
@@ -76,64 +75,62 @@ const CONTAINER_VARIANTS: Variants = {
       staggerChildren: 1,
     },
   },
-}
+};
 
 const CHILD_VARIANTS: Variants = {
   hidden: { opacity: 0, x: 5 },
   visible: { opacity: 1, x: 0 },
-}
+};
 
 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-const TRANSITION_OPTIONS = { stiffness: 300, damping: 150, mass: 1 }
+const TRANSITION_OPTIONS = { stiffness: 300, damping: 150, mass: 1 };
 
 /**
  * Edit form for {@link EditableSpan}.
  */
 function EditForm(props: EditFormProps) {
-  const { className = '', children, onSubmit, onCancel, schema } = props
+  const { className = "", children, onSubmit, onCancel, schema } = props;
 
-  const { getText } = textProvider.useText()
-
-  const formRef = React.useRef<HTMLFormElement | null>(null)
-  const inputRef = React.useRef<HTMLInputElement | null>(null)
+  const formRef = React.useRef<HTMLFormElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   const form = Form.useForm({
     schema: (z) => {
-      const baseValueSchema = z.string().min(1).trim()
-      const baseSchema = z.object({ value: baseValueSchema })
+      const baseValueSchema = z.string().min(1).trim();
+      const baseSchema = z.object({ value: baseValueSchema });
 
       if (schema != null) {
-        return baseSchema.merge(z.object({ value: schema(baseValueSchema) }))
+        return baseSchema.merge(z.object({ value: schema(baseValueSchema) }));
       }
 
-      return baseSchema
+      return baseSchema;
     },
     defaultValues: { value: children },
     onSubmit: ({ value }) => onSubmit(value),
-  })
+  });
 
-  useInteractOutside({ ref: formRef, onInteractOutside: onCancel })
-  useAutoFocus({ ref: inputRef })
+  useInteractOutside({ ref: formRef, onInteractOutside: onCancel });
+  useAutoFocus({ ref: inputRef });
 
-  const { error } = Form.useFieldState({ name: 'value', form })
-  const formErrors = Form.useFormError({ form })
+  const { error } = Form.useFieldState({ name: "value", form });
+  const formErrors = Form.useFormError({ form });
 
   const errorMessage = (() => {
     if (error != null) {
-      return error
+      return error;
     }
 
     if (formErrors.length > 0) {
       return formErrors
-        .filter(({ type }) => type === 'error')
+        .filter(({ type }) => type === "error")
         .map(({ message }) => message)
-        .join('\n')
+        .join("\n");
     }
 
-    return null
-  })()
+    return null;
+  })();
 
-  const hasError = errorMessage != null
+  const hasError = errorMessage != null;
 
   return (
     <form
@@ -150,21 +147,21 @@ function EditForm(props: EditFormProps) {
             variant="custom"
             size="custom"
             rounded="none"
-            testId={props['data-testid']}
-            className={tailwindMerge.twJoin('flex-shrink-0 flex-grow basis-0', className)}
+            testId={props["data-testid"]}
+            className={tailwindMerge.twJoin("flex-shrink-0 flex-grow basis-0", className)}
             type="text"
-            aria-label={getText('editNameShortcut')}
+            aria-label="Edit name"
             // we don't want the display the default error message
             error={null}
             onContextMenu={(event) => {
-              event.stopPropagation()
+              event.stopPropagation();
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                onCancel()
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onCancel();
               }
-              event.stopPropagation()
+              event.stopPropagation();
             }}
           />
 
@@ -192,7 +189,7 @@ function EditForm(props: EditFormProps) {
                     size="medium"
                     variant="icon"
                     icon={TickIcon}
-                    aria-label={getText('confirmEdit')}
+                    aria-label="Confirm edit"
                     children={null}
                   />
                 </motion.div>
@@ -210,7 +207,7 @@ function EditForm(props: EditFormProps) {
                   size="medium"
                   variant="icon"
                   icon={CrossIcon}
-                  aria-label={getText('cancelEdit')}
+                  aria-label="Cancel edit"
                   onPress={onCancel}
                   children={null}
                 />
@@ -220,37 +217,37 @@ function EditForm(props: EditFormProps) {
         </div>
       </Form.Provider>
     </form>
-  )
+  );
 }
 
 /**
  * Props for {@link ErrorMessage}.
  */
 interface ErrorMessageProps {
-  readonly message: string
-  readonly formRef: React.RefObject<HTMLFormElement>
+  readonly message: string;
+  readonly formRef: React.RefObject<HTMLFormElement>;
 }
 
 /**
  * Error message for {@link EditableSpan}.
  */
 function ErrorMessage(props: ErrorMessageProps) {
-  const { message, formRef } = props
+  const { message, formRef } = props;
 
-  const [measureFormRef, formRect] = useMeasure({ useRAF: false })
+  const [measureFormRef, formRect] = useMeasure({ useRAF: false });
 
-  const offset = 12
-  const crossOffset = 36
+  const offset = 12;
+  const crossOffset = 36;
 
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-  const outlineWidth = crossOffset + 10
+  const outlineWidth = crossOffset + 10;
 
   useLayoutEffect(() => {
-    measureFormRef(formRef.current)
-  }, [measureFormRef, formRef])
+    measureFormRef(formRef.current);
+  }, [measureFormRef, formRef]);
 
   if (formRect == null) {
-    return null
+    return null;
   }
 
   return (
@@ -288,10 +285,10 @@ function ErrorMessage(props: ErrorMessageProps) {
         >
           <MotionText
             // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-            initial={{ filter: 'blur(8px)', opacity: 0, x: -12 }}
-            animate={{ filter: 'blur(0px)', opacity: 1, x: 0 }}
+            initial={{ filter: "blur(8px)", opacity: 0, x: -12 }}
+            animate={{ filter: "blur(0px)", opacity: 1, x: 0 }}
             // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-            exit={{ filter: 'blur(8px)', opacity: 0, x: -12 }}
+            exit={{ filter: "blur(8px)", opacity: 0, x: -12 }}
             // eslint-disable-next-line @typescript-eslint/no-magic-numbers
             transition={{ stiffness: 550, damping: 150, mass: 4 }}
             testId="error-message-text"
@@ -307,5 +304,5 @@ function ErrorMessage(props: ErrorMessageProps) {
         </Underlay>
       </motion.div>
     </div>
-  )
+  );
 }

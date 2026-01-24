@@ -1,8 +1,24 @@
 /** @file Common types for WAI-ARIA components. */
-import type { ReactElement } from "react";
+import type { ReactElement, Ref } from "react";
 import type { PopoverProps } from "react-aria-components";
 
 export type Placement = Required<PopoverProps>["placement"];
+
+/**
+ * React 19: `ref` is a normal prop for function components.
+ *
+ * Usage:
+ * `interface Props extends RefProp<HTMLDivElement> { ... }`
+ */
+export interface RefProp<RefType> {
+  readonly ref?: Ref<RefType> | undefined;
+}
+
+/**
+ * Icon keys used by this example.
+ * The original upstream list is not present in this repo; keep it wide for now.
+ */
+export type PossibleIcon = string;
 
 /** Props for adding a test id to a component */
 export interface TestIdProps {

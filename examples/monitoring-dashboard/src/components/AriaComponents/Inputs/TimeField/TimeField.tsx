@@ -1,9 +1,9 @@
 /** @file A date picker. */
-import { useContext, type ForwardedRef } from 'react'
+import { useContext } from "react";
 
-import type { DateSegment as DateSegmentType } from 'react-stately'
+import type { DateSegment as DateSegmentType } from "react-stately";
 
-import CrossIcon from '#/assets/cross.svg'
+import CrossIcon from "#/assets/cross.svg";
 import {
   TimeField as AriaTimeField,
   DateInput,
@@ -13,7 +13,7 @@ import {
   TimeFieldStateContext,
   type TimeFieldProps as AriaTimeFieldProps,
   type TimeValue,
-} from '#/components/aria'
+} from "#/components/aria";
 import {
   Button,
   Form,
@@ -24,76 +24,77 @@ import {
   type FieldStateProps,
   type FieldValues,
   type TSchema,
-} from '#/components/AriaComponents'
-import { useText } from '#/providers/TextProvider'
-import { forwardRef } from '#/utilities/react'
-import type { VariantProps } from '#/utilities/tailwindVariants'
-import { tv } from '#/utilities/tailwindVariants'
+} from "#/components/AriaComponents";
+import type { RefProp } from "#/components/AriaComponents/types";
+import type { VariantProps } from "#/utilities/tailwindVariants";
+import { tv } from "#/utilities/tailwindVariants";
 
 const DATE_PICKER_STYLES = tv({
-  base: '',
+  base: "",
   variants: {
     size: {
       small: {
-        inputGroup: 'h-6 px-2',
+        inputGroup: "h-6 px-2",
       },
       medium: {
-        inputGroup: 'h-8 px-4',
+        inputGroup: "h-8 px-4",
       },
     },
   },
   slots: {
-    inputGroup: 'flex items-center gap-2 rounded-full border-0.5 border-primary/20',
-    dateInput: 'flex justify-center grow',
-    dateSegment: 'rounded placeholder-shown:text-primary/30 focus:bg-primary/10 px-[0.5px]',
-    resetButton: '',
-    calendarPopover: '',
-    calendarDialog: 'text-primary text-xs mx-2',
-    calendarContainer: '',
-    calendarHeader: 'flex items-center mb-2',
-    calendarHeading: 'grow text-center',
-    calendarGrid: '',
-    calendarGridHeader: 'flex',
-    calendarGridHeaderCell: '',
-    calendarGridBody: '',
+    inputGroup: "flex items-center gap-2 rounded-full border-0.5 border-primary/20",
+    dateInput: "flex justify-center grow",
+    dateSegment: "rounded placeholder-shown:text-primary/30 focus:bg-primary/10 px-[0.5px]",
+    resetButton: "",
+    calendarPopover: "",
+    calendarDialog: "text-primary text-xs mx-2",
+    calendarContainer: "",
+    calendarHeader: "flex items-center mb-2",
+    calendarHeading: "grow text-center",
+    calendarGrid: "",
+    calendarGridHeader: "flex",
+    calendarGridHeaderCell: "",
+    calendarGridBody: "",
     calendarGridCell:
-      'text-center px-1 rounded border border-transparent hover:bg-primary/10 outside-visible-range:text-primary/30 disabled:text-primary/30 selected:border-primary/40',
+      "text-center px-1 rounded border border-transparent hover:bg-primary/10 outside-visible-range:text-primary/30 disabled:text-primary/30 selected:border-primary/40",
   },
   defaultVariants: {
-    size: 'medium',
+    size: "medium",
   },
-})
+});
 
 /** Props for a {@link TimeField}. */
 export interface TimeFieldProps<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, TimeValue>,
-> extends Pick<AriaTimeFieldProps<TimeValue>, 'granularity'>,
+>
+  extends
+    Pick<AriaTimeFieldProps<TimeValue>, "granularity">,
     FieldStateProps<
       Omit<
         AriaTimeFieldProps<Extract<FieldValues<Schema>[TFieldName], TimeValue>>,
-        'children' | 'className' | 'style'
+        "children" | "className" | "style"
       >,
       Schema,
       TFieldName,
       TimeValue
     >,
     FieldProps,
-    Pick<FieldComponentProps<Schema>, 'className' | 'style'>,
-    VariantProps<typeof DATE_PICKER_STYLES> {
-  readonly noResetButton?: boolean
-  readonly segments?: Partial<Record<DateSegmentType['type'], boolean>>
+    Pick<FieldComponentProps<Schema>, "className" | "style">,
+    VariantProps<typeof DATE_PICKER_STYLES>,
+    RefProp<HTMLDivElement> {
+  readonly noResetButton?: boolean;
+  readonly segments?: Partial<Record<DateSegmentType["type"], boolean>>;
 }
 
 // This is a function, even though it does not contain function syntax.
 // eslint-disable-next-line no-restricted-syntax
-const useTimeValueField = Form.makeUseField<TimeValue>()
+const useTimeValueField = Form.makeUseField<TimeValue>();
 
 /** A date picker. */
-export const TimeField = forwardRef(function TimeField<
-  Schema extends TSchema,
-  TFieldName extends FieldPath<Schema, TimeValue>,
->(props: TimeFieldProps<Schema, TFieldName>, ref: ForwardedRef<HTMLDivElement>) {
+export function TimeField<Schema extends TSchema, TFieldName extends FieldPath<Schema, TimeValue>>(
+  props: TimeFieldProps<Schema, TFieldName>,
+) {
   const {
     isRequired = false,
     noResetButton = isRequired,
@@ -109,17 +110,18 @@ export const TimeField = forwardRef(function TimeField<
     granularity,
     style,
     isInvalid,
+    ref: forwardedRef,
     ...rest
-  } = props
+  } = props;
 
   const { fieldState, formInstance } = useTimeValueField({
     name,
     isDisabled,
     form,
     defaultValue,
-  })
+  });
 
-  const styles = variants({ size })
+  const styles = variants({ size });
 
   return (
     <Form.Field
@@ -127,13 +129,13 @@ export const TimeField = forwardRef(function TimeField<
       name={name}
       fullWidth
       label={label}
-      aria-label={props['aria-label']}
-      aria-labelledby={props['aria-labelledby']}
-      aria-describedby={props['aria-describedby']}
+      aria-label={props["aria-label"]}
+      aria-labelledby={props["aria-labelledby"]}
+      aria-describedby={props["aria-describedby"]}
       isRequired={isRequired}
       isInvalid={fieldState.invalid}
-      aria-details={props['aria-details']}
-      ref={ref}
+      aria-details={props["aria-details"]}
+      ref={forwardedRef}
       style={style}
     >
       <Form.Controller
@@ -151,9 +153,11 @@ export const TimeField = forwardRef(function TimeField<
             <Group className={styles.inputGroup()}>
               <DateInput className={styles.dateInput()}>
                 {(segment) =>
-                  segments[segment.type] === false ?
+                  segments[segment.type] === false ? (
                     <></>
-                  : <DateSegment segment={segment} className={styles.dateSegment()} />
+                  ) : (
+                    <DateSegment segment={segment} className={styles.dateSegment()} />
+                  )
                 }
               </DateInput>
               {!noResetButton && <TimeFieldResetButton className={styles.resetButton()} />}
@@ -163,31 +167,30 @@ export const TimeField = forwardRef(function TimeField<
         )}
       />
     </Form.Field>
-  )
-})
+  );
+}
 
 /** Props for a {@link TimeFieldResetButton}. */
 interface TimeFieldResetButtonProps {
-  readonly className?: string
+  readonly className?: string;
 }
 
 /** A reset button for a {@link TimeField}. */
 function TimeFieldResetButton(props: TimeFieldResetButtonProps) {
-  const { className } = props
-  const state = useContext(TimeFieldStateContext)
-  const { getText } = useText()
+  const { className } = props;
+  const state = useContext(TimeFieldStateContext);
 
   return (
     <Button
       // Do not inherit default Button behavior from TimeField.
       slot={null}
       variant="icon"
-      aria-label={getText('reset')}
+      aria-label="Reset"
       icon={CrossIcon}
-      className={className ?? ''}
+      className={className ?? ""}
       onPress={() => {
-        state?.setValue(null)
+        state?.setValue(null);
       }}
     />
-  )
+  );
 }

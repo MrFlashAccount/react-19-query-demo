@@ -4,16 +4,15 @@
  * Submit button for forms.
  * Manages the form state and displays a loading spinner when the form is submitting.
  */
-import type { JSX } from 'react'
+import type { JSX } from "react";
 
-import { Button, type ButtonProps } from '#/components/AriaComponents'
-import { useText } from '#/providers/TextProvider'
-import { useFormContext } from './FormProvider'
-import type { FormInstance } from './types'
+import { Button, type ButtonProps } from "#/components/AriaComponents";
+import { useFormContext } from "./FormProvider";
+import type { FormInstance } from "./types";
 
 /** Additional props for the Submit component. */
 interface SubmitButtonBaseProps<IconType extends string> {
-  readonly variant?: ButtonProps<IconType>['variant']
+  readonly variant?: ButtonProps<IconType>["variant"];
   /**
    * Connects the submit button to a form.
    * If not provided, the button will use the nearest form context.
@@ -22,16 +21,16 @@ interface SubmitButtonBaseProps<IconType extends string> {
    */
   // We do not need to know the form fields.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly form?: FormInstance<any>
-  readonly cancel?: boolean
+  readonly form?: FormInstance<any>;
+  readonly cancel?: boolean;
 }
 
 /** Props for the Submit component. */
 export type SubmitProps<IconType extends string> = Omit<
   ButtonProps<IconType>,
-  'formnovalidate' | 'href' | 'variant'
+  "formnovalidate" | "href" | "variant"
 > &
-  SubmitButtonBaseProps<IconType>
+  SubmitButtonBaseProps<IconType>;
 
 /**
  * Submit button for forms.
@@ -39,19 +38,17 @@ export type SubmitProps<IconType extends string> = Omit<
  * Manages the form state and displays a loading spinner when the form is submitting.
  */
 export function Submit<IconType extends string>(props: SubmitProps<IconType>): JSX.Element {
-  const { getText } = useText()
-
   const {
-    size = 'medium',
+    size = "medium",
     loading = false,
-    children = getText('submit'),
-    variant = 'submit',
-    testId = 'form-submit-button',
+    children = "Submit",
+    variant = "submit",
+    testId = "form-submit-button",
     ...buttonProps
-  } = props
+  } = props;
 
-  const form = useFormContext(props.form)
-  const { formState } = form
+  const form = useFormContext(props.form);
+  const { formState } = form;
 
   return (
     <Button
@@ -66,5 +63,5 @@ export function Submit<IconType extends string>(props: SubmitProps<IconType>): J
     >
       {children}
     </Button>
-  )
+  );
 }

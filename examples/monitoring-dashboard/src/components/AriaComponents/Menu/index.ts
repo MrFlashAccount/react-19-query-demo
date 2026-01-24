@@ -10,10 +10,10 @@ export {
   type MenuProps,
   type MenuSectionProps,
   type MenuSeparatorProps,
-} from './Menu'
+} from "./Menu";
 export {
   MENU_ITEM_STYLES,
   type MenuItemBaseProps,
   type MenuItemCustomContentProps,
   type MenuItemProps,
-} from './MenuItem'
+} from "./MenuItem";

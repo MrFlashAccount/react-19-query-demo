@@ -4,14 +4,14 @@
  * Form field registration hook.
  * Use this hook to register a field in the form.
  */
-import { useFormContext } from './FormProvider'
+import { useFormContext } from "./FormProvider";
 import type {
   FieldPath,
   FieldValues,
   FormFieldProps,
   FormInstanceValidated,
   TSchema,
-} from './types'
+} from "./types";
 
 /** Options for the useFieldRegister hook. */
 export type UseFieldRegisterOptions<
@@ -19,16 +19,16 @@ export type UseFieldRegisterOptions<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, Constraint>,
   Constraint,
-> = Omit<FormFieldProps<BaseValueType, Schema, TFieldName, Constraint>, 'form'> & {
-  name: TFieldName
-  form?: FormInstanceValidated<Schema> | undefined
-  defaultValue?: FieldValues<Schema>[TFieldName] | undefined
-  min?: number | string | undefined
-  max?: number | string | undefined
-  minLength?: number | undefined
-  maxLength?: number | undefined
-  setValueAs?: ((value: unknown) => unknown) | undefined
-}
+> = Omit<FormFieldProps<BaseValueType, Schema, TFieldName, Constraint>, "form"> & {
+  name: TFieldName;
+  form?: FormInstanceValidated<Schema> | undefined;
+  defaultValue?: FieldValues<Schema>[TFieldName] | undefined;
+  min?: number | string | undefined;
+  max?: number | string | undefined;
+  minLength?: number | undefined;
+  maxLength?: number | undefined;
+  setValueAs?: ((value: unknown) => unknown) | undefined;
+};
 
 /** Registers a field in the form. */
 export function useFieldRegister<
@@ -49,15 +49,15 @@ export function useFieldRegister<
     form,
     setValueAs,
     isInvalid,
-  } = options
+  } = options;
 
-  const formInstance = useFormContext(form)
+  const formInstance = useFormContext(form);
 
   const extractedValidationDetails = unsafe__extractValidationDetailsFromSchema<
     Schema,
     TFieldName,
     Constraint
-  >(formInstance.schema, name)
+  >(formInstance.schema, name);
 
   const fieldProps = formInstance.register(name, {
     disabled: isDisabled ?? false,
@@ -70,9 +70,9 @@ export function useFieldRegister<
     ...(max != null ? { max } : {}),
     ...(minLength != null ? { minLength } : {}),
     ...(maxLength != null ? { maxLength } : {}),
-  })
+  });
 
-  return { fieldProps, formInstance } as const
+  return { fieldProps, formInstance } as const;
 }
 /** Tried to extract validation details from the schema. */
 // This name is intentional to highlight that this function is unsafe and should be used with caution.
@@ -83,24 +83,24 @@ function unsafe__extractValidationDetailsFromSchema<
   Constraint,
 >(schema: Schema, name: TFieldName) {
   try {
-    if ('shape' in schema) {
+    if ("shape" in schema) {
       if (name in schema.shape) {
         // THIS is 100% unsafe, so we need to be very careful here
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-        const fieldShape = schema.shape[name]
+        const fieldShape = schema.shape[name];
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
-        const min: number | null = fieldShape.minLength
+        const min: number | null = fieldShape.minLength;
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-assignment
-        const max: number | null = fieldShape.maxLength
-        const required = min != null && min > 0
+        const max: number | null = fieldShape.maxLength;
+        const required = min != null && min > 0;
 
-        return { required, min, max } as const
+        return { required, min, max } as const;
       }
 
-      return null
+      return null;
     }
-    return null
+    return null;
   } catch {
-    return null
+    return null;
   }
 }

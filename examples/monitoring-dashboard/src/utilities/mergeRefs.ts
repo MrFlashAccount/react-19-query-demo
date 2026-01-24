@@ -1,5 +1,5 @@
 /** @file Merge multiple refs into a single ref callback. */
-import * as React from 'react'
+import * as React from "react";
 
 /** Merge multiple refs into a single ref callback. */
 export function mergeRefs<T>(
@@ -8,15 +8,15 @@ export function mergeRefs<T>(
   return (value) => {
     for (const ref of refs) {
       if (ref != null && ref !== false) {
-        if (typeof ref === 'function') {
-          ref(value)
+        if (typeof ref === "function") {
+          ref(value);
         } else {
-          const mutableRef: React.MutableRefObject<T | null> = ref
-          mutableRef.current = value
+          const mutableRef: React.MutableRefObject<T | null> = ref;
+          mutableRef.current = value;
         }
       }
     }
-  }
+  };
 }
 
 /**
@@ -26,7 +26,7 @@ export function mergeRefs<T>(
 export function useMergedRef<T>(
   ...refs: (React.Ref<T> | false | null | undefined)[]
 ): React.RefObject<T> {
-  const applyValueOnRefs = React.useMemo(() => mergeRefs(...refs), [refs])
+  const applyValueOnRefs = React.useMemo(() => mergeRefs(...refs), [refs]);
 
   return React.useMemo(
     () =>
@@ -40,12 +40,12 @@ export function useMergedRef<T>(
             newValue: T | null,
             receiver: never,
           ): boolean {
-            applyValueOnRefs(newValue)
+            applyValueOnRefs(newValue);
 
-            return Reflect.set(target, p, newValue, receiver)
+            return Reflect.set(target, p, newValue, receiver);
           },
         },
       ),
     [applyValueOnRefs],
-  )
+  );
 }

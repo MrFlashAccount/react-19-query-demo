@@ -1,17 +1,17 @@
-import type { Meta, StoryObj } from '@storybook/react'
+import type { Meta, StoryObj } from "@storybook/react";
 
-import type { TextProps } from './Text'
-import { Text } from './Text'
+import type { TextProps } from "./Text";
+import { Text } from "./Text";
 
 export default {
-  title: 'Components/Text',
+  title: "Components/Text",
   component: Text,
   args: {
-    children: 'Hello, world!',
+    children: "Hello, world!",
   },
-} as Meta<TextProps>
+} as Meta<TextProps>;
 
-type Story = StoryObj<TextProps>
+type Story = StoryObj<TextProps>;
 
 export const Variants: Story = {
   render: (args) => (
@@ -36,7 +36,7 @@ export const Variants: Story = {
       </Text>
     </section>
   ),
-}
+};
 
 export const Colors: Story = {
   render: (args) => (
@@ -61,7 +61,7 @@ export const Colors: Story = {
       </Text>
     </section>
   ),
-}
+};
 
 export const Rest: Story = {
   render: (args) => (
@@ -107,4 +107,4 @@ export const Rest: Story = {
       </Text>
     </>
   ),
-}
+};

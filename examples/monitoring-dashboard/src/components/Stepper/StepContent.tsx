@@ -2,23 +2,23 @@
  * @file
  * Component to render the step content.
  */
-import type { ReactElement, ReactNode } from 'react'
-import { useStepperContext } from './StepperProvider'
-import type { RenderChildrenProps } from './types'
+import type { ReactElement, ReactNode } from "react";
+import { useStepperContext } from "./StepperProvider";
+import type { RenderChildrenProps } from "./types";
 
 /** Props for {@link StepContent} component. */
 export interface StepContentProps {
-  readonly index: number
-  readonly children: ReactNode | ((props: RenderChildrenProps) => ReactNode)
-  readonly forceRender?: boolean
+  readonly index: number;
+  readonly children: ReactNode | ((props: RenderChildrenProps) => ReactNode);
+  readonly forceRender?: boolean;
 }
 
 /** Step content component. Renders the step content if the step is current or if `forceRender` is true. */
 export function StepContent(props: StepContentProps): ReactElement | null {
-  const { index, children, forceRender = false } = props
-  const { currentStep, goToStep, nextStep, previousStep, totalSteps } = useStepperContext()
+  const { index, children, forceRender = false } = props;
+  const { currentStep, goToStep, nextStep, previousStep, totalSteps } = useStepperContext();
 
-  const isCurrent = currentStep === index
+  const isCurrent = currentStep === index;
 
   const renderProps = {
     currentStep,
@@ -28,11 +28,11 @@ export function StepContent(props: StepContentProps): ReactElement | null {
     goToStep,
     nextStep,
     previousStep,
-  } satisfies RenderChildrenProps
+  } satisfies RenderChildrenProps;
 
   if (isCurrent || forceRender) {
-    return <>{typeof children === 'function' ? children(renderProps) : children}</>
+    return <>{typeof children === "function" ? children(renderProps) : children}</>;
   } else {
-    return null
+    return null;
   }
 }

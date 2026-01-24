@@ -10,5 +10,5 @@ export function unsafeWriteValue<T extends object, K extends keyof T>(
   key: K,
   value: T[K],
 ) {
-  object[key] = value
+  object[key] = value;
 }

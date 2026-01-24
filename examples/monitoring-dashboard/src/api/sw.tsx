@@ -333,4 +333,3 @@ setupWorker([
   // Simulation
   recordMetricTime,
 ]);
-

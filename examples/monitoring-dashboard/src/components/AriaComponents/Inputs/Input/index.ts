@@ -3,4 +3,4 @@
  *
  * Barrel file for Input component.
  */
-export * from './Input'
+export * from "./Input";

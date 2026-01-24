@@ -3,9 +3,8 @@
  *
  * Hook to get the error message from the form.
  */
-import { useText } from '#/providers/TextProvider'
-import { useFormContext } from './FormProvider'
-import type { FormInstance } from './types'
+import { useFormContext } from "./FormProvider";
+import type { FormInstance } from "./types";
 
 /**
  * Props for {@link useFormError}.
@@ -13,7 +12,7 @@ import type { FormInstance } from './types'
 export interface UseFormErrorProps {
   // We do not need to know the form fields.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly form?: FormInstance<any>
+  readonly form?: FormInstance<any>;
 }
 
 /**
@@ -21,59 +20,55 @@ export interface UseFormErrorProps {
  */
 interface Error {
   /** The type of the error, either caused by a form field or by an offline error. */
-  readonly type: 'error' | 'offline'
+  readonly type: "error" | "offline";
   /** The error message. */
-  readonly message: string
+  readonly message: string;
 }
 
 /**
  * Hook to get the error message from the form.
  */
 export function useFormError(props: UseFormErrorProps) {
-  const form = useFormContext(props.form)
+  const form = useFormContext(props.form);
 
-  const { formState } = form
-  const { errors } = formState
-  const { getText } = useText()
+  const { formState } = form;
+  const { errors } = formState;
 
   /** Get the error message. */
   const getSubmitError = (): string | null => {
-    const formErrors = errors.root
+    const formErrors = errors.root;
 
     if (formErrors) {
-      const submitError = formErrors.submit
+      const submitError = formErrors.submit;
 
       if (submitError) {
-        return (
-          submitError.message ??
-          getText('arbitraryErrorTitle') + '. ' + getText('arbitraryErrorSubtitle')
-        )
+        return submitError.message ?? "Something went wrong. Please try again.";
       } else {
-        return null
+        return null;
       }
     } else {
-      return null
+      return null;
     }
-  }
+  };
 
-  const offlineMessage = errors.root?.offline?.message ?? null
-  const errorMessage = getSubmitError()
+  const offlineMessage = errors.root?.offline?.message ?? null;
+  const errorMessage = getSubmitError();
 
-  const result: Error[] = []
+  const result: Error[] = [];
 
   if (offlineMessage != null) {
     result.push({
-      type: 'offline',
+      type: "offline",
       message: offlineMessage,
-    })
+    });
   }
 
   if (errorMessage != null) {
     result.push({
-      type: 'error',
+      type: "error",
       message: errorMessage,
-    })
+    });
   }
 
-  return result
+  return result;
 }

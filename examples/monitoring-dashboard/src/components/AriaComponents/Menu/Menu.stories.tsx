@@ -2,35 +2,34 @@
  * @file
  * Stories for the Menu component.
  */
-import Camera from '#/assets/camera.svg'
-import Eye from '#/assets/eye.svg'
-import EyeClosed from '#/assets/eye_crossed.svg'
-import Folder from '#/assets/folder.svg'
-import type { Meta, StoryObj } from '@storybook/react'
+import Camera from "#/assets/camera.svg";
+import Eye from "#/assets/eye.svg";
+import EyeClosed from "#/assets/eye_crossed.svg";
+import Folder from "#/assets/folder.svg";
+import type { Meta, StoryObj } from "@storybook/react";
 
-import { useText } from '#/providers/TextProvider'
-import { expect, userEvent, within } from '@storybook/test'
-import type { MenuProps } from '.'
-import { Menu } from '.'
-import { passwordSchema } from '../../../pages/authentication/schemas'
-import { Button } from '../Button'
-import { Popover } from '../Dialog'
-import { Form } from '../Form'
-import { Input } from '../Inputs'
+import { expect, userEvent, within } from "@storybook/test";
+import type { MenuProps } from ".";
+import { Menu } from ".";
+import { passwordSchema } from "../../../pages/authentication/schemas";
+import { Button } from "../Button";
+import { Popover } from "../Dialog";
+import { Form } from "../Form";
+import { Input } from "../Inputs";
 
 const meta = {
-  title: 'Components/Menu',
+  title: "Components/Menu",
   component: Menu,
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const button = canvas.getByRole('button', { name: 'Open Menu' })
-    await userEvent.click(button)
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole("button", { name: "Open Menu" });
+    await userEvent.click(button);
   },
-} satisfies Meta<MenuProps<object>>
+} satisfies Meta<MenuProps<object>>;
 
-export default meta
+export default meta;
 
-type Story = StoryObj<MenuProps<object>>
+type Story = StoryObj<MenuProps<object>>;
 
 const MenuContent = () => (
   <>
@@ -45,7 +44,7 @@ const MenuContent = () => (
       <Menu.Item>Paste</Menu.Item>
     </Menu.Section>
   </>
-)
+);
 
 const MenuContentWithIcons = () => (
   <>
@@ -60,7 +59,7 @@ const MenuContentWithIcons = () => (
       <Menu.Item icon={<span>📌</span>}>Paste</Menu.Item>
     </Menu.Section>
   </>
-)
+);
 
 const MenuContentWithShortcuts = () => (
   <>
@@ -75,7 +74,7 @@ const MenuContentWithShortcuts = () => (
       <Menu.Item shortcut="⌘V">Paste</Menu.Item>
     </Menu.Section>
   </>
-)
+);
 
 const MenuContentWithIconsAndShortcuts = () => (
   <>
@@ -107,7 +106,7 @@ const MenuContentWithIconsAndShortcuts = () => (
       </Menu.Item>
     </Menu.Section>
   </>
-)
+);
 
 export const Default: Story = {
   render: () => (
@@ -118,7 +117,7 @@ export const Default: Story = {
       </Menu>
     </Menu.Trigger>
   ),
-}
+};
 
 export const WithIconsTrigger: Story = {
   render: () => (
@@ -129,7 +128,7 @@ export const WithIconsTrigger: Story = {
       </Menu>
     </Menu.Trigger>
   ),
-}
+};
 
 export const WithShortcutsTrigger: Story = {
   render: () => (
@@ -140,7 +139,7 @@ export const WithShortcutsTrigger: Story = {
       </Menu>
     </Menu.Trigger>
   ),
-}
+};
 
 export const WithIconsAndShortcutsTrigger: Story = {
   render: () => (
@@ -151,7 +150,7 @@ export const WithIconsAndShortcutsTrigger: Story = {
       </Menu>
     </Menu.Trigger>
   ),
-}
+};
 
 export const WithSelection: Story = {
   render: () => (
@@ -162,7 +161,7 @@ export const WithSelection: Story = {
       </Menu>
     </Menu.Trigger>
   ),
-}
+};
 
 function MenuContentWithDescription() {
   return (
@@ -198,7 +197,7 @@ function MenuContentWithDescription() {
         </Menu>
       </Menu.SubmenuTrigger>
     </>
-  )
+  );
 }
 
 export const WithDescription: Story = {
@@ -211,36 +210,36 @@ export const WithDescription: Story = {
     </Menu.Trigger>
   ),
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const button = canvas.getByRole('button', { name: 'Open Menu' })
-    await userEvent.click(button)
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole("button", { name: "Open Menu" });
+    await userEvent.click(button);
 
-    const submenu = canvas.getAllByRole('menuitem')
+    const submenu = canvas.getAllByRole("menuitem");
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    await userEvent.click(submenu.at(-1)!)
+    await userEvent.click(submenu.at(-1)!);
   },
-}
+};
 
 function MenuContentWithDynamicContent() {
   const sections = [
-    { id: 1, name: 'New' },
-    { id: 2, name: 'Open' },
-    { id: 3, name: 'Close' },
-    { id: 4, name: 'Save' },
-    { id: 5, name: 'Duplicate' },
-    { id: 6, name: 'Rename' },
-    { id: 7, name: 'Move' },
-  ]
+    { id: 1, name: "New" },
+    { id: 2, name: "Open" },
+    { id: 3, name: "Close" },
+    { id: 4, name: "Save" },
+    { id: 5, name: "Duplicate" },
+    { id: 6, name: "Rename" },
+    { id: 7, name: "Move" },
+  ];
 
   const items = [
-    { id: 1, name: 'Apple' },
-    { id: 2, name: 'Banana' },
-    { id: 3, name: 'Cherry' },
-    { id: 4, name: 'Date' },
-    { id: 5, name: 'Elderberry' },
-    { id: 6, name: 'Fig' },
-    { id: 7, name: 'Grape' },
-  ]
+    { id: 1, name: "Apple" },
+    { id: 2, name: "Banana" },
+    { id: 3, name: "Cherry" },
+    { id: 4, name: "Date" },
+    { id: 5, name: "Elderberry" },
+    { id: 6, name: "Fig" },
+    { id: 7, name: "Grape" },
+  ];
 
   return (
     <Menu items={sections} selectionMode="single">
@@ -250,7 +249,7 @@ function MenuContentWithDynamicContent() {
         </Menu.Section>
       )}
     </Menu>
-  )
+  );
 }
 
 export const DynamicContent: Story = {
@@ -262,18 +261,19 @@ export const DynamicContent: Story = {
     </Menu.Trigger>
   ),
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
-    const button = canvas.getByRole('button', { name: 'Open Menu' })
+    const canvas = within(canvasElement);
+    const button = canvas.getByRole("button", { name: "Open Menu" });
 
-    await userEvent.click(button)
+    await userEvent.click(button);
 
-    await expect(canvas.getByRole('menu')).toBeInTheDocument()
+    await expect(canvas.getByRole("menu")).toBeInTheDocument();
   },
-}
+};
 
 export const WithPopover: Story = {
   render: () => {
-    const { getText } = useText()
+    const getText = (key: string, ...args: string[]) =>
+      args.length > 0 ? `${key} ${args.join(" ")}` : key;
     return (
       <Menu.Trigger>
         <Button>Open Menu</Button>
@@ -313,24 +313,24 @@ export const WithPopover: Story = {
           </Menu.SubmenuTrigger>
         </Menu>
       </Menu.Trigger>
-    )
+    );
   },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement)
+    const canvas = within(canvasElement);
 
-    const button = canvas.getByRole('button', { name: 'Open Menu' })
-    await userEvent.click(button)
+    const button = canvas.getByRole("button", { name: "Open Menu" });
+    await userEvent.click(button);
 
-    await userEvent.hover(canvas.getByRole('menuitem', { name: 'Edit Secret' }))
+    await userEvent.hover(canvas.getByRole("menuitem", { name: "Edit Secret" }));
 
-    const nameInput = await canvas.findByRole('textbox', { name: 'Name' })
-    await userEvent.type(nameInput, 'John')
+    const nameInput = await canvas.findByRole("textbox", { name: "Name" });
+    await userEvent.type(nameInput, "John");
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const passwordInput = canvas.getByTestId('password').querySelector('input')!
-    await userEvent.type(passwordInput, 'abc123sadflmsdkf')
+    const passwordInput = canvas.getByTestId("password").querySelector("input")!;
+    await userEvent.type(passwordInput, "abc123sadflmsdkf");
 
-    const saveButton = await canvas.findByRole('button', { name: 'Save' })
-    await userEvent.click(saveButton)
+    const saveButton = await canvas.findByRole("button", { name: "Save" });
+    await userEvent.click(saveButton);
   },
-}
+};

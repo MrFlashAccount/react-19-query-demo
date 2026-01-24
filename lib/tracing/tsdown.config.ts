@@ -1,11 +1,12 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["index.ts", "helpers.ts", "node.ts", "asynccontext.ts"],
+  entry: ["src/index.ts", "src/node.ts", "src/async-context.ts"],
   outDir: "dist",
   format: "esm",
   platform: "browser",
-  sourcemap: true,
   clean: true,
-  external: ["lit-html", "lit-html/directives/ref.js", /^@lib\//],
+  skipNodeModulesBundle: false,
+  dts: false,
+  noExternal: ["lit-html", "@lib/brand"],
 });

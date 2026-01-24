@@ -33,11 +33,7 @@ declare module "react-server-dom-webpack/server" {
   /**
    * Register a function as a server reference (server action)
    */
-  export function registerServerReference<T extends Function>(
-    fn: T,
-    id: string,
-    name: string,
-  ): T;
+  export function registerServerReference<T extends Function>(fn: T, id: string, name: string): T;
 
   /**
    * Create a proxy for client module imports
@@ -47,11 +43,7 @@ declare module "react-server-dom-webpack/server" {
   /**
    * Register a client reference
    */
-  export function registerClientReference<T = unknown>(
-    ref: T,
-    moduleId: string,
-    name: string,
-  ): T;
+  export function registerClientReference<T = unknown>(ref: T, moduleId: string, name: string): T;
 
   /**
    * Decode action arguments from wire format
@@ -93,4 +85,3 @@ declare module "react-server-dom-webpack/client" {
 declare module "web-streams-polyfill" {
   export class ReadableStream<R = unknown> extends globalThis.ReadableStream<R> {}
 }
-

@@ -9,7 +9,7 @@ import {
   DevtoolsReporter,
   type LoggerReporterOptions,
   type DevtoolsReporterOptions,
-} from "../../tracing";
+} from "@lib/tracing";
 import { useQueryContext } from "../react/QueryProvider";
 
 import { useDebugFormattedQuery } from "./useDebugFormattedQuery";
@@ -82,7 +82,7 @@ export function QueryDevtools({
   disableLogger = true,
   disablePerformanceTracker = true,
   disableFlameGraph = false,
-}: QueryDevtoolsProps) {
+}: QueryDevtoolsProps): React.JSX.Element {
   const { queryClient } = useQueryContext();
 
   useDebugValue(useDebugFormattedQuery(queryClient));

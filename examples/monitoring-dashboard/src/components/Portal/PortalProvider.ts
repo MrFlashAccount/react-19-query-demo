@@ -2,17 +2,17 @@
  * @file
  * Provides the context for the Portal component
  */
-import * as React from 'react'
+import * as React from "react";
 
-import invariant from 'tiny-invariant'
+import invariant from "tiny-invariant";
 
-const PortalContext = React.createContext<Element | null>(null)
+const PortalContext = React.createContext<Element | null>(null);
 
 /** Allows to access the root element for the Portal component */
 export function usePortalContext() {
-  const root = React.useContext(PortalContext)
+  const root = React.useContext(PortalContext);
 
-  return { root } as const
+  return { root } as const;
 }
 
 /**
@@ -20,13 +20,13 @@ export function usePortalContext() {
  * @throws invariant the `PortalProvider` is not in the component tree
  */
 export function useStrictPortalContext() {
-  const root = React.useContext(PortalContext)
+  const root = React.useContext(PortalContext);
 
-  invariant(root != null, 'You should use `PortalProvider` to access the `Portal` component')
+  invariant(root != null, "You should use `PortalProvider` to access the `Portal` component");
 
-  return root
+  return root;
 }
 
 /** Specifies the root element for the Portal component */
 // eslint-disable-next-line no-restricted-syntax
-export const PortalProvider = PortalContext.Provider
+export const PortalProvider = PortalContext.Provider;

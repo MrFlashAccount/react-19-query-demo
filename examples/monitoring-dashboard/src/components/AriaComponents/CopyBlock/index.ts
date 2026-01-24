@@ -3,4 +3,4 @@
  *
  * Barrel export file for CopyBlock component.
  */
-export * from './CopyBlock'
+export * from "./CopyBlock";

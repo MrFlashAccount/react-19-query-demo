@@ -1,6 +1,6 @@
-import "../PerformanceOverlay";
+import "../src/PerformanceOverlay";
 
-import type { PerformanceOverlay as PerfOverlay, OverlayLevel } from "../index";
+import type { PerformanceOverlay as PerfOverlay, OverlayLevel } from "../src";
 
 // Get DOM elements
 const overlay = document.querySelector("performance-overlay") as PerfOverlay;

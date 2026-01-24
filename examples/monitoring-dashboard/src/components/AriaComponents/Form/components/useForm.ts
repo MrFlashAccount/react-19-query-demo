@@ -12,12 +12,33 @@ import invariant from "tiny-invariant";
 
 import { useEvent } from "#/hooks/useEvent";
 import { useOffline, useOfflineChange } from "#/hooks/offlineHooks";
-import { useText } from "#/providers/TextProvider";
 import * as errorUtils from "#/utilities/error";
 import { useMutation } from "@tanstack/react-query";
-import { IS_DEV_MODE } from "enso-common/src/detect";
 import * as schemaModule from "./schema";
 import type * as types from "./types";
+
+const IS_DEV_MODE = import.meta.env.DEV;
+
+function getText(key: string, ...args: string[]) {
+  switch (key) {
+    case "arbitraryFieldRequired":
+      return "Required.";
+    case "arbitraryFieldTooSmall":
+      return `Must be at least ${args[0] ?? "1"}.`;
+    case "arbitraryFieldTooLarge":
+      return `Must be at most ${args[0] ?? ""}.`;
+    case "arbitraryFieldInvalid":
+      return "Invalid value.";
+    case "invalidEmailValidationError":
+      return "Invalid email address.";
+    case "arbitraryFormErrorMessage":
+      return "Something went wrong.";
+    case "unavailableOffline":
+      return "Unavailable while offline.";
+    default:
+      return args.length > 0 ? `${key} ${args.join(" ")}` : key;
+  }
+}
 
 /** Maps the value to the event object. */
 function mapValueOnEvent(value: unknown) {
@@ -46,7 +67,6 @@ function mapValueOnEvent(value: unknown) {
 export function useForm<Schema extends types.TSchema, SubmitResult = void>(
   optionsOrFormInstance: types.UseFormOptions<Schema, SubmitResult> | types.UseFormReturn<Schema>,
 ): types.UseFormReturn<Schema> {
-  const { getText } = useText();
   const [initialTypePassed] = React.useState(() => getArgsType(optionsOrFormInstance));
   const closeRef = React.useRef(() => {});
 

@@ -1,11 +1,11 @@
 {
   "name": "@lib/goat-query",
   "version": "0.0.0",
-  "sideEffects": false,
-  "type": "module",
   "files": [
     "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -22,18 +22,31 @@
       "default": "./dist/devtools/index.js"
     }
   },
-  "dependencies": {
-    "@lib/brand": "workspace:*",
-    "@lib/tracing": "workspace:*"
-  },
-  "peerDependencies": {
-    "react": "^19.0.0"
-  },
   "scripts": {
-    "build": "tsdown",
+    "build": "pnpm run build:lib && pnpm run build:dts",
+    "build:lib": "tsdown",
+    "build:dts": "tsgo --emitDeclarationOnly -p tsconfig.build.json",
     "check": "pnpm run /check:.*/",
     "check:type": "tsgo --noEmit",
     "check:lint": "oxlint --fix --type-aware",
     "check:format": "oxfmt --write"
+  },
+  "dependencies": {
+    "@lib/brand": "workspace:*",
+    "@lib/tracing": "workspace:*"
+  },
+  "devDependencies": {
+    "@typescript/native-preview": "7.0.0-dev.20260124.1",
+    "typescript": "5.9.3",
+    "tsdown": "0.20.1",
+    "oxfmt": "0.26.0",
+    "oxlint": "1.41.0",
+    "oxlint-tsgolint": "0.11.1"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
   }
 }

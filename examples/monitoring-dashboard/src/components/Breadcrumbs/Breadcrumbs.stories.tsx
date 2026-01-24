@@ -1,21 +1,21 @@
 /** @file Stories for the Breadcrumbs component. */
 
-import ArrowDown from '#/assets/expand_arrow.svg'
-import { Button, Menu } from '#/components/AriaComponents'
-import type { Meta, StoryObj } from '@storybook/react'
-import { expect, fn, userEvent, within } from '@storybook/test'
-import { useState } from 'react'
-import type { BreadcrumbsProps } from '.'
-import { Breadcrumbs } from '.'
+import ArrowDown from "#/assets/expand_arrow.svg";
+import { Button, Menu } from "#/components/AriaComponents";
+import type { Meta, StoryObj } from "@storybook/react";
+import { expect, fn, userEvent, within } from "@storybook/test";
+import { useState } from "react";
+import type { BreadcrumbsProps } from ".";
+import { Breadcrumbs } from ".";
 
 export default {
-  title: 'Components/Breadcrumbs',
+  title: "Components/Breadcrumbs",
   component: Breadcrumbs,
-  parameters: { layout: 'centered' },
+  parameters: { layout: "centered" },
   render: (args) => <Breadcrumbs {...args} />,
-} satisfies Meta<BreadcrumbsProps>
+} satisfies Meta<BreadcrumbsProps>;
 
-type Story = StoryObj<BreadcrumbsProps>
+type Story = StoryObj<BreadcrumbsProps>;
 
 export const Default: Story = {
   render: () => (
@@ -33,7 +33,7 @@ export const Default: Story = {
       </Breadcrumbs.Item>
     </Breadcrumbs>
   ),
-}
+};
 
 export const WithDisabledItem: Story = {
   render: () => (
@@ -45,7 +45,7 @@ export const WithDisabledItem: Story = {
       </Breadcrumbs.Item>
     </Breadcrumbs>
   ),
-}
+};
 
 export const WithSuffix: Story = {
   render: () => (
@@ -87,11 +87,11 @@ export const WithSuffix: Story = {
       </Breadcrumbs.Item>
     </Breadcrumbs>
   ),
-}
+};
 
 export const WithManyItems: Story = {
   render: () => (
-    <div style={{ width: '500px' }}>
+    <div style={{ width: "500px" }}>
       <Breadcrumbs>
         <Breadcrumbs.Item onPress={() => {}}>Home</Breadcrumbs.Item>
         <Breadcrumbs.Item onPress={() => {}}>Projects</Breadcrumbs.Item>
@@ -109,7 +109,7 @@ export const WithManyItems: Story = {
       </Breadcrumbs>
     </div>
   ),
-}
+};
 
 export const SingleItem: Story = {
   render: () => (
@@ -117,25 +117,25 @@ export const SingleItem: Story = {
       <Breadcrumbs.Item onPress={() => {}}>Home</Breadcrumbs.Item>
     </Breadcrumbs>
   ),
-}
+};
 
 export const Dynamic: Story = {
   render: () => {
     const [items, setItems] = useState<
       {
-        id: number
-        name: string
-        href: string
-        isCurrent: boolean
+        id: number;
+        name: string;
+        href: string;
+        isCurrent: boolean;
       }[]
     >([
       {
         id: 1,
-        name: 'Home',
+        name: "Home",
         href: `https://google.com/0`,
         isCurrent: true,
       },
-    ])
+    ]);
 
     function addItem() {
       const nextItem = {
@@ -143,8 +143,8 @@ export const Dynamic: Story = {
         name: `Item ${items.length + 1}`,
         href: `https://google.com/search?q=${items.length + 1}`,
         isCurrent: true,
-      }
-      setItems([...items.map((item) => ({ ...item, isCurrent: false })), nextItem])
+      };
+      setItems([...items.map((item) => ({ ...item, isCurrent: false })), nextItem]);
     }
 
     return (
@@ -161,41 +161,41 @@ export const Dynamic: Story = {
           </Breadcrumbs.Item>
         ))}
       </Breadcrumbs>
-    )
+    );
   },
   play: async ({ canvasElement, step }) => {
-    const { findAllByRole, getByLabelText } = within(canvasElement)
+    const { findAllByRole, getByLabelText } = within(canvasElement);
     function getLastItem() {
-      const item = getByLabelText('Add')
-      return item
+      const item = getByLabelText("Add");
+      return item;
     }
 
     async function addItems(count: number) {
       for (let i = 0; i < count; i++) {
-        const lastItem = getLastItem()
-        await userEvent.click(lastItem)
+        const lastItem = getLastItem();
+        await userEvent.click(lastItem);
       }
     }
 
-    await step('Click on the last item', async () => {
-      await addItems(1)
-    })
+    await step("Click on the last item", async () => {
+      await addItems(1);
+    });
 
-    await step('Check if the new item is added', async () => {
-      const items = await findAllByRole('listitem')
-      await expect(items).toHaveLength(2)
-    })
+    await step("Check if the new item is added", async () => {
+      const items = await findAllByRole("listitem");
+      await expect(items).toHaveLength(2);
+    });
 
-    await step('add 10 more items', async () => {
-      await addItems(10)
-    })
+    await step("add 10 more items", async () => {
+      await addItems(10);
+    });
 
-    await step('Check if the new items are added', async () => {
-      const items = await findAllByRole('listitem')
-      await expect(items).toHaveLength(12)
-    })
+    await step("Check if the new items are added", async () => {
+      const items = await findAllByRole("listitem");
+      await expect(items).toHaveLength(12);
+    });
   },
-}
+};
 
 export const WithStartAddon: Story = {
   render: () => (
@@ -355,7 +355,7 @@ export const WithStartAddon: Story = {
       </Breadcrumbs>
     </div>
   ),
-}
+};
 
 export const WithCustomIcon: Story = {
   render: () => (
@@ -380,7 +380,7 @@ export const WithCustomIcon: Story = {
           }}
           icon={({ isDisabled }) => (
             <svg
-              className={`h-4 w-4 ${isDisabled ? 'text-gray-300' : 'text-blue-500'}`}
+              className={`h-4 w-4 ${isDisabled ? "text-gray-300" : "text-blue-500"}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -402,7 +402,7 @@ export const WithCustomIcon: Story = {
           }}
           icon={({ isDisabled }) => (
             <svg
-              className={`h-4 w-4 ${isDisabled ? 'text-gray-300' : 'text-green-500'}`}
+              className={`h-4 w-4 ${isDisabled ? "text-gray-300" : "text-green-500"}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -424,7 +424,7 @@ export const WithCustomIcon: Story = {
           }}
           icon={({ isCurrent }) => (
             <svg
-              className={`h-4 w-4 ${isCurrent ? 'text-indigo-600' : 'text-gray-500'}`}
+              className={`h-4 w-4 ${isCurrent ? "text-indigo-600" : "text-gray-500"}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -535,7 +535,7 @@ export const WithCustomIcon: Story = {
       </Breadcrumbs>
     </div>
   ),
-}
+};
 
 export const WithOnAction: Story = {
   args: { onAction: fn() },
@@ -550,23 +550,23 @@ export const WithOnAction: Story = {
     </Breadcrumbs>
   ),
   play: async ({ canvasElement, args }) => {
-    const { onAction } = args as BreadcrumbsProps
+    const { onAction } = args as BreadcrumbsProps;
 
-    const { getByText, getByLabelText } = within(canvasElement)
-    await userEvent.click(getByText('Reports'))
-    await expect(onAction).toHaveBeenCalledWith('Reports')
+    const { getByText, getByLabelText } = within(canvasElement);
+    await userEvent.click(getByText("Reports"));
+    await expect(onAction).toHaveBeenCalledWith("Reports");
 
-    await userEvent.click(getByLabelText('More'))
-    await userEvent.click(getByText('Team'))
-    await expect(onAction).toHaveBeenCalledWith('Team')
+    await userEvent.click(getByLabelText("More"));
+    await userEvent.click(getByText("Team"));
+    await expect(onAction).toHaveBeenCalledWith("Team");
   },
-}
+};
 
 export const WithDnD: Story = {
   args: {
     onDrop: fn(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      return true
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      return true;
     }),
   },
   render: (args) => {
@@ -584,6 +584,6 @@ export const WithDnD: Story = {
           <Breadcrumbs.Item id="March 2025">March 2025</Breadcrumbs.Item>
         </Breadcrumbs>
       </div>
-    )
+    );
   },
-}
+};

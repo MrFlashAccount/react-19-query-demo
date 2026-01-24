@@ -13,4 +13,3 @@ describe("TabSelector", () => {
     expect(onTabChange).toHaveBeenCalledWith("unset");
   });
 });
-

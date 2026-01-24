@@ -12,8 +12,9 @@ import type { RSCContext, RSCResponseOptions } from "./types";
 /**
  * RSC route handler context
  */
-export interface RSCRouteContext<TParams extends RouteParams = RouteParams>
-  extends RequestContext<TParams> {
+export interface RSCRouteContext<
+  TParams extends RouteParams = RouteParams,
+> extends RequestContext<TParams> {
   /** RSC context with manifest and actions */
   rsc: RSCContext;
 }
@@ -103,10 +104,7 @@ export function rscRoutes<TParams extends RouteParams = RouteParams>(
   render: RSCRenderHandler<TParams>,
   options?: RSCResponseOptions,
 ): RouteDefinition<TParams>[] {
-  return [
-    rscGet(basePath, handler, render, options),
-    rscPost(basePath, handler, options),
-  ];
+  return [rscGet(basePath, handler, render, options), rscPost(basePath, handler, options)];
 }
 
 /**
@@ -148,4 +146,3 @@ export function createRSCRoutes<TParams extends RouteParams = RouteParams>(confi
 // Re-export for convenience
 export { createRSCHandler } from "./response";
 export type { CreateRSCHandlerOptions } from "./response";
-

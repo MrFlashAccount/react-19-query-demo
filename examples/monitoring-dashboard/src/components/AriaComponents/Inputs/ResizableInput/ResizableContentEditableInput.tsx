@@ -16,10 +16,10 @@ import {
   type FieldStateProps,
   type TSchema,
 } from "#/components/AriaComponents";
+import type { RefProp } from "#/components/AriaComponents/types";
 import { useAutoFocus } from "#/hooks/autoFocusHooks";
 import { useEvent } from "#/hooks/useEvent";
 import { mergeRefs } from "#/utilities/mergeRefs";
-import { forwardRef } from "#/utilities/react";
 import { tv, type VariantProps } from "#/utilities/tailwindVariants";
 import { INPUT_STYLES } from "../variants";
 
@@ -47,7 +47,8 @@ export interface ResizableContentEditableInputProps<
     Omit<
       VariantProps<typeof CONTENT_EDITABLE_STYLES>,
       "disabled" | "invalid" | "rounded" | "size" | "variant"
-    > {
+    >,
+    RefProp<HTMLDivElement> {
   /** Defaults to `onInput`. */
   readonly mode?: "onBlur" | "onInput";
   /**
@@ -67,13 +68,10 @@ const useStringField = Form.makeUseField<string>();
  * A resizable input that uses a content-editable div.
  * This component might be useful for a text input that needs to have highlighted content inside of it.
  */
-export const ResizableContentEditableInput = forwardRef(function ResizableContentEditableInput<
+export function ResizableContentEditableInput<
   Schema extends TSchema,
   TFieldName extends FieldPath<Schema, string>,
->(
-  props: ResizableContentEditableInputProps<Schema, TFieldName>,
-  ref: ForwardedRef<HTMLDivElement>,
-) {
+>(props: ResizableContentEditableInputProps<Schema, TFieldName>) {
   const {
     mode = "onInput",
     placeholder = "",
@@ -88,6 +86,7 @@ export const ResizableContentEditableInput = forwardRef(function ResizableConten
     variants = CONTENT_EDITABLE_STYLES,
     fieldVariants,
     autoFocus = false,
+    ref: forwardedRef,
     ...textFieldProps
   } = props;
 
@@ -146,7 +145,7 @@ export const ResizableContentEditableInput = forwardRef(function ResizableConten
           <div
             className={styles.textArea()}
             ref={(el) => {
-              mergeRefs(inputRef, ref, field.ref)(el);
+              mergeRefs(inputRef, forwardedRef, field.ref)(el);
             }}
             contentEditable
             suppressContentEditableWarning
@@ -182,4 +181,4 @@ export const ResizableContentEditableInput = forwardRef(function ResizableConten
       </div>
     </Form.Field>
   );
-});
+}

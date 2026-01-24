@@ -3,4 +3,4 @@
  * Barrel file for Alert component
  */
 
-export * from './Alert'
+export * from "./Alert";

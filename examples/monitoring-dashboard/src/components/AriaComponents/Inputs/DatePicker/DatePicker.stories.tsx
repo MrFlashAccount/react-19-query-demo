@@ -1,25 +1,25 @@
-import { Text } from '#/components/AriaComponents/Text'
-import { roundedVariants } from '#/components/AriaComponents/utilities'
-import { CalendarDate, ZonedDateTime, now } from '@internationalized/date'
-import type { Meta, StoryObj } from '@storybook/react'
-import { z } from 'zod'
-import { Form } from '../../Form/index'
-import type { DatePickerProps } from './DatePicker'
-import { DatePicker } from './DatePicker'
+import { Text } from "#/components/AriaComponents/Text";
+import { roundedVariants } from "#/components/AriaComponents/utilities";
+import { CalendarDate, ZonedDateTime, now } from "@internationalized/date";
+import type { Meta, StoryObj } from "@storybook/react";
+import { z } from "zod";
+import { Form } from "../../Form/index";
+import type { DatePickerProps } from "./DatePicker";
+import { DatePicker } from "./DatePicker";
 
-type Props = DatePickerProps<typeof schema, 'value'>
-type Story = StoryObj<Props>
+type Props = DatePickerProps<typeof schema, "value">;
+type Story = StoryObj<Props>;
 
-const schema = z.object({ value: z.instanceof(ZonedDateTime).or(z.instanceof(CalendarDate)) })
+const schema = z.object({ value: z.instanceof(ZonedDateTime).or(z.instanceof(CalendarDate)) });
 
-const sizes = ['medium', 'small'] as const
-const roundeds = roundedVariants()
+const sizes = ["medium", "small"] as const;
+const roundeds = roundedVariants();
 
 export default {
-  title: 'Components/Inputs/DatePicker',
+  title: "Components/Inputs/DatePicker",
   component: DatePicker,
   render: (args) => <DatePicker {...args} />,
-  tags: ['autodocs'],
+  tags: ["autodocs"],
   decorators: [
     (Story, context) => (
       <Form schema={schema} className="text-primary">
@@ -27,21 +27,21 @@ export default {
       </Form>
     ),
   ],
-  args: { name: 'value' },
+  args: { name: "value" },
   parameters: {
-    layout: 'centered',
+    layout: "centered",
   },
-} as Meta<Props>
+} as Meta<Props>;
 
-export const Default: Story = {}
+export const Default: Story = {};
 
 export const WithTime: Story = {
-  args: { name: 'value', defaultValue: now('Etc/GMT+0') } satisfies Props,
-}
+  args: { name: "value", defaultValue: now("Etc/GMT+0") } satisfies Props,
+};
 
 export const WithoutTimeZone: Story = {
-  args: { name: 'value', defaultValue: now('Etc/GMT+0'), hideTimeZone: true } satisfies Props,
-}
+  args: { name: "value", defaultValue: now("Etc/GMT+0"), hideTimeZone: true } satisfies Props,
+};
 
 export const Rounded: Story = {
   render: (_Story, context) => (
@@ -54,7 +54,7 @@ export const Rounded: Story = {
       ))}
     </div>
   ),
-}
+};
 
 export const Size: Story = {
   render: (_Story, context) => (
@@ -67,4 +67,4 @@ export const Size: Story = {
       ))}
     </div>
   ),
-}
+};

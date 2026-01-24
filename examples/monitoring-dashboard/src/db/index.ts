@@ -148,4 +148,3 @@ export async function setLastMetricTime(time: number): Promise<void> {
   const db = await getDB();
   await db.put("preferences", { key: "lastMetricTime", value: time });
 }
-

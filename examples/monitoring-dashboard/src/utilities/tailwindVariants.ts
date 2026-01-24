@@ -1,21 +1,22 @@
 /** @file `tailwind-variants` with a custom configuration. */
-import type { OmitUndefined } from 'tailwind-variants'
-import { createTV } from 'tailwind-variants'
+import type { OmitUndefined } from "tailwind-variants";
+import { createTV } from "tailwind-variants";
 
-import { TAILWIND_MERGE_CONFIG } from '#/utilities/tailwindMerge'
+import { TAILWIND_MERGE_CONFIG } from "#/utilities/tailwindMerge";
 
-export * from 'tailwind-variants'
+export * from "tailwind-variants";
 
 // This is a function, even though it does not contain function syntax.
 // eslint-disable-next-line no-restricted-syntax
-export const tv = createTV({ twMergeConfig: TAILWIND_MERGE_CONFIG })
+export const tv = createTV({ twMergeConfig: TAILWIND_MERGE_CONFIG });
 
 /** Extract function signatures from a type. */
-export type ExtractFunction<T> =
-  T extends (...args: infer Args) => infer Ret ? (...args: Args) => Ret : never
+export type ExtractFunction<T> = T extends (...args: infer Args) => infer Ret
+  ? (...args: Args) => Ret
+  : never;
 
 /** A `tailwind-variants` type, without restrictions on the `extends` key. */
-export type TVWithoutExtends<T> = ExtractFunction<T> & Omit<T, 'extend'>
+export type TVWithoutExtends<T> = ExtractFunction<T> & Omit<T, "extend">;
 
 /**
  * Props for a component that uses `tailwind-variants`.
@@ -25,7 +26,7 @@ export type TVWithoutExtends<T> = ExtractFunction<T> & Omit<T, 'extend'>
 export type VariantProps<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Component extends (...args: any) => any,
-> = Omit<OmitUndefined<Parameters<Component>[0]>, 'class' | 'className'> & {
+> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className"> & {
   /**
    * Custom styles for a component.
    *
@@ -50,5 +51,5 @@ export type VariantProps<
    * <MyComponent variants={OVERRIDES} />
    * ```
    */
-  variants?: ExtractFunction<Component> | undefined
-}
+  variants?: ExtractFunction<Component> | undefined;
+};

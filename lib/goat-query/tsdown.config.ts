@@ -1,7 +1,7 @@
 import pluginBabel from "@rollup/plugin-babel";
-import { defineConfig } from "tsdown";
+import { defineConfig, type UserConfig } from "tsdown";
 
-export default defineConfig({
+const config: UserConfig = defineConfig({
   plugins: [
     pluginBabel({
       babelHelpers: "bundled",
@@ -13,17 +13,17 @@ export default defineConfig({
       extensions: [".js", ".jsx", ".ts", ".tsx"],
     }),
   ],
-  entry: ["index.ts", "react.ts", "devtools/index.ts"],
+  entry: ["src/index.ts", "src/react.ts", "src/devtools/index.ts"],
   outDir: "dist",
   format: "esm",
   platform: "neutral",
-  sourcemap: true,
   clean: true,
-  inlineOnly: false,
   skipNodeModulesBundle: true,
-  dts: {
-    resolver: "tsc",
-  },
   external: ["react", /^react\//, "@types/react", /^@types\//, /^@lib\//],
+  // tsdown's dts bundling currently produces invalid declarations when React 19
+  // types are involved (e.g. `undefined<T>` and `(void 0).JSX`), which then breaks
+  // downstream typechecks. Generate `.d.ts` via `tsc --emitDeclarationOnly` instead.
+  dts: false,
 });
 
+export default config;

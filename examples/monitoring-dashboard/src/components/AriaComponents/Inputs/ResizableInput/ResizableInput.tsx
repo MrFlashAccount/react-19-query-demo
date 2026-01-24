@@ -7,21 +7,19 @@ import * as aria from "#/components/aria";
 
 import * as mergeRefs from "#/utilities/mergeRefs";
 
-import { forwardRef } from "#/utilities/react";
+import type { RefProp } from "#/components/AriaComponents/types";
 import * as variants from "../variants";
 
 /** Props for a {@link ResizableInput}. */
-export interface ResizableInputProps extends aria.TextFieldProps {
+export interface ResizableInputProps extends aria.TextFieldProps, RefProp<HTMLTextAreaElement> {
   readonly placeholder?: string;
   readonly description?: React.ReactNode;
 }
 
 /** A resizable input field. */
-export const ResizableInput = forwardRef(function ResizableInput(
-  props: ResizableInputProps,
-  ref: React.ForwardedRef<HTMLTextAreaElement>,
-) {
+export function ResizableInput(props: ResizableInputProps) {
   const { value = "", placeholder = "", description = null, ...textFieldProps } = props;
+  const { ref: forwardedRef } = props;
   const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const resizableAreaRef = React.useRef<HTMLSpanElement>(null);
 
@@ -61,7 +59,7 @@ export const ResizableInput = forwardRef(function ResizableInput(
         <div className={inputContainer()}>
           <aria.TextArea
             ref={(el) => {
-              mergeRefs.mergeRefs(inputRef, ref)(el);
+              mergeRefs.mergeRefs(inputRef, forwardedRef)(el);
             }}
             onPaste={onPaste}
             className={textArea()}
@@ -81,4 +79,4 @@ export const ResizableInput = forwardRef(function ResizableInput(
       </div>
     </aria.TextField>
   );
-});
+}

@@ -220,6 +220,7 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
                   /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
                   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
                   isLoading={render.isPending}
+                  /* @ts-expect-error ts errors are expected here because we are merging props with different types */
                   icon={typeof icon === "function" ? icon(render) : icon}
                   styles={styles}
                   /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */

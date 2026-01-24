@@ -1,2 +1,2 @@
-export * from './ProfilePicture'
-export * from './variants'
+export * from "./ProfilePicture";
+export * from "./variants";

@@ -3,4 +3,4 @@
  *
  * Barrel export for the Checkbox component.
  */
-export * from './Checkbox'
+export * from "./Checkbox";
