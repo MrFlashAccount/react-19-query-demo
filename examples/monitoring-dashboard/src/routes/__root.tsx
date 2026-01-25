@@ -9,12 +9,12 @@ export const Route = createRootRoute({
 
 function HeaderFallback() {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/80 px-4 backdrop-blur-sm">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-sm">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-accent-cyan)] to-[var(--color-accent-emerald)]">
             <svg
-              className="h-5 w-5 text-slate-900"
+              className="h-5 w-5 text-invert"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -27,10 +27,10 @@ function HeaderFallback() {
               />
             </svg>
           </div>
-          <span className="text-lg font-semibold text-slate-100">Infrastructure Monitor</span>
+          <span className="text-lg font-semibold text-primary">Infrastructure Monitor</span>
         </div>
         <div className="ml-6 flex items-center gap-4">
-          <div className="h-4 w-24 animate-pulse rounded bg-slate-800" />
+          <div className="h-4 w-24 animate-pulse rounded bg-hover-bg" />
         </div>
       </div>
     </header>
@@ -39,7 +39,7 @@ function HeaderFallback() {
 
 function RootLayout() {
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-slate-950">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
       <Suspense fallback={<HeaderFallback />}>
         <Header />
       </Suspense>

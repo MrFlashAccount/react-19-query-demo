@@ -1,25 +1,28 @@
 import { Link } from "@tanstack/react-router";
-import { Button } from "../AriaComponents";
+import { Text } from "../AriaComponents";
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-56 shrink-0 border-r border-slate-800 bg-slate-950/60 p-3 sm:block">
-      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Navigation</div>
-      <Button variant="link" href="/">
-        Dashboard
-      </Button>
+    <aside className="hidden w-56 shrink-0 border-r border-border bg-background/60 p-3 sm:block">
+      <Text variant="overline" color="muted" className="uppercase tracking-wide">
+        Navigation
+      </Text>
       <nav className="mt-2 flex flex-col gap-1">
         <Link
           to="/"
-          className="rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-900 hover:text-slate-100"
-          activeProps={{ className: "rounded-md bg-slate-900 px-3 py-2 text-sm text-slate-100" }}
+          className="rounded-md px-3 py-2 text-sm text-primary/70 hover:bg-hover-bg hover:text-primary transition-colors"
+          activeProps={{
+            className: "rounded-md bg-hover-bg px-3 py-2 text-sm text-primary",
+          }}
         >
           Dashboard
         </Link>
         <Link
           to="/alerts"
-          className="rounded-md px-3 py-2 text-sm text-slate-300 hover:bg-slate-900 hover:text-slate-100"
-          activeProps={{ className: "rounded-md bg-slate-900 px-3 py-2 text-sm text-slate-100" }}
+          className="rounded-md px-3 py-2 text-sm text-primary/70 hover:bg-hover-bg hover:text-primary transition-colors"
+          activeProps={{
+            className: "rounded-md bg-hover-bg px-3 py-2 text-sm text-primary",
+          }}
         >
           Alerts
         </Link>

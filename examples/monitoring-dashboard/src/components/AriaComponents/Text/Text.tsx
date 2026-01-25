@@ -8,7 +8,6 @@ import * as twv from "#/utilities/tailwindVariants";
 
 import type { TooltipElementType } from "#/components/AriaComponents";
 import type { RefProp } from "#/components/AriaComponents/types";
-import { useEvent } from "#/hooks/useEvent";
 import { memo } from "react";
 import type { TestIdProps } from "../types";
 import * as visualTooltip from "../VisualTooltip";
@@ -201,7 +200,7 @@ export const Text = memo(function Text(props: TextProps) {
     align,
   });
 
-  const isTooltipDisabled = useEvent(() => {
+  const isTooltipDisabled = () => {
     if (tooltipDisplay === "whenOverflowing") {
       return truncate == null;
     }
@@ -210,7 +209,7 @@ export const Text = memo(function Text(props: TextProps) {
     }
 
     return tooltipDisplay === "never";
-  });
+  };
 
   const { tooltip, targetProps } = visualTooltip.useVisualTooltip({
     isDisabled: isTooltipDisabled(),

@@ -50,6 +50,30 @@
   --color-status-warning: #fbbf24;
   --color-status-critical: #fb7185;
   --color-status-offline: #64748b;
+
+  /* Tailwind config expected variables - mapped from existing colors */
+  /* Primary color (text) - using text-primary */
+  --color-primary-rgb: 241 245 249;
+  --color-primary-opacity: 100%;
+
+  /* Invert color (white) */
+  --color-invert-rgb: 255 255 255;
+  --color-invert-opacity: 100%;
+
+  /* Background color - using bg-secondary */
+  --color-background-rgb: 15 18 25;
+  --color-background-opacity: 100%;
+  --color-background-hex: #0f1219;
+
+  /* Dashboard background - using bg-primary */
+  --color-dashboard-background-rgb: 8 10 15;
+  --color-dashboard-background-opacity: 100%;
+
+  /* Accent color - using accent-cyan */
+  --color-accent-rgb: 34 211 238;
+
+  /* Danger color - using accent-rose */
+  --color-danger-rgb: 251 113 133;
 }
 
 html {

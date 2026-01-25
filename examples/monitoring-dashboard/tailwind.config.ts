@@ -27,6 +27,7 @@ const config: Config = {
           "rgb(var(--color-dashboard-background-rgb) / var(--color-dashboard-background-opacity))",
         accent: "rgb(var(--color-accent-rgb) / 100%)",
         danger: "rgb(var(--color-danger-rgb) / 100%)",
+        border: "var(--color-border)",
         "accent-dark": "rgba(62, 145, 82, 1)",
         "hover-bg": "rgb(0 0 0 / 10%)",
         frame: "rgb(255 255 255 / 40%)",
