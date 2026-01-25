@@ -27,7 +27,7 @@ const ICON_LOADER_DELAY = 150;
 export function Button<IconType extends string>(propsReplacement: ButtonProps<IconType>) {
   // @ts-expect-error ts errors are expected here because we are merging props with different types
   // eslint-disable-next-line prefer-const
-  let [props, ref] = useContextProps(propsReplacement, refReplacement, ButtonContext);
+  let [props, ref] = useContextProps(propsReplacement, propsReplacement.ref, ButtonContext);
   props = useMergedButtonStyles(props);
 
   const dialogContext = useDialogContext();

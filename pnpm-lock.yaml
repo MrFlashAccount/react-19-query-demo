@@ -92,6 +92,9 @@ importers:
       '@lib/rsc-service-worker-bff':
         specifier: workspace:*
         version: link:../../lib/rsc-service-worker-bff
+      '@react-aria/collections':
+        specifier: 3.0.1
+        version: 3.0.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@react-aria/interactions':
         specifier: 3.26.0
         version: 3.26.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -132,7 +135,7 @@ importers:
         specifier: 3.45.0
         version: 3.45.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react-aria-components:
-        specifier: ^1.7.1
+        specifier: 1.14.0
         version: 1.14.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react-chartjs-2:
         specifier: ^5.3.0
@@ -162,8 +165,11 @@ importers:
         specifier: 1.3.3
         version: 1.3.3
       zod:
-        specifier: ^3.24.2
-        version: 3.25.76
+        specifier: 4.3.6
+        version: 4.3.6
+      zustand:
+        specifier: 5.0.10
+        version: 5.0.10(@types/react@19.2.5)(react@19.2.0)(use-sync-external-store@1.6.0(react@19.2.0))
     devDependencies:
       '@playwright/test':
         specifier: ^1.50.1
@@ -198,6 +204,12 @@ importers:
       tailwindcss:
         specifier: ^4.1.17
         version: 4.1.17
+      tailwindcss-animate:
+        specifier: 1.0.7
+        version: 1.0.7(tailwindcss@4.1.17)
+      tailwindcss-react-aria-components:
+        specifier: 2.0.1
+        version: 2.0.1(tailwindcss@4.1.17)
       vite:
         specifier: ^8.0.0-beta.0
         version: 8.0.0-beta.0(@types/node@22.18.12)(esbuild@0.25.11)(jiti@2.6.1)(terser@5.46.0)(yaml@2.8.1)
@@ -320,7 +332,26 @@ importers:
         specifier: 4.0.9
         version: 4.0.9(@types/node@22.18.12)(happy-dom@12.10.3)(jiti@2.6.1)(lightningcss@1.30.2)(msw@2.11.6(@types/node@22.18.12)(typescript@5.9.3))(terser@5.46.0)(yaml@2.8.1)
 
-  lib/brand: {}
+  lib/brand:
+    devDependencies:
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260124.1
+        version: 7.0.0-dev.20260124.1
+      oxfmt:
+        specifier: 0.26.0
+        version: 0.26.0
+      oxlint:
+        specifier: 1.41.0
+        version: 1.41.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      tsdown:
+        specifier: 0.20.1
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   lib/goat-query:
     dependencies:
@@ -346,15 +377,46 @@ importers:
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260124.1
         version: 7.0.0-dev.20260124.1
+      oxfmt:
+        specifier: 0.26.0
+        version: 0.26.0
+      oxlint:
+        specifier: 1.41.0
+        version: 1.41.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
       tsdown:
         specifier: 0.20.1
         version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   lib/performance-monitor:
     dependencies:
       lit-html:
         specifier: 3.3.2
         version: 3.3.2
+    devDependencies:
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260124.1
+        version: 7.0.0-dev.20260124.1
+      oxfmt:
+        specifier: 0.26.0
+        version: 0.26.0
+      oxlint:
+        specifier: 1.41.0
+        version: 1.41.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      tsdown:
+        specifier: 0.20.1
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   lib/rsc-service-worker-bff:
     dependencies:
@@ -368,21 +430,60 @@ importers:
         specifier: ^4.1.0
         version: 4.2.0
     devDependencies:
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260124.1
+        version: 7.0.0-dev.20260124.1
+      oxfmt:
+        specifier: 0.26.0
+        version: 0.26.0
+      oxlint:
+        specifier: 1.41.0
+        version: 1.41.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
       react:
         specifier: ^19.2.0
         version: 19.2.0
       react-dom:
         specifier: ^19.2.0
         version: 19.2.0(react@19.2.0)
+      tsdown:
+        specifier: 0.20.1
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   lib/tracing:
-    dependencies:
+    devDependencies:
       '@lib/brand':
         specifier: workspace:*
         version: link:../brand
+      '@types/node':
+        specifier: 22.10.5
+        version: 22.10.5
+      '@typescript/native-preview':
+        specifier: 7.0.0-dev.20260124.1
+        version: 7.0.0-dev.20260124.1
       lit-html:
         specifier: 3.3.2
         version: 3.3.2
+      oxfmt:
+        specifier: 0.26.0
+        version: 0.26.0
+      oxlint:
+        specifier: 1.41.0
+        version: 1.41.0(oxlint-tsgolint@0.11.1)
+      oxlint-tsgolint:
+        specifier: 0.11.1
+        version: 0.11.1
+      tsdown:
+        specifier: 0.20.1
+        version: 0.20.1(@typescript/native-preview@7.0.0-dev.20260124.1)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
 packages:
 
@@ -2024,6 +2125,9 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
+  '@types/node@22.10.5':
+    resolution: {integrity: sha512-F8Q+SeGimwOo86fiovQh8qiXfFEh2/ocYv7tU5pJ3EXMSSxk1Joj5wefpFK2fHTf/N6HKGSxIDBT9f3gCxXPkQ==}
+
   '@types/node@22.18.12':
     resolution: {integrity: sha512-BICHQ67iqxQGFSzfCFTT7MRQ5XcBjG5aeKh5Ok38UBbPe5fxTyE+aHFxwVrGyr8GNlqFMLKD1D3P2K/1ks8tog==}
 
@@ -3026,6 +3130,16 @@ packages:
       tailwind-merge:
         optional: true
 
+  tailwindcss-animate@1.0.7:
+    resolution: {integrity: sha512-bl6mpH3T7I3UFxuvDEXLxy/VuFxBk5bbzplh7tXI68mwMokNYd1t9qPBHlnyTwfa4JGC4zP516I1hYYtQ/vspA==}
+    peerDependencies:
+      tailwindcss: '>=3.0.0 || insiders'
+
+  tailwindcss-react-aria-components@2.0.1:
+    resolution: {integrity: sha512-yTAfYv9BE/gKczS+b8UiFMqxnrEYKKNE6Y4vAWzGadkHGb4Yuawp0SHbZKkZJQgFvK0KjO3JpCq/0kzR5jJ9tw==}
+    peerDependencies:
+      tailwindcss: ^4.0.0
+
   tailwindcss@4.1.17:
     resolution: {integrity: sha512-j9Ee2YjuQqYT9bbRTfTZht9W/ytp5H+jJpZKiYdP/bpnXARAuELt9ofP0lPnmHjbga7SNQIxdTAXCmtKVYjN+Q==}
 
@@ -3136,6 +3250,9 @@ packages:
 
   unconfig-core@7.4.2:
     resolution: {integrity: sha512-VgPCvLWugINbXvMQDf8Jh0mlbvNjNC6eSUziHsBCMpxR05OPrNrvDnyatdMjRgcHaaNsCqz+wjNXxNw1kRLHUg==}
+
+  undici-types@6.20.0:
+    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -3350,8 +3467,26 @@ packages:
     resolution: {integrity: sha512-U/PBtDf35ff0D8X8D0jfdzHYEPFxAI7jJlxZXwCSez5M3190m+QobIfh+sWDWSHMCWWJN2AWamkegn6vr6YBTw==}
     engines: {node: '>=18'}
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+  zustand@5.0.10:
+    resolution: {integrity: sha512-U1AiltS1O9hSy3rul+Ub82ut2fqIAefiSuwECWt6jlMVUGejvf+5omLcRBSzqbRagSM3hQZbtzdeRc6QVScXTg==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
 snapshots:
 
@@ -5272,6 +5407,10 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
+  '@types/node@22.10.5':
+    dependencies:
+      undici-types: 6.20.0
+
   '@types/node@22.18.12':
     dependencies:
       undici-types: 6.21.0
@@ -5790,7 +5929,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 22.18.12
+      '@types/node': 22.10.5
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
@@ -6361,6 +6500,14 @@ snapshots:
     optionalDependencies:
       tailwind-merge: 3.4.0
 
+  tailwindcss-animate@1.0.7(tailwindcss@4.1.17):
+    dependencies:
+      tailwindcss: 4.1.17
+
+  tailwindcss-react-aria-components@2.0.1(tailwindcss@4.1.17):
+    dependencies:
+      tailwindcss: 4.1.17
+
   tailwindcss@4.1.17: {}
 
   tapable@2.3.0: {}
@@ -6482,6 +6629,8 @@ snapshots:
     dependencies:
       '@quansync/fs': 1.0.0
       quansync: 1.0.0
+
+  undici-types@6.20.0: {}
 
   undici-types@6.21.0: {}
 
@@ -6670,4 +6819,10 @@ snapshots:
   yoctocolors-cjs@2.1.3:
     optional: true
 
-  zod@3.25.76: {}
+  zod@4.3.6: {}
+
+  zustand@5.0.10(@types/react@19.2.5)(react@19.2.0)(use-sync-external-store@1.6.0(react@19.2.0)):
+    optionalDependencies:
+      '@types/react': 19.2.5
+      react: 19.2.0
+      use-sync-external-store: 1.6.0(react@19.2.0)

@@ -6,6 +6,7 @@ import { PortalProvider } from "#/components/Portal";
 import type { Spring } from "framer-motion";
 import { MotionConfig } from "framer-motion";
 import { I18nProvider } from "react-aria-components";
+import { useRouter } from "@tanstack/react-router";
 
 const DEFAULT_TRANSITION_OPTIONS: Spring = {
   type: "spring",
@@ -40,6 +41,7 @@ export interface UIProvidersProps extends Readonly<React.PropsWithChildren> {
 /** A wrapper containing all UI-related React Provdiers. */
 export default function UIProviders(props: UIProvidersProps) {
   const { portalRoot, appRoot, locale, children } = props;
+  const router = useRouter();
 
   return (
     <RootContext.Provider value={{ portalRoot, appRoot }}>

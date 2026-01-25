@@ -3,7 +3,7 @@ import type {
   ButtonProps as AriaButtonProps,
   ButtonRenderProps as AriaButtonRenderProps,
   LinkRenderProps as AriaLinkRenderProps,
-  LinkProps,
+  LinkProps as AriaLinkProps,
   Placement,
   PressEvent,
 } from "#/components/aria";
@@ -34,14 +34,19 @@ export interface LinkRenderProps extends AriaLinkRenderProps {
   readonly isLoading: boolean;
 }
 
+export type LinkProps<IconType extends string = string> = BaseButtonProps<
+  IconType,
+  LinkRenderProps
+> &
+  Omit<AriaLinkProps, "children" | "onPress"> &
+  PropsWithHref;
+
 /** Props for a Button. */
 export type ButtonProps<IconType extends string = string> =
   | (BaseButtonProps<IconType, ButtonRenderProps> &
       Omit<AriaButtonProps, "children" | "isPending" | "onPress"> &
       PropsWithoutHref)
-  | (BaseButtonProps<IconType, LinkRenderProps> &
-      Omit<LinkProps, "children" | "onPress"> &
-      PropsWithHref);
+  | LinkProps;
 
 /** Props for a button with an href. */
 interface PropsWithHref {

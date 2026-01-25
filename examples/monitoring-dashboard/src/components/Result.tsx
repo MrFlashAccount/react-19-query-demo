@@ -56,7 +56,7 @@ const RESULT_STYLES = tv({
   },
   slots: {
     statusIcon:
-      "mb-2 flex h-8 w-8 flex-none items-center justify-center rounded-full bg-opacity-25 p-1 text-green",
+      "mb-2 flex h-8 w-8 flex-none items-center justify-center rounded-full bg-green/25 p-1 text-green",
     icon: "h-6 w-6 flex-none",
     title: "",
     subtitle: "max-w-[750px]",

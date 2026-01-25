@@ -1,9 +1,13 @@
 import { Link } from "@tanstack/react-router";
+import { Button } from "../AriaComponents";
 
 export function Sidebar() {
   return (
     <aside className="hidden w-56 shrink-0 border-r border-slate-800 bg-slate-950/60 p-3 sm:block">
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Navigation</div>
+      <Button variant="link" href="/">
+        Dashboard
+      </Button>
       <nav className="mt-2 flex flex-col gap-1">
         <Link
           to="/"

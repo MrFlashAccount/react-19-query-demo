@@ -9,5 +9,5 @@ export {
   type ButtonContextType,
   type ButtonGroupContextType,
 } from "./shared";
-export type { BaseButtonProps, ButtonProps } from "./types";
+export type { BaseButtonProps, ButtonProps, LinkProps } from "./types";
 export * from "./variants";

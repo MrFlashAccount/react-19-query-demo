@@ -9,8 +9,8 @@ import "../rsc/webpack-shim";
 
 import { useState, useEffect, useCallback, Suspense, use } from "react";
 import { createRoot } from "react-dom/client";
-import { createWorker } from "../worker";
-import { registerClientModule, fetchRSC, polyfillReady } from "../rsc";
+import { createWorker } from "../src/worker";
+import { registerClientModule, fetchRSC, polyfillReady } from "../src/rsc";
 
 // Import client components and register them
 import * as ClientComponents from "./components";
@@ -187,7 +187,7 @@ function App() {
     }
 
     // The response is an RSC stream containing the action result
-    const { consumeRSC } = await import("../rsc/client");
+    const { consumeRSC } = await import("../src/rsc/client");
     const result = await consumeRSC<unknown>(response.body!, { callServer });
     addLog("success", `Server action result: ${JSON.stringify(result)}`);
     return result;
