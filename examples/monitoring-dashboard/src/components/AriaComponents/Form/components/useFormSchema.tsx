@@ -1,7 +1,7 @@
 /** @file A hook to create a form schema. */
 import * as React from "react";
 
-import * as callbackEventHooks from "#/hooks/useEvent";
+import * as callbackEventHooks from "@/hooks/useEvent";
 
 import * as schemaComponent from "./schema";
 import type * as types from "./types";

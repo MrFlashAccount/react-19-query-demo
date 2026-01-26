@@ -8,7 +8,7 @@
 
 import * as React from "react";
 
-import * as offlineHooks from "#/hooks/offlineHooks";
+import * as offlineHooks from "@/hooks/offlineHooks";
 
 /** Props for {@link OfflineNotificationManager} */
 export type OfflineNotificationManagerProps = Readonly<React.PropsWithChildren>;

@@ -1,9 +1,9 @@
 /** @file A DialogTrigger opens a dialog when a trigger element is pressed. */
 import * as React from "react";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
-import { useEvent } from "#/hooks/useEvent";
+import { useEvent } from "@/hooks/useEvent";
 import { useOverlayTriggerState } from "react-stately";
 
 /** Props passed to the render function of a {@link DialogTrigger}. */

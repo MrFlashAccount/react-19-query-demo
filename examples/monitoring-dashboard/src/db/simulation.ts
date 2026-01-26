@@ -5,7 +5,7 @@ import type { Metric, LogEntry, LogLevel, ServerStatus } from "./schema";
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SIMULATION_INTERVAL = 1000; // 1 second
+const SIMULATION_INTERVAL = 10000; // 10 seconds
 const PRUNE_INTERVAL = 30_000; // 30 seconds
 const MAX_METRICS_AGE = 24 * 60 * 60 * 1000; // 24 hours
 const MAX_BACKFILL_GAP = 60 * 60 * 1000; // 1 hour

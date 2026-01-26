@@ -6,8 +6,8 @@ import type {
   LinkProps as AriaLinkProps,
   Placement,
   PressEvent,
-} from "#/components/aria";
-import type { ExtractFunction } from "#/utilities/tailwindVariants";
+} from "@/components/aria";
+import type { ExtractFunction } from "@/utilities/tailwindVariants";
 import type { ReactElement, ReactNode, RefObject } from "react";
 import type { Addon, IconProp, TestIdProps } from "../types";
 import type { BUTTON_STYLES, ButtonVariants } from "./variants";

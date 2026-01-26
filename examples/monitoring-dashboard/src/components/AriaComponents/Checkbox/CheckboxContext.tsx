@@ -1,6 +1,6 @@
 /** @file */
-import { useEvent } from "#/hooks/useEvent";
-import { type StoreApi, createStore } from "#/utilities/zustand";
+import { useEvent } from "@/hooks/useEvent";
+import { type StoreApi, createStore } from "@/utilities/zustand";
 import type { PropsWithChildren } from "react";
 import { createContext, useContext, useState } from "react";
 import type { TSchema, UseFormRegisterReturn } from "../Form";

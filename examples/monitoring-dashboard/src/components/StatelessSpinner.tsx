@@ -1,9 +1,9 @@
 /** @file A spinner that does not expose its {@link SpinnerState}. */
 import { startTransition, useEffect, useState } from "react";
 
-import type { SpinnerProps, SpinnerState } from "#/components/Spinner";
-import { Spinner } from "#/components/Spinner";
-export type { SpinnerState } from "#/components/Spinner";
+import type { SpinnerProps, SpinnerState } from "@/components/Spinner";
+import { Spinner } from "@/components/Spinner";
+export type { SpinnerState } from "@/components/Spinner";
 
 /** Props for a {@link StatelessSpinner}. */
 export type StatelessSpinnerProps = SpinnerProps;

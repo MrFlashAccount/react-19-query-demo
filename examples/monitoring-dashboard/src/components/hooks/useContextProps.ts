@@ -2,7 +2,7 @@
  * @file
  * Hook for merging props with context values
  */
-import { mergeRefs } from "#/utilities/mergeRefs";
+import { mergeRefs } from "@/utilities/mergeRefs";
 import { useContext, type Context, type ForwardedRef, type Ref } from "react";
 import { mergeProps } from "../aria";
 

@@ -18,6 +18,15 @@ export function Sidebar() {
           Dashboard
         </Link>
         <Link
+          to="/servers"
+          className="rounded-md px-3 py-2 text-sm text-primary/70 hover:bg-hover-bg hover:text-primary transition-colors"
+          activeProps={{
+            className: "rounded-md bg-hover-bg px-3 py-2 text-sm text-primary",
+          }}
+        >
+          Servers
+        </Link>
+        <Link
           to="/alerts"
           className="rounded-md px-3 py-2 text-sm text-primary/70 hover:bg-hover-bg hover:text-primary transition-colors"
           activeProps={{
@@ -25,6 +34,24 @@ export function Sidebar() {
           }}
         >
           Alerts
+        </Link>
+        <Link
+          to="/incidents"
+          className="rounded-md px-3 py-2 text-sm text-primary/70 hover:bg-hover-bg hover:text-primary transition-colors"
+          activeProps={{
+            className: "rounded-md bg-hover-bg px-3 py-2 text-sm text-primary",
+          }}
+        >
+          Incidents
+        </Link>
+        <Link
+          to="/logs"
+          className="rounded-md px-3 py-2 text-sm text-primary/70 hover:bg-hover-bg hover:text-primary transition-colors"
+          activeProps={{
+            className: "rounded-md bg-hover-bg px-3 py-2 text-sm text-primary",
+          }}
+        >
+          Logs
         </Link>
       </nav>
     </aside>

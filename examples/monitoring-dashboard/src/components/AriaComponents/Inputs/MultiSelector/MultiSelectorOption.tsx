@@ -1,9 +1,8 @@
 /** @file An option in a selector. */
-import { ListBoxItem, type ListBoxItemProps } from "#/components/aria";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
-import * as React from "react";
+import { ListBoxItem, type ListBoxItemProps } from "@/components/aria";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import { TEXT_STYLE } from "../../Text";
 
 /** Props for a {@link MultiSelectorOption}. */
@@ -39,7 +38,7 @@ export const MULTI_SELECTOR_OPTION_STYLES = tv({
     },
     color: {
       primary:
-        "selected:bg-primary selected:text-white hover:bg-primary/5 pressed:bg-primary/10 outline outline-2 outline-transparent outline-offset-[-2px] focus-visible:outline-primary focus-visible:outline-offset-0",
+        "selected:bg-primary selected:text-white hover:bg-primary/5 pressed:bg-primary/10 outline outline-2 outline-transparent -outline-offset-2 focus-visible:outline-primary focus-visible:outline-offset-0",
     },
     variant: {
       default: "",

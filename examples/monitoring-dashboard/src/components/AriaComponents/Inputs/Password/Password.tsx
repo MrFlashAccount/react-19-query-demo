@@ -1,8 +1,8 @@
 /** @file A component wrapping {@link Input} with the ability to show and hide password. */
 import { useState } from "react";
 
-import EyeIcon from "#/assets/eye.svg";
-import EyeCrossedIcon from "#/assets/eye_crossed.svg";
+import EyeIcon from "@/assets/eye.svg";
+import EyeCrossedIcon from "@/assets/eye_crossed.svg";
 import {
   Button,
   Form,
@@ -10,7 +10,7 @@ import {
   type FieldPath,
   type InputProps,
   type TSchema,
-} from "#/components/AriaComponents";
+} from "@/components/AriaComponents";
 import { AnimatePresence, motion } from "framer-motion";
 
 /** Props for a {@link Password}. */

@@ -1,9 +1,9 @@
-import Enso from "#/assets/enso_logo.svg";
-import ArrowDownIcon from "#/assets/expand_arrow_down.svg";
-import Plus from "#/assets/plus.svg";
+import Enso from "@/assets/enso_logo.svg";
+import ArrowDownIcon from "@/assets/expand_arrow_down.svg";
+import Plus from "@/assets/plus.svg";
 
-import type * as aria from "#/components/aria";
-import { Popover, Separator, Text } from "#/components/AriaComponents";
+import type * as aria from "@/components/aria";
+import { Popover, Separator, Text } from "@/components/AriaComponents";
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, userEvent, within } from "@storybook/test";
 import { Button, type BaseButtonProps } from ".";

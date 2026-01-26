@@ -4,21 +4,21 @@
  */
 import * as React from "react";
 
-import * as aria from "#/components/aria";
-import * as ariaComponents from "#/components/AriaComponents";
-import * as errorBoundary from "#/components/ErrorBoundary";
-import * as portal from "#/components/Portal";
-import * as suspense from "#/components/Suspense";
+import * as aria from "@/components/aria";
+import * as ariaComponents from "@/components/AriaComponents";
+import * as errorBoundary from "@/components/ErrorBoundary";
+import * as portal from "@/components/Portal";
+import * as suspense from "@/components/Suspense";
 
-import * as mergeRefs from "#/utilities/mergeRefs";
+import * as mergeRefs from "@/utilities/mergeRefs";
 
-import { DialogDismiss, ResetButtonGroupContext } from "#/components/AriaComponents";
-import { useEvent } from "#/hooks/useEvent";
-import { useMeasure } from "#/hooks/measureHooks";
-import { LayoutGroup, motion, type Spring } from "#/utilities/motion";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
-import { unsafeWriteValue } from "#/utilities/write";
+import { DialogDismiss, ResetButtonGroupContext } from "@/components/AriaComponents";
+import { useEvent } from "@/hooks/useEvent";
+import { useMeasure } from "@/hooks/measureHooks";
+import { LayoutGroup, motion, type Spring } from "@/utilities/motion";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
+import { unsafeWriteValue } from "@/utilities/write";
 import { useRootContext } from "../../UIProviders";
 import { Close } from "./Close";
 import * as dialogProvider from "./DialogProvider";
@@ -81,7 +81,8 @@ const DIALOG_STYLES = tv({
       normal: { base: "", closeButton: "" },
       floating: {
         base: "",
-        closeButton: "absolute left-4 top-4 visible z-1 transition-all duration-150",
+        closeButton:
+          "absolute left-4 top-4 visible z-1 transition-[opacity,transform] duration-150",
         header: "p-0 max-h-0 min-h-0 h-0 border-0 z-1",
         content: "isolate",
       },

@@ -7,8 +7,8 @@ import {
   type FieldValues,
   type FieldVariantProps,
   type TSchema,
-} from "#/components/AriaComponents";
-import { Input, type InputProps } from "#/components/aria";
+} from "@/components/AriaComponents";
+import { Input, type InputProps } from "@/components/aria";
 
 /** Props for {@link HiddenFile}. */
 export interface HiddenFileProps<Schema extends TSchema, TFieldName extends FieldPath<Schema, File>>

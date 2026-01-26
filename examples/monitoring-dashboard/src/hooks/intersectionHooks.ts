@@ -1,5 +1,5 @@
 /** @file Track changes in intersection ratio between an element and one of its ancestors. */
-import { useLatest } from "#/hooks/useLatest";
+import { useLatest } from "@/hooks/useLatest";
 import * as React from "react";
 
 // UNSAFE. Only type-safe if the `transform` and `initialValue` arguments below are omitted

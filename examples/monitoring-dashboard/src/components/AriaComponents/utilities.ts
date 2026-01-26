@@ -1,7 +1,7 @@
 /** @file Constants for aria components. */
 
-import { identity } from "#/utilities/functions";
-import { unsafeKeyValuePair } from "#/utilities/object";
+import { identity } from "@/utilities/functions";
+import { unsafeKeyValuePair } from "@/utilities/object";
 
 /** Possible values for the `rounded` variant. */
 export function roundedVariants() {

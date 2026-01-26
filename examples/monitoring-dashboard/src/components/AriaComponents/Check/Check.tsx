@@ -4,7 +4,7 @@
  * A checkmark icon
  * Can be used to indicate that an item is selected. Has an indeterminate state.
  */
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { motion, type Variants } from "framer-motion";
 
 /**

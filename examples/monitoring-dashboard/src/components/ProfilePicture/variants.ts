@@ -1,5 +1,5 @@
 /** @file Variants for the ProfilePicture component. */
-import { tv } from "#/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 
 /**
  * Variants for the ProfilePicture component.

@@ -3,8 +3,8 @@
  *
  * Form error component.
  */
-import Offline from "#/assets/offline_filled.svg";
-import { Alert, Text, type AlertProps } from "#/components/AriaComponents";
+import Offline from "@/assets/offline_filled.svg";
+import { Alert, Text, type AlertProps } from "@/components/AriaComponents";
 import { useFormError, type UseFormErrorProps } from "./useFormError";
 
 /** Props for the FormError component. */

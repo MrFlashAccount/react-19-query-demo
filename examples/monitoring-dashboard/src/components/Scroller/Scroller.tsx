@@ -4,11 +4,11 @@
  * Scroller is a component that
  */
 
-import { useEvent } from "#/hooks/useEvent";
-import { useEventListener } from "#/hooks/eventListenerHooks";
-import { useMeasureCallback } from "#/hooks/measureHooks";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { useEvent } from "@/hooks/useEvent";
+import { useEventListener } from "@/hooks/eventListenerHooks";
+import { useMeasureCallback } from "@/hooks/measureHooks";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import {
   startTransition,
   useCallback,
@@ -98,8 +98,8 @@ export const SCROLLER_STYLES = tv({
       orientation: "horizontal",
       class: {
         content: "overflow-x-auto min-w-0 max-w-full",
-        shadowStart: "top-0 bottom-0 left-0 w-10 bg-gradient-to-r",
-        shadowEnd: "top-0 bottom-0 right-0 w-10 bg-gradient-to-l",
+        shadowStart: "top-0 bottom-0 left-0 w-10 bg-linear-to-r",
+        shadowEnd: "top-0 bottom-0 right-0 w-10 bg-linear-to-l",
       },
     },
     {
@@ -113,8 +113,8 @@ export const SCROLLER_STYLES = tv({
       orientation: "vertical",
       class: {
         content: "overflow-y-auto min-h-0 max-h-full",
-        shadowStart: "-top-[0.5px] left-0 right-0 min-h-1 h-[25%] max-h-10 bg-gradient-to-b",
-        shadowEnd: "-bottom-[0.5px] left-0 right-0 min-h-1 h-[25%] max-h-10 bg-gradient-to-t",
+        shadowStart: "-top-[0.5px] left-0 right-0 min-h-1 h-[25%] max-h-10 bg-linear-to-b",
+        shadowEnd: "-bottom-[0.5px] left-0 right-0 min-h-1 h-[25%] max-h-10 bg-linear-to-t",
       },
     },
   ],

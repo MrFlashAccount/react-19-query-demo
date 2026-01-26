@@ -5,7 +5,7 @@
  */
 import * as React from "react";
 
-import * as twv from "#/utilities/tailwindVariants";
+import * as twv from "@/utilities/tailwindVariants";
 
 /** Props for the {@link VisuallyHidden} component. */
 export type VisuallyHiddenProps = React.HTMLProps<HTMLElement>;

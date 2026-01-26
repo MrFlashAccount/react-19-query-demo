@@ -7,7 +7,7 @@ import type * as React from "react";
 import type * as reactHookForm from "react-hook-form";
 import type * as z from "zod";
 
-import type { Path } from "#/utilities/objectPath";
+import type { Path } from "@/utilities/objectPath";
 import type { FormEvent } from "react";
 import type * as schemaModule from "./schema";
 
@@ -31,10 +31,7 @@ export type FieldPath<Schema extends TSchema, Constraint = unknown> = Extract<
 >;
 
 /** Schema type */
-export type TSchema =
-  | z.AnyZodObject
-  | z.ZodEffects<z.AnyZodObject>
-  | z.ZodEffects<z.ZodEffects<z.AnyZodObject>>;
+export type TSchema = z.ZodObject<any>;
 
 /** A callback that returns a schema. */
 export type SchemaCallback<Schema extends TSchema = TSchema> = (z: SchemaBuilder) => Schema;

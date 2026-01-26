@@ -1,7 +1,7 @@
 /** @file A full-screen loading spinner. */
-import { StatelessSpinner, type SpinnerState } from "#/components/StatelessSpinner";
+import { StatelessSpinner, type SpinnerState } from "@/components/StatelessSpinner";
 
-import * as twv from "#/utilities/tailwindVariants";
+import * as twv from "@/utilities/tailwindVariants";
 import { memo } from "react";
 
 const STYLES = twv.tv({

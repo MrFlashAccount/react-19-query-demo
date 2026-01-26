@@ -3,20 +3,14 @@
  *
  * Checkboxes allow users to select multiple items from a list of individual items, or to mark one individual item as selected.
  */
-import type { CheckboxProps as AriaCheckboxProps } from "#/components/aria";
-import { Checkbox as AriaCheckbox, CheckboxGroupStateContext } from "#/components/aria";
-import { mergeRefs, useMergedRef } from "#/utilities/mergeRefs";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
-import { useStore } from "#/utilities/zustand";
-import {
-  useContext,
-  type CSSProperties,
-  type ForwardedRef,
-  type MutableRefObject,
-  type ReactElement,
-} from "react";
+import type { CheckboxProps as AriaCheckboxProps } from "@/components/aria";
+import { Checkbox as AriaCheckbox, CheckboxGroupStateContext } from "@/components/aria";
+import { mergeRefs, useMergedRef } from "@/utilities/mergeRefs";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
+import { useStore } from "@/utilities/zustand";
+import { useContext, type CSSProperties, type MutableRefObject, type ReactElement } from "react";
 import type { CheckboxGroupState } from "react-stately";
 import invariant from "tiny-invariant";
 import { Check } from "../Check/Check";

@@ -3,28 +3,16 @@
  *
  * Icon component that displays an icon based on different input.
  */
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
-import type {
-  AvailableIconReturn,
-  IconProp as IconType,
-  IconPropSvgUse as IconTypeSvgUse,
-  LegacyAvailableIconReturn,
-  LegacyIconProp as LegacyIconPropType,
-  TestIdProps,
-} from "../AriaComponents";
-import SvgMask from "../SvgMask";
-
-type IconName = string;
-
-function isIconName(icon: string): icon is IconName {
-  return false;
-}
+import type { ReactNode } from "react";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
+import type { TestIdProps } from "../AriaComponents";
 
 /**
  * Props for {@link Icon}.
  */
-export type IconProps<Render = never> = BaseIconProps<Render> &
-  (LegacyIconProps<string, Render> | SvgUseIconProps<Render>);
+export type IconProps<Render = never> = BaseIconProps<Render> & {
+  children: ReactNode | ((render: Render) => ReactNode);
+};
 
 /**
  * Base props for all icon types.
@@ -35,23 +23,6 @@ interface BaseIconProps<Render = never> extends VariantProps<typeof ICON_STYLES>
   readonly alt?: string | undefined;
 }
 
-/**
- * @deprecated Prefer defined keys over importing from `#/assets/*.svg
- */
-export interface LegacyIconProps<
-  Icon extends string,
-  Render = never,
-> extends BaseIconProps<Render> {
-  readonly children: LegacyIconPropType<Icon, Render>;
-  readonly icon?: never;
-}
-
-/** Generic type for icons imported from Figma. */
-export interface SvgUseIconProps<Render = never> {
-  readonly children?: never;
-  readonly icon: IconTypeSvgUse<Render>;
-}
-
 // eslint-disable-next-line react-refresh/only-export-components
 export const ICON_STYLES = tv({
   base: "flex-none aspect-square w-full h-full [&>svg]:stroke-current [&>svg]:w-full [&>svg]:h-full",
@@ -60,8 +31,8 @@ export const ICON_STYLES = tv({
       custom: "",
       primary: "text-primary",
       danger: "text-danger",
-      success: "text-accent-dark",
-      accent: "text-accent-dark",
+      success: "text-success",
+      accent: "text-accent",
       muted: "text-primary/50",
       disabled: "text-disabled",
       invert: "text-invert",
@@ -93,21 +64,9 @@ export function Icon<Render = never>(props: IconProps<Render>) {
 
   const styles = variants({ size, className, color });
 
-  if ("children" in props) {
-    return (
-      <IconInternal<Render>
-        icon={props.children}
-        className={styles}
-        testId={testId}
-        renderProps={renderProps}
-        alt={alt}
-      />
-    );
-  }
-
   return (
     <IconInternal<Render>
-      icon={props.icon}
+      icon={props.children}
       className={styles}
       testId={testId}
       renderProps={renderProps}
@@ -119,7 +78,7 @@ export function Icon<Render = never>(props: IconProps<Render>) {
 /** Props for {@link IconInternal}. */
 interface IconInternalProps<Render = never> extends TestIdProps {
   readonly className?: string | undefined;
-  readonly icon: IconType<string, Render>;
+  readonly icon: ReactNode | ((render: Render) => ReactNode);
   readonly renderProps?: Render | undefined;
   readonly alt?: string | undefined;
 }
@@ -131,23 +90,14 @@ interface IconInternalProps<Render = never> extends TestIdProps {
 function IconInternal<Render = never>(props: IconInternalProps<Render>) {
   const { className, testId, renderProps, icon, alt = "" } = props;
 
-  // eslint-disable-next-line no-restricted-syntax
   const renderedIcon = typeof icon === "function" ? icon(renderProps as never) : icon;
 
   if (renderedIcon == null || renderedIcon === false) {
     return null;
   }
 
-  if (typeof renderedIcon === "string") {
-    if (isIconName(renderedIcon)) {
-      return <SvgUse icon={renderedIcon} testId={testId} className={className} alt={alt} />;
-    }
-
-    return <SvgMask src={renderedIcon} className={className} testId={testId} alt={alt} />;
-  }
-
   return (
-    <span className={className} data-testid={testId}>
+    <span className={className} data-testid={testId} role="img" aria-label={alt}>
       {renderedIcon}
     </span>
   );
@@ -183,15 +133,4 @@ export function SvgUse(props: SvgUseProps) {
       <use href={icon} className="h-full w-full" aria-hidden="true" data-icon={icon} />
     </svg>
   );
-}
-
-/**
- * Utility function to render an icon based on the icon type and render props.
- */
-// eslint-disable-next-line react-refresh/only-export-components
-export function renderIcon<Icon extends string, Render>(
-  icon: IconType<Icon, Render>,
-  renderProps: Render,
-): AvailableIconReturn | LegacyAvailableIconReturn<Icon> {
-  return typeof icon === "function" ? icon(renderProps) : icon;
 }

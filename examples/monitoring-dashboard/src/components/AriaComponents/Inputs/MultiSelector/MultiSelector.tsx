@@ -1,7 +1,7 @@
 /** @file A horizontal selector supporting multiple input. */
 import { useRef, type CSSProperties, type Ref } from "react";
 
-import { omit, unsafeRemoveUndefined } from "#/utilities/object";
+import { omit, unsafeRemoveUndefined } from "@/utilities/object";
 
 import {
   FieldError,
@@ -9,7 +9,7 @@ import {
   mergeProps,
   type ListBoxItemProps,
   type ListBoxProps,
-} from "#/components/aria";
+} from "@/components/aria";
 import {
   Form,
   type FieldPath,
@@ -17,10 +17,10 @@ import {
   type FieldStateProps,
   type FieldValues,
   type TSchema,
-} from "#/components/AriaComponents";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import type { RefProp } from "#/components/AriaComponents/types";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+} from "@/components/AriaComponents";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import type { RefProp } from "@/components/AriaComponents/types";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { MultiSelectorOption, type MultiSelectorOptionProps } from "./MultiSelectorOption";
 
 const OPTION_VARIANTS: Record<

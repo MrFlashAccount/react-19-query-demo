@@ -6,9 +6,9 @@
 
 import * as React from "react";
 
-import * as eventCallback from "#/hooks/useEvent";
+import * as eventCallback from "@/hooks/useEvent";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
 import * as dialogStackProvider from "./DialogStackProvider";
 

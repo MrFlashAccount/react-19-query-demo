@@ -6,7 +6,7 @@ import * as React from "react";
 
 import invariant from "tiny-invariant";
 
-import { useEvent } from "#/hooks/useEvent";
+import { useEvent } from "@/hooks/useEvent";
 import * as portalProvider from "./PortalProvider";
 import type * as types from "./types";
 

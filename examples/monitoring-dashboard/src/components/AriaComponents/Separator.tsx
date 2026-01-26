@@ -2,8 +2,8 @@
 import {
   Separator as AriaSeparator,
   type SeparatorProps as AriaSeparatorProps,
-} from "#/components/aria";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+} from "@/components/aria";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 
 /** The props for {@link Separator} component. */
 export interface SeparatorProps extends AriaSeparatorProps, VariantProps<typeof SEPARATOR_STYLES> {
@@ -50,12 +50,12 @@ export const SEPARATOR_STYLES = tv({
     {
       size: "medium",
       orientation: "horizontal",
-      class: "h-[1px]",
+      class: "h-px",
     },
     {
       size: "medium",
       orientation: "vertical",
-      class: "w-[1px]",
+      class: "w-px",
     },
     {
       size: "thick",

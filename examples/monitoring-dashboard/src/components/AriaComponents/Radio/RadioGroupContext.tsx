@@ -16,7 +16,7 @@ import * as React from "react";
 
 import invariant from "tiny-invariant";
 
-import * as eventCallback from "#/hooks/useEvent";
+import * as eventCallback from "@/hooks/useEvent";
 
 /** Props for {@link RadioGroupContextProps} */
 export interface RadioGroupContextProps {

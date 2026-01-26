@@ -7,7 +7,7 @@ import * as React from "react";
 
 import invariant from "tiny-invariant";
 
-import * as eventCallbackHooks from "#/hooks/useEvent";
+import * as eventCallbackHooks from "@/hooks/useEvent";
 
 /** Direction of the stepper */
 type Direction = "back-none" | "back" | "forward-none" | "forward" | "initial";

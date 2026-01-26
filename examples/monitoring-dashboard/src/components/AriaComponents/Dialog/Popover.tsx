@@ -5,14 +5,14 @@
  */
 import * as React from "react";
 
-import * as aria from "#/components/aria";
-import * as errorBoundary from "#/components/ErrorBoundary";
-import * as portal from "#/components/Portal";
-import * as suspense from "#/components/Suspense";
+import * as aria from "@/components/aria";
+import * as errorBoundary from "@/components/ErrorBoundary";
+import * as portal from "@/components/Portal";
+import * as suspense from "@/components/Suspense";
 
-import * as twv from "#/utilities/tailwindVariants";
+import * as twv from "@/utilities/tailwindVariants";
 
-import { useEvent } from "#/hooks/useEvent";
+import { useEvent } from "@/hooks/useEvent";
 import { ResetButtonGroupContext } from "../Button";
 import type { Placement } from "../types";
 import { Close } from "./Close";

@@ -1,5 +1,5 @@
-import { Text } from "#/components/AriaComponents/Text";
-import { roundedVariants } from "#/components/AriaComponents/utilities";
+import { Text } from "@/components/AriaComponents/Text";
+import { roundedVariants } from "@/components/AriaComponents/utilities";
 import type { Meta, StoryObj } from "@storybook/react";
 import { z } from "zod";
 import { Form } from "../../Form/index";

@@ -1,13 +1,7 @@
 /** @file A resizable input that uses a content-editable div. */
-import {
-  useEffect,
-  useRef,
-  type ClipboardEvent,
-  type ForwardedRef,
-  type HTMLAttributes,
-} from "react";
+import { useEffect, useRef, type ClipboardEvent, type HTMLAttributes } from "react";
 
-import type { FieldVariantProps } from "#/components/AriaComponents";
+import type { FieldVariantProps } from "@/components/AriaComponents";
 import {
   Form,
   Text,
@@ -15,12 +9,12 @@ import {
   type FieldProps,
   type FieldStateProps,
   type TSchema,
-} from "#/components/AriaComponents";
-import type { RefProp } from "#/components/AriaComponents/types";
-import { useAutoFocus } from "#/hooks/autoFocusHooks";
-import { useEvent } from "#/hooks/useEvent";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+} from "@/components/AriaComponents";
+import type { RefProp } from "@/components/AriaComponents/types";
+import { useAutoFocus } from "@/hooks/autoFocusHooks";
+import { useEvent } from "@/hooks/useEvent";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { INPUT_STYLES } from "../variants";
 
 const CONTENT_EDITABLE_STYLES = tv({

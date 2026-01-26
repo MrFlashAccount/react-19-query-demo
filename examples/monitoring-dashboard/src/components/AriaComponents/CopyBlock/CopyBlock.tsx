@@ -1,6 +1,6 @@
 /** @file A block of text with a copy button. */
-import { useCopy } from "#/hooks/copyHooks";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { useCopy } from "@/hooks/copyHooks";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import type { ReactNode } from "react";
 import { Button } from "../Button";
 import { TEXT_STYLE } from "../Text";

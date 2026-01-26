@@ -6,12 +6,12 @@ import * as React from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 
-import DoneIcon from "#/assets/check_mark.svg";
+import DoneIcon from "@/assets/check_mark.svg";
 
-import * as ariaComponents from "#/components/AriaComponents";
-import SvgMask from "#/components/SvgMask";
+import * as ariaComponents from "@/components/AriaComponents";
+import SvgMask from "@/components/SvgMask";
 
-import { tv } from "#/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import * as stepperProvider from "./StepperProvider";
 import type { RenderStepProps } from "./types";
 import type * as stepperState from "./useStepperState";

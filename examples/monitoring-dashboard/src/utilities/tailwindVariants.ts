@@ -2,7 +2,7 @@
 import type { OmitUndefined } from "tailwind-variants";
 import { createTV } from "tailwind-variants";
 
-import { TAILWIND_MERGE_CONFIG } from "#/utilities/tailwindMerge";
+import { TAILWIND_MERGE_CONFIG } from "@/utilities/tailwindMerge";
 
 export * from "tailwind-variants";
 

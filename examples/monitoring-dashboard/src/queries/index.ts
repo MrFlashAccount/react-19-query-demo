@@ -11,7 +11,7 @@ import type {
   CreateAlert,
   UpdateAlert,
   LogQuery,
-} from "@db/schema";
+} from "@/db/schema";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard Stats (defined first as it's used by mutations)

@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm run \"/dev:.*/\"",
+    "dev:dashboard": "pnpm run dev --filter @examples/monitoring-dashboard",
     "dev:watch": "vite",
     "build": "bunx --bun vite build",
+    "build:dashboard": "pnpm run build --filter @examples/monitoring-dashboard",
     "build:lib": "pnpm -r --filter \"./lib/*\" build",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit --isolatedDeclarations",

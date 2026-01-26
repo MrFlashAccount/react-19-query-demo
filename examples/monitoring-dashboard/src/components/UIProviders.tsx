@@ -1,8 +1,8 @@
 /** @file A wrapper containing all UI-related React Provdiers. */
 import * as React from "react";
 
-import { DialogStackProvider } from "#/components/AriaComponents";
-import { PortalProvider } from "#/components/Portal";
+import { DialogStackProvider } from "@/components/AriaComponents";
+import { PortalProvider } from "@/components/Portal";
 import type { Spring } from "framer-motion";
 import { MotionConfig } from "framer-motion";
 import { I18nProvider } from "react-aria-components";

@@ -1,8 +1,8 @@
 /** @file A button that copies text to the clipboard. */
-import Error from "#/assets/cross.svg";
-import CopyIcon from "#/assets/duplicate.svg";
-import Done from "#/assets/tick.svg";
-import { useCopy } from "#/hooks/copyHooks";
+import Error from "@/assets/cross.svg";
+import CopyIcon from "@/assets/duplicate.svg";
+import Done from "@/assets/tick.svg";
+import { useCopy } from "@/hooks/copyHooks";
 import { Button } from "./Button";
 import type { ButtonProps } from "./types";
 

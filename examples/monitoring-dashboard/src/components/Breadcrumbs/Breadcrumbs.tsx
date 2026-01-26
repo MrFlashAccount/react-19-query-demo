@@ -1,6 +1,6 @@
 /** @file A breadcrumb nagivation component. */
-import { useEvent } from "#/hooks/useEvent";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { useEvent } from "@/hooks/useEvent";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import {
   Fragment,
   memo,

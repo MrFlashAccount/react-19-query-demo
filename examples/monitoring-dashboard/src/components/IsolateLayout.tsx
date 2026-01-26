@@ -4,11 +4,11 @@
  * Isolates the layout of the children from the rest of the page.
  * Improves Layout recalculation performance.
  */
-import { useMeasureCallback } from "#/hooks/measureHooks";
+import { useMeasureCallback } from "@/hooks/measureHooks";
 import { useRef, type ReactNode } from "react";
 import { mergeRefs } from "../utilities/mergeRefs";
 import { tv } from "../utilities/tailwindVariants";
-import type { RefProp } from "#/components/AriaComponents/types";
+import type { RefProp } from "@/components/AriaComponents/types";
 
 /**
  * Props for the {@link IsolateLayout} component.

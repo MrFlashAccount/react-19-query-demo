@@ -4,8 +4,8 @@ import * as React from "react";
 
 import invariant from "tiny-invariant";
 
-import type { StoreApi } from "#/utilities/zustand";
-import { createStore, useStore } from "#/utilities/zustand";
+import type { StoreApi } from "@/utilities/zustand";
+import { createStore, useStore } from "@/utilities/zustand";
 
 /** DialogStackItem represents an item in the dialog stack. */
 export interface DialogStackItem {

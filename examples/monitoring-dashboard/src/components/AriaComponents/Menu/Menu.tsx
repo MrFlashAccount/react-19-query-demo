@@ -7,9 +7,9 @@ import * as React from "react";
 import { createHideableComponent, createLeafComponent } from "@react-aria/collections";
 import * as aria from "react-aria-components";
 
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 
-import { twJoin } from "#/utilities/tailwindMerge";
+import { twJoin } from "@/utilities/tailwindMerge";
 import { memo } from "react";
 import { AnimatedBackground } from "../../AnimatedBackground";
 import { Popover } from "../Dialog";

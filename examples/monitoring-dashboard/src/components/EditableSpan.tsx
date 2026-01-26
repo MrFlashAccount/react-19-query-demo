@@ -1,15 +1,15 @@
 /** @file A text `<span>` which turns into an `input` when desired. */
 import * as React from "react";
 
-import CrossIcon from "#/assets/cross.svg";
-import TickIcon from "#/assets/tick.svg";
+import CrossIcon from "@/assets/cross.svg";
+import TickIcon from "@/assets/tick.svg";
 
-import { Button, Form, Input, Text, Underlay } from "#/components/AriaComponents";
-import * as tailwindMerge from "#/utilities/tailwindMerge";
+import { Button, Form, Input, Text, Underlay } from "@/components/AriaComponents";
+import * as tailwindMerge from "@/utilities/tailwindMerge";
 
-import { useInteractOutside } from "#/components/aria";
-import { useAutoFocus } from "#/hooks/autoFocusHooks";
-import { useMeasure } from "#/hooks/measureHooks";
+import { useInteractOutside } from "@/components/aria";
+import { useAutoFocus } from "@/hooks/autoFocusHooks";
+import { useMeasure } from "@/hooks/measureHooks";
 import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { useLayoutEffect } from "react";
 import type { z } from "zod";
@@ -140,7 +140,7 @@ function EditForm(props: EditFormProps) {
       {...form.formProps}
     >
       <Form.Provider form={form}>
-        <div className="flex flex-1 flex-shrink-0 basis-full items-center">
+        <div className="flex flex-1 shrink-0 basis-full items-center">
           <Input
             inputRef={inputRef}
             name="value"
@@ -148,7 +148,7 @@ function EditForm(props: EditFormProps) {
             size="custom"
             rounded="none"
             testId={props["data-testid"]}
-            className={tailwindMerge.twJoin("flex-shrink-0 flex-grow basis-0", className)}
+            className={tailwindMerge.twJoin("shrink-0 grow basis-0", className)}
             type="text"
             aria-label="Edit name"
             // we don't want the display the default error message
@@ -266,7 +266,7 @@ function ErrorMessage(props: ErrorMessageProps) {
         animate={{ opacity: 1, scaleX: 1 }}
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
         exit={{ opacity: 0, scaleX: 0.99 }}
-        className="pointer-events-none absolute h-full w-full rounded-4xl border-[2px] border-danger"
+        className="pointer-events-none absolute h-full w-full rounded-4xl border-2 border-danger"
         data-testid="error-message-outline"
       />
 
@@ -299,8 +299,8 @@ function ErrorMessage(props: ErrorMessageProps) {
             {message}
           </MotionText>
 
-          <div className="absolute bottom-0 left-0 aspect-square w-5 -translate-x-full [background:radial-gradient(circle_at_0%_0%,_transparent_70%,_var(--color-danger)_70%)]" />
-          <div className="absolute left-0 top-0 aspect-square w-5 -translate-x-full [background:radial-gradient(circle_at_0%_100%,_transparent_70%,_var(--color-danger)_70%)]" />
+          <div className="absolute bottom-0 left-0 aspect-square w-5 -translate-x-full [background:radial-gradient(circle_at_0%_0%,transparent_70%,var(--color-danger)_70%)]" />
+          <div className="absolute left-0 top-0 aspect-square w-5 -translate-x-full [background:radial-gradient(circle_at_0%_100%,transparent_70%,var(--color-danger)_70%)]" />
         </Underlay>
       </motion.div>
     </div>

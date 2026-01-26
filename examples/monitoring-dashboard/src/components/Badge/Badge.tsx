@@ -3,8 +3,8 @@
  *
  * Badges are used to highlight an item's status for quick recognition.
  */
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import type { ReactNode } from "react";
 import { TEXT_STYLE, type IconPropSvgUse } from "../AriaComponents";
 import { Icon } from "../Icon";
@@ -22,8 +22,8 @@ export const BADGE_STYLES = tv({
   variants: {
     variant: {
       solid:
-        "border-transparent bg-[var(--badge-bg-color)] opacity-[var(--badge-opacity)] text-[var(--badge-text-color)]",
-      outline: "border-[var(--badge-border-color)] bg-transparent text-primary",
+        "border-transparent bg-(--badge-bg-color) opacity-(--badge-opacity) text-(--badge-text-color)",
+      outline: "border-(--badge-border-color) bg-transparent text-primary",
     },
     color: {
       primary:
@@ -35,7 +35,7 @@ export const BADGE_STYLES = tv({
       danger:
         "[--badge-border-color:var(--color-danger)] [--badge-bg-color:var(--color-danger)] [--badge-text-color:var(--color-invert)]",
       success:
-        "[--badge-border-color:var(--color-accent-dark)] [--badge-bg-color:var(--color-accent-dark)] [--badge-text-color:var(--color-invert)]",
+        "[--badge-border-color:var(--color-success)] [--badge-bg-color:var(--color-success)] [--badge-text-color:var(--color-invert)]",
       muted:
         "[--badge-border-color:var(--color-primary)] [--badge-bg-color:var(--color-primary)] [--badge-text-color:var(--color-invert)] [--badge-opacity:0.5]",
       disabled:

@@ -3,8 +3,8 @@
  *
  * Variants for the ResizableInput component.
  */
-import { makeRoundedStyles } from "#/components/AriaComponents/utilities";
-import { tv } from "#/utilities/tailwindVariants";
+import { makeRoundedStyles } from "@/components/AriaComponents/utilities";
+import { tv } from "@/utilities/tailwindVariants";
 import { TEXT_STYLE } from "../Text";
 
 export const INPUT_STYLES = tv({
@@ -40,8 +40,8 @@ export const INPUT_STYLES = tv({
   },
   slots: {
     icon: "flex-none",
-    addonStart: "mt-[-1px] flex flex-none items-center gap-1",
-    addonEnd: "mt-[-1px] flex flex-none items-center gap-1",
+    addonStart: "-mt-px flex flex-none items-center gap-1",
+    addonEnd: "-mt-px flex flex-none items-center gap-1",
     content: "flex items-center gap-2",
     inputContainer: TEXT_STYLE({
       className: "relative flex max-h-32 min-h-6 w-full items-center overflow-clip",

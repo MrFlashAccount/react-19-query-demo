@@ -1,5 +1,5 @@
 /** @file Types for the Dialog component. */
-import type * as aria from "#/components/aria";
+import type * as aria from "@/components/aria";
 
 /** Props for the Dialog component. */
 export interface DialogProps extends aria.DialogProps {

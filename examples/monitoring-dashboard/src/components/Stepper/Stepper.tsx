@@ -7,12 +7,12 @@ import * as React from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 
-import * as eventCallback from "#/hooks/useEvent";
+import * as eventCallback from "@/hooks/useEvent";
 
-import { ErrorBoundary } from "#/components/ErrorBoundary";
-import { Suspense } from "#/components/Suspense";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { Suspense } from "@/components/Suspense";
 
-import { tv } from "#/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import { Step } from "./Step";
 import { StepContent } from "./StepContent";
 import * as stepperProvider from "./StepperProvider";

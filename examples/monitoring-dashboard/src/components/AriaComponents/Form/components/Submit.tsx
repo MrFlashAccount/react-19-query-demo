@@ -6,7 +6,7 @@
  */
 import type { JSX } from "react";
 
-import { Button, type ButtonProps } from "#/components/AriaComponents";
+import { Button, type ButtonProps } from "@/components/AriaComponents";
 import { useFormContext } from "./FormProvider";
 import type { FormInstance } from "./types";
 

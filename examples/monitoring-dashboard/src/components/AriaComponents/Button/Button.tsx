@@ -1,12 +1,12 @@
 /** @file A styled button. */
 import { memo, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 
-import * as aria from "#/components/aria";
-import { Tooltip, TooltipTrigger } from "#/components/AriaComponents/Tooltip";
-import { useVisualTooltip } from "#/components/AriaComponents/VisualTooltip";
-import { Icon as IconComponent } from "#/components/Icon";
-import { StatelessSpinner } from "#/components/StatelessSpinner";
-import { useEvent } from "#/hooks/useEvent";
+import * as aria from "@/components/aria";
+import { Tooltip, TooltipTrigger } from "@/components/AriaComponents/Tooltip";
+import { useVisualTooltip } from "@/components/AriaComponents/VisualTooltip";
+import { Icon as IconComponent } from "@/components/Icon";
+import { StatelessSpinner } from "@/components/StatelessSpinner";
+import { useEvent } from "@/hooks/useEvent";
 import { useContextProps } from "../../hooks/useContextProps";
 import { useDialogContext } from "../Dialog";
 import { ButtonGroup, ButtonGroupJoin } from "./ButtonGroup";

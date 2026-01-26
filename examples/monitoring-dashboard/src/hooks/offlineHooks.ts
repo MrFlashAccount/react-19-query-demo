@@ -3,7 +3,7 @@ import * as React from "react";
 
 import * as reactQuery from "@tanstack/react-query";
 
-import * as eventCallback from "#/hooks/useEvent";
+import * as eventCallback from "@/hooks/useEvent";
 
 /** Hook to get the offline status */
 export function useOffline() {

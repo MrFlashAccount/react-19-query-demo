@@ -1,7 +1,7 @@
 /** @file Text input. */
 import { useRef, type CSSProperties, type ReactElement, type ReactNode, type Ref } from "react";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 import {
   Form,
   Text,
@@ -12,13 +12,13 @@ import {
   type FieldVariantProps,
   type TestIdProps,
   type TSchema,
-} from "#/components/AriaComponents";
-import SvgMask from "#/components/SvgMask";
-import { useAutoFocus } from "#/hooks/autoFocusHooks";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { ExtractFunction, VariantProps } from "#/utilities/tailwindVariants";
-import { omit } from "#/utilities/object";
+} from "@/components/AriaComponents";
+import SvgMask from "@/components/SvgMask";
+import { useAutoFocus } from "@/hooks/autoFocusHooks";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { ExtractFunction, VariantProps } from "@/utilities/tailwindVariants";
+import { omit } from "@/utilities/object";
 import { INPUT_STYLES } from "../variants";
 
 /** Props for an {@link Input}. */

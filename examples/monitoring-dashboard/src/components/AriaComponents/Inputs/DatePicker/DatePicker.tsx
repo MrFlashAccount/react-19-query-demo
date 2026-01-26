@@ -3,8 +3,8 @@ import { useContext } from "react";
 
 import type { DateSegment as DateSegmentType } from "react-stately";
 
-import CrossIcon from "#/assets/cross.svg";
-import ArrowIcon from "#/assets/folder_arrow.svg";
+import CrossIcon from "@/assets/cross.svg";
+import ArrowIcon from "@/assets/folder_arrow.svg";
 import {
   DatePicker as AriaDatePicker,
   Calendar,
@@ -23,10 +23,10 @@ import {
   Label,
   type DatePickerProps as AriaDatePickerProps,
   type DateValue,
-} from "#/components/aria";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
+} from "@/components/aria";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import {
   Button,
   Form,

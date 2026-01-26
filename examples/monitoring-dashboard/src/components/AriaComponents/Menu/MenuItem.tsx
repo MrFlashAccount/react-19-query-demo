@@ -2,8 +2,8 @@
  * @file
  * An item within a menu that represents a single action or option.
  */
-import ArrowRight from "#/assets/expand_arrow_right.svg";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import ArrowRight from "@/assets/expand_arrow_right.svg";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { memo, type ReactElement, type ReactNode } from "react";
 import type {
   MenuItemProps as AriaMenuItemProps,
@@ -28,7 +28,7 @@ export const MENU_ITEM_STYLES = tv({
     checkContainer: "block",
     icon: "flex-none h-4 w-4",
     submenuIndicator: "flex-none h-4 w-4 self-center text-primary",
-    shortcut: "self-center text-primary mt-[1px]",
+    shortcut: "self-center text-primary mt-px",
     title: "block w-full flex-1",
     description: "block w-full flex-1",
     hover: "bg-primary/5 w-full rounded-3xl",
@@ -250,7 +250,7 @@ const MenuItemContent = memo(function MenuItemContent(props: MenuItemContentProp
     );
 
   return (
-    <div className="-mt-[1px] flex w-full min-w-0 flex-1 flex-col">
+    <div className="-mt-px flex w-full min-w-0 flex-1 flex-col">
       <Text
         className="block w-full"
         variant="body"

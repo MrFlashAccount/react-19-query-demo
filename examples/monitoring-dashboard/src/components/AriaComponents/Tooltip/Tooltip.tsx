@@ -1,8 +1,8 @@
 /** @file Displays the description of an element on hover or focus. */
-import * as aria from "#/components/aria";
-import { useStrictPortalContext } from "#/components/Portal";
+import * as aria from "@/components/aria";
+import { useStrictPortalContext } from "@/components/Portal";
 
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { ResetButtonGroupContext } from "../Button";
 
 import { DIALOG_BACKGROUND } from "../Dialog";
@@ -10,7 +10,7 @@ import { TEXT_STYLE } from "../Text";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const TOOLTIP_STYLES = tv({
-  base: "group flex justify-center items-center text-center min-w-10 [overflow-wrap:anywhere]",
+  base: "group flex justify-center items-center text-center min-w-10 wrap-anywhere",
   variants: {
     variant: {
       custom: "",

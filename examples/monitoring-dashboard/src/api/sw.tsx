@@ -1,5 +1,5 @@
 import { setupWorker, http, json, error, noContent } from "@lib/rsc-service-worker-bff";
-import { getDB, setLastMetricTime } from "@db/index";
+import { getDB, setLastMetricTime } from "@/db/index";
 import {
   ServerSchema,
   CreateServerSchema,
@@ -13,7 +13,7 @@ import {
   type Metric,
   type LogEntry,
   type DashboardStats,
-} from "@db/schema";
+} from "@/db/schema";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Servers

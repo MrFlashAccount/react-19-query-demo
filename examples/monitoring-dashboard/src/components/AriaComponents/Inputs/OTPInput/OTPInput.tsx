@@ -1,10 +1,10 @@
 /** @file */
-import { mergeProps } from "#/components/aria";
-import { useEvent } from "#/hooks/useEvent";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
+import { mergeProps } from "@/components/aria";
+import { useEvent } from "@/hooks/useEvent";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import type { OTPInputProps } from "input-otp";
 import { OTPInput as BaseOTPInput, type SlotProps as OTPInputSlotProps } from "input-otp";
 import type { Ref } from "react";

@@ -4,7 +4,7 @@
  * Close button for a dialog.
  */
 
-import { useEvent } from "#/hooks/useEvent";
+import { useEvent } from "@/hooks/useEvent";
 import { type ButtonProps, Button } from "../Button";
 import * as dialogProvider from "./DialogProvider";
 

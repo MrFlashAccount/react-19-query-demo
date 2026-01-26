@@ -1,6 +1,6 @@
 /** @file A text display with an icon. */
-import { Icon } from "#/components/Icon";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { Icon } from "@/components/Icon";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { Text, VisualTooltip, type IconProp, type TextProps, type TooltipElementType } from "..";
 
 const ICON_DISPLAY_STYLES = tv({

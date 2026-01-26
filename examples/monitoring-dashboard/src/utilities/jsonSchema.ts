@@ -1,5 +1,5 @@
 /** @file Utilities for using JSON schemas. */
-import * as objectModule from "#/utilities/object";
+import * as objectModule from "@/utilities/object";
 
 /** Look up a `{ "$ref": "" }` in the root schema. */
 export function lookupDef(defs: Record<string, object>, schema: object) {

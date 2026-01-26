@@ -1,6 +1,6 @@
 /** @file A button for closing a modal. */
-import DismissIcon from "#/assets/dismiss.svg";
-import { twMerge } from "#/utilities/tailwindMerge";
+import DismissIcon from "@/assets/dismiss.svg";
+import { twMerge } from "@/utilities/tailwindMerge";
 import { memo } from "react";
 import { Button } from "./Button";
 import type { ButtonProps } from "./types";

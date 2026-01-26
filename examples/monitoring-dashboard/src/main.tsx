@@ -3,12 +3,13 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { QueryProvider, QueryClient } from "@lib/goat-query/react";
 
-import { graph } from "./queries";
-import { router } from "./router";
-import "./index.css";
+import { graph } from "@/queries";
+import { router } from "@/router";
 import { createWorker } from "@lib/rsc-service-worker-bff";
-import { seedDatabase } from "./db/seed";
-import { startSimulation } from "./db/simulation";
+import { seedDatabase } from "@/db/seed";
+import { startSimulation } from "@/db/simulation";
+import { Loader } from "@/components/Loader";
+import "./index.css";
 
 const worker = createWorker("/sw.js");
 
@@ -46,16 +47,10 @@ function Bootstrap({
 }) {
   use(workerStartPromise);
   use(seedDatabasePromise);
+
   useEffect(() => {
     startSimulation();
   }, []);
-  return null;
-}
 
-function Loader() {
-  return (
-    <div className="flex h-full items-center justify-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
-    </div>
-  );
+  return null;
 }

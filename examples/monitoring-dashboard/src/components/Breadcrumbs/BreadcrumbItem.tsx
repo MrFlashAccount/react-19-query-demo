@@ -1,7 +1,7 @@
 /** @file A single breadcrumb item. */
-import { useEvent } from "#/hooks/useEvent";
-import { noop } from "#/utilities/functions";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { useEvent } from "@/hooks/useEvent";
+import { noop } from "@/utilities/functions";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { useMutation } from "@tanstack/react-query";
 import {
   createContext,

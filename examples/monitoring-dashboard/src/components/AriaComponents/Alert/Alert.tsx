@@ -1,10 +1,10 @@
 /** @file Alert component. */
 import type { HTMLAttributes, PropsWithChildren, ReactElement } from "react";
 
-import SvgMask from "#/components/SvgMask";
+import SvgMask from "@/components/SvgMask";
 
-import type { RefProp } from "#/components/AriaComponents/types";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import type { RefProp } from "@/components/AriaComponents/types";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const ALERT_STYLES = tv({

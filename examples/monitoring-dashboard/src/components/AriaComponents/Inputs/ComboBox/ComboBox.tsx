@@ -1,18 +1,18 @@
 /** @file A combo box with a list of items that can be filtered. */
 import { useContext, useRef } from "react";
 
-import CrossIcon from "#/assets/cross.svg";
-import ArrowIcon from "#/assets/folder_arrow.svg";
+import CrossIcon from "@/assets/cross.svg";
+import ArrowIcon from "@/assets/folder_arrow.svg";
 import {
   ComboBox as AriaComboBox,
   ComboBoxStateContext,
   ListBox,
   ListBoxItem,
   type ComboBoxProps as AriaComboBoxProps,
-} from "#/components/aria";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
+} from "@/components/aria";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 import {
   BasicInput,
   Button,

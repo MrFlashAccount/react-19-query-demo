@@ -4,7 +4,7 @@
  * Helpers to work with forms
  */
 
-import { omit } from "#/utilities/object";
+import { omit } from "@/utilities/object";
 
 const NON_DOM_PROPS = ["isInvalid", "isRequired", "isDisabled", "readOnly", "invalid"] as const;
 

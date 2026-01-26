@@ -1,7 +1,7 @@
 /** @file Display the result of an operation. */
-import Success from "#/assets/check_mark.svg";
-import Error from "#/assets/cross.svg";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import Success from "@/assets/check_mark.svg";
+import Error from "@/assets/cross.svg";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import type { JSX, PropsWithChildren, ReactElement } from "react";
 import type { TestIdProps } from "./AriaComponents";
 import { Text } from "./AriaComponents/Text";
@@ -10,7 +10,7 @@ import SvgMask from "./SvgMask";
 
 const INFO_ICON = (
   // eslint-disable-next-line no-restricted-syntax
-  <Text variant="custom" className="pb-0.5 text-xl leading-[0]" aria-hidden>
+  <Text variant="custom" className="pb-0.5 text-xl leading-0" aria-hidden>
     i
   </Text>
 );
@@ -43,7 +43,7 @@ const STATUS_ICON_MAP: Readonly<Record<Status, StatusIcon>> = {
 };
 
 const RESULT_STYLES = tv({
-  base: "flex flex-col items-center justify-center max-w-full px-6 py-4 text-center h-[max-content]",
+  base: "flex flex-col items-center justify-center max-w-full px-6 py-4 text-center h-max",
   variants: {
     centered: {
       true: "m-auto",

@@ -1,13 +1,13 @@
 /** @file Text component */
 import * as React from "react";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
-import * as mergeRefs from "#/utilities/mergeRefs";
-import * as twv from "#/utilities/tailwindVariants";
+import * as mergeRefs from "@/utilities/mergeRefs";
+import * as twv from "@/utilities/tailwindVariants";
 
-import type { TooltipElementType } from "#/components/AriaComponents";
-import type { RefProp } from "#/components/AriaComponents/types";
+import type { TooltipElementType } from "@/components/AriaComponents";
+import type { RefProp } from "@/components/AriaComponents/types";
 import { memo } from "react";
 import type { TestIdProps } from "../types";
 import * as visualTooltip from "../VisualTooltip";
@@ -38,8 +38,8 @@ export const TEXT_STYLE = twv.tv({
       custom: "",
       primary: "text-primary",
       danger: "text-danger",
-      success: "text-accent-dark",
-      accent: "text-accent-dark",
+      success: "text-success",
+      accent: "text-accent",
       muted: "text-primary/40",
       disabled: "text-disabled",
       invert: "text-invert",
@@ -55,17 +55,17 @@ export const TEXT_STYLE = twv.tv({
     // leading should always be after the text size to make sure it is not stripped by twMerge
     variant: {
       custom: "",
-      body: "text-xs leading-[20px] before:h-[2px] after:h-[2px] macos:before:h-[1px] macos:after:h-[3px",
+      body: "text-xs leading-[20px] before:h-[2px] after:h-[2px] macos:before:h-px macos:after:h-[3px",
       // eslint-disable-next-line @typescript-eslint/naming-convention
       "body-sm":
-        "text-[10.5px] leading-[16px] before:h-[2px] after:h-[2px] macos:before:h-[1px] macos:after:h-[3px]",
+        "text-[10.5px] leading-[16px] before:h-[2px] after:h-[2px] macos:before:h-px macos:after:h-[3px]",
       h1: "text-xl leading-[29px] before:h-0.5 after:h-[5px] macos:before:h-[3px] macos:after:h-[3px]",
       subtitle:
-        "text-[13.5px] leading-[20px] before:h-[2px] after:h-[2px] macos:before:h-[1px] macos:after:h-[3px]",
+        "text-[13.5px] leading-[20px] before:h-[2px] after:h-[2px] macos:before:h-px macos:after:h-[3px]",
       caption:
-        "text-[8.5px] leading-[12px] before:h-[1px] after:h-[1px] macos:before:h-[0.5px] macos:after:h-[1.5px]",
+        "text-[8.5px] leading-[12px] before:h-px after:h-px macos:before:h-[0.5px] macos:after:h-[1.5px]",
       overline:
-        "text-[8.5px] leading-[16px] before:h-[1px] after:h-[1px] macos:before:h-[0.5px] macos:after:h-[1.5px] uppercase",
+        "text-[8.5px] leading-[16px] before:h-px after:h-px macos:before:h-[0.5px] macos:after:h-[1.5px] uppercase",
     },
     weight: {
       custom: "",
@@ -104,7 +104,7 @@ export const TEXT_STYLE = twv.tv({
       "7": "line-clamp-7",
       "8": "line-clamp-8",
       "9": "line-clamp-9",
-      custom: "line-clamp-[var(--line-clamp)]",
+      custom: "line-clamp-(--line-clamp)",
       /* eslint-enable @typescript-eslint/naming-convention */
     },
     monospace: { true: "font-mono" },

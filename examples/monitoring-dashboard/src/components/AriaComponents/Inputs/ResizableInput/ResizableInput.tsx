@@ -1,13 +1,13 @@
 /** @file A resizable input field. */
 import * as React from "react";
 
-import * as eventCallbackHooks from "#/hooks/useEvent";
+import * as eventCallbackHooks from "@/hooks/useEvent";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
-import * as mergeRefs from "#/utilities/mergeRefs";
+import * as mergeRefs from "@/utilities/mergeRefs";
 
-import type { RefProp } from "#/components/AriaComponents/types";
+import type { RefProp } from "@/components/AriaComponents/types";
 import * as variants from "../variants";
 
 /** Props for a {@link ResizableInput}. */

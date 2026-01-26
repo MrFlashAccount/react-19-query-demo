@@ -1,13 +1,13 @@
 /** @file Catches errors in child components. */
-import Offline from "#/assets/offline_filled.svg";
+import Offline from "@/assets/offline_filled.svg";
 import * as React from "react";
 
 import * as errorBoundary from "react-error-boundary";
 
-import { Alert, Button, Separator, Text, type SvgUseIcon } from "#/components/AriaComponents";
-import { useEvent } from "#/hooks/useEvent";
-import * as errorUtils from "#/utilities/error";
-import { OfflineError } from "#/utilities/HttpClient";
+import { Alert, Button, Separator, Text, type SvgUseIcon } from "@/components/AriaComponents";
+import { useEvent } from "@/hooks/useEvent";
+import * as errorUtils from "@/utilities/error";
+import { OfflineError } from "@/utilities/HttpClient";
 import type { FallbackProps } from "react-error-boundary";
 import { Icon } from "./Icon";
 import SvgMask from "./SvgMask";
@@ -152,7 +152,7 @@ export function ErrorDisplay(props: ErrorDisplayProps): React.JSX.Element {
           </Text>
 
           <Alert
-            className="mx-auto mt-2 max-h-[80vh] max-w-screen-lg overflow-auto"
+            className="mx-auto mt-2 max-h-[80vh] max-w-(--breakpoint-lg) overflow-auto"
             variant="neutral"
           >
             <Text

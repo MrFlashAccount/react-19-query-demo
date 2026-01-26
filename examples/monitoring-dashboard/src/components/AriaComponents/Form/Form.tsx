@@ -1,10 +1,10 @@
 /** @file Form component. */
 import * as React from "react";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
-import { useEvent } from "#/hooks/useEvent";
-import type { RefProp } from "#/components/AriaComponents/types";
+import { useEvent } from "@/hooks/useEvent";
+import type { RefProp } from "@/components/AriaComponents/types";
 import * as dialog from "../Dialog";
 import * as components from "./components";
 import * as styles from "./styles";

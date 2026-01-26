@@ -2,10 +2,10 @@
  * @file
  * Stories for the Menu component.
  */
-import Camera from "#/assets/camera.svg";
-import Eye from "#/assets/eye.svg";
-import EyeClosed from "#/assets/eye_crossed.svg";
-import Folder from "#/assets/folder.svg";
+import Camera from "@/assets/camera.svg";
+import Eye from "@/assets/eye.svg";
+import EyeClosed from "@/assets/eye_crossed.svg";
+import Folder from "@/assets/folder.svg";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { expect, userEvent, within } from "@storybook/test";

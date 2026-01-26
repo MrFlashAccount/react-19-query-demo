@@ -3,7 +3,7 @@ import { useContext } from "react";
 
 import type { DateSegment as DateSegmentType } from "react-stately";
 
-import CrossIcon from "#/assets/cross.svg";
+import CrossIcon from "@/assets/cross.svg";
 import {
   TimeField as AriaTimeField,
   DateInput,
@@ -13,7 +13,7 @@ import {
   TimeFieldStateContext,
   type TimeFieldProps as AriaTimeFieldProps,
   type TimeValue,
-} from "#/components/aria";
+} from "@/components/aria";
 import {
   Button,
   Form,
@@ -24,10 +24,10 @@ import {
   type FieldStateProps,
   type FieldValues,
   type TSchema,
-} from "#/components/AriaComponents";
-import type { RefProp } from "#/components/AriaComponents/types";
-import type { VariantProps } from "#/utilities/tailwindVariants";
-import { tv } from "#/utilities/tailwindVariants";
+} from "@/components/AriaComponents";
+import type { RefProp } from "@/components/AriaComponents/types";
+import type { VariantProps } from "@/utilities/tailwindVariants";
+import { tv } from "@/utilities/tailwindVariants";
 
 const DATE_PICKER_STYLES = tv({
   base: "",

@@ -7,10 +7,10 @@ import * as React from "react";
 
 import { useNavigate, useRouterState, type NavigateOptions } from "@tanstack/react-router";
 
-import * as eventCallback from "#/hooks/useEvent";
-import * as lazyMemo from "#/hooks/useLazyMemoHooks";
+import * as eventCallback from "@/hooks/useEvent";
+import * as lazyMemo from "@/hooks/useLazyMemoHooks";
 
-import * as safeJsonParse from "#/utilities/safeJsonParse";
+import * as safeJsonParse from "@/utilities/safeJsonParse";
 import { useCallback } from "react";
 
 /** The return type of the `useSearchParamsState` hook. */

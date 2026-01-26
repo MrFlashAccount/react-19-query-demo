@@ -5,11 +5,11 @@
  */
 import * as React from "react";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
-import type { Path } from "#/utilities/objectPath";
-import type { RefProp } from "#/components/AriaComponents/types";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import type { Path } from "@/utilities/objectPath";
+import type { RefProp } from "@/components/AriaComponents/types";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import * as text from "../../Text";
 import { Form } from "../Form";
 import type * as types from "./types";

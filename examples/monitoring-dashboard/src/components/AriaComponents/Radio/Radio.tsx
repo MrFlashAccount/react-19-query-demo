@@ -6,12 +6,12 @@
 
 import * as React from "react";
 
-import * as aria from "#/components/aria";
+import * as aria from "@/components/aria";
 
-import * as mergeRefs from "#/utilities/mergeRefs";
-import * as twv from "#/utilities/tailwindVariants";
+import * as mergeRefs from "@/utilities/mergeRefs";
+import * as twv from "@/utilities/tailwindVariants";
 
-import type { RefProp } from "#/components/AriaComponents/types";
+import type { RefProp } from "@/components/AriaComponents/types";
 import invariant from "tiny-invariant";
 import * as text from "../Text";
 import * as radioGroup from "./RadioGroup";

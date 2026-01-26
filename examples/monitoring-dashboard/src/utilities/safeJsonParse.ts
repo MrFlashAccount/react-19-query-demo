@@ -6,7 +6,7 @@
  * Also provides a type for the parsed JSON.
  */
 
-import { ZodSchema } from "zod";
+import type { z } from "zod";
 
 /**
  * Safely parse a JSON string.
@@ -16,7 +16,7 @@ import { ZodSchema } from "zod";
 export function safeJsonParse<T = unknown>(
   value: unknown,
   defaultValue: T,
-  predicate?: ZodSchema<T> | ((parsed: unknown) => parsed is T),
+  predicate?: z.ZodType<T> | ((parsed: unknown) => parsed is T),
 ): T {
   try {
     if (typeof value !== "string") {
@@ -25,7 +25,7 @@ export function safeJsonParse<T = unknown>(
     const parsed: unknown = JSON.parse(value);
 
     if (predicate != null) {
-      if (predicate instanceof ZodSchema) {
+      if (typeof predicate === "object" && "parse" in predicate && typeof predicate.parse === "function") {
         return predicate.parse(parsed);
       }
 

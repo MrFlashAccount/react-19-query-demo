@@ -3,7 +3,7 @@
  *
  * Variants for a button
  */
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { TEXT_STYLE } from "../Text";
 
 /**
@@ -16,7 +16,7 @@ export const BUTTON_STYLES = tv({
     "group",
     "relative",
     // basic outline
-    "outline-offset-[1px] outline-transparent",
+    "outline-offset-1 outline-transparent",
     // buttons always have borders
     // so keep them in mind when setting paddings
     "border-0.5 border-transparent",
@@ -32,7 +32,7 @@ export const BUTTON_STYLES = tv({
       true: "opacity-50 cursor-not-allowed",
     },
     isFocused: {
-      true: "focus:outline-none focus-visible:outline-2 focus-visible:outline-black focus-visible:outline-offset-[-2px]",
+      true: "focus:outline-none focus-visible:outline-2 focus-visible:outline-black focus-visible:-outline-offset-2",
     },
     isActive: {
       none: "",
@@ -272,7 +272,7 @@ export const BUTTON_STYLES = tv({
       class: {
         base: TEXT_STYLE({
           disableLineHeightCompensation: true,
-          className: "border-0 outline-offset-[4px] p-0 rounded-full w-3.5 h-3.5",
+          className: "border-0 outline-offset-4 p-0 rounded-full w-3.5 h-3.5",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
       },
@@ -284,7 +284,7 @@ export const BUTTON_STYLES = tv({
       class: {
         base: TEXT_STYLE({
           disableLineHeightCompensation: true,
-          className: "border-0 outline-offset-[4px] p-0 rounded-full w-4 h-4",
+          className: "border-0 outline-offset-4 p-0 rounded-full w-4 h-4",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
       },
@@ -296,7 +296,7 @@ export const BUTTON_STYLES = tv({
       class: {
         base: TEXT_STYLE({
           disableLineHeightCompensation: true,
-          className: "border-0 outline-offset-[4px] p-0 rounded-full w-5 h-5",
+          className: "border-0 outline-offset-4 p-0 rounded-full w-5 h-5",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
       },

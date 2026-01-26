@@ -2,8 +2,8 @@
 import { Fragment, isValidElement, type PropsWithChildren, type ReactElement } from "react";
 import flattenChildren from "react-keyed-flatten-children";
 
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
-import type { RefProp } from "#/components/AriaComponents/types";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
+import type { RefProp } from "@/components/AriaComponents/types";
 import invariant from "tiny-invariant";
 import type { TestIdProps } from "../types";
 import {

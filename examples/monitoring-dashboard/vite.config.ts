@@ -40,6 +40,7 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
     resolve: {
       alias: {
         "@lib/rsc-service-worker-bff": path.resolve(libDir, "rsc-service-worker-bff"),
+        "@/db": path.resolve(rootDir, "src/db"),
         "@db": path.resolve(rootDir, "src/db"),
       },
       conditions: [mode, "browser", "import", "default"],
@@ -101,11 +102,6 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(rootDir, "src"),
-      "@db": path.resolve(rootDir, "src/db"),
-      "@api": path.resolve(rootDir, "src/api"),
-      "@components": path.resolve(rootDir, "src/components"),
-      "@queries": path.resolve(rootDir, "src/queries"),
-      "@hooks": path.resolve(rootDir, "src/hooks"),
       "#": path.resolve(rootDir, "src"),
     },
   },

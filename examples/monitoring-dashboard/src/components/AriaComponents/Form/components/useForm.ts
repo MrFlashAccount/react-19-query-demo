@@ -10,9 +10,9 @@ import * as zodResolver from "@hookform/resolvers/zod";
 import * as reactHookForm from "react-hook-form";
 import invariant from "tiny-invariant";
 
-import { useEvent } from "#/hooks/useEvent";
-import { useOffline, useOfflineChange } from "#/hooks/offlineHooks";
-import * as errorUtils from "#/utilities/error";
+import { useEvent } from "@/hooks/useEvent";
+import { useOffline, useOfflineChange } from "@/hooks/offlineHooks";
+import * as errorUtils from "@/utilities/error";
 import { useMutation } from "@tanstack/react-query";
 import * as schemaModule from "./schema";
 import type * as types from "./types";

@@ -1,8 +1,8 @@
 /** @file A styled dropdown. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import CheckMarkIcon from "#/assets/check_mark.svg";
-import ArrowIcon from "#/assets/folder_arrow.svg";
+import CheckMarkIcon from "@/assets/check_mark.svg";
+import ArrowIcon from "@/assets/folder_arrow.svg";
 import {
   FieldError,
   ListBox,
@@ -11,12 +11,12 @@ import {
   useFocusVisible,
   useFocusWithin,
   type InputProps,
-} from "#/components/aria";
-import SvgMask from "#/components/SvgMask";
-import { useLatest } from "#/hooks/useLatest";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import type { RefProp } from "#/components/AriaComponents/types";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+} from "@/components/aria";
+import SvgMask from "@/components/SvgMask";
+import { useLatest } from "@/hooks/useLatest";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import type { RefProp } from "@/components/AriaComponents/types";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import {
   Form,
   type FieldComponentProps,

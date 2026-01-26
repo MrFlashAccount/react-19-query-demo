@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import type { PropsWithChildren } from "react";
 import { createContext, memo, useContext, useId, useMemo } from "react";
 
-import { twJoin } from "#/utilities/tailwindMerge";
+import { twJoin } from "@/utilities/tailwindMerge";
 import invariant from "tiny-invariant";
 
 /** Props for {@link AnimatedBackground}. */

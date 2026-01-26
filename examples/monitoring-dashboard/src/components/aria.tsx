@@ -1,5 +1,5 @@
 /** @file Barrel re-export of `react-aria` and `react-aria-components`. */
-import type { Mutable } from "#/utilities/object";
+import type { Mutable } from "@/utilities/object";
 import * as aria from "react-aria";
 
 // eslint-disable-next-line react-refresh/only-export-components

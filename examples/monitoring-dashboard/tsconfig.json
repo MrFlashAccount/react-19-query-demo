@@ -18,13 +18,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "#/*": ["./src/*"],
-      "@/*": ["./src/*"],
-      "@db/*": ["./src/db/*"],
-      "@api/*": ["./src/api/*"],
-      "@components/*": ["./src/components/*"],
-      "@queries/*": ["./src/queries/*"],
-      "@hooks/*": ["./src/hooks/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/*.ts", "src/*.tsx", "src/**/*.ts", "src/**/*.tsx"]

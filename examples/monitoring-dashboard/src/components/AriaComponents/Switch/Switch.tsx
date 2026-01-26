@@ -9,10 +9,10 @@ import {
   Switch as AriaSwitch,
   mergeProps,
   type SwitchProps as AriaSwitchProps,
-} from "#/components/aria";
-import { mergeRefs } from "#/utilities/mergeRefs";
-import type { RefProp } from "#/components/AriaComponents/types";
-import { tv, type VariantProps } from "#/utilities/tailwindVariants";
+} from "@/components/aria";
+import { mergeRefs } from "@/utilities/mergeRefs";
+import type { RefProp } from "@/components/AriaComponents/types";
+import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { Form, type FieldPath, type FieldProps, type FieldStateProps, type TSchema } from "../Form";
 import { TEXT_STYLE } from "../Text";
 
@@ -53,7 +53,7 @@ export const SWITCH_STYLES = tv({
     background:
       "flex shrink-0 cursor-default items-center rounded-full bg-primary/30 bg-clip-padding shadow-inner outline-none ring-black transition duration-200 ease-in-out group-focus-visible:ring-2 group-pressed:bg-primary/60 group-selected:bg-primary group-selected:group-pressed:bg-primary/50",
     thumb:
-      "aspect-square h-full flex-none translate-x-0 transform rounded-full bg-white transition duration-200 ease-in-out group-selected:translate-x-[100%]",
+      "aspect-square h-full flex-none translate-x-0 transform rounded-full bg-white transition duration-200 ease-in-out group-selected:translate-x-full",
   },
   defaultVariants: {
     size: "small",

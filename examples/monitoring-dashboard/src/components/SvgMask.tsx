@@ -1,7 +1,7 @@
 /** @file File containing SVG icon definitions. */
 import * as React from "react";
 
-import * as tailwindMerge from "#/utilities/tailwindMerge";
+import * as tailwindMerge from "@/utilities/tailwindMerge";
 import type { TestIdProps } from "./AriaComponents";
 import type { RefProp } from "./AriaComponents/types";
 

@@ -1,8 +1,8 @@
 /** @file A hook for creating a visual tooltip that appears when the target element is hovered over. */
-import * as aria from "#/components/aria";
-import * as ariaComponents from "#/components/AriaComponents";
-import Portal from "#/components/Portal";
-import * as eventCallback from "#/hooks/useEvent";
+import * as aria from "@/components/aria";
+import * as ariaComponents from "@/components/AriaComponents";
+import Portal from "@/components/Portal";
+import * as eventCallback from "@/hooks/useEvent";
 import * as React from "react";
 
 /** Props for {@link useVisualTooltip}. */
