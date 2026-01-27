@@ -32,7 +32,7 @@ export interface TextProps
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const TEXT_STYLE = twv.tv({
-  base: "",
+  base: "[text-box-trim:trim-both]",
   variants: {
     color: {
       custom: "",
@@ -55,17 +55,13 @@ export const TEXT_STYLE = twv.tv({
     // leading should always be after the text size to make sure it is not stripped by twMerge
     variant: {
       custom: "",
-      body: "text-xs leading-[20px] before:h-[2px] after:h-[2px] macos:before:h-px macos:after:h-[3px",
+      body: "text-xs leading-[20px]",
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      "body-sm":
-        "text-[10.5px] leading-[16px] before:h-[2px] after:h-[2px] macos:before:h-px macos:after:h-[3px]",
-      h1: "text-xl leading-[29px] before:h-0.5 after:h-[5px] macos:before:h-[3px] macos:after:h-[3px]",
-      subtitle:
-        "text-[13.5px] leading-[20px] before:h-[2px] after:h-[2px] macos:before:h-px macos:after:h-[3px]",
-      caption:
-        "text-[8.5px] leading-[12px] before:h-px after:h-px macos:before:h-[0.5px] macos:after:h-[1.5px]",
-      overline:
-        "text-[8.5px] leading-[16px] before:h-px after:h-px macos:before:h-[0.5px] macos:after:h-[1.5px] uppercase",
+      "body-sm": "text-[10px] leading-[16px]",
+      h1: "text-[20px] leading-[29px]",
+      subtitle: "text-[14px] leading-[20px]",
+      caption: "text-[8px] leading-[12px]",
+      overline: "text-[8px] leading-[16px] uppercase",
     },
     weight: {
       custom: "",
@@ -116,13 +112,6 @@ export const TEXT_STYLE = twv.tv({
       word: "select-text",
       all: "select-all",
     },
-    disableLineHeightCompensation: {
-      true: "before:hidden after:hidden before:w-0 after:w-0",
-      false:
-        "flex-col before:block after:block before:flex-none after:flex-none before:w-full after:w-full",
-      top: "flex-col before:hidden before:w-0 after:block after:flex-none after:w-full",
-      bottom: "flex-col before:block before:flex-none before:w-full after:hidden after:w-0",
-    },
   },
   defaultVariants: {
     variant: "body",
@@ -133,7 +122,6 @@ export const TEXT_STYLE = twv.tv({
     italic: false,
     nowrap: false,
     monospace: false,
-    disableLineHeightCompensation: false,
     textSelection: "auto",
   },
   compoundVariants: [
@@ -148,7 +136,7 @@ export const TEXT_STYLE = twv.tv({
 
 /** Text component that supports truncation and show a tooltip on hover when text is truncated */
 // eslint-disable-next-line no-restricted-syntax
-export const Text = memo(function Text(props: TextProps) {
+export function Text(props: TextProps) {
   const {
     className,
     variant,
@@ -171,7 +159,6 @@ export const Text = memo(function Text(props: TextProps) {
     tooltipOffset,
     tooltipCrossOffset,
     textSelection,
-    disableLineHeightCompensation = false,
     align,
     ref: forwardedRef,
     ...ariaProps
@@ -192,10 +179,6 @@ export const Text = memo(function Text(props: TextProps) {
     color,
     balance,
     textSelection,
-    disableLineHeightCompensation:
-      disableLineHeightCompensation === false
-        ? textContext.isInsideTextComponent
-        : disableLineHeightCompensation,
     className,
     align,
   });
@@ -253,12 +236,7 @@ export const Text = memo(function Text(props: TextProps) {
       {tooltip}
     </textProvider.TextProvider>
   );
-}) as unknown as React.FC<TextProps> & {
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  Heading: typeof Heading;
-  // eslint-disable-next-line @typescript-eslint/naming-convention
-  Group: React.FC<React.PropsWithChildren>;
-};
+}
 
 /** Heading props */
 export interface HeadingProps

@@ -1,6 +1,13 @@
 import { createRouter } from "@tanstack/react-router";
+import rootRoute from "./routes/__root";
+import serverRoute from "./routes/Server";
 
-export const router = createRouter({});
+const routeTree = rootRoute.addChildren([serverRoute]);
+
+export const router = createRouter({
+  routeTree,
+  context: { hello: "world" },
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

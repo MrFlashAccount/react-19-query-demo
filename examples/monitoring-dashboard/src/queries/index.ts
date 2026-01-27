@@ -104,8 +104,6 @@ export const metricsQuery = query<MetricQueryParams, Metric[]>({
     if (!res.ok) throw new Error("Failed to fetch metrics");
     return res.json();
   },
-  staleTime: 1000,
-  gcTime: 30_000,
 });
 
 export const latestMetricsQuery = query<string[], Record<string, Metric | null>>({
@@ -114,8 +112,6 @@ export const latestMetricsQuery = query<string[], Record<string, Metric | null>>
     if (!res.ok) throw new Error("Failed to fetch latest metrics");
     return res.json();
   },
-  staleTime: 1000,
-  gcTime: 10_000,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -144,8 +140,6 @@ export const logsQuery = query<Partial<LogQuery>, LogsResponse>({
     if (!res.ok) throw new Error("Failed to fetch logs");
     return res.json();
   },
-  staleTime: 2000,
-  gcTime: 30_000,
 });
 
 export const logQuery = query<string, LogEntry>({
@@ -154,7 +148,6 @@ export const logQuery = query<string, LogEntry>({
     if (!res.ok) throw new Error("Failed to fetch log");
     return res.json();
   },
-  staleTime: 60_000,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,8 +160,6 @@ export const alertsQuery = query<void, Alert[]>({
     if (!res.ok) throw new Error("Failed to fetch alerts");
     return res.json();
   },
-  staleTime: 10_000,
-  gcTime: 60_000,
 });
 
 export const alertQuery = query<string, Alert>({
@@ -177,7 +168,6 @@ export const alertQuery = query<string, Alert>({
     if (!res.ok) throw new Error("Failed to fetch alert");
     return res.json();
   },
-  staleTime: 10_000,
 });
 
 export const createAlertMutation = mutation({
@@ -225,8 +215,6 @@ export const incidentsQuery = query<string | undefined, Incident[]>({
     if (!res.ok) throw new Error("Failed to fetch incidents");
     return res.json();
   },
-  staleTime: 5000,
-  gcTime: 30_000,
 });
 
 export const acknowledgeIncidentMutation = mutation({

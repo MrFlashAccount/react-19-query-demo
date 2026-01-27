@@ -61,7 +61,9 @@ export function DialogTrigger(props: DialogTriggerProps) {
     <aria.DialogTrigger {...state} onOpenChange={onOpenChangeInternal}>
       {typeof trigger === "function" ? trigger(renderProps) : trigger}
 
-      {typeof dialog === "function" ? dialog(renderProps) : dialog}
+      <React.Activity mode={state.isOpen ? "visible" : "hidden"}>
+        {typeof dialog === "function" ? dialog(renderProps) : dialog}
+      </React.Activity>
     </aria.DialogTrigger>
   );
 }

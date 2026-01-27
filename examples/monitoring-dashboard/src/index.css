@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "tailwindcss-react-aria-components";
 @config "../tailwind.config.ts";
 
 @font-face {
@@ -33,7 +34,9 @@
   font-display: swap;
 }
 
-/* Scoped to `.enso-dashboard, .enso-chat, .enso-portal-root` in tailwind config. */
+@theme {
+  --spacing: 4px;
+}
 
 :root {
   /* Palette colors */
@@ -75,6 +78,11 @@
   --spinner-fast-transition-duration: 1s;
   --spinner-medium-transition-duration: 5s;
   --spinner-slow-transition-duration: 90s;
+}
+
+:where(html) {
+  color-scheme: light dark;
+  color: var(--color-primary);
 }
 
 @layer utilities {

@@ -14,3 +14,4 @@ export * from "./Password";
 export * from "./ResizableInput";
 export * from "./TimeField";
 export * from "./variants";
+export * from "./Dropdown";

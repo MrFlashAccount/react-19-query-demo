@@ -74,11 +74,6 @@ const config: Config = {
       opacity: {
         full: "100%",
       },
-      zIndex: {
-        1: "1",
-        spotlight: "2",
-        tooltip: "3",
-      },
       backdropBlur: {
         xs: "2px",
       },

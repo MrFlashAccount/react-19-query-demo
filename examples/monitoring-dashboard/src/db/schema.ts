@@ -11,9 +11,9 @@ export const ServerStatusSchema = z.enum(["healthy", "warning", "critical", "off
 export type ServerStatus = z.infer<typeof ServerStatusSchema>;
 
 export const ServerSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string().min(1).max(100),
-  ip: z.string().ip(),
+  ip: z.ipv4(),
   region: RegionSchema,
   status: ServerStatusSchema,
   tags: z.array(z.string()),
@@ -53,7 +53,7 @@ export const LogEntrySchema = z.object({
   level: LogLevelSchema,
   message: z.string(),
   service: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type LogEntry = z.infer<typeof LogEntrySchema>;
 

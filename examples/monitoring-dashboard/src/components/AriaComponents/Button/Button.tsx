@@ -1,9 +1,16 @@
 /** @file A styled button. */
-import { memo, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
-
+import {
+  memo,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useTransition,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import { Link } from "@tanstack/react-router";
 import * as aria from "@/components/aria";
 import { Tooltip, TooltipTrigger } from "@/components/AriaComponents/Tooltip";
-import { useVisualTooltip } from "@/components/AriaComponents/VisualTooltip";
 import { Icon as IconComponent } from "@/components/Icon";
 import { StatelessSpinner } from "@/components/StatelessSpinner";
 import { useEvent } from "@/hooks/useEvent";
@@ -25,9 +32,7 @@ const ICON_LOADER_DELAY = 150;
 // Manually casting types to make TS infer the final type correctly (e.g. RenderProps in icon)
 // eslint-disable-next-line no-restricted-syntax
 export function Button<IconType extends string>(propsReplacement: ButtonProps<IconType>) {
-  // @ts-expect-error ts errors are expected here because we are merging props with different types
-  // eslint-disable-next-line prefer-const
-  let [props, ref] = useContextProps(propsReplacement, propsReplacement.ref, ButtonContext);
+  let [props, ref] = useContextProps(propsReplacement, null, ButtonContext);
   props = useMergedButtonStyles(props);
 
   const dialogContext = useDialogContext();
@@ -60,15 +65,14 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
   } = props;
 
   const { position, isJoined } = useJoinedButtonPrivateContext();
-
-  const [implicitlyLoading, setImplicitlyLoading] = useState(false);
+  const [implicitlyLoading, startTransition] = useTransition();
 
   const contentRef = useRef<HTMLSpanElement>(null);
   const loaderRef = useRef<HTMLSpanElement>(null);
 
   const isLink = ariaProps.href != null;
 
-  const Tag = isLink ? aria.Link : aria.Button;
+  const Tag = isLink ? Link : aria.Button;
 
   const goodDefaults = {
     ...(isLink ? { rel: "noopener noreferrer" } : { type: "button" as const }),
@@ -137,11 +141,7 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
       const result = onPress?.(event);
 
       if (result instanceof Promise) {
-        setImplicitlyLoading(true);
-
-        void result.finally(() => {
-          setImplicitlyLoading(false);
-        });
+        startTransition(() => result);
       }
 
       if (dialogContext != null && "formMethod" in props && props.formMethod === "dialog") {
@@ -164,13 +164,6 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
     iconOnly: isIconOnly,
     isJoined,
     position,
-  });
-
-  const { tooltip: visualTooltip, targetProps } = useVisualTooltip({
-    targetRef: contentRef,
-    children: tooltipElement,
-    isDisabled: !shouldUseVisualTooltip,
-    overlayPositionProps: { placement: tooltipPlacement ?? "top" },
   });
 
   const shouldDisplayBorder = isJoined && (position === "first" || position === "middle");
@@ -208,11 +201,7 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
         return (
           <>
             <span className={styles.wrapper()}>
-              <span
-                ref={contentRef}
-                className={styles.content({ className: contentClassName })}
-                {...targetProps}
-              >
+              <span ref={contentRef} className={styles.content({ className: contentClassName })}>
                 <ButtonContent
                   isIconOnly={isIconOnly}
                   loaderPosition={loaderPosition}
@@ -238,8 +227,6 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
                   <StatelessSpinner state="loading-medium" size={16} />
                 </span>
               )}
-
-              {shouldShowTooltip && visualTooltip}
             </span>
 
             {shouldDisplayBorder && <div className={styles.joinSeparator()} />}

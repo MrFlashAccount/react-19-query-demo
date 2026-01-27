@@ -7,14 +7,14 @@
 /// <reference lib="webworker" />
 
 // Import webpack shim FIRST - required for client reference resolution
-import "../rsc/webpack-shim";
+import "../src/rsc/webpack-shim";
 
 import { setupWorker, http, json, createClientModule } from "..";
 import {
   createFlightResponse,
   createServerAction,
   executeServerAction,
-} from "../rsc/flight-serializer";
+} from "../src/rsc/flight-serializer";
 
 // Import types from client components for type-safe references
 import type * as ClientComponents from "./components";
