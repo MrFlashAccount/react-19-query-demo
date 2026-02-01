@@ -15,7 +15,7 @@ import { Icon as IconComponent } from "@/components/Icon";
 import { StatelessSpinner } from "@/components/StatelessSpinner";
 import { useEvent } from "@/hooks/useEvent";
 import { useContextProps } from "../../hooks/useContextProps";
-import { useDialogContext } from "../Dialog";
+import { useDialogContext, useDialogPrerenderContext } from "../Dialog";
 import { ButtonGroup, ButtonGroupJoin } from "./ButtonGroup";
 import {
   ButtonContext,
@@ -31,12 +31,14 @@ const ICON_LOADER_DELAY = 150;
 /** A button allows a user to perform an action, with mouse, touch, and keyboard interactions. */
 // Manually casting types to make TS infer the final type correctly (e.g. RenderProps in icon)
 // eslint-disable-next-line no-restricted-syntax
-export function Button<IconType extends string>(propsReplacement: ButtonProps<IconType>) {
+export function Button<IconType extends string>(
+  propsReplacement: ButtonProps<IconType>,
+) {
   let [props, ref] = useContextProps(propsReplacement, null, ButtonContext);
   props = useMergedButtonStyles(props);
 
   const dialogContext = useDialogContext();
-
+  const prerenderContext = useDialogPrerenderContext();
   const {
     className,
     contentClassName,
@@ -79,7 +81,8 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
     "data-testid": testId,
   };
 
-  const isIconOnly = (children == null || children === "" || children === false) && icon != null;
+  const isIconOnly =
+    (children == null || children === "" || children === false) && icon != null;
 
   const shouldShowTooltip = (() => {
     if (tooltip === false) {
@@ -91,7 +94,9 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
     }
   })();
 
-  const tooltipElement = shouldShowTooltip ? (tooltip ?? ariaProps["aria-label"]) : null;
+  const tooltipElement = shouldShowTooltip
+    ? (tooltip ?? ariaProps["aria-label"])
+    : null;
 
   const isLoadingFinal = (() => {
     if (typeof loading === "boolean") {
@@ -144,7 +149,11 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
         startTransition(() => result);
       }
 
-      if (dialogContext != null && "formMethod" in props && props.formMethod === "dialog") {
+      if (
+        dialogContext != null &&
+        "formMethod" in props &&
+        props.formMethod === "dialog"
+      ) {
         dialogContext.close();
       }
     }
@@ -166,7 +175,8 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
     position,
   });
 
-  const shouldDisplayBorder = isJoined && (position === "first" || position === "middle");
+  const shouldDisplayBorder =
+    isJoined && (position === "first" || position === "middle");
 
   const button = (
     <Tag
@@ -176,6 +186,12 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
       {...aria.mergeProps<aria.ButtonProps>()(goodDefaults, ariaProps, {
         isPending: isLoadingFinal,
         isDisabled,
+        onHoverStart: () => {
+          prerenderContext.enablePrerender();
+        },
+        onHoverEnd: () => {
+          prerenderContext.disablePrerender();
+        },
         // we use onPressEnd instead of onPress because for some reason react-aria doesn't trigger
         // onPress on EXTRA_CLICK_ZONE, but onPress{start,end} are triggered
         onPressEnd: (e) => {
@@ -201,7 +217,10 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
         return (
           <>
             <span className={styles.wrapper()}>
-              <span ref={contentRef} className={styles.content({ className: contentClassName })}>
+              <span
+                ref={contentRef}
+                className={styles.content({ className: contentClassName })}
+              >
                 <ButtonContent
                   isIconOnly={isIconOnly}
                   loaderPosition={loaderPosition}
@@ -213,9 +232,15 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
                   icon={typeof icon === "function" ? icon(render) : icon}
                   styles={styles}
                   /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
-                  addonStart={typeof addonStart === "function" ? addonStart(render) : addonStart}
+                  addonStart={
+                    typeof addonStart === "function"
+                      ? addonStart(render)
+                      : addonStart
+                  }
                   /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
-                  addonEnd={typeof addonEnd === "function" ? addonEnd(render) : addonEnd}
+                  addonEnd={
+                    typeof addonEnd === "function" ? addonEnd(render) : addonEnd
+                  }
                 >
                   {/* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */}
                   {typeof children === "function" ? children(render) : children}
@@ -244,7 +269,9 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
     <TooltipTrigger delay={0} closeDelay={0}>
       {button}
 
-      <Tooltip {...(tooltipPlacement != null ? { placement: tooltipPlacement } : {})}>
+      <Tooltip
+        {...(tooltipPlacement != null ? { placement: tooltipPlacement } : {})}
+      >
         {tooltipElement}
       </Tooltip>
     </TooltipTrigger>
@@ -291,7 +318,9 @@ const ButtonContent = memo(function ButtonContent(props: ButtonContentProps) {
   if (isIconOnly) {
     return (
       <span className={styles.extraClickZone()}>
-        {hasAddon(addonStart) && <div className={styles.addonStart()}>{addonStart}</div>}
+        {hasAddon(addonStart) && (
+          <div className={styles.addonStart()}>{addonStart}</div>
+        )}
         <Icon
           isLoading={isLoading}
           loaderPosition={loaderPosition}
@@ -299,7 +328,9 @@ const ButtonContent = memo(function ButtonContent(props: ButtonContentProps) {
           styles={styles}
           hideLoader={hideLoader}
         />
-        {hasAddon(addonEnd) && <div className={styles.addonEnd()}>{addonEnd}</div>}
+        {hasAddon(addonEnd) && (
+          <div className={styles.addonEnd()}>{addonEnd}</div>
+        )}
       </span>
     );
   }
@@ -307,7 +338,9 @@ const ButtonContent = memo(function ButtonContent(props: ButtonContentProps) {
   // Default button
   return (
     <>
-      {hasAddon(addonStart) && <div className={styles.addonStart()}>{addonStart}</div>}
+      {hasAddon(addonStart) && (
+        <div className={styles.addonStart()}>{addonStart}</div>
+      )}
       <Icon
         isLoading={isLoading}
         loaderPosition={loaderPosition}
@@ -316,7 +349,9 @@ const ButtonContent = memo(function ButtonContent(props: ButtonContentProps) {
         hideLoader={hideLoader}
       />
       {children}
-      {hasAddon(addonEnd) && <div className={styles.addonEnd()}>{addonEnd}</div>}
+      {hasAddon(addonEnd) && (
+        <div className={styles.addonEnd()}>{addonEnd}</div>
+      )}
     </>
   );
 });

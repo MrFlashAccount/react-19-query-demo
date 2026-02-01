@@ -8,10 +8,8 @@ import * as twv from "@/utilities/tailwindVariants";
 
 import type { TooltipElementType } from "@/components/AriaComponents";
 import type { RefProp } from "@/components/AriaComponents/types";
-import { memo } from "react";
 import type { TestIdProps } from "../types";
 import * as visualTooltip from "../VisualTooltip";
-import * as textProvider from "./TextProvider";
 
 /** Props for the Text component */
 export interface TextProps
@@ -55,13 +53,13 @@ export const TEXT_STYLE = twv.tv({
     // leading should always be after the text size to make sure it is not stripped by twMerge
     variant: {
       custom: "",
-      body: "text-xs leading-[20px]",
+      body: "text-[16px] leading-[20px]",
       // eslint-disable-next-line @typescript-eslint/naming-convention
-      "body-sm": "text-[10px] leading-[16px]",
+      "body-sm": "text-[14px] leading-[20px]",
       h1: "text-[20px] leading-[29px]",
       subtitle: "text-[14px] leading-[20px]",
-      caption: "text-[8px] leading-[12px]",
-      overline: "text-[8px] leading-[16px] uppercase",
+      caption: "text-[12px] leading-[20px]",
+      overline: "text-[12px] leading-[16px] uppercase",
     },
     weight: {
       custom: "",
@@ -134,8 +132,6 @@ export const TEXT_STYLE = twv.tv({
   ],
 });
 
-/** Text component that supports truncation and show a tooltip on hover when text is truncated */
-// eslint-disable-next-line no-restricted-syntax
 export function Text(props: TextProps) {
   const {
     className,
@@ -165,7 +161,6 @@ export function Text(props: TextProps) {
   } = props;
 
   const textElementRef = React.useRef<HTMLElement | null>(null);
-  const textContext = textProvider.useTextContext();
 
   const textClasses = TEXT_STYLE({
     variant,
@@ -196,7 +191,6 @@ export function Text(props: TextProps) {
 
   const { tooltip, targetProps } = visualTooltip.useVisualTooltip({
     isDisabled: isTooltipDisabled(),
-    // React 19 `useRef(null)` returns `RefObject<T | null>`, but this hook expects `T`.
     targetRef: textElementRef as unknown as React.RefObject<HTMLElement>,
     display: tooltipDisplay === "never" ? () => false : tooltipDisplay,
     children: tooltipElement,
@@ -212,7 +206,7 @@ export function Text(props: TextProps) {
   });
 
   return (
-    <textProvider.TextProvider value={{ isInsideTextComponent: true }}>
+    <>
       <ElementType
         // @ts-expect-error This is caused by the type-safe `elementType` type.
         ref={(el) => {
@@ -231,10 +225,10 @@ export function Text(props: TextProps) {
         )}
       >
         {children}
-      </ElementType>
 
-      {tooltip}
-    </textProvider.TextProvider>
+        {tooltip}
+      </ElementType>
+    </>
   );
 }
 
@@ -246,7 +240,7 @@ export interface HeadingProps
 }
 
 /** Heading component */
-const Heading = memo(function Heading(props: HeadingProps) {
+function Heading(props: HeadingProps) {
   const { level = 1, ref: forwardedRef, ...textProps } = props;
   return (
     <Text
@@ -257,16 +251,6 @@ const Heading = memo(function Heading(props: HeadingProps) {
       {...textProps}
     />
   );
-});
-
-/** Text group component. It's used to visually group text elements together */
-function TextGroup(props: React.PropsWithChildren) {
-  return (
-    <textProvider.TextProvider value={{ isInsideTextComponent: true }}>
-      {props.children}
-    </textProvider.TextProvider>
-  );
 }
 
 Text.Heading = Heading;
-Text.Group = TextGroup;

@@ -3,7 +3,6 @@
  *
  * A hook that returns a form instance.
  */
-import * as sentry from "@sentry/react";
 import * as React from "react";
 
 import * as zodResolver from "@hookform/resolvers/zod";
@@ -13,11 +12,9 @@ import invariant from "tiny-invariant";
 import { useEvent } from "@/hooks/useEvent";
 import { useOffline, useOfflineChange } from "@/hooks/offlineHooks";
 import * as errorUtils from "@/utilities/error";
-import { useMutation } from "@tanstack/react-query";
 import * as schemaModule from "./schema";
 import type * as types from "./types";
-
-const IS_DEV_MODE = import.meta.env.DEV;
+import { useUnmount } from "../../../../hooks/unmountHooks";
 
 function getText(key: string, ...args: string[]) {
   switch (key) {
@@ -67,6 +64,7 @@ function mapValueOnEvent(value: unknown) {
 export function useForm<Schema extends types.TSchema, SubmitResult = void>(
   optionsOrFormInstance: types.UseFormOptions<Schema, SubmitResult> | types.UseFormReturn<Schema>,
 ): types.UseFormReturn<Schema> {
+  "use no memo";
   const [initialTypePassed] = React.useState(() => getArgsType(optionsOrFormInstance));
   const closeRef = React.useRef(() => {});
 
@@ -87,81 +85,40 @@ export function useForm<Schema extends types.TSchema, SubmitResult = void>(
       method,
       schema,
       onSubmit,
+      onChange,
       canSubmitOffline = false,
       onSubmitFailed,
       onSubmitted,
       onSubmitSuccess,
-      debugName,
       resetOnSubmit = true,
       ...options
     } = optionsOrFormInstance;
 
     const computedSchema = typeof schema === "function" ? schema(schemaModule.schema) : schema;
 
-    const formInstance = reactHookForm.useForm({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const formInstance = reactHookForm.useForm<
+      types.FieldValues<Schema>,
+      unknown,
+      types.TransformedValues<Schema>
+    >({
       ...options,
-      resolver: zodResolver.zodResolver(
-        computedSchema,
-        {
-          async: true,
-          errorMap: (issue) => {
-            if (IS_DEV_MODE) {
-              // eslint-disable-next-line no-restricted-properties
-              console.error("(Development only) Form validation error:", issue);
-            }
-            switch (issue.code) {
-              case "too_small":
-                if (issue.minimum === 1 && issue.type === "string") {
-                  return {
-                    message: getText("arbitraryFieldRequired"),
-                  };
-                } else {
-                  return {
-                    message: getText("arbitraryFieldTooSmall", issue.minimum.toString()),
-                  };
-                }
-              case "too_big":
-                return { message: getText("arbitraryFieldTooLarge", issue.maximum.toString()) };
-              case "invalid_type":
-                return { message: getText("arbitraryFieldInvalid") };
-              case "invalid_string":
-                if (issue.validation === "email") {
-                  return { message: getText("invalidEmailValidationError") };
-                }
+      resolver: zodResolver.zodResolver(computedSchema),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
 
-                return { message: getText("arbitraryFieldInvalid") };
-
-              case "invalid_literal":
-              case "invalid_enum_value":
-              case "invalid_union":
-              case "unrecognized_keys":
-              case "invalid_union_discriminator":
-              case "invalid_arguments":
-              case "invalid_return_type":
-              case "not_multiple_of":
-              case "custom":
-              case "invalid_intersection_types":
-              case "invalid_date":
-              case "not_finite":
-              default:
-                return {
-                  message: getText("arbitraryFieldInvalid"),
-                };
-            }
-          },
-        },
-        { mode: "async" },
-      ),
-    });
+    const [isPending, startTransition] = React.useTransition();
 
     const register: types.UseFormRegister<Schema> = (name, opts) => {
       const registered = formInstance.register(name, opts);
 
-      const onChange: types.UseFormRegisterReturn<Schema>["onChange"] = (value) =>
-        registered.onChange(mapValueOnEvent(value));
+      const onChange: types.UseFormRegisterReturn<Schema>["onChange"] = (value) => {
+        return registered.onChange(mapValueOnEvent(value));
+      };
 
-      const onBlur: types.UseFormRegisterReturn<Schema>["onBlur"] = (value) =>
-        registered.onBlur(mapValueOnEvent(value));
+      const onBlur: types.UseFormRegisterReturn<Schema>["onBlur"] = (value) => {
+        return registered.onBlur(mapValueOnEvent(value));
+      };
 
       const result: types.UseFormRegisterReturn<Schema, typeof name> = {
         ...registered,
@@ -183,59 +140,55 @@ export function useForm<Schema extends types.TSchema, SubmitResult = void>(
     // and if we do, we throw an error.
     /* eslint-disable react-compiler/react-compiler */
     /* eslint-disable react-hooks/rules-of-hooks */
-    const formMutation = useMutation({
-      // We use template literals to make the mutation key more readable in the devtools
-      // This mutation exists only for debug purposes - React Query dev tools record the mutation,
-      // the result, and the variables(form fields).
-      // In general, prefer using object literals for the mutation key.
-      mutationKey: ["Form submission", `debugName: ${debugName}`],
-      mutationFn: async (fieldValues: types.FieldValues<Schema>) => {
-        try {
-          // This is safe, because we transparently passing the result of the onSubmit function,
-          // and the type of the result is the same as the type of the SubmitResult.
-          // eslint-disable-next-line no-restricted-syntax
-          const result = (await onSubmit?.(fieldValues, form)) as SubmitResult;
 
-          if (method === "dialog") {
-            closeRef.current();
-          }
+    // useActionState hook for form submission state management
+    const onSubmitHandler = useEvent(
+      (fieldValues: types.TransformedValues<Schema>) =>
+        new Promise((resolve, reject) => {
+          startTransition(async () => {
+            try {
+              const result = (await onSubmit?.(fieldValues, form)) as SubmitResult;
 
-          if (resetOnSubmit) {
-            formInstance.reset();
-          }
+              if (method === "dialog") {
+                closeRef.current();
+              }
 
-          return result;
-        } catch (error) {
-          const isJSError = errorUtils.isJSError(error);
+              if (resetOnSubmit) {
+                formInstance.reset();
+              }
 
-          if (isJSError) {
-            sentry.captureException(error, {
-              contexts: { form: { values: fieldValues } },
-            });
-          }
+              // Call success callback
+              await onSubmitSuccess?.(result, fieldValues, form);
+              // Call settled callback
+              await onSubmitted?.(result, undefined, fieldValues, form);
 
-          const message = isJSError
-            ? getText("arbitraryFormErrorMessage")
-            : errorUtils.tryGetMessage(error, getText("arbitraryFormErrorMessage"));
+              resolve({ data: result });
+            } catch (error) {
+              const isJSError = errorUtils.isJSError(error);
 
-          setFormError(message);
-          // We need to throw the error to make the mutation fail
-          throw error;
-        }
-      },
-      onError: (error, values) => onSubmitFailed?.(error, values, form),
-      onSuccess: (data, values) => onSubmitSuccess?.(data, values, form),
-      onSettled: (data, error, values) => onSubmitted?.(data, error, values, form),
-    });
+              const message = isJSError
+                ? getText("arbitraryFormErrorMessage")
+                : errorUtils.tryGetMessage(error, getText("arbitraryFormErrorMessage"));
 
-    // There is no way to avoid type casting here
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any,no-restricted-syntax,@typescript-eslint/no-unsafe-argument
-    const formOnSubmit = formInstance.handleSubmit(formMutation.mutateAsync as any);
+              setFormError(message);
+
+              // Call error callback
+              await onSubmitFailed?.(error, fieldValues, form);
+              // Call settled callback
+              await onSubmitted?.(undefined, error, fieldValues, form);
+
+              reject(error);
+            }
+          });
+        }),
+    );
+
+    const formOnSubmit = formInstance.handleSubmit(onSubmitHandler);
 
     const { isOffline } = useOffline();
 
     useOfflineChange(
-      (offline) => {
+      (offline: boolean) => {
         if (offline) {
           formInstance.setError("root.offline", { message: getText("unavailableOffline") });
         } else {
@@ -252,12 +205,12 @@ export function useForm<Schema extends types.TSchema, SubmitResult = void>(
       if (isOffline && !canSubmitOffline) {
         formInstance.setError("root.offline", { message: getText("unavailableOffline") });
         return Promise.resolve();
+      }
+
+      if (event) {
+        return formOnSubmit(event);
       } else {
-        if (event) {
-          return formOnSubmit(event);
-        } else {
-          return formOnSubmit();
-        }
+        return formOnSubmit();
       }
     });
 
@@ -265,12 +218,29 @@ export function useForm<Schema extends types.TSchema, SubmitResult = void>(
       formInstance.setError("root.submit", { message: error });
     });
 
+    // Store the onChange callback in a ref to always have the latest version
+    const onChangeEvent = useEvent(onChange);
+    // Subscribe to form changes immediately (not in useEffect)
+    // Use lazy initialization to only subscribe once
+    const watchUnsubscribeRef = React.useRef<{ unsubscribe: () => void } | null>(null);
+    if (!watchUnsubscribeRef.current && onChange) {
+      const subscription = formInstance.watch((values) => {
+        // Cast to TransformedValues since the schema transforms the values
+        onChangeEvent(values as types.TransformedValues<Schema>);
+      });
+      watchUnsubscribeRef.current = subscription;
+    }
+
+    useUnmount(() => {
+      watchUnsubscribeRef.current?.unsubscribe();
+    });
+
     const form: types.UseFormReturn<Schema> = {
       ...formInstance,
       submit,
-      // @ts-expect-error Our `UseFormRegister<Schema>` is the same as `react-hook-form`'s,
-      // just with an added constraint.
-      control: { ...formInstance.control, register },
+      isSubmitting: isPending,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      control: { ...formInstance.control, register: register as any },
       register,
       schema: computedSchema,
       setFormError,
@@ -287,7 +257,7 @@ export function useForm<Schema extends types.TSchema, SubmitResult = void>(
 
 /** Get the type of arguments passed to the useForm hook */
 function getArgsType<Schema extends types.TSchema, SubmitResult = void>(
-  args: types.UseFormOptions<Schema, SubmitResult>,
+  args: types.UseFormOptions<Schema, SubmitResult> | types.UseFormReturn<Schema>,
 ) {
   return "formState" in args ? ("formInstance" as const) : ("formOptions" as const);
 }

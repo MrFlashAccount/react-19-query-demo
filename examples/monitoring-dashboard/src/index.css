@@ -85,6 +85,10 @@
   color: var(--color-primary);
 }
 
+:where(.portal-root) {
+  isolation: isolate;
+}
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -112,7 +116,9 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply w-2 rounded-full border-2 border-solid border-transparent;
+  width: 16px;
+  border-radius: 100%;
+  border: 2px solid transparent;
   background-repeat: no-repeat, no-repeat, no-repeat;
 }
 

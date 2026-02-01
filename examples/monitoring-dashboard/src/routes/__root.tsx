@@ -98,19 +98,19 @@ export default createRootRoute({
 export const RootLayout = {
   Slot: ({
     children,
-    slotName,
+    name,
   }: {
     children: React.ReactNode;
-    slotName: (typeof LAYOUT_SLOTS)[number]["name"];
+    name: (typeof LAYOUT_SLOTS)[number]["name"];
   }) => {
-    const slot = LAYOUT_SLOTS.find((slot) => slot.name === slotName);
+    const slot = LAYOUT_SLOTS.find((slot) => slot.name === name);
 
     if (!slot) {
-      throw new Error(`Slot ${slotName} not found`);
+      throw new Error(`Slot ${name} not found`);
     }
 
     return (
-      <div className={slot.slotClassNames} style={{ gridArea: slotName, gridRow: slot.rowSize }}>
+      <div className={slot.slotClassNames} style={{ gridArea: name, gridRow: slot.rowSize }}>
         {children}
       </div>
     );

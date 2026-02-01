@@ -3,7 +3,7 @@
  * A dialog is an overlay shown above other content in an application.
  * Can be used to display alerts, confirmations, or other content.
  */
-import * as React from "react";
+import React, { use } from "react";
 
 import * as aria from "@/components/aria";
 import * as errorBoundary from "@/components/ErrorBoundary";
@@ -11,6 +11,7 @@ import * as portal from "@/components/Portal";
 import * as suspense from "@/components/Suspense";
 
 import * as twv from "@/utilities/tailwindVariants";
+import keyedFlattenChildren from "react-keyed-flatten-children";
 
 import { useEvent } from "@/hooks/useEvent";
 import { ResetButtonGroupContext } from "../Button";
@@ -21,6 +22,8 @@ import * as dialogStackProvider from "./DialogStackProvider";
 import { DialogTrigger } from "./DialogTrigger";
 import * as utlities from "./utilities";
 import * as variants from "./variants";
+import { Scroller } from "../../Scroller";
+import { createContext } from "../../../utilities/react";
 
 /** Props for a {@link Popover}. */
 export interface PopoverProps
@@ -51,15 +54,39 @@ export const POPOVER_STYLES = twv.tv({
     },
     size: {
       custom: { base: "", dialog: "" },
-      auto: { base: "w-[unset]", dialog: "p-2.5" },
-      xxsmall: { base: "max-w-[206px]", dialog: "p-1.5" },
-      xsmall: { base: "max-w-xs", dialog: "p-3" },
-      small: { base: "max-w-sm", dialog: "px-4 p-3" },
-      medium: { base: "max-w-md", dialog: "px-5 p-3.5" },
-      large: { base: "max-w-lg", dialog: "p-4" },
-      xlarge: { base: "max-w-xl", dialog: "p-6" },
-      xxlarge: { base: "max-w-2xl", dialog: "px-8 py-7" },
-      xxxlarge: { base: "max-w-3xl", dialog: "px-10 py-9" },
+      auto: {
+        base: "w-[unset]",
+        dialog: "p-2.5",
+        content: "py-2.5",
+      },
+      xxsmall: {
+        base: "max-w-[206px]",
+        dialog: "p-1.5",
+        content: "py-1.5",
+      },
+      xsmall: { base: "max-w-xs", dialog: "p-3", content: "py-3" },
+      small: {
+        base: "max-w-sm",
+        dialog: "px-4 p-3",
+        content: "py-3",
+      },
+      medium: {
+        base: "max-w-md",
+        dialog: "px-5 p-3.5",
+        content: "py-3.5",
+      },
+      large: { base: "max-w-lg", dialog: "p-4", content: "py-4" },
+      xlarge: { base: "max-w-xl", dialog: "p-6", content: "py-6" },
+      xxlarge: {
+        base: "max-w-2xl",
+        dialog: "px-8 py-7",
+        content: "py-7",
+      },
+      xxxlarge: {
+        base: "max-w-3xl",
+        dialog: "px-10 py-9",
+        content: "py-9",
+      },
     },
     rounded: {
       none: { base: "rounded-none", dialog: "rounded-none" },
@@ -71,9 +98,19 @@ export const POPOVER_STYLES = twv.tv({
       xxxlarge: { base: "rounded-3xl", dialog: "rounded-3xl scroll-offset-edge-3xl" },
       xxxxlarge: { base: "rounded-4xl", dialog: "rounded-4xl scroll-offset-edge-4xl" },
     },
+    hasFooter: {
+      true: { dialog: "grid-rows-[auto_1fr_auto]" },
+    },
+    hasHeader: {
+      true: { dialog: "grid-rows-[auto_1fr_auto]" },
+    },
   },
   slots: {
-    dialog: "flex-auto overflow-y-auto max-h-[inherit]",
+    dialog: "grid grid-rows-[auto_minmax(0,1fr)_auto] min-h-0 max-h-[inherit] flex-auto",
+    content: "grid-area:1/1 min-h-0 max-h-[inherit]",
+    scroller: "flex flex-col h-full min-h-0 max-h-[inherit]",
+    header: "grid-area:1/1",
+    footer: "grid-area:3/1",
   },
   defaultVariants: { rounded: "xxlarge", size: "small", variant: "light" },
 });
@@ -101,7 +138,6 @@ export function Popover(props: PopoverProps) {
   const popoverStyle = { zIndex: "" };
 
   return (
-    // @ts-expect-error placement is optional, but destructure it to make it either value or undefined, and ts complains
     <aria.Popover
       ref={popoverRef}
       className={(values) =>
@@ -145,7 +181,7 @@ interface PopoverContentProps {
   readonly size: PopoverProps["size"];
   readonly rounded: PopoverProps["rounded"];
   readonly opts: aria.PopoverRenderProps;
-  readonly popoverRef: React.RefObject<HTMLDivElement>;
+  readonly popoverRef: React.RefObject<HTMLDivElement | null>;
   readonly isDismissable: boolean;
   readonly variant: PopoverProps["variant"];
 }
@@ -186,6 +222,31 @@ function PopoverContent(props: PopoverContentProps) {
     }),
   });
 
+  const childrenCalculated =
+    typeof children === "function" ? children({ ...opts, close }) : children;
+
+  const childrenArray = keyedFlattenChildren(childrenCalculated);
+
+  const footer = childrenArray.find(
+    (child) => React.isValidElement(child) && child.type === Popover.Footer,
+  );
+  const header = childrenArray.find(
+    (child) => React.isValidElement(child) && child.type === Popover.Header,
+  );
+  const content = childrenArray.find(
+    (child) =>
+      React.isValidElement(child) && child.type !== Popover.Footer && child.type !== Popover.Header,
+  );
+
+  const popoverStyles = POPOVER_STYLES({
+    ...opts,
+    size,
+    rounded,
+    variant,
+    hasFooter: !!footer,
+    hasHeader: !!header,
+  });
+
   return (
     <ResetButtonGroupContext>
       <dialogStackProvider.DialogStackRegistrar id={dialogId} type="popover" />
@@ -195,17 +256,26 @@ function PopoverContent(props: PopoverContentProps) {
         role="dialog"
         aria-labelledby={labelledBy}
         tabIndex={-1}
-        className={POPOVER_STYLES({
-          ...opts,
-          size,
-          rounded,
-          variant,
-        }).dialog()}
+        className={popoverStyles.dialog()}
       >
         <dialogProvider.DialogProvider dialogId={dialogId} close={close}>
           <errorBoundary.ErrorBoundary>
             <suspense.Suspense loaderProps={SUSPENSE_LOADER_PROPS}>
-              {typeof children === "function" ? children({ ...opts, close }) : children}
+              <PopoverSlotsGuardProvider
+                value={{ isDirectChild: true, className: popoverStyles.header() }}
+              >
+                {header}
+              </PopoverSlotsGuardProvider>
+              <div className={popoverStyles.content()}>
+                <Scroller className={popoverStyles.scroller()} orientation="vertical">
+                  {content}
+                </Scroller>
+              </div>
+              <PopoverSlotsGuardProvider
+                value={{ isDirectChild: true, className: popoverStyles.footer() }}
+              >
+                {footer}
+              </PopoverSlotsGuardProvider>
             </suspense.Suspense>
           </errorBoundary.ErrorBoundary>
         </dialogProvider.DialogProvider>
@@ -214,5 +284,24 @@ function PopoverContent(props: PopoverContentProps) {
   );
 }
 
+const [PopoverSlotsGuardProvider] = createContext(
+  { isDirectChild: false, className: "" },
+  "PopoverSlotsGuardProvider",
+);
+
 Popover.Trigger = DialogTrigger;
 Popover.Close = Close;
+Popover.Header = function PopoverHeader(props: React.PropsWithChildren) {
+  const { isDirectChild, className } = use(PopoverSlotsGuardProvider);
+  if (!isDirectChild) {
+    throw new Error("PopoverHeader must be a direct child of Popover");
+  }
+  return <div className={className}>{props.children}</div>;
+};
+Popover.Footer = function PopoverFooter(props: React.PropsWithChildren) {
+  const { isDirectChild, className } = use(PopoverSlotsGuardProvider);
+  if (!isDirectChild) {
+    throw new Error("PopoverFooter must be a direct child of Popover");
+  }
+  return <div className={className}>{props.children}</div>;
+};

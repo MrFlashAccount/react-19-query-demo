@@ -235,7 +235,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-[5px] p-0 rounded-full",
         }),
         icon: "w-full h-full mb-[unset]",
@@ -247,7 +246,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-[5px] p-0 rounded-full w-2.5 h-2.5",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
@@ -259,7 +257,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-[5px] p-0 rounded-full w-3 h-3",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
@@ -271,7 +268,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-4 p-0 rounded-full w-3.5 h-3.5",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
@@ -283,7 +279,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-4 p-0 rounded-full w-4 h-4",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
@@ -295,7 +290,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-4 p-0 rounded-full w-5 h-5",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",
@@ -307,7 +301,6 @@ export const BUTTON_STYLES = tv({
       isJoined: false,
       class: {
         base: TEXT_STYLE({
-          disableLineHeightCompensation: true,
           className: "border-0 outline-offset-[5px] p-0 rounded-full w-12 h-12",
         }),
         icon: "w-[unset] h-[unset] mb-[unset]",

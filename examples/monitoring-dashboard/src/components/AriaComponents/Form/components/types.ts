@@ -93,6 +93,7 @@ export interface UseFormOptions<Schema extends TSchema, SubmitResult = void>
   /** When set to `dialog`, form submission will close the parent dialog on successful submission. */
   readonly method?: "dialog" | (string & {}) | undefined;
   readonly resetOnSubmit?: boolean;
+  readonly onChange?: (values: TransformedValues<Schema>) => void;
 }
 
 /** Register function for a form field. */
@@ -133,9 +134,10 @@ export interface UseFormReturn<Schema extends TSchema> extends Omit<
 > {
   readonly register: UseFormRegister<Schema>;
   readonly submit: (event?: FormEvent<HTMLFormElement> | null) => Promise<void>;
+  readonly isSubmitting: boolean;
   readonly schema: Schema;
   readonly setFormError: (error: string) => void;
-  readonly closeRef: React.MutableRefObject<() => void>;
+  readonly closeRef: React.RefObject<() => void>;
   readonly formProps: {
     readonly onSubmit: (event?: FormEvent<HTMLFormElement> | null) => Promise<void>;
     readonly noValidate: boolean;

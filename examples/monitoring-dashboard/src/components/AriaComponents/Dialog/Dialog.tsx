@@ -1,9 +1,11 @@
+"use client";
 /**
  * @file A dialog is an overlay shown above other content in an application.
  * Can be used to display alerts, confirmations, or other content.
  */
 import * as React from "react";
 
+import DismissIcon from "@/assets/dismiss.svg";
 import * as aria from "@/components/aria";
 import * as ariaComponents from "@/components/AriaComponents";
 import * as errorBoundary from "@/components/ErrorBoundary";
@@ -12,14 +14,11 @@ import * as suspense from "@/components/Suspense";
 
 import * as mergeRefs from "@/utilities/mergeRefs";
 
-import { DialogDismiss, ResetButtonGroupContext } from "@/components/AriaComponents";
+import { ResetButtonGroupContext } from "@/components/AriaComponents";
 import { useEvent } from "@/hooks/useEvent";
-import { useMeasure } from "@/hooks/measureHooks";
-import { LayoutGroup, motion, type Spring } from "@/utilities/motion";
 import type { VariantProps } from "@/utilities/tailwindVariants";
 import { tv } from "@/utilities/tailwindVariants";
 import { unsafeWriteValue } from "@/utilities/write";
-import { useRootContext } from "../../UIProviders";
 import { Close } from "./Close";
 import * as dialogProvider from "./DialogProvider";
 import * as dialogStackProvider from "./DialogStackProvider";
@@ -27,37 +26,52 @@ import { DialogTrigger } from "./DialogTrigger";
 import type * as types from "./types";
 import * as utlities from "./utilities";
 import { DIALOG_BACKGROUND } from "./variants";
-
-// eslint-disable-next-line no-restricted-syntax
-const MotionDialog = motion(aria.Dialog);
+import SvgMask from "../../SvgMask";
 
 const OVERLAY_STYLES = tv({
   base: "fixed inset-0 isolate flex items-center justify-center bg-primary/20",
   variants: {
     isEntering: { true: "animate-in fade-in duration-200 ease-out" },
     isExiting: { true: "animate-out fade-out duration-200 ease-in" },
-    blockInteractions: { true: "backdrop-blur-md transition-[backdrop-filter] duration-200" },
+    blockInteractions: {
+      true: "backdrop-blur-md transition-[backdrop-filter] duration-200",
+    },
   },
 });
 
 const MODAL_STYLES = tv({
-  base: "fixed inset-0 flex items-center justify-center text-xs text-primary",
+  base: "fixed flex items-center justify-center text-xs text-primary",
   variants: {
     isEntering: { true: "animate-in ease-out duration-200" },
     isExiting: { true: "animate-out ease-in duration-200" },
-    type: { modal: "", fullscreen: "p-3.5" },
+    type: {
+      modal: "inset-0",
+      fullscreen: "inset-0",
+      sheet: "top-0 right-0 bottom-0",
+    },
   },
   compoundVariants: [
     { type: "modal", isEntering: true, class: "slide-in-from-top-1" },
     { type: "modal", isExiting: true, class: "slide-out-to-top-1" },
     { type: "fullscreen", isEntering: true, class: "zoom-in-[1.015]" },
     { type: "fullscreen", isExiting: true, class: "zoom-out-[1.015]" },
+    {
+      type: "sheet",
+      isEntering: true,
+      class: "slide-in-from-bottom-1 md:slide-in-from-right-1",
+    },
+    {
+      type: "sheet",
+      isExiting: true,
+      class: "slide-out-to-bottom-1 md:slide-out-to-right-1",
+    },
   ],
 });
 
 const DIALOG_STYLES = tv({
   base: DIALOG_BACKGROUND({
-    className: "w-full max-w-full flex flex-col text-left align-middle shadow-xl overflow-clip",
+    className:
+      "w-full max-w-full flex flex-col text-left align-middle shadow-xl overflow-clip",
   }),
   variants: {
     type: {
@@ -67,6 +81,10 @@ const DIALOG_STYLES = tv({
       },
       fullscreen: {
         base: "w-full h-full max-w-full max-h-full bg-clip-border",
+        header: "px-4 pt-[5px] pb-1.5 min-h-12",
+      },
+      sheet: {
+        base: "min-w-[320px] md:min-w-[600px] md:max-w-[90dvw] md:h-full max-w-full max-h-full bg-clip-border",
         header: "px-4 pt-[5px] pb-1.5 min-h-12",
       },
     },
@@ -121,7 +139,10 @@ const DIALOG_STYLES = tv({
       xxxlarge: { content: "p-20 pt-10 pb-16" },
     },
     scrolledToTop: { true: { header: "border-transparent" } },
-    layout: { true: { measurerWrapper: "h-auto" }, false: { measurerWrapper: "h-full" } },
+    layout: {
+      true: { measurerWrapper: "h-auto" },
+      false: { measurerWrapper: "h-full" },
+    },
   },
   slots: {
     header:
@@ -140,6 +161,37 @@ const DIALOG_STYLES = tv({
     { type: "modal", size: "xxlarge", class: "max-w-2xl" },
     { type: "modal", size: "xxxlarge", class: "max-w-3xl" },
     { type: "modal", size: "xxxxlarge", class: "max-w-4xl" },
+    { type: "sheet", size: "small", class: "max-w-sm" },
+    { type: "sheet", size: "medium", class: "max-w-md" },
+    { type: "sheet", size: "large", class: "max-w-lg" },
+    { type: "sheet", size: "xlarge", class: "max-w-xl" },
+    { type: "sheet", size: "xxlarge", class: "max-w-2xl" },
+    { type: "sheet", size: "xxxlarge", class: "max-w-3xl" },
+    { type: "sheet", size: "xxxxlarge", class: "max-w-4xl" },
+    { type: "sheet", rounded: "none", class: "rounded-none" },
+    {
+      type: "sheet",
+      rounded: "small",
+      class: "rounded-l-sm rounded-r-none",
+    },
+    { type: "sheet", rounded: "medium", class: "rounded-l-md rounded-r-none" },
+    { type: "sheet", rounded: "large", class: "rounded-l-lg rounded-r-none" },
+    { type: "sheet", rounded: "xlarge", class: "rounded-l-xl rounded-r-none" },
+    {
+      type: "sheet",
+      rounded: "xxlarge",
+      class: "rounded-l-2xl rounded-r-none",
+    },
+    {
+      type: "sheet",
+      rounded: "xxxlarge",
+      class: "rounded-l-3xl rounded-r-none",
+    },
+    {
+      type: "sheet",
+      rounded: "xxxxlarge",
+      class: "rounded-l-4xl rounded-r-none",
+    },
     { type: "fullscreen", class: { measurerWrapper: "h-full" } },
   ],
   defaultVariants: {
@@ -153,18 +205,11 @@ const DIALOG_STYLES = tv({
   },
 });
 
-const TRANSITION: Spring = {
-  type: "spring",
-  // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-  stiffness: 1_200,
-  // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-  damping: 90,
-  mass: 3,
-};
-
 /** Props for the {@link Dialog} component. */
 export interface DialogProps
-  extends types.DialogProps, Omit<VariantProps<typeof DIALOG_STYLES>, "scrolledToTop"> {}
+  extends
+    types.DialogProps,
+    Omit<VariantProps<typeof DIALOG_STYLES>, "scrolledToTop"> {}
 
 /**
  * A dialog is an overlay shown above other content in an application.
@@ -175,7 +220,7 @@ export function Dialog(props: DialogProps) {
     type = "modal",
     isDismissable = true,
     isKeyboardDismissDisabled = false,
-    onOpenChange = () => {},
+    // onOpenChange = () => {},
     modalProps = {},
   } = props;
 
@@ -184,22 +229,28 @@ export function Dialog(props: DialogProps) {
   return (
     <aria.ModalOverlay
       className={({ isEntering, isExiting }) =>
-        OVERLAY_STYLES({ isEntering, isExiting, blockInteractions: !isDismissable })
+        OVERLAY_STYLES({
+          isEntering,
+          isExiting,
+          blockInteractions: !isDismissable,
+        })
       }
       isDismissable={isDismissable}
       isKeyboardDismissDisabled={isKeyboardDismissDisabled}
       UNSTABLE_portalContainer={root}
-      onOpenChange={onOpenChange}
+      // onOpenChange={onOpenChange}
       shouldCloseOnInteractOutside={() => false}
       {...modalProps}
     >
       {(values) => (
         <aria.Modal
-          className={({ isEntering, isExiting }) => MODAL_STYLES({ type, isEntering, isExiting })}
+          className={({ isEntering, isExiting }) =>
+            MODAL_STYLES({ type, isEntering, isExiting })
+          }
           isDismissable={isDismissable}
           isKeyboardDismissDisabled={isKeyboardDismissDisabled}
           UNSTABLE_portalContainer={root}
-          onOpenChange={onOpenChange}
+          // onOpenChange={onOpenChange}
           shouldCloseOnInteractOutside={() => false}
           {...modalProps}
         >
@@ -216,12 +267,14 @@ const TYPE_TO_DIALOG_TYPE: Record<
 > = {
   modal: "dialog",
   fullscreen: "dialog-fullscreen",
+  sheet: "dialog",
 };
 
 /**
  * Props for the {@link DialogContent} component.
  */
-interface DialogContentProps extends DialogProps, VariantProps<typeof DIALOG_STYLES> {
+interface DialogContentProps
+  extends DialogProps, VariantProps<typeof DIALOG_STYLES> {
   readonly modalState: aria.OverlayTriggerState;
 }
 
@@ -254,23 +307,10 @@ function DialogContent(props: DialogContentProps) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   const dialogId = aria.useId();
 
-  const { appRoot } = useRootContext();
-
   const titleId = `${dialogId}-title`;
   const padding = paddingRaw ?? (type === "modal" ? "medium" : "xlarge");
   const isFullscreen = type === "fullscreen";
-
-  const [isLayoutDisabled, setIsLayoutDisabled] = React.useState(true);
-
-  const [contentDimensionsRef, dimensions] = useMeasure({
-    isDisabled: isLayoutDisabled,
-    useRAF: false,
-  });
-
-  const [headerDimensionsRef, headerDimensions] = useMeasure({
-    isDisabled: isLayoutDisabled,
-    useRAF: false,
-  });
+  const isSheet = type === "sheet";
 
   // Mutating the method of the modalState object to ensure that the close `close`
   // function will call the `onDismiss` function and then close the modal.
@@ -302,32 +342,6 @@ function DialogContent(props: DialogContentProps) {
     },
   });
 
-  React.useEffect(() => {
-    if (isFullscreen) {
-      return;
-    }
-
-    setIsLayoutDisabled(false);
-
-    return () => {
-      setIsLayoutDisabled(true);
-    };
-  }, [isFullscreen]);
-
-  React.useEffect(() => {
-    if (isFullscreen && modalState.isOpen) {
-      unsafeWriteValue(appRoot.style, "scale", "0.99");
-      unsafeWriteValue(appRoot.style, "filter", "blur(8px)");
-      unsafeWriteValue(appRoot.style, "willChange", "scale, filter");
-
-      return () => {
-        unsafeWriteValue(appRoot.style, "scale", "");
-        unsafeWriteValue(appRoot.style, "filter", "");
-        unsafeWriteValue(appRoot.style, "willChange", "");
-      };
-    }
-  }, [isFullscreen, modalState, appRoot]);
-
   const styles = variants({
     className,
     type,
@@ -340,36 +354,11 @@ function DialogContent(props: DialogContentProps) {
     layout,
   });
 
-  const getDialogHeight = () => {
-    if (isFullscreen) {
-      return "";
-    }
-
-    if (dimensions == null || headerDimensions == null) {
-      return "";
-    }
-
-    return dimensions.height + headerDimensions.height;
-  };
-
   return (
     <ResetButtonGroupContext>
-      <LayoutGroup>
-        <MotionDialog
-          layout
-          transition={TRANSITION}
-          style={{ height: getDialogHeight() }}
+      <dialogProvider.DialogProvider close={close} dialogId={dialogId}>
+        <aria.Dialog
           id={dialogId}
-          onLayoutAnimationStart={() => {
-            if (scrollerRef.current) {
-              scrollerRef.current.style.overflowY = "clip";
-            }
-          }}
-          onLayoutAnimationComplete={() => {
-            if (scrollerRef.current) {
-              scrollerRef.current.style.overflowY = "";
-            }
-          }}
           ref={(ref: HTMLDivElement | null) => {
             mergeRefs.mergeRefs(dialogRef, (element) => {
               if (element) {
@@ -388,48 +377,36 @@ function DialogContent(props: DialogContentProps) {
           aria-labelledby={titleId}
           {...ariaDialogProps}
         >
-          <motion.div layout className="w-full" transition={{ duration: 0 }}>
-            <DialogHeader
-              closeButton={closeButton}
-              title={title}
-              titleId={titleId}
-              scrollerRef={scrollerRef}
-              fitContent={fitContent}
-              hideCloseButton={hideCloseButton}
-              padding={padding}
-              rounded={rounded}
-              size={size}
-              type={type}
-              headerDimensionsRef={headerDimensionsRef}
-              close={close}
-              variants={variants}
-            />
-          </motion.div>
+          <DialogHeader
+            scrollerRef={scrollerRef}
+            closeButton={closeButton}
+            title={title}
+            titleId={titleId}
+            fitContent={fitContent}
+            hideCloseButton={hideCloseButton}
+            padding={padding}
+            rounded={rounded}
+            size={size}
+            type={type}
+            variants={variants}
+          />
 
-          <motion.div
-            layout
-            layoutScroll
-            className={styles.scroller()}
-            ref={scrollerRef}
-            transition={{ duration: 0 }}
+          <DialogBody
+            dialogId={dialogId}
+            scrollerRef={scrollerRef}
+            measurerWrapperClassName={styles.measurerWrapper()}
+            contentClassName={styles.content()}
+            type={type}
           >
-            <DialogBody
-              close={close}
-              contentDimensionsRef={contentDimensionsRef}
-              dialogId={dialogId}
-              headerDimensionsRef={headerDimensionsRef}
-              scrollerRef={scrollerRef}
-              measurerWrapperClassName={styles.measurerWrapper()}
-              contentClassName={styles.content()}
-              type={type}
-            >
-              {children}
-            </DialogBody>
-          </motion.div>
-        </MotionDialog>
+            {children}
+          </DialogBody>
+        </aria.Dialog>
 
-        <dialogStackProvider.DialogStackRegistrar id={dialogId} type={TYPE_TO_DIALOG_TYPE[type]} />
-      </LayoutGroup>
+        <dialogStackProvider.DialogStackRegistrar
+          id={dialogId}
+          type={TYPE_TO_DIALOG_TYPE[type]}
+        />
+      </dialogProvider.DialogProvider>
     </ResetButtonGroupContext>
   );
 }
@@ -438,11 +415,8 @@ function DialogContent(props: DialogContentProps) {
  * Props for the {@link DialogBody} component.
  */
 interface DialogBodyProps {
+  readonly scrollerRef: React.RefObject<HTMLDivElement | null>;
   readonly dialogId: string;
-  readonly contentDimensionsRef: (node: HTMLElement | null) => void;
-  readonly headerDimensionsRef: (node: HTMLElement | null) => void;
-  readonly scrollerRef: React.RefObject<HTMLDivElement>;
-  readonly close: () => void;
   readonly measurerWrapperClassName: string;
   readonly contentClassName: string;
   readonly children: DialogProps["children"];
@@ -454,27 +428,18 @@ interface DialogBodyProps {
  */
 
 const DialogBody = React.memo(function DialogBody(props: DialogBodyProps) {
-  const {
-    close,
-    contentDimensionsRef,
-    dialogId,
-    children,
-    measurerWrapperClassName,
-    contentClassName,
-    type,
-  } = props;
+  const { scrollerRef, children, contentClassName, type } = props;
+  const { close } = dialogProvider.useDialogStrictContext();
 
   return (
-    <div className={measurerWrapperClassName}>
-      <div ref={contentDimensionsRef} className={contentClassName}>
-        <errorBoundary.ErrorBoundary>
-          <suspense.Suspense loaderProps={{ minHeight: type === "fullscreen" ? "full" : "h32" }}>
-            <dialogProvider.DialogProvider close={close} dialogId={dialogId}>
-              {typeof children === "function" ? children({ close }) : children}
-            </dialogProvider.DialogProvider>
-          </suspense.Suspense>
-        </errorBoundary.ErrorBoundary>
-      </div>
+    <div ref={scrollerRef} className={contentClassName}>
+      <errorBoundary.ErrorBoundary>
+        <suspense.Suspense
+          loaderProps={{ minHeight: type === "fullscreen" ? "full" : "h32" }}
+        >
+          {typeof children === "function" ? children({ close }) : children}
+        </suspense.Suspense>
+      </errorBoundary.ErrorBoundary>
     </div>
   );
 });
@@ -482,25 +447,27 @@ const DialogBody = React.memo(function DialogBody(props: DialogBodyProps) {
 /**
  * Props for the {@link DialogHeader} component.
  */
-interface DialogHeaderProps extends Omit<VariantProps<typeof DIALOG_STYLES>, "scrolledToTop"> {
+interface DialogHeaderProps extends Omit<
+  VariantProps<typeof DIALOG_STYLES>,
+  "scrolledToTop"
+> {
+  readonly scrollerRef: React.RefObject<HTMLDivElement | null>;
   readonly closeButton: DialogProps["closeButton"];
   readonly title: DialogProps["title"];
   readonly titleId: string;
-  readonly headerDimensionsRef: (node: HTMLElement | null) => void;
-  readonly scrollerRef: React.RefObject<HTMLDivElement>;
-  readonly close: () => void;
 }
 
 /**
  * The header of a dialog.
  * @internal
  */
-const DialogHeader = React.memo(function DialogHeader(props: DialogHeaderProps) {
+const DialogHeader = React.memo(function DialogHeader(
+  props: DialogHeaderProps,
+) {
   const {
     closeButton,
     title,
     titleId,
-    headerDimensionsRef,
     scrollerRef,
     fitContent,
     hideCloseButton,
@@ -509,7 +476,6 @@ const DialogHeader = React.memo(function DialogHeader(props: DialogHeaderProps) 
     size,
     type,
     variants = DIALOG_STYLES,
-    close,
     layout,
   } = props;
 
@@ -526,14 +492,9 @@ const DialogHeader = React.memo(function DialogHeader(props: DialogHeaderProps) 
 
   const [isScrolledToTop, privateSetIsScrolledToTop] = React.useState(true);
 
-  const setIsScrolledToTop = React.useCallback(
-    (value: boolean) => {
-      React.startTransition(() => {
-        privateSetIsScrolledToTop(value);
-      });
-    },
-    [privateSetIsScrolledToTop],
-  );
+  const setIsScrolledToTop = (value: boolean) => {
+    privateSetIsScrolledToTop(value);
+  };
 
   /** Handles the scroll event on the dialog content. */
   const handleScrollEvent = useEvent(() => {
@@ -558,12 +519,14 @@ const DialogHeader = React.memo(function DialogHeader(props: DialogHeaderProps) 
   }, [handleScrollEvent, scrollerRef]);
 
   return (
-    <aria.Header
-      ref={headerDimensionsRef}
-      className={styles.header({ scrolledToTop: isScrolledToTop })}
-    >
+    <aria.Header className={styles.header({ scrolledToTop: isScrolledToTop })}>
       {closeButton !== "none" && (
-        <ariaComponents.CloseButton className={styles.closeButton()} onPress={close} />
+        <Dialog.Close
+          variant="icon"
+          size="xsmall"
+          className={styles.closeButton()}
+          icon={<SvgMask src={DismissIcon} />}
+        />
       )}
 
       {title != null && (
@@ -581,6 +544,4 @@ const DialogHeader = React.memo(function DialogHeader(props: DialogHeaderProps) 
 });
 
 Dialog.Close = Close;
-/** @deprecated Use {@link Dialog.Close} instead. */
-Dialog.Dismiss = DialogDismiss;
 Dialog.Trigger = DialogTrigger;

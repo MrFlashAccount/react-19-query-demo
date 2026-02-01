@@ -204,6 +204,19 @@ export const deleteAlertMutation = mutation({
   invalidates: [alertsQuery],
 });
 
+export const toggleAlertMutation = mutation({
+  mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }): Promise<Alert> => {
+    const res = await fetch(`/api/alerts/${id}/toggle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) throw new Error("Failed to toggle alert");
+    return res.json();
+  },
+  invalidates: [alertsQuery],
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Incidents
 // ─────────────────────────────────────────────────────────────────────────────
@@ -248,6 +261,10 @@ export const graph = new DependencyGraph([
   logQuery,
   alertsQuery,
   alertQuery,
+  createAlertMutation,
+  updateAlertMutation,
+  deleteAlertMutation,
+  toggleAlertMutation,
   incidentsQuery,
   acknowledgeIncidentMutation,
   resolveIncidentMutation,

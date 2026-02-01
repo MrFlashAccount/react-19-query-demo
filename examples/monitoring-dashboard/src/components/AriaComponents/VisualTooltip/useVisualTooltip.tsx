@@ -1,7 +1,6 @@
 /** @file A hook for creating a visual tooltip that appears when the target element is hovered over. */
 import * as aria from "@/components/aria";
 import * as ariaComponents from "@/components/AriaComponents";
-import Portal from "@/components/Portal";
 import * as eventCallback from "@/hooks/useEvent";
 import * as React from "react";
 
@@ -32,13 +31,12 @@ export interface VisualTooltipOptions extends Pick<
 /** The return value of the {@link useVisualTooltip} hook. */
 export interface VisualTooltipReturn {
   readonly targetProps: aria.DOMAttributes<aria.FocusableElement> & { readonly id: string };
-  readonly tooltip: JSX.Element | null;
+  readonly tooltip: React.JSX.Element | null;
 }
 
 /** The display strategy for the tooltip. */
 type DisplayStrategy = "always" | "whenOverflowing";
 
-const DEFAULT_OFFSET = 6;
 const DEFAULT_DELAY = 250;
 
 /**
@@ -52,7 +50,6 @@ export function useVisualTooltip(props: VisualTooltipOptions): VisualTooltipRetu
   const {
     children,
     targetRef,
-    triggerRef = targetRef,
     className,
     isDisabled = false,
     overlayPositionProps = {},
@@ -70,13 +67,23 @@ export function useVisualTooltip(props: VisualTooltipOptions): VisualTooltipRetu
 
   const disabled = isDisabled || isTooltipDisabled;
 
-  const state = aria.useTooltipTriggerState({
-    closeDelay: DEFAULT_DELAY,
-    delay: DEFAULT_DELAY,
-    isDisabled: disabled,
+  const [state, setState] = React.useState({ isOpen: false });
+
+  const open = eventCallback.useEvent(() => {
+    setState((prev) => ({ ...prev, isOpen: true }));
+  });
+  const close = eventCallback.useEvent(() => {
+    setState((prev) => ({ ...prev, isOpen: false }));
   });
 
   const handleHoverChange = eventCallback.useEvent((isHovered: boolean) => {
+    if (disabled) {
+      if (state.isOpen) {
+        close();
+      }
+      return;
+    }
+
     const shouldDisplay = () => {
       if (isHovered && targetRef.current != null) {
         return typeof display === "function"
@@ -91,9 +98,9 @@ export function useVisualTooltip(props: VisualTooltipOptions): VisualTooltipRetu
       setIsTooltipDisabled(!shouldDisplay());
 
       if (shouldDisplay()) {
-        state.open();
+        open();
       } else {
-        state.close();
+        close();
       }
     });
   });
@@ -104,7 +111,10 @@ export function useVisualTooltip(props: VisualTooltipOptions): VisualTooltipRetu
   });
 
   return {
-    targetProps: aria.mergeProps<React.HTMLAttributes<HTMLElement>>()(targetHoverProps, { id }),
+    targetProps: aria.mergeProps<React.HTMLAttributes<HTMLElement>>()(targetHoverProps, {
+      id,
+      style: { anchorName: `--${id}` },
+    } as any),
     tooltip: state.isOpen ? (
       <TooltipInner
         id={id}
@@ -116,11 +126,6 @@ export function useVisualTooltip(props: VisualTooltipOptions): VisualTooltipRetu
         maxWidth={maxWidth}
         children={children}
         testId={testId}
-        state={state}
-        targetRef={targetRef}
-        triggerRef={triggerRef}
-        disabled={disabled}
-        handleHoverChange={handleHoverChange}
       />
     ) : null,
   } as const;
@@ -132,11 +137,6 @@ interface TooltipInnerProps extends Pick<
   "maxWidth" | "rounded" | "size" | "variant"
 > {
   readonly id: string;
-  readonly disabled: boolean;
-  readonly handleHoverChange: (isHovered: boolean) => void;
-  readonly state: aria.TooltipTriggerState;
-  readonly targetRef: React.RefObject<HTMLElement>;
-  readonly triggerRef: React.RefObject<HTMLElement>;
   readonly children: React.ReactNode;
   readonly className?: string | undefined;
   readonly testId?: string | undefined;
@@ -146,16 +146,30 @@ interface TooltipInnerProps extends Pick<
   >;
 }
 
+const PLACEMENT_TO_POSITION_AREA: Record<string, string> = {
+  bottom: "top",
+  top: "bottom",
+  left: "right",
+  right: "left",
+  "bottom-start": "top start",
+  "bottom-end": "top end",
+  "top-start": "bottom start",
+  "top-end": "bottom end",
+  "left-start": "right start",
+  "left-end": "right end",
+  "right-start": "left start",
+  "right-end": "left end",
+};
+
+function getPositionArea(placement: string): string {
+  return PLACEMENT_TO_POSITION_AREA[placement] ?? "top";
+}
+
 /** The inner component of the tooltip. */
 // eslint-disable-next-line react-refresh/only-export-components
 function TooltipInner(props: TooltipInnerProps) {
   const {
     id,
-    disabled,
-    handleHoverChange,
-    state,
-    targetRef,
-    triggerRef,
     className,
     variant,
     rounded,
@@ -166,71 +180,47 @@ function TooltipInner(props: TooltipInnerProps) {
     overlayPositionProps,
   } = props;
 
-  const {
-    containerPadding = 0,
-    offset = DEFAULT_OFFSET,
-    crossOffset = 0,
-    placement = "bottom",
-  } = overlayPositionProps;
-
   const popoverRef = React.useRef<HTMLDivElement>(null);
 
-  const { hoverProps: tooltipHoverProps } = aria.useHover({
-    isDisabled: disabled,
-    onHoverChange: handleHoverChange,
-  });
+  const placement = overlayPositionProps.placement ?? "bottom";
+  const positionArea = getPositionArea(placement);
 
-  const { tooltipProps } = aria.useTooltipTrigger({ isDisabled: disabled }, state, targetRef);
+  React.useLayoutEffect(() => {
+    if (popoverRef.current) {
+      const ref = popoverRef.current;
+      ref.showPopover();
+      return () => {
+        ref.hidePopover();
+      };
+    }
+  }, []);
 
-  // eslint-disable-next-line @typescript-eslint/unbound-method
-  const { overlayProps, updatePosition } = aria.useOverlayPosition({
-    isOpen: state.isOpen,
-    overlayRef: popoverRef,
-    targetRef: triggerRef,
-    offset,
-    crossOffset,
-    placement,
-    containerPadding,
-  });
-
-  const createTooltipElement = () => (
-    <Portal onMount={updatePosition}>
-      <span
-        ref={popoverRef}
-        {...aria.mergeProps<React.HTMLAttributes<HTMLDivElement>>()(
-          overlayProps,
-          tooltipProps,
-          tooltipHoverProps,
-          {
-            id,
-            className: ariaComponents.TOOLTIP_STYLES({
-              className,
-              variant,
-              rounded,
-              size,
-              maxWidth,
-            }),
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            "aria-hidden": true,
-            // Note that this is a `@ts-expect-error` so that an update to the outdated type
-            // definitions will notify that this `@ts-expect-error` can be safely removed.
-            // @ts-expect-error This is a new DOM property.
-            popover: "",
-            role: "presentation",
-            "data-testid": testId,
-            // Remove z-index from the overlay style because it is not needed.
-            // We show the latest element on top, and z-index can cause issues with
-            // the stacking context.
-            style: { zIndex: "" },
-          },
-        )}
-      >
-        {children}
-      </span>
-    </Portal>
+  return (
+    <span
+      ref={popoverRef}
+      {...({
+        id,
+        className: ariaComponents.TOOLTIP_STYLES({
+          className,
+          variant,
+          rounded,
+          size,
+          maxWidth,
+        }),
+        "aria-hidden": true,
+        popover: "manual",
+        role: "presentation",
+        "data-testid": testId,
+        style: {
+          positionAnchor: `--${id}`,
+          positionArea,
+          positionTry: "flip-block",
+        },
+      } as React.HTMLAttributes<HTMLSpanElement>)}
+    >
+      {children}
+    </span>
   );
-
-  return createTooltipElement();
 }
 
 const DISPLAY_STRATEGIES: Record<DisplayStrategy, (target: HTMLElement) => boolean> = {

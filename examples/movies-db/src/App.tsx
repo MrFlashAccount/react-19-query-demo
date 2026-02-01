@@ -1,8 +1,6 @@
 import type { MovieApi } from "./api/types";
 import type { TabId } from "./components/shared/TabSelector";
-import { traced } from "@lib/tracing";
-import type { ISpan } from "@lib/tracing";
-import { useState, lazy, useTransition } from "react";
+import { useState, lazy, useTransition, useEffect, useRef } from "react";
 
 import {
   searchMovies,
@@ -25,117 +23,9 @@ const STRESS_BREADTH = 5;
 const STRESS_BRANCHES = 1;
 const STRESS_TASKS = 25;
 
-// Total invocations: branches * (breadth^(depth+1) - 1) / (breadth - 1) + 2 (root + tail) * STRESS_TASKS
 const TOTAL_INVOCATIONS =
   (STRESS_BRANCHES * ((STRESS_BREADTH ** (STRESS_DEPTH + 1) - 1) / (STRESS_BREADTH - 1)) + 2) *
   STRESS_TASKS;
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-// Non-traced version for baseline comparison
-const runBranchUntraced = async (depth: number, breadth: number): Promise<void> => {
-  await sleep(2 + Math.random() * 10);
-
-  if (depth <= 0) {
-    return;
-  }
-
-  const tasks = Array.from({ length: breadth }, () => runBranchUntraced(depth - 1, breadth));
-  await Promise.all(tasks);
-  await sleep(2 + Math.random() * 10);
-};
-
-const runStressTestUntraced = async (): Promise<void> => {
-  await sleep(5 + Math.random() * 15);
-
-  for (let i = 0; i < STRESS_TASKS; i += 1) {
-    const branches = Array.from({ length: STRESS_BRANCHES }, () =>
-      runBranchUntraced(STRESS_DEPTH, STRESS_BREADTH),
-    );
-    await Promise.all(branches);
-    await sleep(5 + Math.random() * 15);
-  }
-
-  // tail
-  for (let i = 0; i < 5; i += 1) {
-    await sleep(4 + i + Math.random() * 6);
-  }
-};
-
-// Traced version
-const runBranch = async (
-  parent: ISpan,
-  depth: number,
-  breadth: number,
-  path: string,
-): Promise<void> => {
-  const withSpan = traced(
-    async (span: ISpan) => {
-      await sleep(2 + Math.random() * 10);
-
-      if (depth <= 0) {
-        return;
-      }
-
-      const tasks = Array.from({ length: breadth }, (_, index) =>
-        runBranch(span, depth - 1, breadth, `${path}.${index}`),
-      );
-      await Promise.all(tasks);
-      await sleep(2 + Math.random() * 10);
-    },
-    {
-      name: `stress:node:${path}`,
-      payload: { depth, breadth, path, parent: parent.payload },
-      meta: { color: depth % 2 === 0 ? "secondary" : "tertiary" },
-      parentSpan: parent,
-    },
-  );
-
-  await withSpan();
-};
-
-const runTracingStressTest = async (): Promise<void> => {
-  const rootSpan = traced(
-    async (root) => {
-      await sleep(5 + Math.random() * 15);
-
-      for (let i = 0; i < STRESS_TASKS; i += 1) {
-        const branches = Array.from({ length: STRESS_BRANCHES }, (_, index) =>
-          runBranch(root, STRESS_DEPTH, STRESS_BREADTH, `root-${index}`),
-        );
-        await Promise.all(branches);
-        await sleep(5 + Math.random() * 15);
-      }
-
-      const tailSpan = traced(
-        async () => {
-          for (let i = 0; i < 5; i += 1) {
-            await sleep(4 + i + Math.random() * 6);
-          }
-        },
-        {
-          name: "stress:tail",
-          payload: { phase: "tail" },
-          meta: { color: "secondary" },
-          parentSpan: root,
-        },
-      );
-
-      await tailSpan();
-    },
-    {
-      name: "stress:test",
-      payload: {
-        depth: STRESS_DEPTH,
-        breadth: STRESS_BREADTH,
-        branches: STRESS_BRANCHES,
-      },
-      meta: { color: "primary", description: "Tracing stress test" },
-    },
-  );
-
-  await rootSpan();
-};
 
 interface StressTestResult {
   untracedMs: number;
@@ -146,26 +36,32 @@ function TracingStressTest() {
   const [transitioning, startTransition] = useTransition();
   const [result, setResult] = useState<StressTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const workerRef = useRef<Worker | null>(null);
 
-  const handleRun = async () => {
+  useEffect(() => {
+    workerRef.current = new Worker(new URL("./stressTest.worker.ts", import.meta.url), {
+      type: "module",
+    });
+
+    workerRef.current.onmessage = (event) => {
+      const response = event.data;
+      if (response.type === "complete") {
+        setResult({ untracedMs: response.untracedMs, tracedMs: response.tracedMs });
+      } else if (response.type === "error") {
+        setError(response.error);
+      }
+    };
+
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  const handleRun = () => {
     setError(null);
     setResult(null);
 
-    try {
-      // Run untraced first
-      const untracedStart = performance.now();
-      await runStressTestUntraced();
-      const untracedMs = performance.now() - untracedStart;
-
-      // Run traced
-      const tracedStart = performance.now();
-      await runTracingStressTest();
-      const tracedMs = performance.now() - tracedStart;
-
-      setResult({ untracedMs, tracedMs });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+    workerRef.current?.postMessage({ type: "runStressTest", id: crypto.randomUUID() });
   };
 
   const overheadPerSpanUs = result

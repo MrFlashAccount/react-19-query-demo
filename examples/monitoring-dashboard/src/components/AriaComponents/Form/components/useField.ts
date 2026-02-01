@@ -35,8 +35,9 @@ export function useField<
     name,
     disabled: isDisabled,
     control: formInstance.control,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...(defaultValue != null ? { defaultValue } : {}),
-  });
+  } as any);
 
   return { field, fieldState, formState, formInstance } as const;
 }

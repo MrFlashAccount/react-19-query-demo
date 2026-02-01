@@ -9,10 +9,8 @@ const SERVER_COUNT = 100;
 const METRICS_HOURS = 24;
 const METRICS_INTERVAL_MS = 60_000; // 1 minute
 const LOG_COUNT = 10_000;
-const ALERT_COUNT = 8;
 
 const REGIONS: Region[] = ["us-east", "us-west", "eu-west", "eu-central", "asia-pacific"];
-const LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error", "critical"];
 const SERVICES = ["nginx", "postgres", "redis", "api-gateway", "auth-service", "worker", "cron"];
 
 const SERVER_PREFIXES = ["web", "api", "db", "cache", "worker", "gateway", "queue", "storage"];
@@ -335,34 +333,34 @@ export async function seedDatabase(): Promise<{ servers: number; metrics: number
   const alerts = generateAlerts();
 
   // Insert in batches for better performance
-  const BATCH_SIZE = 1000;
+  const BATCH_SIZE = 8192;
 
   // Insert servers
   console.log("[Seed] Inserting servers...");
   const serverTx = db.transaction("servers", "readwrite");
   for (const server of servers) {
-    await serverTx.store.put(server);
+    serverTx.store.put(server);
   }
   await serverTx.done;
 
-  // Insert metrics in batches
+  // Insert metrics in batches - collect promises and await once per batch
   console.log("[Seed] Inserting metrics...");
   for (let i = 0; i < metrics.length; i += BATCH_SIZE) {
     const batch = metrics.slice(i, i + BATCH_SIZE);
     const tx = db.transaction("metrics", "readwrite");
     for (const metric of batch) {
-      await tx.store.put(metric);
+      tx.store.put(metric);
     }
     await tx.done;
   }
 
-  // Insert logs in batches
+  // Insert logs in batches - collect promises and await once per batch
   console.log("[Seed] Inserting logs...");
   for (let i = 0; i < logs.length; i += BATCH_SIZE) {
     const batch = logs.slice(i, i + BATCH_SIZE);
     const tx = db.transaction("logs", "readwrite");
     for (const log of batch) {
-      await tx.store.put(log);
+      tx.store.put(log);
     }
     await tx.done;
   }
@@ -371,7 +369,7 @@ export async function seedDatabase(): Promise<{ servers: number; metrics: number
   console.log("[Seed] Inserting alerts...");
   const alertTx = db.transaction("alerts", "readwrite");
   for (const alert of alerts) {
-    await alertTx.store.put(alert);
+    alertTx.store.put(alert);
   }
   await alertTx.done;
 

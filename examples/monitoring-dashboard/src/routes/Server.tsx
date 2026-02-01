@@ -1,10 +1,13 @@
 import { createRoute } from "@tanstack/react-router";
 import Root, { RootLayout } from "./__root";
-import { Dropdown, Text } from "@/components/AriaComponents";
+import { Button, Text } from "@/components/AriaComponents";
 import { useQuery } from "@lib/goat-query/react";
-import { use, useState, createContext, useContext, Suspense } from "react";
-import { serversQuery, metricsQuery, logsQuery } from "../queries";
-import type { Server as ServerType, Metric, LogLevel } from "@/db/schema";
+import { use, useState, Suspense, useTransition, useEffect } from "react";
+import { serversQuery, metricsQuery } from "../queries";
+import type { Server as ServerType, Metric } from "@/db/schema";
+import { ServerContext, useServerContext } from "./Server/ServerContext";
+import { ServerSelector } from "./Server/ServerSelectorPopover";
+import { LogsTable } from "./Server/components/LogsTable";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,6 +20,7 @@ import {
   Filler,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+import { useEvent } from "@/hooks/useEvent";
 
 // Register Chart.js components
 ChartJS.register(
@@ -31,32 +35,48 @@ ChartJS.register(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Context for selected server
+// Re-export context types for convenience
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ServerContextValue {
-  server: ServerType | null;
-  servers: ServerType[];
-  selectedIndex: number;
-  setSelectedIndex: (index: number) => void;
-}
+import type { ServerContextValue } from "./Server/ServerContext";
+export type { ServerContextValue };
 
-const ServerContext = createContext<ServerContextValue | null>(null);
-
-function useServerContext() {
-  const ctx = useContext(ServerContext);
-  if (!ctx) throw new Error("useServerContext must be used within ServerProvider");
-  return ctx;
-}
-
-function ServerProvider({ children }: { children: React.ReactNode }) {
+function ServerProvider({
+  children,
+  endTime,
+  startTime,
+  onTimeRangeChange,
+}: {
+  children: React.ReactNode;
+  endTime: number;
+  startTime: number;
+  onTimeRangeChange?: (startTime: number, endTime: number) => void;
+}) {
   const { promise } = useQuery({ query: serversQuery, params: undefined });
   const servers = use(promise);
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [isLoading, startTransition] = useTransition();
   const server = servers[selectedIndex] ?? null;
 
+  const selectServer = useEvent((index: number) =>
+    startTransition(() => {
+      setSelectedIndex(index);
+    }),
+  );
+
   return (
-    <ServerContext.Provider value={{ server, servers, selectedIndex, setSelectedIndex }}>
+    <ServerContext.Provider
+      value={{
+        server,
+        servers,
+        selectedIndex,
+        selectServer,
+        isLoading,
+        endTime,
+        startTime,
+        onTimeRangeChange,
+      }}
+    >
       {children}
     </ServerContext.Provider>
   );
@@ -67,42 +87,58 @@ function ServerProvider({ children }: { children: React.ReactNode }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function Server() {
-  return (
-    <Suspense fallback={<ServerLoadingState />}>
-      <ServerProvider>
-        <RootLayout.Slot slotName="header">
-          <div className="flex items-center gap-2 px-4">
-            <Text.Heading variant="h1">Server</Text.Heading>
-            <ServerDropdown />
-          </div>
-        </RootLayout.Slot>
+  const [endTime, setEndTime] = useState(() => Date.now());
+  const [startTime, setStartTime] = useState(() => endTime - 6 * 60 * 60 * 1000);
+  const [, startTransition] = useTransition();
 
-        <RootLayout.Slot slotName="body">
+  const handleTimeRangeChange = (newStartTime: number, newEndTime: number) => {
+    startTransition(() => {
+      setStartTime(newStartTime);
+      setEndTime(newEndTime);
+    });
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      startTransition(() => {
+        setEndTime(Date.now());
+      });
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <ServerProvider endTime={endTime} startTime={startTime} onTimeRangeChange={handleTimeRangeChange}>
+      <RootLayout.Slot name="header">
+        <div className="flex items-center gap-2 px-4 w-full">
+          <Text.Heading variant="h1">Server</Text.Heading>
+          <ServerSelectorWrapper />
+        </div>
+      </RootLayout.Slot>
+
+      <RootLayout.Slot name="body">
+        <Suspense fallback={<ServerLoadingState />}>
           <ServerBody />
-        </RootLayout.Slot>
-      </ServerProvider>
-    </Suspense>
+        </Suspense>
+      </RootLayout.Slot>
+    </ServerProvider>
   );
 }
 
 function ServerLoadingState() {
   return (
-    <RootLayout.Slot slotName="body">
-      <div className="flex h-full items-center justify-center">
-        <Text color="muted">Loading servers...</Text>
-      </div>
-    </RootLayout.Slot>
+    <div className="flex h-full items-center justify-center">
+      <Text color="muted">Loading servers...</Text>
+    </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Server Body
 // ─────────────────────────────────────────────────────────────────────────────
-const endTime = Date.now();
-const startTime = endTime - 6 * 60 * 60 * 1000; // Last 6 hours
 
 function ServerBody() {
-  const { server } = useServerContext();
+  const { server, endTime, startTime, onTimeRangeChange } = useServerContext();
 
   if (!server) {
     return (
@@ -116,7 +152,7 @@ function ServerBody() {
     <div className="flex flex-col gap-6 p-4 overflow-auto">
       <ServerOverview server={server} />
       <ServerMetricsCharts serverId={server.id} startTime={startTime} endTime={endTime} />
-      <ServerLogsTable serverId={server.id} startTime={startTime} endTime={endTime} />
+      <LogsTable serverId={server.id} startTime={startTime} endTime={endTime} onTimeRangeChange={onTimeRangeChange} />
     </div>
   );
 }
@@ -126,6 +162,7 @@ function ServerBody() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ServerOverview({ server }: { server: ServerType }) {
+  const { endTime } = useServerContext();
   const statusColors: Record<ServerType["status"], string> = {
     healthy: "bg-success/20 text-success border-success/30",
     warning: "bg-warning/20 text-warning border-warning/30",
@@ -134,7 +171,7 @@ function ServerOverview({ server }: { server: ServerType }) {
   };
 
   const lastSeenFormatted = new Date(server.lastSeen).toLocaleString();
-  const uptimeMs = Date.now() - server.createdAt;
+  const uptimeMs = endTime - server.createdAt;
   const uptimeDays = Math.floor(uptimeMs / (1000 * 60 * 60 * 24));
 
   return (
@@ -142,6 +179,7 @@ function ServerOverview({ server }: { server: ServerType }) {
       <Text.Heading level={2} variant="subtitle" className="mb-3">
         Overview
       </Text.Heading>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Status" value={server.status} className={statusColors[server.status]} />
         <StatCard label="Region" value={server.region} />
@@ -170,7 +208,7 @@ function StatCard({
       <Text variant="overline" color="muted" className="mb-1 block">
         {label}
       </Text>
-      <Text variant="body" weight="semibold" className="capitalize">
+      <Text variant="body" weight="semibold">
         {value}
       </Text>
     </div>
@@ -241,7 +279,10 @@ function prepareChartData(metrics: Metric[]): {
   const sampled = sorted.filter((_, i) => i % 5 === 0);
 
   const labels = sampled.map((m) =>
-    new Date(m.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    new Date(m.timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
   );
 
   return {
@@ -311,177 +352,31 @@ function ChartCard({ title, data, color }: { title: string; data: ChartDataPoint
   );
 }
 
-function ChartSkeleton() {
-  return (
-    <section>
-      <div className="mb-3 h-5 w-32 animate-pulse rounded bg-primary/10" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            className="h-64 animate-pulse rounded-lg border border-border bg-primary/5"
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Server Logs Table
+// Server Selector Wrapper
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ServerLogsTable({
-  serverId,
-  startTime,
-  endTime,
-}: {
-  serverId: string;
-  startTime: number;
-  endTime: number;
-}) {
-  const { promise } = useQuery({
-    query: logsQuery,
-    params: { serverId, startTime, endTime, limit: 50 },
-  });
-  const { logs, total } = use(promise);
-
-  const levelColors: Record<LogLevel, string> = {
-    debug: "text-primary/50",
-    info: "text-info",
-    warn: "text-warning",
-    error: "text-danger",
-    critical: "text-danger font-bold",
-  };
-
-  const errorCount = logs.filter((l) => l.level === "error" || l.level === "critical").length;
-  const warnCount = logs.filter((l) => l.level === "warn").length;
+function ServerSelectorWrapper() {
+  const { server } = useServerContext();
 
   return (
-    <section>
-      <div className="mb-3 flex items-center justify-between">
-        <Text.Heading level={2} variant="subtitle">
-          Recent Logs
-        </Text.Heading>
-        <div className="flex gap-3">
-          <Text variant="body-sm" color="muted">
-            Total: {total}
-          </Text>
-          {errorCount > 0 && (
-            <Text variant="body-sm" className="text-danger">
-              Errors: {errorCount}
-            </Text>
-          )}
-          {warnCount > 0 && (
-            <Text variant="body-sm" className="text-warning">
-              Warnings: {warnCount}
-            </Text>
-          )}
-        </div>
-      </div>
-      <div className="overflow-hidden rounded-lg border border-border">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-150">
-            <thead className="bg-primary/5">
-              <tr>
-                <th className="px-3 py-2 text-left">
-                  <Text variant="overline" color="muted">
-                    Time
-                  </Text>
-                </th>
-                <th className="px-3 py-2 text-left">
-                  <Text variant="overline" color="muted">
-                    Level
-                  </Text>
-                </th>
-                <th className="px-3 py-2 text-left">
-                  <Text variant="overline" color="muted">
-                    Service
-                  </Text>
-                </th>
-                <th className="px-3 py-2 text-left">
-                  <Text variant="overline" color="muted">
-                    Message
-                  </Text>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-hover-bg transition-colors">
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <Text variant="body-sm" monospace>
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </Text>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Text
-                      variant="body-sm"
-                      weight="semibold"
-                      className={`uppercase ${levelColors[log.level]}`}
-                    >
-                      {log.level}
-                    </Text>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Text variant="body-sm" color="muted">
-                      {log.service ?? "—"}
-                    </Text>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Text variant="body-sm" truncate>
-                      {log.message}
-                    </Text>
-                  </td>
-                </tr>
-              ))}
-              {logs.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-8 text-center">
-                    <Text color="muted">No logs found</Text>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <section>
-      <div className="mb-3 h-5 w-24 animate-pulse rounded bg-primary/10" />
-      <div className="h-64 animate-pulse rounded-lg border border-border bg-primary/5" />
-    </section>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Server Dropdown
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ServerDropdown() {
-  const { servers, selectedIndex, setSelectedIndex } = useServerContext();
-
-  const serverOptions = servers.map((server) => ({ id: server.id, name: server.name }));
-
-  return (
-    <Dropdown<(typeof serverOptions)[number]>
-      items={serverOptions}
-      selectedIndex={selectedIndex}
-      onChange={(_, index) => setSelectedIndex(index)}
-      aria-label="Select server"
-      size="medium"
-    >
-      {({ item }) => (
-        <span className="flex items-center gap-2">
-          <span>{item.name}</span>
-        </span>
-      )}
-    </Dropdown>
+    <ServerSelector
+      triggerButton={
+        <Button variant="outline" size="medium" className="flex items-center gap-2">
+          <span>{server?.name ?? "Select Server"}</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </Button>
+      }
+    />
   );
 }
 

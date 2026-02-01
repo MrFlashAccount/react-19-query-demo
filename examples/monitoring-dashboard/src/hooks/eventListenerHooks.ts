@@ -21,21 +21,21 @@ export type UseEventListenerParams = Omit<AddEventListenerOptions, "signal"> & {
 function useEventListener<K extends keyof WindowEventMap>(
   eventName: K,
   handler: (event: WindowEventMap[K]) => void,
-  element: RefObject<Window> | Window,
+  element: RefObject<Window | null> | Window,
   options?: UseEventListenerParams | boolean,
 ): void;
 
 function useEventListener<K extends keyof HTMLElementEventMap, T extends Element = HTMLDivElement>(
   eventName: K,
   handler: (event: HTMLElementEventMap[K]) => void,
-  element: RefObject<T> | T,
+  element: RefObject<T | null> | T,
   options?: UseEventListenerParams | boolean,
 ): void;
 
 function useEventListener<K extends keyof DocumentEventMap>(
   eventName: K,
   handler: (event: DocumentEventMap[K]) => void,
-  element: Document | RefObject<Document>,
+  element: Document | RefObject<Document | null>,
   options?: UseEventListenerParams | boolean,
 ): void;
 
@@ -53,7 +53,7 @@ function useEventListener<
 >(
   eventName: KH | KW,
   handler: (event: Event | HTMLElementEventMap[KH] | WindowEventMap[KW]) => void,
-  element: RefObject<T> | T,
+  element: RefObject<T | null> | T,
   options: UseEventListenerParams | boolean = { passive: true },
 ) {
   const {

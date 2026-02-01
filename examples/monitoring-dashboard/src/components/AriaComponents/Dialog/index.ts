@@ -6,7 +6,11 @@
 export * from "./Close";
 export * from "./Dialog";
 export * from "./DialogDismiss";
-export { useDialogContext, type DialogContextValue } from "./DialogProvider";
+export {
+  useDialogContext,
+  useDialogPrerenderContext,
+  type DialogContextValue,
+} from "./DialogProvider";
 export {
   DialogStackProvider,
   type DialogStackContextType,

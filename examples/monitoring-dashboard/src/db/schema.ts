@@ -47,8 +47,8 @@ export const LogLevelSchema = z.enum(["debug", "info", "warn", "error", "critica
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
 export const LogEntrySchema = z.object({
-  id: z.string().uuid(),
-  serverId: z.string().uuid(),
+  id: z.uuid(),
+  serverId: z.uuid(),
   timestamp: z.number(),
   level: LogLevelSchema,
   message: z.string(),

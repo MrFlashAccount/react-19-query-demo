@@ -362,7 +362,7 @@ export class Query<
   }
 
   private startObservingCommitEffects(abortSignal: AbortSignal): void {
-    this.environment.commitTarget.addEventListener("commit", () => this.batcher.flush(), {
+    this.environment.commitTarget.addEventListener("commit", this.batcher.flush.bind(this.batcher), {
       signal: abortSignal,
     });
   }

@@ -8,7 +8,7 @@ import type { JSX } from "react";
 
 import { Button, type ButtonProps } from "@/components/AriaComponents";
 import { useFormContext } from "./FormProvider";
-import type { FormInstance } from "./types";
+import type { AnyFormInstance } from "./types";
 
 /** Additional props for the Submit component. */
 interface SubmitButtonBaseProps<IconType extends string> {
@@ -19,18 +19,18 @@ interface SubmitButtonBaseProps<IconType extends string> {
    *
    * This field is helpful when you need to use the submit button outside of the form.
    */
-  // We do not need to know the form fields.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly form?: FormInstance<any>;
+  readonly form?: AnyFormInstance;
   readonly cancel?: boolean;
 }
 
 /** Props for the Submit component. */
 export type SubmitProps<IconType extends string> = Omit<
   ButtonProps<IconType>,
-  "formnovalidate" | "href" | "variant"
+  "formnovalidate" | "href" | "variant" | "children"
 > &
-  SubmitButtonBaseProps<IconType>;
+  SubmitButtonBaseProps<IconType> & {
+    children?: React.ReactNode | ((props: { isSubmitting: boolean }) => React.ReactNode);
+  };
 
 /**
  * Submit button for forms.
@@ -40,7 +40,7 @@ export type SubmitProps<IconType extends string> = Omit<
 export function Submit<IconType extends string>(props: SubmitProps<IconType>): JSX.Element {
   const {
     size = "medium",
-    loading = false,
+    isLoading = false,
     children = "Submit",
     variant = "submit",
     testId = "form-submit-button",
@@ -55,13 +55,13 @@ export function Submit<IconType extends string>(props: SubmitProps<IconType>): J
       type="submit"
       variant={variant}
       size={size}
-      loading={loading || formState.isSubmitting}
+      isLoading={isLoading || formState.isSubmitting}
       testId={testId}
-      /* This is safe because we are passing all props to the button */
-      /* eslint-disable-next-line @typescript-eslint/no-explicit-any,no-restricted-syntax */
       {...(buttonProps as any)}
     >
-      {children}
+      {typeof children === "function"
+        ? children({ isSubmitting: formState.isSubmitting })
+        : children}
     </Button>
   );
 }

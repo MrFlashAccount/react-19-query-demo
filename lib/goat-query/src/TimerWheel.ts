@@ -141,9 +141,7 @@ export class TimerWheel {
     const delay = Math.max(this.minDelay, earliest.expirationTime - now);
 
     // Schedule timeout to process timers at that time
-    this.timeoutId = setTimeout(() => {
-      this.processTimers();
-    }, delay);
+    this.timeoutId = setTimeout(this.processTimers.bind(this), delay);
   }
 
   /**

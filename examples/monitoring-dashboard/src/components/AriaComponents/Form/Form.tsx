@@ -15,9 +15,7 @@ import type * as types from "./types";
  * It also handles form submission.
  * Provides better error handling and form state management and better UX out of the box.
  */
-// There is no way to avoid type casting here
-// eslint-disable-next-line no-restricted-syntax
-export const Form = function Form<Schema extends components.TSchema, SubmitResult = void>(
+export function Form<Schema extends components.TSchema, SubmitResult = void>(
   props: types.FormProps<Schema, SubmitResult> & RefProp<HTMLFormElement>,
 ): React.JSX.Element {
   /** Input values for this form. */
@@ -40,7 +38,7 @@ export const Form = function Form<Schema extends components.TSchema, SubmitResul
     gap,
     method,
     canSubmitOffline = false,
-    testId = props["data-testid"],
+    testId,
     ref: forwardedRef,
     ...formProps
   } = props;
@@ -48,9 +46,10 @@ export const Form = function Form<Schema extends components.TSchema, SubmitResul
   const dialogContext = dialog.useDialogContext();
 
   const onSubmit = useEvent(
-    async (fieldValues: types.FieldValues<Schema>, formInstance: types.UseFormReturn<Schema>) => {
-      // This is SAFE because we're passing the result transparently, and it's typed outside
-      // eslint-disable-next-line no-restricted-syntax
+    async (
+      fieldValues: types.TransformedValues<Schema>,
+      formInstance: types.UseFormReturn<Schema>,
+    ) => {
       const result = (await props.onSubmit?.(fieldValues, formInstance)) as SubmitResult;
 
       if (method === "dialog") {
@@ -114,32 +113,7 @@ export const Form = function Form<Schema extends components.TSchema, SubmitResul
       </aria.FormValidationContext.Provider>
     </form>
   );
-} as unknown as (<Schema extends components.TSchema, SubmitResult = void>(
-  props: types.FormProps<Schema, SubmitResult> & RefProp<HTMLFormElement>,
-) => React.JSX.Element) & {
-  /* eslint-disable @typescript-eslint/naming-convention */
-  schema: typeof components.schema;
-  useForm: typeof components.useForm;
-  useField: typeof components.useField;
-  makeUseField: typeof components.makeUseField;
-  Submit: typeof components.Submit;
-  Reset: typeof components.Reset;
-  Field: typeof components.Field;
-  FieldError: typeof components.FieldError;
-  FormError: typeof components.FormError;
-  FieldValue: typeof components.FieldValue;
-  Provider: typeof components.FormProvider;
-  useFormSchema: typeof components.useFormSchema;
-  Controller: typeof components.Controller;
-  FIELD_STYLES: typeof components.FIELD_STYLES;
-  useFormContext: typeof components.useFormContext;
-  useOptionalFormContext: typeof components.useOptionalFormContext;
-  useWatch: typeof components.useWatch;
-  useFieldRegister: typeof components.useFieldRegister;
-  useFieldState: typeof components.useFieldState;
-  useFormError: typeof components.useFormError;
-  /* eslint-enable @typescript-eslint/naming-convention */
-};
+}
 
 Form.schema = components.schema;
 Form.useForm = components.useForm;
@@ -157,7 +131,8 @@ Form.Field = components.Field;
 Form.Controller = components.Controller;
 Form.Provider = components.FormProvider;
 Form.useWatch = components.useWatch;
-Form.FIELD_STYLES = components.FIELD_STYLES;
 Form.useFieldRegister = components.useFieldRegister;
 Form.useFieldState = components.useFieldState;
 Form.useFormError = components.useFormError;
+
+Form.FIELD_STYLES = components.FIELD_STYLES;

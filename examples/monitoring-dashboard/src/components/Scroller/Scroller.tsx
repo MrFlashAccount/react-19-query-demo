@@ -23,6 +23,16 @@ import type { TestIdProps } from "../AriaComponents";
 export const SCROLLER_STYLES = tv({
   base: "relative w-auto min-w-0",
   variants: {
+    shadowColor: {
+      light: {
+        shadowStart: "from-primary/5",
+        shadowEnd: "from-primary/5",
+      },
+      dark: {
+        shadowStart: "from-primary/5",
+        shadowEnd: "from-primary/5",
+      },
+    },
     scrollbar: {
       false: {
         content: "no-scrollbar",
@@ -74,8 +84,8 @@ export const SCROLLER_STYLES = tv({
 
   slots: {
     content: "",
-    shadowStart: "pointer-events-none absolute from-dashboard transition-opacity",
-    shadowEnd: "pointer-events-none absolute from-dashboard transition-opacity",
+    shadowStart: "pointer-events-none absolute transition-opacity",
+    shadowEnd: "pointer-events-none absolute transition-opacity",
   },
 
   compoundVariants: [
@@ -126,6 +136,7 @@ export const SCROLLER_STYLES = tv({
     showShadows: true,
     startHidden: true,
     endHidden: true,
+    shadowColor: "light",
   },
 });
 
@@ -166,6 +177,19 @@ export function Scroller(props: ScrollerProps) {
     });
   });
 
+  const calculateShadows = useEvent((element: HTMLDivElement) => {
+    const { scrollLeft, clientWidth, scrollTop, clientHeight, scrollWidth, scrollHeight } = element;
+
+    const scrollStart = orientation === "horizontal" ? scrollLeft : scrollTop;
+    const size = orientation === "horizontal" ? clientWidth : clientHeight;
+    const scrollSize = orientation === "horizontal" ? scrollWidth : scrollHeight;
+
+    const isAtStart = scrollStart === 0;
+    const isAtEnd = Math.ceil(scrollStart + size) >= scrollSize;
+
+    return { isAtStart, isAtEnd };
+  });
+
   const [measureRef] = useMeasureCallback({
     isDisabled: !showShadows,
     onResize: () => {
@@ -197,19 +221,6 @@ export function Scroller(props: ScrollerProps) {
     containerRef,
     { passive: true, isDisabled: !showShadows },
   );
-
-  const calculateShadows = useEvent((element: HTMLDivElement) => {
-    const { scrollLeft, clientWidth, scrollTop, clientHeight, scrollWidth, scrollHeight } = element;
-
-    const scrollStart = orientation === "horizontal" ? scrollLeft : scrollTop;
-    const size = orientation === "horizontal" ? clientWidth : clientHeight;
-    const scrollSize = orientation === "horizontal" ? scrollWidth : scrollHeight;
-
-    const isAtStart = scrollStart === 0;
-    const isAtEnd = Math.ceil(scrollStart + size) >= scrollSize;
-
-    return { isAtStart, isAtEnd };
-  });
 
   const refCallback = useCallback(
     (el: HTMLDivElement | null) => {

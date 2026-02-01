@@ -10,6 +10,7 @@ import { seedDatabase } from "@/db/seed";
 import { startSimulation } from "@/db/simulation";
 import { Loader } from "@/components/Loader";
 import "./index.css";
+import UIProviders from "./components/UIProviders";
 
 const worker = createWorker("/sw.js");
 
@@ -21,6 +22,11 @@ const seedDatabasePromise = seedDatabase();
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
 
+const portalRoot = document.createElement("div");
+portalRoot.classList.add("portal-root");
+portalRoot.id = "portal-root";
+document.body.appendChild(portalRoot);
+
 startTransition(() => {
   createRoot(root).render(
     <StrictMode>
@@ -30,7 +36,9 @@ startTransition(() => {
           seedDatabasePromise={seedDatabasePromise}
         />
         <QueryProvider queryClient={queryClient}>
-          <RouterProvider router={router} />
+          <UIProviders portalRoot={portalRoot} appRoot={root} locale="en-US">
+            <RouterProvider router={router} />
+          </UIProviders>
         </QueryProvider>
       </Suspense>
     </StrictMode>,
@@ -48,9 +56,7 @@ function Bootstrap({
   use(workerStartPromise);
   use(seedDatabasePromise);
 
-  useEffect(() => {
-    startSimulation();
-  }, []);
+  useEffect(startSimulation, []);
 
   return null;
 }
