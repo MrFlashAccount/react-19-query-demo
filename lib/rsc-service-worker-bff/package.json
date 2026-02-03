@@ -32,7 +32,7 @@
     "check:format": "oxfmt --write"
   },
   "dependencies": {
-    "react-is": "19.2.0",
+    "react-is": "^19.0.0",
     "react-server-dom-webpack": "^19.1.0",
     "web-streams-polyfill": "^4.1.0"
   },

@@ -3,13 +3,14 @@
   "compilerOptions": {
     "noEmit": false,
     "emitDeclarationOnly": true,
+    "composite": false,
+    "incremental": false,
     "declaration": true,
-    "declarationMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "types": ["vite/client"]
   },
-  "include": ["./src/**/*.ts", "./src/**/*.tsx"],
+  "include": ["./src/**/*.ts"],
   "exclude": [
     "./dist",
     "./node_modules",
@@ -19,4 +20,3 @@
     "./tsdown.config.ts"
   ]
 }
-

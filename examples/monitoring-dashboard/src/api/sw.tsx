@@ -1,7 +1,6 @@
 import { setupWorker, http, json, error, noContent } from "@lib/rsc-service-worker-bff";
 import { getDB, setLastMetricTime } from "@/db/index";
 import {
-  ServerSchema,
   CreateServerSchema,
   UpdateServerSchema,
   AlertSchema,
@@ -35,7 +34,7 @@ const getServer = http.get("/api/servers/:id", async ({ params }) => {
 const createServer = http.post("/api/servers", async ({ request }) => {
   const body = await request.json();
   const result = CreateServerSchema.safeParse(body);
-  if (!result.success) return error(result.error.format(), 400);
+  if (!result.success) return error(result.error.message, 400);
 
   const now = Date.now();
   const server: Server = {
@@ -57,7 +56,7 @@ const updateServer = http.patch("/api/servers/:id", async ({ params, request }) 
 
   const body = await request.json();
   const result = UpdateServerSchema.safeParse({ ...body, id: params.id });
-  if (!result.success) return error(result.error.format(), 400);
+  if (!result.success) return error(result.error.message, 400);
 
   const updated: Server = { ...existing, ...result.data };
   await db.put("servers", updated);
@@ -77,7 +76,7 @@ const deleteServer = http.delete("/api/servers/:id", async ({ params }) => {
 const getMetrics = http.post("/api/metrics/query", async ({ request }) => {
   const body = await request.json();
   const result = MetricQuerySchema.safeParse(body);
-  if (!result.success) return error(result.error.format(), 400);
+  if (!result.success) return error(result.error.message, 400);
 
   const { serverIds, startTime, endTime } = result.data;
   const db = await getDB();
@@ -131,7 +130,7 @@ const getLogs = http.get("/api/logs", async ({ request }) => {
     offset: url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : 0,
   });
 
-  if (!queryResult.success) return error(queryResult.error.format(), 400);
+  if (!queryResult.success) return error(queryResult.error.message, 400);
 
   const { serverId, level, search, startTime, endTime, limit, offset } = queryResult.data;
   const db = await getDB();
@@ -197,7 +196,7 @@ const getAlert = http.get("/api/alerts/:id", async ({ params }) => {
 const createAlert = http.post("/api/alerts", async ({ request }) => {
   const body = await request.json();
   const result = CreateAlertSchema.safeParse(body);
-  if (!result.success) return error(result.error.format(), 400);
+  if (!result.success) return error(result.error.message, 400);
 
   const alert = {
     id: crypto.randomUUID(),
@@ -218,7 +217,7 @@ const updateAlert = http.patch("/api/alerts/:id", async ({ params, request }) =>
 
   const body = await request.json();
   const result = UpdateAlertSchema.safeParse({ ...body, id: params.id });
-  if (!result.success) return error(result.error.format(), 400);
+  if (!result.success) return error(result.error.message, 400);
 
   const updated = { ...existing, ...result.data };
   await db.put("alerts", updated);
