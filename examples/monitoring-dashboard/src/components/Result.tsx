@@ -1,12 +1,10 @@
 /** @file Display the result of an operation. */
-import Success from "@/assets/check_mark.svg";
-import Error from "@/assets/cross.svg";
+import { Check, X } from "lucide-react";
 import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import type { JSX, PropsWithChildren, ReactElement } from "react";
 import type { TestIdProps } from "./AriaComponents";
 import { Text } from "./AriaComponents/Text";
 import { Loader } from "./Loader";
-import SvgMask from "./SvgMask";
 
 const INFO_ICON = (
   // eslint-disable-next-line no-restricted-syntax
@@ -26,8 +24,8 @@ const STATUS_ICON_MAP: Readonly<Record<Status, StatusIcon>> = {
     colorClassName: "text-primary",
     bgClassName: "bg-primary/15",
   },
-  error: { icon: Error, colorClassName: "text-red-500", bgClassName: "bg-red-500" },
-  success: { icon: Success, colorClassName: "text-green-500", bgClassName: "bg-green" },
+  error: { icon: <X />, colorClassName: "text-red-500", bgClassName: "bg-red-500" },
+  success: { icon: <Check />, colorClassName: "text-green-500", bgClassName: "bg-green" },
   // pending is the same as loading. Used for mutations.
   pending: {
     icon: <Loader minHeight="h8" />,
@@ -113,14 +111,9 @@ export function Result(props: ResultProps) {
         <>
           {statusIcon != null ? (
             <div className={classes.statusIcon({ className: statusIcon.bgClassName })}>
-              {typeof statusIcon.icon === "string" ? (
-                <SvgMask
-                  src={icon ?? statusIcon.icon}
-                  className={classes.icon({ className: statusIcon.colorClassName })}
-                />
-              ) : (
-                statusIcon.icon
-              )}
+              <div className={classes.icon({ className: statusIcon.colorClassName })}>
+                {statusIcon.icon}
+              </div>
             </div>
           ) : (
             status

@@ -1,6 +1,6 @@
 import { useState, use } from "react";
 import { createRoute } from "@tanstack/react-router";
-import Root from "./__root";
+import Root, { RootLayout } from "./__root";
 import { useQuery, useMutation } from "@lib/goat-query/react";
 import {
   alertsQuery,
@@ -12,6 +12,7 @@ import {
 import { AlertRuleBuilder } from "./Alerts/index";
 import type { Alert } from "@/db/schema";
 import { Button, Text } from "@/components/AriaComponents";
+import { MetricsAlertsTabs } from "@/components/MetricsAlertsTabs";
 
 function AlertsPage() {
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
@@ -25,7 +26,13 @@ function AlertsPage() {
   const deleteAlert = useMutation({ mutation: deleteAlertMutation });
   const toggleAlert = useMutation({ mutation: toggleAlertMutation });
 
-  const handleCreate = async (values: { name: string; metric: string; operator: string; threshold: number; duration: number }) => {
+  const handleCreate = async (values: {
+    name: string;
+    metric: string;
+    operator: string;
+    threshold: number;
+    duration: number;
+  }) => {
     await createAlert.mutate({
       name: values.name,
       metric: values.metric as Alert["metric"],
@@ -38,7 +45,13 @@ function AlertsPage() {
     setIsCreating(false);
   };
 
-  const handleEdit = async (values: { name: string; metric: string; operator: string; threshold: number; duration: number }) => {
+  const handleEdit = async (values: {
+    name: string;
+    metric: string;
+    operator: string;
+    threshold: number;
+    duration: number;
+  }) => {
     if (!editingAlert) return;
     await updateAlert.mutate({
       id: editingAlert.id,
@@ -69,38 +82,54 @@ function AlertsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <Text variant="h1">Alert Rules</Text>
-          <Text variant="body-sm" color="muted">
-            Configure alerts to get notified when metrics exceed thresholds
-          </Text>
+    <>
+      <RootLayout.Slot name="header">
+        <div className="flex items-center justify-between gap-4 px-4 w-full">
+          <MetricsAlertsTabs />
+          <div className="flex-1" />
         </div>
-        <Button variant="primary" size="medium" onPress={() => setIsCreating(true)}>
-          Create Alert Rule
-        </Button>
-      </div>
+      </RootLayout.Slot>
 
-      {(isCreating || editingAlert) && (
-        <AlertRuleBuilder
-          alert={editingAlert ?? undefined}
-          onSubmit={editingAlert ? handleEdit : handleCreate}
-          onCancel={handleCancel}
-        />
-      )}
+      <RootLayout.Slot name="body">
+        <div className="flex flex-col gap-6 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <Text variant="h1">Alert Rules</Text>
+              <Text variant="body-sm" color="muted">
+                Configure alerts to get notified when metrics exceed thresholds
+              </Text>
+            </div>
+            <Button variant="primary" size="medium" onPress={() => setIsCreating(true)}>
+              Create Alert Rule
+            </Button>
+          </div>
 
-      <AlertsList
-        alerts={alerts}
-        onEdit={setEditingAlert}
-        onToggle={handleToggle}
-        onDelete={handleDelete}
-      />
-    </div>
+          {(isCreating || editingAlert) && (
+            <AlertRuleBuilder
+              alert={editingAlert ?? undefined}
+              onSubmit={editingAlert ? handleEdit : handleCreate}
+              onCancel={handleCancel}
+            />
+          )}
+
+          <AlertsList
+            alerts={alerts}
+            onEdit={setEditingAlert}
+            onToggle={handleToggle}
+            onDelete={handleDelete}
+          />
+        </div>
+      </RootLayout.Slot>
+    </>
   );
 }
 
-function AlertsList({ alerts, onEdit, onToggle, onDelete }: {
+function AlertsList({
+  alerts,
+  onEdit,
+  onToggle,
+  onDelete,
+}: {
   alerts: Alert[];
   onEdit: (alert: Alert) => void;
   onToggle: (alert: Alert) => void;
@@ -139,6 +168,8 @@ function AlertsList({ alerts, onEdit, onToggle, onDelete }: {
                     : "bg-info"
                   : "bg-muted"
               }`}
+              aria-label={alert.enabled ? "Alert enabled" : "Alert disabled"}
+              role="status"
             />
             <div>
               <Text variant="body-sm" weight="medium">
@@ -152,13 +183,28 @@ function AlertsList({ alerts, onEdit, onToggle, onDelete }: {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="xsmall" onPress={() => onToggle(alert)}>
+            <Button
+              variant="ghost"
+              size="xsmall"
+              onPress={() => onToggle(alert)}
+              aria-label={`${alert.enabled ? "Disable" : "Enable"} alert ${alert.name}`}
+            >
               {alert.enabled ? "Disable" : "Enable"}
             </Button>
-            <Button variant="ghost" size="xsmall" onPress={() => onEdit(alert)}>
+            <Button
+              variant="ghost"
+              size="xsmall"
+              onPress={() => onEdit(alert)}
+              aria-label={`Edit alert ${alert.name}`}
+            >
               Edit
             </Button>
-            <Button variant="ghost" size="xsmall" onPress={() => onDelete(alert.id)}>
+            <Button
+              variant="ghost"
+              size="xsmall"
+              onPress={() => onDelete(alert.id)}
+              aria-label={`Delete alert ${alert.name}`}
+            >
               Delete
             </Button>
           </div>

@@ -1,5 +1,5 @@
 /** @file Catches errors in child components. */
-import Offline from "@/assets/offline_filled.svg";
+import { WifiOff } from "lucide-react";
 import * as React from "react";
 
 import * as errorBoundary from "react-error-boundary";
@@ -10,7 +10,6 @@ import * as errorUtils from "@/utilities/error";
 import { OfflineError } from "@/utilities/HttpClient";
 import type { FallbackProps } from "react-error-boundary";
 import { Icon } from "./Icon";
-import SvgMask from "./SvgMask";
 import type { ResultProps } from "./Result";
 import { Result } from "./Result";
 
@@ -122,7 +121,7 @@ export function ErrorDisplay(props: ErrorDisplayProps): React.JSX.Element {
   const finalTitle = title ?? "Something went wrong";
   const finalSubtitle = subtitle ?? (isOfflineError ? "Offline error" : "Something went wrong");
   const finalStatus =
-    status ?? (isOfflineError ? <SvgMask src={Offline} className="aspect-square w-6" /> : "error");
+    status ?? (isOfflineError ? <WifiOff className="aspect-square w-6" /> : "error");
 
   const defaultRender = (
     <Result

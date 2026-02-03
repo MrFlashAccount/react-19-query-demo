@@ -3,7 +3,7 @@ import { useContext } from "react";
 
 import type { DateSegment as DateSegmentType } from "react-stately";
 
-import CrossIcon from "@/assets/cross.svg";
+import { X } from "lucide-react";
 import {
   TimeField as AriaTimeField,
   DateInput,
@@ -186,7 +186,7 @@ function TimeFieldResetButton(props: TimeFieldResetButtonProps) {
       slot={null}
       variant="icon"
       aria-label="Reset"
-      icon={CrossIcon}
+      icon={<X />}
       className={className ?? ""}
       onPress={() => {
         state?.setValue(null);

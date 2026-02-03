@@ -1,3 +1,5 @@
+import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
+
 import { startTransition, StrictMode, Suspense, use, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
@@ -6,13 +8,18 @@ import { QueryProvider, QueryClient } from "@lib/goat-query/react";
 import { graph } from "@/queries";
 import { router } from "@/router";
 import { createWorker } from "@lib/rsc-service-worker-bff";
+import { registerClientModule } from "@lib/rsc-service-worker-bff/rsc";
 import { seedDatabase } from "@/db/seed";
 import { startSimulation } from "@/db/simulation";
 import { Loader } from "@/components/Loader";
 import "./index.css";
 import UIProviders from "./components/UIProviders";
+import * as ServerClientComponents from "./routes/Server/client-components";
 
 const worker = createWorker("/sw.js");
+
+// Register client components for RSC
+registerClientModule("server-monitoring", ServerClientComponents);
 
 // Create query client
 const queryClient = new QueryClient({ graph });
@@ -22,10 +29,12 @@ const seedDatabasePromise = seedDatabase();
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
 
-const portalRoot = document.createElement("div");
-portalRoot.classList.add("portal-root");
-portalRoot.id = "portal-root";
-document.body.appendChild(portalRoot);
+let portalRoot: HTMLElement | null = document.querySelector("#portal-root");
+if (!portalRoot) {
+  portalRoot = document.createElement("div");
+  portalRoot.id = "portal-root";
+  document.body.appendChild(portalRoot);
+}
 
 startTransition(() => {
   createRoot(root).render(

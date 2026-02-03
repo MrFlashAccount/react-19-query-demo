@@ -1,6 +1,6 @@
 /** @file Stories for the Breadcrumbs component. */
 
-import ArrowDown from "@/assets/expand_arrow.svg";
+import { ChevronDown } from "lucide-react";
 import { Button, Menu } from "@/components/AriaComponents";
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent, within } from "@storybook/test";
@@ -55,7 +55,7 @@ export const WithSuffix: Story = {
         isDisabled
         addonEnd={
           <Menu.Trigger>
-            <Button icon={ArrowDown} aria-label="Edit" />
+            <Button icon={<ChevronDown />} aria-label="Edit" />
 
             <Menu>
               <Menu.Item>Edit</Menu.Item>
@@ -72,7 +72,7 @@ export const WithSuffix: Story = {
         isCurrent
         addonEnd={
           <Menu.Trigger>
-            <Button icon={ArrowDown} aria-label="Edit" />
+            <Button icon={<ChevronDown />} aria-label="Edit" />
 
             <Menu>
               <Menu.Item>Edit</Menu.Item>

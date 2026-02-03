@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  Button,
-  Text,
-  CopyBlock,
-  Separator,
-} from "@/components/AriaComponents";
+import { Button, Text, CopyBlock, Separator } from "@/components/AriaComponents";
 import type { LogEntry, LogLevel } from "@/db/schema";
 import { logsQuery } from "@/queries";
 import { useQuery } from "@lib/goat-query/react";
@@ -17,7 +12,8 @@ const LOG_DETAIL_STYLES = tv({
     section: "flex flex-col gap-2",
     codeBlock: "rounded-lg border border-border bg-primary/5 p-3 overflow-x-auto",
     relatedLogs: "flex flex-col gap-2 mt-4",
-    relatedLogItem: "flex items-center gap-2 p-2 rounded-lg hover:bg-hover-bg cursor-pointer transition-colors",
+    relatedLogItem:
+      "flex items-center gap-2 p-2 rounded-lg hover:bg-hover-bg cursor-pointer transition-colors",
     navButtons: "flex items-center gap-2 mt-4",
   },
   variants: {
@@ -38,12 +34,7 @@ interface LogDetailDialogProps {
   onViewAtTime?: (timestamp: number) => void;
 }
 
-export function LogDetailDialog({
-  log,
-  serverId,
-  onNavigate,
-  onViewAtTime,
-}: LogDetailDialogProps) {
+export function LogDetailDialog({ log, serverId, onNavigate, onViewAtTime }: LogDetailDialogProps) {
   const styles = LOG_DETAIL_STYLES({ level: log.level });
   const [showRelated, setShowRelated] = useState(false);
 
@@ -130,7 +121,9 @@ export function LogDetailDialog({
           Timestamp
         </Text>
         <div className="flex flex-col gap-1">
-          <Text variant="body">{formattedDate} at {formattedTime}</Text>
+          <Text variant="body">
+            {formattedDate} at {formattedTime}
+          </Text>
           <Text variant="body-sm" color="muted" className="font-mono">
             {log.timestamp}
           </Text>
@@ -190,11 +183,7 @@ export function LogDetailDialog({
           <Text variant="overline" color="muted">
             Related Logs
           </Text>
-          <Button
-            variant="ghost"
-            size="xsmall"
-            onPress={() => setShowRelated(!showRelated)}
-          >
+          <Button variant="ghost" size="xsmall" onPress={() => setShowRelated(!showRelated)}>
             {showRelated ? "Hide" : "Show"} ({relatedLogs.length - 1} nearby)
           </Button>
         </div>
@@ -214,10 +203,10 @@ export function LogDetailDialog({
                       relatedLog.level === "debug"
                         ? "bg-primary/50"
                         : relatedLog.level === "info"
-                        ? "bg-info"
-                        : relatedLog.level === "warn"
-                        ? "bg-warning"
-                        : "bg-danger"
+                          ? "bg-info"
+                          : relatedLog.level === "warn"
+                            ? "bg-warning"
+                            : "bg-danger"
                     }`}
                   />
                   <Text variant="body-sm" className="flex-1 truncate">

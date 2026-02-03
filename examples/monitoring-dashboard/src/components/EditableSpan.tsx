@@ -1,8 +1,7 @@
 /** @file A text `<span>` which turns into an `input` when desired. */
 import * as React from "react";
 
-import CrossIcon from "@/assets/cross.svg";
-import TickIcon from "@/assets/tick.svg";
+import { X, Check } from "lucide-react";
 
 import { Button, Form, Input, Text, Underlay } from "@/components/AriaComponents";
 import * as tailwindMerge from "@/utilities/tailwindMerge";
@@ -188,7 +187,7 @@ function EditForm(props: EditFormProps) {
                   <Form.Submit
                     size="medium"
                     variant="icon"
-                    icon={TickIcon}
+                    icon={<Check />}
                     aria-label="Confirm edit"
                     children={null}
                   />
@@ -206,7 +205,7 @@ function EditForm(props: EditFormProps) {
                 <Button
                   size="medium"
                   variant="icon"
-                  icon={CrossIcon}
+                  icon={<X />}
                   aria-label="Cancel edit"
                   onPress={onCancel}
                   children={null}

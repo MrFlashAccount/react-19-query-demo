@@ -5,10 +5,10 @@ import type { Server, Metric, LogEntry, Alert, LogLevel, Region, ServerStatus } 
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SERVER_COUNT = 100;
+const SERVER_COUNT = 10;
 const METRICS_HOURS = 24;
 const METRICS_INTERVAL_MS = 60_000; // 1 minute
-const LOG_COUNT = 10_000;
+const LOG_COUNT = 20_000;
 
 const REGIONS: Region[] = ["us-east", "us-west", "eu-west", "eu-central", "asia-pacific"];
 const SERVICES = ["nginx", "postgres", "redis", "api-gateway", "auth-service", "worker", "cron"];
@@ -332,46 +332,53 @@ export async function seedDatabase(): Promise<{ servers: number; metrics: number
   console.log("[Seed] Generating alerts...");
   const alerts = generateAlerts();
 
-  // Insert in batches for better performance
-  const BATCH_SIZE = 8192;
+  // Insert all data in parallel using single transactions per store for maximum speed
+  console.log("[Seed] Inserting data...");
+  await Promise.all([
+    // Insert servers
+    (async () => {
+      const tx = db.transaction("servers", "readwrite");
+      const promises: Promise<string>[] = [];
+      for (const server of servers) {
+        promises.push(tx.store.put(server));
+      }
+      promises.push(tx.done as any);
+      await Promise.all(promises);
+    })(),
 
-  // Insert servers
-  console.log("[Seed] Inserting servers...");
-  const serverTx = db.transaction("servers", "readwrite");
-  for (const server of servers) {
-    serverTx.store.put(server);
-  }
-  await serverTx.done;
+    // Insert metrics
+    (async () => {
+      const tx = db.transaction("metrics", "readwrite");
+      const promises: Promise<string>[] = [];
+      for (const metric of metrics) {
+        promises.push(tx.store.put(metric));
+      }
+      promises.push(tx.done as any);
+      await Promise.all(promises);
+    })(),
 
-  // Insert metrics in batches - collect promises and await once per batch
-  console.log("[Seed] Inserting metrics...");
-  for (let i = 0; i < metrics.length; i += BATCH_SIZE) {
-    const batch = metrics.slice(i, i + BATCH_SIZE);
-    const tx = db.transaction("metrics", "readwrite");
-    for (const metric of batch) {
-      tx.store.put(metric);
-    }
-    await tx.done;
-  }
+    // Insert logs
+    (async () => {
+      const tx = db.transaction("logs", "readwrite");
+      const promises: Promise<string>[] = [];
+      for (const log of logs) {
+        promises.push(tx.store.put(log));
+      }
+      promises.push(tx.done as any);
+      await Promise.all(promises);
+    })(),
 
-  // Insert logs in batches - collect promises and await once per batch
-  console.log("[Seed] Inserting logs...");
-  for (let i = 0; i < logs.length; i += BATCH_SIZE) {
-    const batch = logs.slice(i, i + BATCH_SIZE);
-    const tx = db.transaction("logs", "readwrite");
-    for (const log of batch) {
-      tx.store.put(log);
-    }
-    await tx.done;
-  }
-
-  // Insert alerts
-  console.log("[Seed] Inserting alerts...");
-  const alertTx = db.transaction("alerts", "readwrite");
-  for (const alert of alerts) {
-    alertTx.store.put(alert);
-  }
-  await alertTx.done;
+    // Insert alerts
+    (async () => {
+      const tx = db.transaction("alerts", "readwrite");
+      const promises: Promise<string>[] = [];
+      for (const alert of alerts) {
+        promises.push(tx.store.put(alert));
+      }
+      promises.push(tx.done as any);
+      await Promise.all(promises);
+    })(),
+  ]);
 
   // Mark as seeded and record last metric time
   await markSeeded();

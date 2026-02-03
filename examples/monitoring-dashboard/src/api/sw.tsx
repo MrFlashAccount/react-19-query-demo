@@ -1,4 +1,14 @@
-import { setupWorker, http, json, error, noContent } from "@lib/rsc-service-worker-bff";
+import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
+
+import {
+  setupWorker,
+  http,
+  json,
+  error,
+  noContent,
+  createClientModule,
+  createFlightResponse,
+} from "@lib/rsc-service-worker-bff";
 import { getDB, setLastMetricTime } from "@/db/index";
 import {
   CreateServerSchema,
@@ -13,6 +23,23 @@ import {
   type LogEntry,
   type DashboardStats,
 } from "@/db/schema";
+import { ServerBody } from "@/routes/Server/ServerRSC";
+import type * as ClientComponents from "@/routes/Server/client-components";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RSC Client Module
+// ─────────────────────────────────────────────────────────────────────────────
+
+const { manifest, refs: Client } = createClientModule<typeof ClientComponents>(
+  "server-monitoring",
+  [
+    "ServerSelectorWrapper",
+    "ChartCard",
+    "LogTimestampButton",
+    "LogViewAtTimeButton",
+    "LoadMoreButton",
+  ],
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Servers
@@ -75,7 +102,28 @@ const deleteServer = http.delete("/api/servers/:id", async ({ params }) => {
 
 const getMetrics = http.post("/api/metrics/query", async ({ request }) => {
   const body = await request.json();
-  const result = MetricQuerySchema.safeParse(body);
+
+  // Parse time range if range param is provided
+  let parsedBody = body;
+  if (body.range && typeof body.range === "string") {
+    const { parseTimeRange } = await import("@/utilities/timeRange");
+    const parsed = parseTimeRange(body.range);
+    if (parsed) {
+      parsedBody = {
+        ...body,
+        startTime: parsed.startTime,
+        endTime: parsed.endTime,
+      };
+      delete parsedBody.range;
+    }
+  }
+
+  // Handle "now" keyword
+  if (parsedBody.endTime === "now") {
+    parsedBody.endTime = Date.now();
+  }
+
+  const result = MetricQuerySchema.safeParse(parsedBody);
   if (!result.success) return error(result.error.message, 400);
 
   const { serverIds, startTime, endTime } = result.data;
@@ -118,14 +166,34 @@ const getLatestMetrics = http.get("/api/metrics/latest", async ({ request }) => 
 
 const getLogs = http.get("/api/logs", async ({ request }) => {
   const url = new URL(request.url);
+
+  // Parse time range
+  let parsedStartTime: number | undefined;
+  let parsedEndTime: number | undefined;
+
+  const rangeParam = url.searchParams.get("range");
+  if (rangeParam) {
+    const { parseTimeRange } = await import("@/utilities/timeRange");
+    const parsed = parseTimeRange(rangeParam);
+    if (parsed) {
+      parsedStartTime = parsed.startTime;
+      parsedEndTime = parsed.endTime;
+    }
+  } else {
+    // Legacy numeric params
+    const endTimeParam = url.searchParams.get("endTime");
+    parsedEndTime =
+      endTimeParam === "now" ? Date.now() : endTimeParam ? Number(endTimeParam) : undefined;
+    const startTimeParam = url.searchParams.get("startTime");
+    parsedStartTime = startTimeParam ? Number(startTimeParam) : undefined;
+  }
+
   const queryResult = LogQuerySchema.safeParse({
     serverId: url.searchParams.get("serverId") ?? undefined,
     level: url.searchParams.get("level") ?? undefined,
     search: url.searchParams.get("search") ?? undefined,
-    startTime: url.searchParams.get("startTime")
-      ? Number(url.searchParams.get("startTime"))
-      : undefined,
-    endTime: url.searchParams.get("endTime") ? Number(url.searchParams.get("endTime")) : undefined,
+    startTime: parsedStartTime,
+    endTime: parsedEndTime,
     limit: url.searchParams.get("limit") ? Number(url.searchParams.get("limit")) : 100,
     offset: url.searchParams.get("offset") ? Number(url.searchParams.get("offset")) : 0,
   });
@@ -301,10 +369,103 @@ const recordMetricTime = http.post("/api/simulation/record-time", async () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// RSC Endpoint for Server Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getServerRSC = http.get("/rsc/server", async ({ url }) => {
+  const serverId = url.searchParams.get("serverId");
+  const limit = Number(url.searchParams.get("limit") ?? "50");
+  const offset = Number(url.searchParams.get("offset") ?? "0");
+
+  // Parse time range - support relative ranges and "now" keyword
+  let startTime: number;
+  let endTime: number;
+
+  const rangeParam = url.searchParams.get("range");
+  if (rangeParam) {
+    // Use parseTimeRange utility
+    const { parseTimeRange } = await import("@/utilities/timeRange");
+    const parsed = parseTimeRange(rangeParam);
+    if (parsed) {
+      startTime = parsed.startTime;
+      endTime = parsed.endTime;
+    } else {
+      // Fallback to 6 hours if parsing fails
+      endTime = Date.now();
+      startTime = endTime - 6 * 60 * 60 * 1000;
+    }
+  } else {
+    // Legacy numeric params
+    const endTimeParam = url.searchParams.get("endTime");
+    endTime = endTimeParam === "now" ? Date.now() : Number(endTimeParam);
+    startTime = Number(url.searchParams.get("startTime"));
+  }
+
+  const db = await getDB();
+
+  // Fetch all servers
+  const servers = await db.getAll("servers");
+
+  // Determine which server to show
+  let server: Server | null = null;
+  if (serverId) {
+    const foundServer = await db.get("servers", serverId);
+    server = foundServer ?? null;
+  } else if (servers.length > 0) {
+    server = servers[0] ?? null;
+  }
+
+  // Fetch metrics if server is selected
+  let metrics: Metric[] = [];
+  if (server) {
+    const range = IDBKeyRange.bound([server.id, startTime], [server.id, endTime]);
+    metrics = await db.getAllFromIndex("metrics", "by-server-time", range);
+    metrics.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  // Fetch logs if server is selected
+  let logs: LogEntry[] = [];
+  let logsTotal = 0;
+  if (server) {
+    const range = IDBKeyRange.bound([server.id, startTime], [server.id, endTime]);
+    const allLogs = await db.getAllFromIndex("logs", "by-server-time", range);
+    allLogs.sort((a, b) => b.timestamp - a.timestamp);
+
+    logsTotal = allLogs.length;
+    logs = allLogs.slice(offset, offset + limit);
+  }
+
+  // Extract unique services
+  const services = [
+    ...new Set(logs.map((log) => log.service).filter((s): s is string => Boolean(s))),
+  ];
+
+  // Render RSC
+  const element = (
+    <ServerBody
+      Client={Client}
+      server={server}
+      servers={servers}
+      metrics={metrics}
+      logs={logs}
+      logsTotal={logsTotal}
+      services={services}
+      startTime={startTime}
+      endTime={endTime}
+      range={rangeParam || "last_6h"}
+    />
+  );
+
+  return createFlightResponse(element, manifest);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Setup Worker
 // ─────────────────────────────────────────────────────────────────────────────
 
 setupWorker([
+  // RSC
+  getServerRSC,
   // Servers
   getServers,
   getServer,

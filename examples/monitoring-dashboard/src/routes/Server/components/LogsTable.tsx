@@ -1,4 +1,4 @@
-import { useState, use, useCallback } from "react";
+import { useState, use, useCallback, useEffect } from "react";
 import {
   Button,
   Text,
@@ -12,6 +12,7 @@ import type { LogEntry, LogLevel } from "@/db/schema";
 import { logsQuery } from "@/queries";
 import { useQuery } from "@lib/goat-query/react";
 import { z } from "zod";
+import { useSearchParamsState } from "@/hooks/searchParamsStateHooks";
 
 const LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error", "critical"];
 const TIME_PRESETS = [
@@ -62,20 +63,43 @@ export function LogsTable({
   onTimeRangeChange,
   onViewAtTime,
 }: LogsTableProps) {
-  // Filters state managed by parent
-  const [filters, setFilters] = useState<FilterValues>({
-    search: "",
-    service: "",
-    levels: [],
-    timeRange: undefined,
-  });
+  // Sync filters to URL params
+  const [searchParam, setSearchParam] = useSearchParamsState<string>("logSearch", "");
+  const [serviceParam, setServiceParam] = useSearchParamsState<string>("logService", "");
+  const [levelsParam, setLevelsParam] = useSearchParamsState<LogLevel[]>("logLevels", []);
   const [limit, setLimit] = useState(50);
   const [offset, setOffset] = useState(0);
+
+  // Initialize filters from URL params
+  const [filters, setFilters] = useState<FilterValues>({
+    search: searchParam,
+    service: serviceParam,
+    levels: levelsParam,
+    timeRange: undefined,
+  });
+
+  // Sync URL params when filters change
+  useEffect(() => {
+    setSearchParam(filters.search || "");
+  }, [filters.search, setSearchParam]);
+
+  useEffect(() => {
+    setServiceParam(filters.service || "");
+  }, [filters.service, setServiceParam]);
+
+  useEffect(() => {
+    setLevelsParam(filters.levels.length > 0 ? filters.levels : []);
+  }, [filters.levels, setLevelsParam]);
 
   // Handle filter submission from form
   const handleFiltersSubmit = useCallback(
     (values: FilterValues) => {
       setFilters(values);
+
+      // Sync to URL immediately
+      setSearchParam(values.search || "");
+      setServiceParam(values.service || "");
+      setLevelsParam(values.levels.length > 0 ? values.levels : []);
 
       // If time range is selected, trigger time range change
       if (values.timeRange) {
@@ -85,7 +109,7 @@ export function LogsTable({
         setOffset(0);
       }
     },
-    [onTimeRangeChange],
+    [onTimeRangeChange, setSearchParam, setServiceParam, setLevelsParam],
   );
 
   // Handle load more
@@ -139,11 +163,32 @@ export function LogsTable({
 
   return (
     <section className="flex flex-col gap-4">
+      <div className="flex items-center gap-2">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </svg>
+        <Text variant="h2" className="text-lg font-semibold">
+          Recent Logs
+        </Text>
+      </div>
+
       <LogFilters services={services} filters={filters} onSubmit={handleFiltersSubmit} />
 
       <div className="flex items-center justify-between">
         <div className="flex gap-3">
-          <Text variant="body-sm">Total: {total}</Text>
+          <Text variant="body-sm">{total} logs</Text>
           {errorCount > 0 && (
             <Text variant="body-sm" color="danger">
               Errors: {errorCount}
@@ -206,7 +251,11 @@ function LogFilters({ services, filters, onSubmit }: LogFiltersProps) {
   return (
     <Form form={form}>
       <div className="flex flex-wrap items-center gap-3 p-3 bg-background/60 rounded-lg border border-border">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div
+          className="flex items-center gap-2 flex-wrap"
+          role="group"
+          aria-label="Log level filters"
+        >
           <Form.FieldValue form={form} name="levels">
             {(values) =>
               LOG_LEVELS.map((level) => (
@@ -214,13 +263,24 @@ function LogFilters({ services, filters, onSubmit }: LogFiltersProps) {
                   key={level}
                   type="button"
                   onClick={() => toggleLevel(level)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleLevel(level);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                     values.includes(level)
                       ? "bg-primary/10 border-primary/30"
                       : "bg-background border-border hover:border-primary/20"
                   }`}
+                  aria-pressed={values.includes(level)}
+                  aria-label={`Filter by ${level} level`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${LEVEL_DOT_COLORS[level]}`} />
+                  <span
+                    className={`w-2 h-2 rounded-full ${LEVEL_DOT_COLORS[level]}`}
+                    aria-hidden="true"
+                  />
                   <Text variant="body-sm" className="capitalize">
                     {level}
                   </Text>
@@ -231,11 +291,12 @@ function LogFilters({ services, filters, onSubmit }: LogFiltersProps) {
         </div>
 
         {services.length > 0 && (
-          <Form.Field name="service" label="">
+          <Form.Field name="service" label="Service filter">
             {(fieldProps) => (
               <select
                 {...fieldProps}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm"
+                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                aria-label="Filter by service"
               >
                 <option value="">All Services</option>
                 {services.map((service) => (
@@ -248,22 +309,15 @@ function LogFilters({ services, filters, onSubmit }: LogFiltersProps) {
           </Form.Field>
         )}
 
-        <div className="flex items-center gap-1">
-          {TIME_PRESETS.map((preset) => (
-            <Button
-              key={preset.label}
-              type="button"
-              variant="ghost"
-              size="xsmall"
-              onPress={() => setTimeRange(preset.value)}
-            >
-              {preset.label}
-            </Button>
-          ))}
-        </div>
-
         <div className="flex items-center gap-2 flex-1 min-w-50">
-          <Input form={form} name="search" placeholder="Search logs..." rounded="large" />
+          <Input
+            form={form}
+            name="search"
+            placeholder="Search logs…"
+            rounded="large"
+            aria-label="Search logs"
+            autoComplete="off"
+          />
         </div>
       </div>
 
@@ -389,7 +443,12 @@ function LogTableRow({ log, onViewAtTime }: LogTableRowProps) {
       </td>
       <td className="px-3 py-2">
         <Tooltip placement="left">
-          <Button variant="ghost" size="xsmall" onPress={onViewAtTime}>
+          <Button
+            variant="ghost"
+            size="xsmall"
+            onPress={onViewAtTime}
+            aria-label="View at this time"
+          >
             <svg
               width="16"
               height="16"
@@ -397,6 +456,7 @@ function LogTableRow({ log, onViewAtTime }: LogTableRowProps) {
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
+              aria-hidden="true"
             >
               <circle cx="12" cy="12" r="10" />
               <path d="M12 6v6l4 2" />

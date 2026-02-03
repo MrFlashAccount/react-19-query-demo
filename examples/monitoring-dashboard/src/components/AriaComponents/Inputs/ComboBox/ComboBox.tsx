@@ -1,8 +1,7 @@
 /** @file A combo box with a list of items that can be filtered. */
 import { useContext, useRef } from "react";
 
-import CrossIcon from "@/assets/cross.svg";
-import ArrowIcon from "@/assets/folder_arrow.svg";
+import { X, ChevronDown } from "lucide-react";
 import {
   ComboBox as AriaComboBox,
   ComboBoxStateContext,
@@ -164,7 +163,7 @@ export function ComboBox<Schema extends TSchema, TFieldName extends FieldPath<Sc
             }}
           >
             <div ref={popoverTriggerRef} className={styles.inputContainer()}>
-              <Button variant="icon" icon={ArrowIcon} className="rotate-90" />
+              <Button variant="icon" icon={<ChevronDown />} />
               <BasicInput
                 name={name}
                 placeholder={placeholder}
@@ -225,7 +224,7 @@ function ComboBoxResetButton(props: ComboBoxResetButtonProps) {
       slot={null}
       variant="icon"
       aria-label="Reset"
-      icon={CrossIcon}
+      icon={<X />}
       className={className ?? ""}
       onPress={() => {
         state?.setInputValue("");

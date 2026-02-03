@@ -142,7 +142,9 @@ const handleSave = async () => {
 
 ```typescript
 const createServer = useMutation({ mutation: createServerMutation });
-createServer.mutate({ /* data */ }); // NOT .mutateAsync()
+createServer.mutate({
+  /* data */
+}); // NOT .mutateAsync()
 ```
 
 ## Styling
@@ -249,6 +251,7 @@ export const router = createRouter({
 ### Add navigation link in sidebar (if needed)
 
 Update `NAV_ITEMS` in `src/routes/__root.tsx`:
+
 ```typescript
 const NAV_ITEMS = [
   { to: "/" as const, label: "Servers", icon: ComputerIcon },

@@ -1,8 +1,7 @@
 /** @file A styled dropdown. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import CheckMarkIcon from "@/assets/check_mark.svg";
-import ArrowIcon from "@/assets/folder_arrow.svg";
+import { Check, ChevronRight } from "lucide-react";
 import {
   FieldError,
   ListBox,
@@ -12,7 +11,6 @@ import {
   useFocusWithin,
   type InputProps,
 } from "@/components/aria";
-import SvgMask from "@/components/SvgMask";
 import { useLatest } from "@/hooks/useLatest";
 import { mergeRefs } from "@/utilities/mergeRefs";
 import type { RefProp } from "@/components/AriaComponents/types";
@@ -280,8 +278,7 @@ export function Dropdown<T>(props: DropdownProps<T> & RefProp<HTMLDivElement>) {
                   textValue={typeof item === "string" ? item : `${i}`}
                   className={styles.optionsItem()}
                 >
-                  <SvgMask
-                    src={CheckMarkIcon}
+                  <Check
                     className={styles.icon({
                       className: selectedIndices.includes(i) ? "" : "invisible",
                     })}
@@ -294,7 +291,7 @@ export function Dropdown<T>(props: DropdownProps<T> & RefProp<HTMLDivElement>) {
         </div>
       </div>
       <div className={styles.input()}>
-        <SvgMask src={ArrowIcon} className={styles.dropdownArrow()} />
+        <ChevronRight className={styles.dropdownArrow()} />
         <div className={styles.inputDisplay()}>
           {isMouseFocused && !multiple ? (
             "\u00a0"
@@ -310,7 +307,7 @@ export function Dropdown<T>(props: DropdownProps<T> & RefProp<HTMLDivElement>) {
       <div className={styles.hiddenOptions()}>
         {items.map((item, i) => (
           <div key={i} className={styles.hiddenOption()}>
-            <SvgMask src={CheckMarkIcon} />
+            <Check />
             <Child item={item} />
           </div>
         ))}

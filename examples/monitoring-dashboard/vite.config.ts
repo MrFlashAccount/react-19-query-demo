@@ -7,7 +7,6 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, build as viteBuild } from "vite";
 
 const rootDir = import.meta.dirname;
-const libDir = path.resolve(rootDir, "../../lib");
 
 // Service worker config
 const swConfig = {
@@ -39,13 +38,13 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
     },
     resolve: {
       alias: {
-        "@lib/rsc-service-worker-bff": path.resolve(libDir, "rsc-service-worker-bff"),
+        "@": path.resolve(rootDir, "src"),
         "@/db": path.resolve(rootDir, "src/db"),
         "@db": path.resolve(rootDir, "src/db"),
       },
       conditions: [mode, "browser", "import", "default"],
     },
-    plugins: [react({ babel: { plugins: ["babel-plugin-react-compiler"] } })],
+    plugins: [react()],
     define: { "process.env.NODE_ENV": JSON.stringify(mode) },
   });
 

@@ -18,16 +18,12 @@ const [DialogContext, useDialogStrictContext, useDialogContext] =
   createContext<DialogContextValue | null>(null, "DialogContext");
 
 /** The provider for a dialog. */
-export function DialogProvider(
-  props: DialogContextValue & React.PropsWithChildren,
-) {
+export function DialogProvider(props: DialogContextValue & React.PropsWithChildren) {
   const { children, close, dialogId } = props;
 
   const value = React.useMemo(() => ({ close, dialogId }), [close, dialogId]);
 
-  return (
-    <DialogContext.Provider value={value}>{children}</DialogContext.Provider>
-  );
+  return <DialogContext.Provider value={value}>{children}</DialogContext.Provider>;
 }
 
 const [DialogPrerenderContext, , useDialogPrerenderContext] = createContext(
@@ -50,9 +46,7 @@ export function DialogPrerenderProvider(props: React.PropsWithChildren) {
   };
 
   return (
-    <DialogPrerenderContext.Provider value={value}>
-      {children}
-    </DialogPrerenderContext.Provider>
+    <DialogPrerenderContext.Provider value={value}>{children}</DialogPrerenderContext.Provider>
   );
 }
 

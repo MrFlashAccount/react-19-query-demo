@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  Button,
-  Text,
-  Dialog,
-  DialogTrigger,
-  Form,
-  Input,
-} from "@/components/AriaComponents";
+import { Button, Text, Dialog, DialogTrigger, Form, Input } from "@/components/AriaComponents";
 import type { Alert, AlertMetric, AlertOperator } from "@/db/schema";
 import { z } from "zod";
 
@@ -70,14 +63,24 @@ export function AlertRuleBuilder({ alert, onSubmit, onCancel }: AlertRuleBuilder
             <div className="flex flex-col gap-4 p-4">
               <Form.Field name="name" label="Alert Name">
                 {(fieldProps) => (
-                  <Input form={form} name="name" placeholder="High CPU Usage" rounded="medium" {...fieldProps} />
+                  <Input
+                    form={form}
+                    name="name"
+                    placeholder="High CPU Usage"
+                    rounded="medium"
+                    {...fieldProps}
+                  />
                 )}
               </Form.Field>
 
               <div className="grid grid-cols-3 gap-3">
                 <Form.Field name="metric" label="Metric">
                   {(fieldProps) => (
-                    <select name="metric" {...fieldProps} className="px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                    <select
+                      name="metric"
+                      {...fieldProps}
+                      className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                    >
                       {ALERT_METRICS.map((metric) => (
                         <option key={metric} value={metric}>
                           {metric.charAt(0).toUpperCase() + metric.slice(1)}
@@ -89,7 +92,11 @@ export function AlertRuleBuilder({ alert, onSubmit, onCancel }: AlertRuleBuilder
 
                 <Form.Field name="operator" label="Condition">
                   {(fieldProps) => (
-                    <select name="operator" {...fieldProps} className="px-3 py-2 rounded-lg border border-border bg-background text-sm">
+                    <select
+                      name="operator"
+                      {...fieldProps}
+                      className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                    >
                       {ALERT_OPERATORS.map((op) => (
                         <option key={op} value={op}>
                           {op}
@@ -101,14 +108,30 @@ export function AlertRuleBuilder({ alert, onSubmit, onCancel }: AlertRuleBuilder
 
                 <Form.Field name="threshold" label="Threshold (%)">
                   {(fieldProps) => (
-                    <Input form={form} name="threshold" type="number" min={0} max={100} rounded="medium" {...fieldProps} />
+                    <Input
+                      form={form}
+                      name="threshold"
+                      type="number"
+                      min={0}
+                      max={100}
+                      rounded="medium"
+                      {...fieldProps}
+                    />
                   )}
                 </Form.Field>
               </div>
 
               <Form.Field name="duration" label="Duration (seconds)">
                 {(fieldProps) => (
-                  <Input form={form} name="duration" type="number" min={1} placeholder="300" rounded="medium" {...fieldProps} />
+                  <Input
+                    form={form}
+                    name="duration"
+                    type="number"
+                    min={1}
+                    placeholder="300"
+                    rounded="medium"
+                    {...fieldProps}
+                  />
                 )}
               </Form.Field>
 

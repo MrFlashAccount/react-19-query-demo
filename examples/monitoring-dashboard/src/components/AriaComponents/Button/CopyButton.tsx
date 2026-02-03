@@ -1,7 +1,5 @@
 /** @file A button that copies text to the clipboard. */
-import Error from "@/assets/cross.svg";
-import CopyIcon from "@/assets/duplicate.svg";
-import Done from "@/assets/tick.svg";
+import { X, Copy, Check } from "lucide-react";
 import { useCopy } from "@/hooks/copyHooks";
 import { Button } from "./Button";
 import type { ButtonProps } from "./types";
@@ -34,9 +32,9 @@ export interface CopyButtonProps<IconType extends string> extends Omit<
 export function CopyButton<IconType extends string>(props: CopyButtonProps<IconType>) {
   const {
     variant = "icon",
-    copyIcon = CopyIcon,
-    successIcon = Done,
-    errorIcon = Error,
+    copyIcon = <Copy />,
+    successIcon = <Check />,
+    errorIcon = <X />,
     copyText,
     onCopy,
     ...buttonProps

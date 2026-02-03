@@ -25,7 +25,11 @@ export function safeJsonParse<T = unknown>(
     const parsed: unknown = JSON.parse(value);
 
     if (predicate != null) {
-      if (typeof predicate === "object" && "parse" in predicate && typeof predicate.parse === "function") {
+      if (
+        typeof predicate === "object" &&
+        "parse" in predicate &&
+        typeof predicate.parse === "function"
+      ) {
         return predicate.parse(parsed);
       }
 

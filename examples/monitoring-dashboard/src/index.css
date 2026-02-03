@@ -85,7 +85,7 @@
   color: var(--color-primary);
 }
 
-:where(.portal-root) {
+:where(#portal-root, #root) {
   isolation: isolate;
 }
 

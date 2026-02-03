@@ -1,12 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { Button, Text } from "@/components/AriaComponents";
-import SvgMask from "@/components/SvgMask";
-
-// Icon imports
-import ComputerIcon from "@/assets/computer.svg";
-import BellIcon from "@/assets/bell.svg";
-import WarningIcon from "@/assets/warning.svg";
-import LogsIcon from "@/assets/logs.svg";
+import { Monitor, Bell, AlertTriangle, ScrollText } from "lucide-react";
 import { Icon } from "../components/Icon";
 
 function Header() {
@@ -36,10 +30,10 @@ function Header() {
 }
 
 const NAV_ITEMS = [
-  { to: "/" as const, label: "Servers", icon: ComputerIcon },
-  { to: "/alerts" as const, label: "Alerts", icon: BellIcon },
-  { to: "/incidents" as const, label: "Incidents", icon: WarningIcon },
-  { to: "/logs" as const, label: "Logs", icon: LogsIcon },
+  { to: "/" as const, label: "Servers", icon: Monitor },
+  { to: "/alerts" as const, label: "Alerts", icon: Bell },
+  { to: "/incidents" as const, label: "Incidents", icon: AlertTriangle },
+  { to: "/logs" as const, label: "Logs", icon: ScrollText },
 ];
 
 function Sidebar() {
@@ -51,7 +45,7 @@ function Sidebar() {
       <nav className="flex flex-col gap-1">
         {NAV_ITEMS.map((item) => (
           <Button
-            icon={<SvgMask src={item.icon} className="h-5 w-5" />}
+            icon={<item.icon className="h-5 w-5" />}
             variant="ghost"
             href={item.to}
             key={item.to}

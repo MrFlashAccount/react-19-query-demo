@@ -6,10 +6,9 @@ import * as React from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
 
-import DoneIcon from "@/assets/check_mark.svg";
+import { Check } from "lucide-react";
 
 import * as ariaComponents from "@/components/AriaComponents";
-import SvgMask from "@/components/SvgMask";
 
 import { tv } from "@/utilities/tailwindVariants";
 import * as stepperProvider from "./StepperProvider";
@@ -73,7 +72,7 @@ export function Step(props: StepProps) {
         {index + 1}
       </ariaComponents.Text>
     ),
-    completeIcon = DoneIcon,
+    completeIcon = <Check />,
   } = props;
 
   const { state } = stepperProvider.useStepperContext();
@@ -151,8 +150,6 @@ export function Step(props: StepProps) {
 
             if (renderIconElement == null) {
               return null;
-            } else if (typeof renderIconElement === "string") {
-              return <SvgMask src={renderIconElement} />;
             } else {
               return renderIconElement;
             }

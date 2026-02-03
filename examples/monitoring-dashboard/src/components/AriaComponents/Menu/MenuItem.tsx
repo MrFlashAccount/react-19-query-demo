@@ -2,7 +2,7 @@
  * @file
  * An item within a menu that represents a single action or option.
  */
-import ArrowRight from "@/assets/expand_arrow_right.svg";
+import { ChevronRight } from "lucide-react";
 import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import { memo, type ReactElement, type ReactNode } from "react";
 import type {
@@ -12,7 +12,6 @@ import type {
 import { MenuItem as AriaMenuItem, Keyboard } from "react-aria-components";
 import { AnimatedBackground } from "../../AnimatedBackground";
 import { Icon } from "../../Icon";
-import SvgMask from "../../SvgMask";
 import { Check } from "../Check";
 import { Text, TEXT_STYLE } from "../Text";
 import type { IconProp, TestIdProps } from "../types";
@@ -214,7 +213,7 @@ const SubmenuIndicator = memo(function SubmenuIndicator(props: {
 
   if (!hasSubmenu) return null;
 
-  return <SvgMask src={ArrowRight} className={className} />;
+  return <ChevronRight className={className} />;
 });
 
 /**

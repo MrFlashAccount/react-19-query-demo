@@ -168,16 +168,6 @@ inset 0 -36px 51px -51px #00000014`,
           },
 
           // === States ===
-
-          ".focus-ring, .focus-ring:focus": {
-            "@apply outline outline-2 -outline-offset-2 outline-primary transition-all": "",
-          },
-          ".focus-ring.checkbox": {
-            "@apply outline-offset-0": "",
-          },
-
-          // === Classes affecting opacity ===
-
           ".scroll-offset-edge-m": {
             "--scrollbar-offset-edge": "4px",
           },
@@ -194,15 +184,11 @@ inset 0 -36px 51px -51px #00000014`,
             "--scrollbar-offset-edge": "28px",
           },
         },
-        {
-          respectPrefix: true,
-          respectImportant: true,
-        },
+        { respectPrefix: true, respectImportant: true },
       );
 
       addVariant("not-focus", "&:where([data-rac]):not([data-focused])");
       addVariant("not-selected", "&:where([data-rac]):not([data-selected])");
-
       addVariant("macos", ".macos &");
     }),
   ],

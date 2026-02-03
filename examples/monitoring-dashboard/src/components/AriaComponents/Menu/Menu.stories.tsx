@@ -2,10 +2,7 @@
  * @file
  * Stories for the Menu component.
  */
-import Camera from "@/assets/camera.svg";
-import Eye from "@/assets/eye.svg";
-import EyeClosed from "@/assets/eye_crossed.svg";
-import Folder from "@/assets/folder.svg";
+import { Camera, Eye, EyeOff, Folder } from "lucide-react";
 import type { Meta, StoryObj } from "@storybook/react";
 
 import { expect, userEvent, within } from "@storybook/test";
@@ -79,17 +76,17 @@ const MenuContentWithShortcuts = () => (
 const MenuContentWithIconsAndShortcuts = () => (
   <>
     <Menu.Section title="File">
-      <Menu.Item icon={Camera} shortcut="⌘N">
+      <Menu.Item icon={<Camera />} shortcut="⌘N">
         New File
       </Menu.Item>
-      <Menu.Item icon={Folder} shortcut="⌘O">
+      <Menu.Item icon={<Folder />} shortcut="⌘O">
         Open...
       </Menu.Item>
-      <Menu.Item icon={Folder} shortcut="⌘O">
+      <Menu.Item icon={<Folder />} shortcut="⌘O">
         Very long item that should be truncated
       </Menu.Item>
 
-      <Menu.Item icon={({ isHovered }) => (isHovered ? EyeClosed : Eye)} shortcut="⌘S">
+      <Menu.Item icon={({ isHovered }) => (isHovered ? <EyeOff /> : <Eye />)} shortcut="⌘S">
         Save
       </Menu.Item>
     </Menu.Section>
@@ -180,18 +177,18 @@ function MenuContentWithDescription() {
         <div>Custom content</div>
       </Menu.Item>
 
-      <Menu.Item icon={Eye} description="This is a description" shortcut="⌘N">
+      <Menu.Item icon={<Eye />} description="This is a description" shortcut="⌘N">
         New File
       </Menu.Item>
 
       <Menu.Separator />
 
       <Menu.SubmenuTrigger>
-        <Menu.Item icon={Folder} description="This is a description" shortcut="⌘O">
+        <Menu.Item icon={<Folder />} description="This is a description" shortcut="⌘O">
           Open Submenu
         </Menu.Item>
         <Menu selectionMode="multiple">
-          <Menu.Item description="This is a description" icon={Eye}>
+          <Menu.Item description="This is a description" icon={<Eye />}>
             Submenu item
           </Menu.Item>
         </Menu>

@@ -1,4 +1,5 @@
 import { query, mutation, DependencyGraph } from "@lib/goat-query";
+import { fetchRSC } from "@lib/rsc-service-worker-bff/rsc";
 import type {
   Server,
   Metric,
@@ -25,6 +26,35 @@ export const statsQuery = query<void, DashboardStats>({
   },
   staleTime: 2000,
   gcTime: 10_000,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RSC Server Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ServerRSCParams {
+  serverId: string | null;
+  range: string;
+  limit: number;
+  offset: number;
+}
+
+export const serverRSCQuery = query<ServerRSCParams, React.ReactElement>({
+  queryFn: async ({ serverId, range, limit = 300, offset }) => {
+    const params = new URLSearchParams({
+      range,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (serverId) {
+      params.set("serverId", serverId);
+    }
+
+    const rscUrl = `/rsc/server?${params}`;
+    return fetchRSC<React.ReactElement>(rscUrl);
+  },
+  staleTime: 1000,
+  gcTime: 5_000,
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,8 +120,7 @@ export const deleteServerMutation = mutation({
 
 interface MetricQueryParams {
   serverIds: string[];
-  startTime: number;
-  endTime: number;
+  range: string;
 }
 
 export const metricsQuery = query<MetricQueryParams, Metric[]>({
@@ -125,14 +154,17 @@ export interface LogsResponse {
   offset: number;
 }
 
-export const logsQuery = query<Partial<LogQuery>, LogsResponse>({
+export interface LogQueryWithRange extends Omit<Partial<LogQuery>, "startTime" | "endTime"> {
+  range?: string;
+}
+
+export const logsQuery = query<LogQueryWithRange, LogsResponse>({
   queryFn: async (params) => {
     const searchParams = new URLSearchParams();
     if (params.serverId) searchParams.set("serverId", params.serverId);
     if (params.level) searchParams.set("level", params.level);
     if (params.search) searchParams.set("search", params.search);
-    if (params.startTime) searchParams.set("startTime", String(params.startTime));
-    if (params.endTime) searchParams.set("endTime", String(params.endTime));
+    if (params.range) searchParams.set("range", params.range);
     if (params.limit) searchParams.set("limit", String(params.limit));
     if (params.offset) searchParams.set("offset", String(params.offset));
 

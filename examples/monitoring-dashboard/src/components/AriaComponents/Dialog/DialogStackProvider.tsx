@@ -21,8 +21,7 @@ export interface DialogStackContextType {
   readonly slice: (currentId: string) => void;
 }
 
-const DialogStackContext =
-  React.createContext<StoreApi<DialogStackContextType> | null>(null);
+const DialogStackContext = React.createContext<StoreApi<DialogStackContextType> | null>(null);
 
 /** DialogStackProvider is a React component that provides the dialog stack context to its children. */
 export function DialogStackProvider(props: React.PropsWithChildren) {
@@ -65,11 +64,7 @@ export function DialogStackProvider(props: React.PropsWithChildren) {
     })),
   );
 
-  return (
-    <DialogStackContext.Provider value={store}>
-      {children}
-    </DialogStackContext.Provider>
-  );
+  return <DialogStackContext.Provider value={store}>{children}</DialogStackContext.Provider>;
 }
 
 /** DialogStackRegistrar is a React component that registers a dialog in the dialog stack. */
@@ -79,10 +74,7 @@ export const DialogStackRegistrar = React.memo(function DialogStackRegistrar(
   const { id, type } = props;
 
   const store = React.useContext(DialogStackContext);
-  invariant(
-    store,
-    "DialogStackRegistrar must be used within a DialogStackProvider",
-  );
+  invariant(store, "DialogStackRegistrar must be used within a DialogStackProvider");
 
   const { add, slice } = useStore(store, (state) => ({
     add: state.add,
@@ -113,10 +105,7 @@ export interface UseDialogStackStateProps {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useDialogStackState(props: UseDialogStackStateProps) {
   const store = React.useContext(DialogStackContext);
-  invariant(
-    store,
-    "useDialogStackState must be used within a DialogStackProvider",
-  );
+  invariant(store, "useDialogStackState must be used within a DialogStackProvider");
 
   const isLatest = useIsLatestDialogStackItem(props.id);
   const index = useDialogStackIndex(props.id);
@@ -130,10 +119,7 @@ export function useDialogStackState(props: UseDialogStackStateProps) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useIsLatestDialogStackItem(id: string) {
   const store = React.useContext(DialogStackContext);
-  invariant(
-    store,
-    "useIsLatestDialogStackItem must be used within a DialogStackProvider",
-  );
+  invariant(store, "useIsLatestDialogStackItem must be used within a DialogStackProvider");
 
   return useStore(store, (state) => state.stack.at(-1)?.id === id, {
     unsafeEnableTransition: true,
@@ -146,16 +132,9 @@ export function useIsLatestDialogStackItem(id: string) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useDialogStackIndex(id: string) {
   const store = React.useContext(DialogStackContext);
-  invariant(
-    store,
-    "useDialogStackIndex must be used within a DialogStackProvider",
-  );
+  invariant(store, "useDialogStackIndex must be used within a DialogStackProvider");
 
-  return useStore(
-    store,
-    (state) => state.stack.findIndex((item) => item.id === id),
-    {
-      unsafeEnableTransition: true,
-    },
-  );
+  return useStore(store, (state) => state.stack.findIndex((item) => item.id === id), {
+    unsafeEnableTransition: true,
+  });
 }

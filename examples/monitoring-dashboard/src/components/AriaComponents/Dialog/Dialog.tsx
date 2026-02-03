@@ -5,7 +5,7 @@
  */
 import * as React from "react";
 
-import DismissIcon from "@/assets/dismiss.svg";
+import { X } from "lucide-react";
 import * as aria from "@/components/aria";
 import * as ariaComponents from "@/components/AriaComponents";
 import * as errorBoundary from "@/components/ErrorBoundary";
@@ -26,7 +26,6 @@ import { DialogTrigger } from "./DialogTrigger";
 import type * as types from "./types";
 import * as utlities from "./utilities";
 import { DIALOG_BACKGROUND } from "./variants";
-import SvgMask from "../../SvgMask";
 
 const OVERLAY_STYLES = tv({
   base: "fixed inset-0 isolate flex items-center justify-center bg-primary/20",
@@ -70,8 +69,7 @@ const MODAL_STYLES = tv({
 
 const DIALOG_STYLES = tv({
   base: DIALOG_BACKGROUND({
-    className:
-      "w-full max-w-full flex flex-col text-left align-middle shadow-xl overflow-clip",
+    className: "w-full max-w-full flex flex-col text-left align-middle shadow-xl overflow-clip",
   }),
   variants: {
     type: {
@@ -207,9 +205,7 @@ const DIALOG_STYLES = tv({
 
 /** Props for the {@link Dialog} component. */
 export interface DialogProps
-  extends
-    types.DialogProps,
-    Omit<VariantProps<typeof DIALOG_STYLES>, "scrolledToTop"> {}
+  extends types.DialogProps, Omit<VariantProps<typeof DIALOG_STYLES>, "scrolledToTop"> {}
 
 /**
  * A dialog is an overlay shown above other content in an application.
@@ -244,9 +240,7 @@ export function Dialog(props: DialogProps) {
     >
       {(values) => (
         <aria.Modal
-          className={({ isEntering, isExiting }) =>
-            MODAL_STYLES({ type, isEntering, isExiting })
-          }
+          className={({ isEntering, isExiting }) => MODAL_STYLES({ type, isEntering, isExiting })}
           isDismissable={isDismissable}
           isKeyboardDismissDisabled={isKeyboardDismissDisabled}
           UNSTABLE_portalContainer={root}
@@ -273,8 +267,7 @@ const TYPE_TO_DIALOG_TYPE: Record<
 /**
  * Props for the {@link DialogContent} component.
  */
-interface DialogContentProps
-  extends DialogProps, VariantProps<typeof DIALOG_STYLES> {
+interface DialogContentProps extends DialogProps, VariantProps<typeof DIALOG_STYLES> {
   readonly modalState: aria.OverlayTriggerState;
 }
 
@@ -402,10 +395,7 @@ function DialogContent(props: DialogContentProps) {
           </DialogBody>
         </aria.Dialog>
 
-        <dialogStackProvider.DialogStackRegistrar
-          id={dialogId}
-          type={TYPE_TO_DIALOG_TYPE[type]}
-        />
+        <dialogStackProvider.DialogStackRegistrar id={dialogId} type={TYPE_TO_DIALOG_TYPE[type]} />
       </dialogProvider.DialogProvider>
     </ResetButtonGroupContext>
   );
@@ -434,9 +424,7 @@ const DialogBody = React.memo(function DialogBody(props: DialogBodyProps) {
   return (
     <div ref={scrollerRef} className={contentClassName}>
       <errorBoundary.ErrorBoundary>
-        <suspense.Suspense
-          loaderProps={{ minHeight: type === "fullscreen" ? "full" : "h32" }}
-        >
+        <suspense.Suspense loaderProps={{ minHeight: type === "fullscreen" ? "full" : "h32" }}>
           {typeof children === "function" ? children({ close }) : children}
         </suspense.Suspense>
       </errorBoundary.ErrorBoundary>
@@ -447,10 +435,7 @@ const DialogBody = React.memo(function DialogBody(props: DialogBodyProps) {
 /**
  * Props for the {@link DialogHeader} component.
  */
-interface DialogHeaderProps extends Omit<
-  VariantProps<typeof DIALOG_STYLES>,
-  "scrolledToTop"
-> {
+interface DialogHeaderProps extends Omit<VariantProps<typeof DIALOG_STYLES>, "scrolledToTop"> {
   readonly scrollerRef: React.RefObject<HTMLDivElement | null>;
   readonly closeButton: DialogProps["closeButton"];
   readonly title: DialogProps["title"];
@@ -461,9 +446,7 @@ interface DialogHeaderProps extends Omit<
  * The header of a dialog.
  * @internal
  */
-const DialogHeader = React.memo(function DialogHeader(
-  props: DialogHeaderProps,
-) {
+const DialogHeader = React.memo(function DialogHeader(props: DialogHeaderProps) {
   const {
     closeButton,
     title,
@@ -521,12 +504,7 @@ const DialogHeader = React.memo(function DialogHeader(
   return (
     <aria.Header className={styles.header({ scrolledToTop: isScrolledToTop })}>
       {closeButton !== "none" && (
-        <Dialog.Close
-          variant="icon"
-          size="xsmall"
-          className={styles.closeButton()}
-          icon={<SvgMask src={DismissIcon} />}
-        />
+        <Dialog.Close variant="icon" size="xsmall" className={styles.closeButton()} icon={<X />} />
       )}
 
       {title != null && (

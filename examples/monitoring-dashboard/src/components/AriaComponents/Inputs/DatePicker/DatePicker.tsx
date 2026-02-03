@@ -3,8 +3,7 @@ import { useContext } from "react";
 
 import type { DateSegment as DateSegmentType } from "react-stately";
 
-import CrossIcon from "@/assets/cross.svg";
-import ArrowIcon from "@/assets/folder_arrow.svg";
+import { X, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import {
   DatePicker as AriaDatePicker,
   Calendar,
@@ -225,7 +224,7 @@ export function DatePicker<Schema extends TSchema, TFieldName extends FieldPath<
                   }
                 </DateInput>
               </I18nProvider>
-              <Button variant="icon" icon={ArrowIcon} className={styles.calendarButton()} />
+              <Button variant="icon" icon={<CalendarIcon />} className={styles.calendarButton()} />
               {!noResetButton && <DatePickerResetButton className={styles.resetButton()} />}
             </Group>
             {props.description != null && <Text slot="description" />}
@@ -233,14 +232,9 @@ export function DatePicker<Schema extends TSchema, TFieldName extends FieldPath<
               <Dialog className={styles.calendarDialog()}>
                 <Calendar className={styles.calendarContainer()}>
                   <header className={styles.calendarHeader()}>
-                    <Button
-                      variant="icon"
-                      slot="previous"
-                      icon={ArrowIcon}
-                      className="rotate-180"
-                    />
+                    <Button variant="icon" slot="previous" icon={<ChevronLeft />} />
                     <Heading className={styles.calendarHeading()} />
-                    <Button variant="icon" slot="next" icon={ArrowIcon} />
+                    <Button variant="icon" slot="next" icon={<ChevronRight />} />
                   </header>
                   <CalendarGrid className={styles.calendarGrid()}>
                     {noCalendarHeader ? (
@@ -281,7 +275,7 @@ function DatePickerResetButton(props: DatePickerResetButtonProps) {
       slot={null}
       variant="icon"
       aria-label="Reset"
-      icon={CrossIcon}
+      icon={<X />}
       className={className ?? ""}
       onPress={() => {
         state?.setValue(null);

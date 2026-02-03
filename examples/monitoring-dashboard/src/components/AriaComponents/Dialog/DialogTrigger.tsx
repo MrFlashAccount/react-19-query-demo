@@ -14,20 +14,11 @@ export interface DialogTriggerRenderProps {
   readonly open: () => void;
 }
 /** Props for a {@link DialogTrigger}. */
-export interface DialogTriggerProps extends Omit<
-  aria.DialogTriggerProps,
-  "children"
-> {
+export interface DialogTriggerProps extends Omit<aria.DialogTriggerProps, "children"> {
   /** The trigger element. */
   readonly children: [
-    (
-      | React.ReactElement
-      | ((props: DialogTriggerRenderProps) => React.ReactElement)
-    ),
-    (
-      | React.ReactElement
-      | ((props: DialogTriggerRenderProps) => React.ReactElement)
-    ),
+    React.ReactElement | ((props: DialogTriggerRenderProps) => React.ReactElement),
+    React.ReactElement | ((props: DialogTriggerRenderProps) => React.ReactElement),
   ];
   readonly onOpen?: () => void;
   readonly onClose?: () => void;
@@ -35,12 +26,7 @@ export interface DialogTriggerProps extends Omit<
 
 /** A DialogTrigger opens a dialog when a trigger element is pressed. */
 export function DialogTrigger(props: DialogTriggerProps) {
-  const {
-    children,
-    onOpenChange,
-    onOpen = () => {},
-    onClose = () => {},
-  } = props;
+  const { children, onOpenChange, onOpen = () => {}, onClose = () => {} } = props;
 
   const state = useOverlayTriggerState(props);
 

@@ -17,3 +17,4 @@ export {
   type MenuItemCustomContentProps,
   type MenuItemProps,
 } from "./MenuItem";
+export { MenuTrigger, type MenuTriggerProps } from "./MenuTrigger";

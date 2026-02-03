@@ -3,7 +3,7 @@
  *
  * Form error component.
  */
-import Offline from "@/assets/offline_filled.svg";
+import { WifiOff } from "lucide-react";
 import { Alert, Text, type AlertProps } from "@/components/AriaComponents";
 import { useFormError, type UseFormErrorProps } from "./useFormError";
 
@@ -25,7 +25,7 @@ export function FormError(props: FormErrorProps) {
       {errors.map((error) => {
         const testId = `form-submit-${error.type}`;
         const finalVariant = error.type === "offline" ? "outline" : variant;
-        const icon = error.type === "offline" ? Offline : null;
+        const icon = error.type === "offline" ? <WifiOff /> : null;
 
         return (
           <Alert

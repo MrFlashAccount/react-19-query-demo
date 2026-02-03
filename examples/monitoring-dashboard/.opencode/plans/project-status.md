@@ -3,9 +3,11 @@
 ## Implementation Progress
 
 ### Phase 1: Server Selector Popover ✅ COMPLETED
+
 **File:** `src/routes/Server/ServerSelectorPopover.tsx`
 
 **Features Implemented:**
+
 - Search functionality with filtering by name, IP, and region
 - Inline server name editing with double-click activation
 - Delete functionality with confirmation dialog
@@ -14,9 +16,11 @@
 - Dialog system for CRUD operations
 
 ### Phase 2: Enhanced Logs Table 🔄 IN PROGRESS
+
 **File:** `src/routes/Server/components/LogsTable.tsx`
 
 **Features Implemented:**
+
 - Logs table with server data fetching via React Query
 - Filtering by log level (error, warn, info, debug)
 - Filtering by service type
@@ -27,18 +31,23 @@
 - Service badges for quick identification
 
 **Remaining Items:**
+
 - Infinite scroll for large log datasets
 - Correlation features for related log entries
 
 ### Phase 3: Alert Rule Builder ⏸️ PENDING
+
 **Planned Features:**
+
 - Visual rule builder interface
 - Threshold configuration
 - Notification settings
 - Rule management (create, edit, delete)
 
 ### Phase 4: Dashboard Enhancements ⏸️ PENDING
+
 **Planned Features:**
+
 - Auto-refresh indicator
 - Bulk search capabilities
 - Metrics at time view for historical analysis

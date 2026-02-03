@@ -1,6 +1,4 @@
-import Enso from "@/assets/enso_logo.svg";
-import ArrowDownIcon from "@/assets/expand_arrow_down.svg";
-import Plus from "@/assets/plus.svg";
+import { Plus, ChevronDown } from "lucide-react";
 
 import type * as aria from "@/components/aria";
 import { Popover, Separator, Text } from "@/components/AriaComponents";
@@ -58,11 +56,11 @@ export const Variants: Story = {
 
       <Text.Heading>Icons</Text.Heading>
       <div className="grid grid-cols-4 place-content-center place-items-start gap-3">
-        <Button icon={Enso}>Icon start</Button>
-        <Button icon={Enso} iconPosition="end">
+        <Button icon={<Plus />}>Icon start</Button>
+        <Button icon={<Plus />} iconPosition="end">
           Icon end
         </Button>
-        <Button icon={Enso} aria-label="Only icon" />
+        <Button icon={<Plus />} aria-label="Only icon" />
       </div>
 
       <Text.Heading>States</Text.Heading>
@@ -86,10 +84,10 @@ export const Tooltips: Story = {
         <Button tooltip="This is a tooltip">Tooltip</Button>
         <Button
           aria-label="Tooltip uses aria-label for icon buttons"
-          icon={Enso}
+          icon={<Plus />}
           testId="icon-button"
         />
-        <Button icon={Enso} tooltip={false} testId="icon-button-no-tooltip" />
+        <Button icon={<Plus />} tooltip={false} testId="icon-button-no-tooltip" />
       </div>
     </div>
   ),
@@ -183,15 +181,15 @@ export const ButtonGroup: Story = {
           <Button.GroupJoin key={variant} buttonVariants={{ variant }}>
             <Button>Button 1</Button>
             <Button>Button 2</Button>
-            <Button icon={ArrowDownIcon} />
+            <Button icon={<ChevronDown />} />
           </Button.GroupJoin>
         ))}
 
         <Button.GroupJoin buttonVariants={{ variant: "primary" }}>
-          <Button icon={Plus}>New Project</Button>
+          <Button icon={<Plus />}>New Project</Button>
 
           <Popover.Trigger>
-            <Button icon={ArrowDownIcon} />
+            <Button icon={<ChevronDown />} />
 
             <Popover>
               <Text>Lorem ipsum dolor sit amet consectetur adipisicing elit. Quisquam, quos.</Text>
