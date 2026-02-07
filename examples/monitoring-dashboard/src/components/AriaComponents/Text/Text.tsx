@@ -3,7 +3,6 @@ import * as React from "react";
 
 import * as aria from "@/components/aria";
 
-import * as mergeRefs from "@/utilities/mergeRefs";
 import * as twv from "@/utilities/tailwindVariants";
 
 import type { TooltipElementType } from "@/components/AriaComponents";
@@ -30,7 +29,7 @@ export interface TextProps
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const TEXT_STYLE = twv.tv({
-  base: "[text-box-trim:trim-both]",
+  base: "[text-box-trim:trim-both] [text-box-edge:cap alphabetic]",
   variants: {
     color: {
       custom: "",
@@ -43,10 +42,6 @@ export const TEXT_STYLE = twv.tv({
       invert: "text-invert",
       inherit: "text-inherit",
       current: "text-current",
-    },
-    font: {
-      default: "",
-      naming: "font-naming",
     },
     // we use custom padding for the text variants to make sure the text is aligned with the grid
     // leading is also adjusted to make sure the text is aligned with the grid
@@ -64,12 +59,12 @@ export const TEXT_STYLE = twv.tv({
     weight: {
       custom: "",
       default: "",
-      bold: "font-bold",
-      semibold: "font-semibold",
-      extraBold: "font-extrabold",
-      medium: "font-medium",
-      normal: "font-normal",
-      thin: "font-thin",
+      bold: "font-[600]",
+      semibold: "font-[500]",
+      extraBold: "font-[800]",
+      medium: "font-[400]",
+      normal: "font-[300]",
+      thin: "font-[200]",
     },
     balance: {
       true: "text-balance",
@@ -113,7 +108,6 @@ export const TEXT_STYLE = twv.tv({
   },
   defaultVariants: {
     variant: "body",
-    font: "default",
     weight: "default",
     transform: "none",
     color: "primary",
@@ -136,7 +130,6 @@ export function Text(props: TextProps) {
   const {
     className,
     variant,
-    font,
     italic,
     weight,
     nowrap,
@@ -160,11 +153,8 @@ export function Text(props: TextProps) {
     ...ariaProps
   } = props;
 
-  const textElementRef = React.useRef<HTMLElement | null>(null);
-
   const textClasses = TEXT_STYLE({
     variant,
-    font,
     weight,
     transform,
     monospace,
@@ -206,13 +196,10 @@ export function Text(props: TextProps) {
   });
 
   return (
-    <>
+    <Client.VisualTooltip isDisabled={isTooltipDisabled()} display={tooltipDisplay}>
       <ElementType
         // @ts-expect-error This is caused by the type-safe `elementType` type.
-        ref={(el) => {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-          mergeRefs.mergeRefs(forwardedRef, textElementRef)(el);
-        }}
+        ref={forwardedRef}
         data-testid={testId}
         className={textClasses}
         {...aria.mergeProps<React.HTMLAttributes<HTMLElement>>()(
@@ -225,10 +212,8 @@ export function Text(props: TextProps) {
         )}
       >
         {children}
-
-        {tooltip}
       </ElementType>
-    </>
+    </Client.VisualTooltip>
   );
 }
 

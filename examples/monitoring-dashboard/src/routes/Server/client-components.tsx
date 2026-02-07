@@ -7,8 +7,10 @@
 import { Button, Dialog, DialogTrigger, Text, Tooltip } from "@/components/AriaComponents";
 import { ServerSelector } from "./ServerSelectorPopover";
 import type { LogEntry, LogLevel, Server } from "@/db/schema";
-import { Line, Bar } from "react-chartjs-2";
+import { ChartGPUChart } from "chartgpu-react";
+import type { ChartGPUOptions } from "chartgpu";
 import type { ChartDataPoint } from "./types";
+import { ChevronsUpDown } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Server Selector Wrapper
@@ -18,18 +20,15 @@ export function ServerSelectorWrapper({ server }: { server: Server | null }) {
   return (
     <ServerSelector
       triggerButton={
-        <Button variant="outline" size="medium" className="flex items-center gap-2">
-          <span>{server?.name ?? "Select Server"}</span>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+        <Button variant="outline" size="medium" icon={<ChevronsUpDown />} iconPosition="end">
+          <span
+            style={{
+              textBoxTrim: "trim-both",
+              textBoxEdge: "cap alphabetic",
+            }}
           >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
+            {server?.name ?? "Select Server"}
+          </span>
         </Button>
       }
     />
@@ -40,6 +39,16 @@ export function ServerSelectorWrapper({ server }: { server: Server | null }) {
 // Chart Components
 // ─────────────────────────────────────────────────────────────────────────────
 
+function colorWithAlpha(cssColor: string, alpha: number): string {
+  if (cssColor.startsWith("rgba(")) {
+    return cssColor.replace(/[\d.]+\)\s*$/, `${alpha})`);
+  }
+  if (cssColor.startsWith("rgb(")) {
+    return cssColor.replace("rgb(", "rgba(").replace(/\)\s*$/, `, ${alpha})`);
+  }
+  return cssColor;
+}
+
 export function ChartCard({
   title,
   data,
@@ -49,10 +58,8 @@ export function ChartCard({
   data: ChartDataPoint;
   color: string;
 }) {
-  // Use bar chart for Request Volume and Error Distribution, line chart for others
   const isBarChart = title === "Request Volume" || title === "Error Distribution";
 
-  // Ensure data is valid
   if (
     !data ||
     !data.labels ||
@@ -74,97 +81,39 @@ export function ChartCard({
     );
   }
 
-  // Ensure labels and values arrays match and are valid
   const minLength = Math.min(data.labels.length, data.values.length);
-  const labels = data.labels.slice(0, minLength);
   const values = data.values
     .slice(0, minLength)
     .map((v) => (typeof v === "number" && !isNaN(v) ? v : 0));
-
-  const chartConfig = {
-    labels,
-    datasets: [
-      {
-        label: title,
-        data: values,
-        ...(isBarChart
-          ? {
-              backgroundColor: color,
-              borderColor: color,
-              borderWidth: 0,
-            }
-          : {
-              borderColor: color,
-              backgroundColor: color.replace("1)", "0.1)"),
-              borderWidth: 2,
-              fill: true,
-              tension: 0.3,
-              pointRadius: 0,
-              pointHoverRadius: 4,
-            }),
-      },
-    ],
-  };
+  const chartData: [number, number][] = values.map((y, i) => [i, y]);
 
   const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        mode: isBarChart ? ("index" as const) : ("nearest" as const),
-        intersect: false,
-      },
-    },
-    scales: {
-      x: {
-        display: true,
-        grid: { display: false },
-        ticks: { maxTicksLimit: 8, font: { size: 10 } },
-      },
-      y: {
-        display: true,
-        grid: { color: "rgba(0,0,0,0.05)" },
-        ticks: { font: { size: 10 } },
-        beginAtZero: isBarChart,
-      },
-    },
-    interaction: {
-      mode: isBarChart ? ("index" as const) : ("nearest" as const),
-      axis: "x" as const,
-      intersect: false,
-    },
-    elements: {
-      ...(isBarChart
-        ? {
-            bar: {
-              borderSkipped: false,
-            },
-          }
-        : {}),
-    },
-  };
+    theme: "light",
+    series: [
+      isBarChart
+        ? { type: "bar", name: title, data: chartData, color }
+        : {
+            type: "line",
+            name: title,
+            data: chartData,
+            lineStyle: { color, width: 2 },
+            areaStyle: { color: colorWithAlpha(color, 0.1) },
+          },
+    ],
+    xAxis: { type: "value" },
+    yAxis: { type: "value", min: isBarChart ? 0 : undefined },
+    grid: { left: 48, right: 16, top: 16, bottom: 32 },
+    tooltip: { show: true },
+  } satisfies ChartGPUOptions;
 
   return (
-    <div className="rounded-lg border border-border bg-background/60 p-4 backdrop-blur-sm">
+    <div className="rounded-lg border border-border bg-background/60 p-4">
       <Text variant="body" weight="semibold" className="mb-2 block text-wrap-balance">
         {title}
       </Text>
+
       <div className="h-48" role="img" aria-label={`${title} chart`}>
-        {isBarChart ? (
-          <Bar
-            key={`${title}-${values.length}-${values[0] || 0}`}
-            data={chartConfig}
-            options={options}
-          />
-        ) : (
-          <Line
-            key={`${title}-${values.length}-${values[0] || 0}`}
-            data={chartConfig}
-            options={options}
-          />
-        )}
+        <ChartGPUChart options={options} style={{ width: "100%", height: "192px" }} />
       </div>
     </div>
   );
@@ -182,7 +131,7 @@ export function LogTimestampButton({ timestamp, log }: { timestamp: number; log:
       </Button>
 
       <Dialog type="sheet" size="large" title="Log Entry Details">
-        <LogDetailContent log={log} />
+        {() => <LogDetailContent log={log} />}
       </Dialog>
     </DialogTrigger>
   );

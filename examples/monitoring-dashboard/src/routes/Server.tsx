@@ -9,36 +9,6 @@ import { TimeRangeSelector } from "./Server/TimeRangeSelector";
 import { useQuery } from "@lib/goat-query/react";
 import { useEvent } from "@/hooks/useEvent";
 import { MetricsAlertsTabs } from "@/components/MetricsAlertsTabs";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from "chart.js";
-
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-);
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Re-export context types for convenience
-// ─────────────────────────────────────────────────────────────────────────────
-
 import type { ServerContextValue } from "./Server/ServerContext";
 export type { ServerContextValue };
 
@@ -164,13 +134,7 @@ function Server() {
 
       <RootLayout.Slot name="body">
         <Suspense fallback={<ServerLoadingState />}>
-          <ServerBody
-            key={refreshKey}
-            serverId={serverId}
-            range={range}
-            limit={limit}
-            offset={offset}
-          />
+          <ServerBody serverId={serverId} range={range} limit={limit} offset={offset} />
         </Suspense>
       </RootLayout.Slot>
     </ServerProvider>
@@ -207,7 +171,7 @@ function ServerBody({
 
   const element = use(promise);
 
-  return element;
+  return <>{element}</>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -16,5 +16,11 @@
     }
   },
   "include": ["./src/**/*.ts", "./src/**/*.tsx"],
-  "exclude": ["./dist", "./node_modules", "./**/__tests__/**", "./**/*.test.*", "./tsdown.config.ts"]
+  "exclude": [
+    "./dist",
+    "./node_modules",
+    "./**/__tests__/**",
+    "./**/*.test.*",
+    "./tsdown.config.ts"
+  ]
 }

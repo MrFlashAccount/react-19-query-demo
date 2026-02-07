@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { Retrier } from "../Retrier";
-import { timerWheel } from "../TimerWheel";
+import { Retrier } from "../src/Retrier";
+import { timerWheel } from "../src/TimerWheel";
 
 describe("Retrier", () => {
   beforeEach(() => {
@@ -402,6 +402,7 @@ describe("Retrier", () => {
 
       // Start first execution
       const promise1 = retrier.execute(fn1);
+      void promise1.catch(() => undefined);
 
       // Wait for first call
       await vi.advanceTimersByTimeAsync(0);
@@ -409,6 +410,7 @@ describe("Retrier", () => {
 
       // Start second execution - should cancel the first
       const promise2 = retrier.execute(fn2);
+      void promise2.catch(() => undefined);
 
       // Advance time to let the first execution detect cancellation
       await vi.advanceTimersByTimeAsync(0);
@@ -429,6 +431,7 @@ describe("Retrier", () => {
 
       // Start first execution
       const promise1 = retrier.execute(fn1);
+      void promise1.catch(() => undefined);
 
       // Wait for first call and start of delay
       await vi.advanceTimersByTimeAsync(0);
@@ -439,6 +442,7 @@ describe("Retrier", () => {
 
       // Start second execution during the delay
       const promise2 = retrier.execute(fn2);
+      void promise2.catch(() => undefined);
 
       // Advance to let cancellation be detected
       await vi.advanceTimersByTimeAsync(500);
@@ -460,14 +464,17 @@ describe("Retrier", () => {
 
       // Start first execution
       const promise1 = retrier.execute(fn1);
+      void promise1.catch(() => undefined);
       await vi.advanceTimersByTimeAsync(0);
 
       // Start second execution (cancels first)
       const promise2 = retrier.execute(fn2);
+      void promise2.catch(() => undefined);
       await vi.advanceTimersByTimeAsync(0);
 
       // Start third execution (cancels second)
       const promise3 = retrier.execute(fn3);
+      void promise3.catch(() => undefined);
       await vi.advanceTimersByTimeAsync(0);
 
       // First two should be cancelled
@@ -491,6 +498,7 @@ describe("Retrier", () => {
       const fn = vi.fn().mockRejectedValue(new Error("fail"));
 
       const promise = retrier.execute(fn);
+      void promise.catch(() => undefined);
 
       // Initial call happens
       await vi.advanceTimersByTimeAsync(0);
@@ -525,6 +533,7 @@ describe("Retrier", () => {
       });
 
       const promise = retrier.execute(fn);
+      void promise.catch(() => undefined);
 
       // Wait a tick to ensure execute has started
       await vi.advanceTimersByTimeAsync(0);
@@ -559,7 +568,9 @@ describe("Retrier", () => {
       const fn2 = vi.fn().mockRejectedValue(new Error("fail2"));
 
       const promise1 = retrier.execute(fn1);
+      void promise1.catch(() => undefined);
       const promise2 = retrier.execute(fn2);
+      void promise2.catch(() => undefined);
 
       await vi.advanceTimersByTimeAsync(0);
 
@@ -578,6 +589,7 @@ describe("Retrier", () => {
 
       // First execution - will be cancelled
       const promise1 = retrier.execute(fn1);
+      void promise1.catch(() => undefined);
       await vi.advanceTimersByTimeAsync(0);
       retrier.cancel();
       await vi.advanceTimersByTimeAsync(1000);
@@ -600,6 +612,7 @@ describe("Retrier", () => {
       const fn = vi.fn().mockRejectedValueOnce(new Error("fail 1")).mockResolvedValue("success");
 
       const promise = retrier.execute(fn);
+      void promise.catch(() => undefined);
 
       // Initial call happens
       await vi.advanceTimersByTimeAsync(0);
@@ -644,6 +657,7 @@ describe("Retrier", () => {
       const fn = vi.fn().mockRejectedValue(new Error("fail"));
 
       const promise = retrier.execute(fn);
+      void promise.catch(() => undefined);
 
       // Initial call
       await vi.advanceTimersByTimeAsync(0);
@@ -668,6 +682,7 @@ describe("Retrier", () => {
       const fn = vi.fn().mockRejectedValue(new Error("fail"));
 
       const promise = retrier.execute(fn);
+      void promise.catch(() => undefined);
 
       // Initial call
       await vi.advanceTimersByTimeAsync(0);
@@ -693,6 +708,7 @@ describe("Retrier", () => {
       const fn = vi.fn().mockRejectedValueOnce(new Error("fail")).mockResolvedValue("success");
 
       const promise = retrier.execute(fn);
+      void promise.catch(() => undefined);
 
       await vi.advanceTimersByTimeAsync(0);
 

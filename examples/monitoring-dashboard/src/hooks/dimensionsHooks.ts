@@ -1,5 +1,5 @@
 /** @file Hooks for reactively watching node dimensions. */
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 /** Dimensions object for {@link useDimensions}. */
 interface DimensionObject {
@@ -60,9 +60,9 @@ export function useDimensions({
   });
   const [node, setNode] = useState<HTMLElement | SVGElement | null>(null);
 
-  const ref = useCallback((newNode: HTMLElement | SVGElement | null) => {
+  const ref = (newNode: HTMLElement | SVGElement | null) => {
     setNode(newNode);
-  }, []);
+  };
 
   useLayoutEffect(() => {
     if (node) {

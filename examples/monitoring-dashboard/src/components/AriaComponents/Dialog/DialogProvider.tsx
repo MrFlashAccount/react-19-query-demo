@@ -21,7 +21,7 @@ const [DialogContext, useDialogStrictContext, useDialogContext] =
 export function DialogProvider(props: DialogContextValue & React.PropsWithChildren) {
   const { children, close, dialogId } = props;
 
-  const value = React.useMemo(() => ({ close, dialogId }), [close, dialogId]);
+  const value = { close, dialogId };
 
   return <DialogContext.Provider value={value}>{children}</DialogContext.Provider>;
 }

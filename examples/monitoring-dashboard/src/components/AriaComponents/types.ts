@@ -22,8 +22,9 @@ export type PossibleIcon = string;
 
 /** Props for adding a test id to a component */
 export interface TestIdProps {
-  readonly "data-testid"?: never;
-  readonly testId?: string | undefined;
+  /** @deprecated */
+  "data-testid"?: never;
+  testId?: string | undefined;
 }
 
 /** Any icon. */

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { TimerWheel } from "../TimerWheel";
+import { TimerWheel } from "../src/TimerWheel";
 
 describe("TimerWheel", () => {
   let wheel: TimerWheel;

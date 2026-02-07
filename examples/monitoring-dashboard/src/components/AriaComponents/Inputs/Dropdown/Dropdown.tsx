@@ -1,7 +1,7 @@
 /** @file A styled dropdown. */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronsUpDown } from "lucide-react";
 import {
   FieldError,
   ListBox,
@@ -84,7 +84,7 @@ const DROPDOWN_STYLES = tv({
     optionsItem:
       "flex min-h-6 items-center gap-2 rounded-input transition-colors focus:cursor-default focus:bg-frame focus:font-bold focus:focus-ring not-focus:hover:bg-hover-bg not-selected:hover:bg-hover-bg",
     input: "group relative flex items-center gap-2",
-    dropdownArrow: "rotate-90 opacity-80 group-hover:opacity-100",
+    dropdownArrow: "opacity-80 group-hover:opacity-100",
     inputDisplay: "grow select-none",
     hiddenOptions: "flex h-0 flex-col overflow-hidden",
     hiddenOption: "flex gap-2 font-bold",
@@ -291,7 +291,7 @@ export function Dropdown<T>(props: DropdownProps<T> & RefProp<HTMLDivElement>) {
         </div>
       </div>
       <div className={styles.input()}>
-        <ChevronRight className={styles.dropdownArrow()} />
+        <ChevronsUpDown className={styles.dropdownArrow()} />
         <div className={styles.inputDisplay()}>
           {isMouseFocused && !multiple ? (
             "\u00a0"

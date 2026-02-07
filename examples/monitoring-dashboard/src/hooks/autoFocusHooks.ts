@@ -12,7 +12,7 @@ import { useUnmount } from "./unmountHooks";
 
 /** Props for the {@link useAutoFocus} hook. */
 export interface UseAutoFocusProps {
-  readonly ref: React.RefObject<HTMLElement>;
+  readonly ref: React.RefObject<HTMLElement | null>;
   readonly disabled?: boolean | undefined;
   /**
    * Called when the element is focused.
@@ -37,6 +37,13 @@ export function useAutoFocus(props: UseAutoFocusProps) {
   const shouldForceFocus = useRef(false);
   const scheduledFocusRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const clearScheduledFocus = useEvent(() => {
+    if (scheduledFocusRef.current != null) {
+      clearTimeout(scheduledFocusRef.current);
+      scheduledFocusRef.current = null;
+    }
+  });
+
   useInteractOutside({
     ref,
     onInteractOutside: () => {
@@ -58,13 +65,6 @@ export function useAutoFocus(props: UseAutoFocusProps) {
     }, FOCUS_DELAY);
 
     return clearScheduledFocus;
-  });
-
-  const clearScheduledFocus = useEvent(() => {
-    if (scheduledFocusRef.current != null) {
-      clearTimeout(scheduledFocusRef.current);
-      scheduledFocusRef.current = null;
-    }
   });
 
   useEffect(() => {

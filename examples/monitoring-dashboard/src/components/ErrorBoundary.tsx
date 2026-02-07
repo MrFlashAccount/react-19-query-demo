@@ -189,7 +189,7 @@ export function InlineErrorDisplay(props: InlineErrorDisplayProps) {
 
   const defaultRender = (
     <div className="flex items-center gap-1">
-      <Icon icon={finalIcon} />
+      <Icon>{finalIcon}</Icon>
       <Text>{finalTitle}</Text>
       <Button variant="outline" size="xsmall" onPress={onReset} className="ml-3">
         Try again

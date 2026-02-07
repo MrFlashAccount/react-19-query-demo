@@ -6883,8 +6883,7 @@
       viewConstructor: a$1,
       readerType: "byob",
     };
-    if (e$1._pendingPullIntos.length > 0)
-      return (e$1._pendingPullIntos.push(d$1),  rt(n$1, o$1));
+    if (e$1._pendingPullIntos.length > 0) return (e$1._pendingPullIntos.push(d$1), rt(n$1, o$1));
     if ("closed" === n$1._state) {
       const e$2 = new a$1(d$1.buffer, d$1.byteOffset, 0);
       o$1._closeSteps(e$2);
@@ -7272,10 +7271,10 @@
       (e$1._writeRequests = new v()),
       void 0 === e$1._pendingAbortRequest)
     )
-      return  Et(e$1);
+      return Et(e$1);
     const r$1 = e$1._pendingAbortRequest;
     if (((e$1._pendingAbortRequest = void 0), r$1._wasAlreadyErroring))
-      return (r$1._reject(t$1),  Et(e$1));
+      return (r$1._reject(t$1), Et(e$1));
     b(
       e$1._writableStreamController[w](r$1._reason),
       () => (r$1._resolve(), Et(e$1), null),
@@ -7419,7 +7418,7 @@
     const t$1 = e$1._controlledWritableStream;
     if (!e$1._started) return;
     if (void 0 !== t$1._inFlightWriteRequest) return;
-    if ("erroring" === t$1._state) return  Pt(t$1);
+    if ("erroring" === t$1._state) return Pt(t$1);
     if (0 === e$1._queue.length) return;
     const r$1 = e$1._queue.peek().value;
     r$1 === Dt
@@ -8716,7 +8715,7 @@
       }
       [C](e$1) {
         const t$1 = this._controlledReadableByteStream;
-        if (this._queueTotalSize > 0) return  He(this, e$1);
+        if (this._queueTotalSize > 0) return He(this, e$1);
         const r$1 = this._autoAllocateChunkSize;
         if (void 0 !== r$1) {
           let t$2;

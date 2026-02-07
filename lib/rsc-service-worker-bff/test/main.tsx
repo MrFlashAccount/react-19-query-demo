@@ -5,7 +5,7 @@
  */
 
 // Import webpack shim FIRST - required for react-server-dom-webpack
-import "../rsc/webpack-shim";
+import "../src/rsc/webpack-shim";
 
 import { useState, useEffect, useCallback, Suspense, use } from "react";
 import { createRoot } from "react-dom/client";

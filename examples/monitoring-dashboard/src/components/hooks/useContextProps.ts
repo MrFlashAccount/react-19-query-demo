@@ -3,7 +3,7 @@
  * Hook for merging props with context values
  */
 import { mergeRefs } from "@/utilities/mergeRefs";
-import { useContext, type Context, type ForwardedRef, type Ref } from "react";
+import { use, type Context, type Ref } from "react";
 import { mergeProps } from "../aria";
 
 /**
@@ -13,13 +13,9 @@ export function useContextProps<
   T extends object,
   E extends Element,
   C extends (Partial<T> & { ref?: Ref<E | null> }) | null,
->(
-  props: T,
-  ref: ForwardedRef<E> | Ref<E> | null,
-  context: Context<C>,
-): [props: T, ref: Ref<E | null>] {
-  const contextValue = useContext(context);
-  let localRef = ref ?? (("ref" in props ? props.ref : null) as Ref<E | null> | null);
+>(props: T, context: Context<C>): [props: T, ref: Ref<E | null>] {
+  const contextValue = use(context);
+  let localRef = ("ref" in props ? props.ref : null) as Ref<E | null> | null;
 
   if (contextValue == null) {
     return [props, localRef];

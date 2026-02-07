@@ -5,7 +5,7 @@
  */
 import type { CheckboxProps as AriaCheckboxProps } from "@/components/aria";
 import { Checkbox as AriaCheckbox, CheckboxGroupStateContext } from "@/components/aria";
-import { mergeRefs, useMergedRef } from "@/utilities/mergeRefs";
+import { mergeRefs } from "@/utilities/mergeRefs";
 import type { RefProp } from "@/components/AriaComponents/types";
 import type { VariantProps } from "@/utilities/tailwindVariants";
 import { tv } from "@/utilities/tailwindVariants";
@@ -269,7 +269,7 @@ const CheckboxInternal = function CheckboxInternal<
         mergeRefs(forwardedRef, field.ref)(el);
       }}
       {...props}
-      inputRef={useMergedRef(checkboxRef, (input) => {
+      inputRef={mergeRefs(checkboxRef, (input) => {
         // Hack to remove the `data-testid` attribute from the input element
         // react-aria-components adds this attribute, but it is a duplicate of the label's `data-testid`
         // which messes up the test selectors

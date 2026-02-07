@@ -6,10 +6,10 @@ import type {
   ITracer,
   ISpan,
   SpanId,
-} from "../types";
+} from "../src/types";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-import { BaseReporter } from "../reporters/BaseReporter";
+import { BaseReporter } from "../src/reporters/BaseReporter";
 
 // Helper to create mock spans with all required ISpan properties
 function createMockSpan(overrides: Omit<Partial<ISpan>, "spanId"> & { spanId: string }): ISpan {
@@ -468,7 +468,7 @@ describe("Tracer with reporters", () => {
   });
 
   it("should dispatch events to reporters", async () => {
-    const { Tracer } = await import("../Tracer");
+    const { Tracer } = await import("../src/Tracer");
     const tracer = new Tracer();
     const reporter = new TestReporter();
 
@@ -495,7 +495,7 @@ describe("Tracer with reporters", () => {
   });
 
   it("should handle reporter errors without affecting tracer", async () => {
-    const { Tracer } = await import("../Tracer");
+    const { Tracer } = await import("../src/Tracer");
     const tracer = new Tracer();
 
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -535,7 +535,7 @@ describe("Tracer with reporters", () => {
 
 describe("NullTracer with reporters", () => {
   it("should not throw when adding reporter", async () => {
-    const { NullTracer } = await import("../NullTracer");
+    const { NullTracer } = await import("../src/NullTracer");
     const tracer = new NullTracer();
 
     const receiver = { handleEvent: vi.fn() };
@@ -549,7 +549,7 @@ describe("NullTracer with reporters", () => {
   });
 
   it("should always return false for hasReporters()", async () => {
-    const { NullTracer } = await import("../NullTracer");
+    const { NullTracer } = await import("../src/NullTracer");
     const tracer = new NullTracer();
 
     expect(tracer.hasReporters()).toBe(false);

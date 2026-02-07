@@ -1,4 +1,4 @@
-import type { TraceEvent, IEventReceiver } from "../../tracing/types";
+import type { TraceEvent, IEventReceiver } from "../../tracing/src/types";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // We'll test the internal implementation directly
@@ -21,7 +21,7 @@ describe("Span", () => {
 
   describe("lifecycle", () => {
     it("should be created in inactive state", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -36,7 +36,7 @@ describe("Span", () => {
     });
 
     it("should transition to running state when started", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -61,7 +61,7 @@ describe("Span", () => {
     });
 
     it("should transition to ended state on success", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -87,7 +87,7 @@ describe("Span", () => {
     });
 
     it("should transition to ended state on error", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -113,7 +113,7 @@ describe("Span", () => {
     });
 
     it("should ignore start() if already running", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -130,7 +130,7 @@ describe("Span", () => {
     });
 
     it("should ignore start() if already ended", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -150,7 +150,7 @@ describe("Span", () => {
     });
 
     it("should ignore success()/error() if not running", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -167,7 +167,7 @@ describe("Span", () => {
     });
 
     it("should ignore success()/error() if already ended", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -190,7 +190,7 @@ describe("Span", () => {
 
   describe("event()", () => {
     it("should emit intermediate events while running", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -214,7 +214,7 @@ describe("Span", () => {
     });
 
     it("should ignore events if not running", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -230,7 +230,7 @@ describe("Span", () => {
     });
 
     it("should ignore events if ended", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Span",
@@ -252,7 +252,7 @@ describe("Span", () => {
 
   describe("child spans", () => {
     it("should create a child span with parent reference", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const parentSpan = new Span({
         name: "Parent Span",
@@ -277,7 +277,7 @@ describe("Span", () => {
     });
 
     it("should emit parent info in child events", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const parentSpan = new Span({
         name: "Parent Span",
@@ -307,7 +307,7 @@ describe("Span", () => {
 
   describe("properties", () => {
     it("should have unique spanId", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span1 = new Span({
         name: "Test Span",
@@ -331,7 +331,7 @@ describe("Span", () => {
     });
 
     it("should expose correct properties", async () => {
-      const { Span } = await import("../../tracing/Tracer");
+      const { Span } = await import("../../tracing/src/Tracer");
 
       const span = new Span({
         name: "Test Name",
@@ -361,7 +361,7 @@ describe("Tracer", () => {
 
   describe("addReporter()", () => {
     it("should add reporter and receive events", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const reporter: IEventReceiver = { handleEvent: vi.fn() };
@@ -380,7 +380,7 @@ describe("Tracer", () => {
     });
 
     it("should return unregister function", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const reporter: IEventReceiver = { handleEvent: vi.fn() };
@@ -396,7 +396,7 @@ describe("Tracer", () => {
     });
 
     it("should support multiple reporters", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const reporter1: IEventReceiver = { handleEvent: vi.fn() };
@@ -417,14 +417,14 @@ describe("Tracer", () => {
 
   describe("hasReporters()", () => {
     it("should return false when no reporters", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       expect(tracer.hasReporters()).toBe(false);
     });
 
     it("should return true when has reporters", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       tracer.addReporter({ handleEvent: () => {} });
@@ -433,7 +433,7 @@ describe("Tracer", () => {
     });
 
     it("should return false after unregister", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const unregister = tracer.addReporter({ handleEvent: () => {} });
@@ -445,7 +445,7 @@ describe("Tracer", () => {
 
   describe("createSpan()", () => {
     it("should create span without starting it", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const reporter: IEventReceiver = { handleEvent: vi.fn() };
@@ -459,7 +459,7 @@ describe("Tracer", () => {
     });
 
     it("should create span with correct name and payload", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const span = tracer.createSpan("Test Span", { key: "value" }, testMeta);
@@ -471,7 +471,7 @@ describe("Tracer", () => {
 
   describe("startSpan()", () => {
     it("should create and start span", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const reporter: IEventReceiver = { handleEvent: vi.fn() };
@@ -493,7 +493,7 @@ describe("Tracer", () => {
 
   describe("error handling in reporters", () => {
     it("should catch and log reporter errors", async () => {
-      const { Tracer } = await import("../../tracing/Tracer");
+      const { Tracer } = await import("../../tracing/src/Tracer");
       const tracer = new Tracer();
 
       const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -522,7 +522,7 @@ describe("Tracer", () => {
 
 describe("NullTracer", () => {
   it("should return no-op span", async () => {
-    const { NullTracer } = await import("../../tracing/NullTracer");
+    const { NullTracer } = await import("../../tracing/src/NullTracer");
     const tracer = new NullTracer();
 
     const span = tracer.createSpan("Test Span", {});
@@ -537,7 +537,7 @@ describe("NullTracer", () => {
   });
 
   it("should always return false for hasReporters()", async () => {
-    const { NullTracer } = await import("../../tracing/NullTracer");
+    const { NullTracer } = await import("../../tracing/src/NullTracer");
     const tracer = new NullTracer();
 
     expect(tracer.hasReporters()).toBe(false);
@@ -548,7 +548,7 @@ describe("NullTracer", () => {
   });
 
   it("should return same no-op span for child()", async () => {
-    const { NullTracer } = await import("../../tracing/NullTracer");
+    const { NullTracer } = await import("../../tracing/src/NullTracer");
     const tracer = new NullTracer();
 
     const span = tracer.createSpan("Test Span", {});

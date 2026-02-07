@@ -80,7 +80,6 @@ export interface BaseButtonProps<IconType extends string, Render>
   readonly onPress?:
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     | ((event: PressEvent) => Promise<unknown> | unknown)
-    | null
     | undefined
   readonly contentClassName?: string | undefined;
   readonly isDisabled?: boolean | undefined;

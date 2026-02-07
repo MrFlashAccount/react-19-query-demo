@@ -4,8 +4,11 @@ import { use, useMemo } from "react";
 import { QueryContext } from "../react/QueryProvider";
 
 import { StatusIcons } from "./constants";
+import type { Query } from "../Query";
 
-export function useDebugFormattedQuery(queryClient?: QueryClient) {
+export function useDebugFormattedQuery(
+  queryClient?: QueryClient,
+): Record<string, { count: number; queries: Query<any, any, any>[] }> {
   const client = queryClient ?? use(QueryContext)?.queryClient;
 
   if (client === undefined) {

@@ -11,7 +11,6 @@ import { mergeRefs } from "@/utilities/mergeRefs";
 import { tv, type VariantProps } from "@/utilities/tailwindVariants";
 import {
   startTransition,
-  useCallback,
   useRef,
   useState,
   type HTMLAttributes,
@@ -222,18 +221,15 @@ export function Scroller(props: ScrollerProps) {
     { passive: true, isDisabled: !showShadows },
   );
 
-  const refCallback = useCallback(
-    (el: HTMLDivElement | null) => {
-      if (!el) {
-        return;
-      }
+  const refCallback = (el: HTMLDivElement | null) => {
+    if (!el) {
+      return;
+    }
 
-      const { isAtStart, isAtEnd } = calculateShadows(el);
+    const { isAtStart, isAtEnd } = calculateShadows(el);
 
-      setHidden(isAtStart, isAtEnd);
-    },
-    [calculateShadows, setHidden],
-  );
+    setHidden(isAtStart, isAtEnd);
+  };
 
   const styles = variants({
     scrollbar,

@@ -1,8 +1,28 @@
 {
   "name": "@lib/rsc-service-worker-bff",
   "version": "0.0.0",
+  "description": "Service worker backend-for-frontend toolkit with React Server Components support.",
+  "keywords": [
+    "bff",
+    "react-server-components",
+    "rsc",
+    "service-worker",
+    "web"
+  ],
+  "homepage": "https://github.com/MrFlashAccount/react-19-query-demo#readme",
+  "bugs": {
+    "url": "https://github.com/MrFlashAccount/react-19-query-demo/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrFlashAccount/react-19-query-demo.git",
+    "directory": "lib/rsc-service-worker-bff"
+  },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE*",
+    "README*"
   ],
   "type": "module",
   "sideEffects": false,
@@ -22,31 +42,41 @@
       "default": "./dist/rsc/*.js"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm run build:lib && pnpm run build:dts",
     "build:lib": "tsdown",
     "build:dts": "tsgo --emitDeclarationOnly -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "test": "vitest run",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit",
     "check:lint": "oxlint --fix --type-aware",
     "check:format": "oxfmt --write"
   },
   "dependencies": {
-    "react-is": "^19.0.0",
-    "react-server-dom-webpack": "^19.1.0",
-    "web-streams-polyfill": "^4.1.0"
+    "react-is": "catalog:",
+    "react-server-dom-webpack": "catalog:",
+    "web-streams-polyfill": "catalog:"
   },
   "devDependencies": {
-    "@typescript/native-preview": "7.0.0-dev.20260124.1",
-    "typescript": "5.9.3",
-    "tsdown": "0.20.1",
-    "oxfmt": "0.26.0",
-    "oxlint": "1.41.0",
-    "oxlint-tsgolint": "0.11.1",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "@typescript/native-preview": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
   },
   "peerDependencies": {
-    "react": "^19.0.0"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

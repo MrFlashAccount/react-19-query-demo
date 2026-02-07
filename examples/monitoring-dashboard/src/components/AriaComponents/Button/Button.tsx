@@ -1,14 +1,12 @@
 /** @file A styled button. */
 import {
   memo,
-  useLayoutEffect,
   useRef,
-  useState,
   useTransition,
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from "react";
-import { Link } from "@tanstack/react-router";
 import * as aria from "@/components/aria";
 import { Tooltip, TooltipTrigger } from "@/components/AriaComponents/Tooltip";
 import { Icon as IconComponent } from "@/components/Icon";
@@ -31,14 +29,12 @@ const ICON_LOADER_DELAY = 150;
 /** A button allows a user to perform an action, with mouse, touch, and keyboard interactions. */
 // Manually casting types to make TS infer the final type correctly (e.g. RenderProps in icon)
 // eslint-disable-next-line no-restricted-syntax
-export function Button<IconType extends string>(propsReplacement: ButtonProps<IconType>) {
-  let [props, ref] = useContextProps(propsReplacement, null, ButtonContext);
+export function Button(propsReplacement: ButtonProps) {
+  let [props, ref] = useContextProps(propsReplacement, ButtonContext);
   props = useMergedButtonStyles(props);
-
   const dialogContext = useDialogContext();
   const prerenderContext = useDialogPrerenderContext();
   const {
-    className,
     contentClassName,
     children,
     variant,
@@ -72,12 +68,18 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
 
   const isLink = ariaProps.href != null;
 
-  const Tag = isLink ? Link : aria.Button;
+  const applyGoodDefaults = (() => {
+    if (isLink) {
+      // @ts-expect-error ts errors are expected here because we are merging props with different types
+      props.rel = "noopener noreferrer";
+    } else {
+      // @ts-expect-error ts errors are expected here because we are merging props with different types
+      props.type = "button" as const;
+    }
 
-  const goodDefaults = {
-    ...(isLink ? { rel: "noopener noreferrer" } : { type: "button" as const }),
-    "data-testid": testId,
-  };
+    // @ts-expect-error ts errors are expected here because we are merging props with different types
+    props["data-testid"] = testId;
+  })();
 
   const isIconOnly = (children == null || children === "" || children === false) && icon != null;
 
@@ -90,8 +92,6 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
       return tooltip != null;
     }
   })();
-
-  const tooltipElement = shouldShowTooltip ? (tooltip ?? ariaProps["aria-label"]) : null;
 
   const isLoadingFinal = (() => {
     if (typeof loading === "boolean") {
@@ -106,37 +106,9 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
   })();
 
   const isDisabled = props.isDisabled ?? isLoadingFinal;
-  const shouldUseVisualTooltip = shouldShowTooltip && isDisabled;
   const extraClickZone = extraClickZoneProp ?? variant === "icon";
 
-  useLayoutEffect(() => {
-    const delay = ICON_LOADER_DELAY;
-
-    if (isLoadingFinal) {
-      const loaderAnimation = loaderRef.current?.animate(
-        [{ opacity: 0 }, { opacity: 0, offset: 1 }, { opacity: 1 }],
-        { duration: delay, easing: "linear", delay: 0, fill: "forwards" },
-      );
-      const contentAnimation =
-        loaderPosition !== "full"
-          ? null
-          : contentRef.current?.animate([{ opacity: 1 }, { opacity: 0 }], {
-              duration: 0,
-              easing: "linear",
-              delay,
-              fill: "forwards",
-            });
-
-      return () => {
-        loaderAnimation?.cancel();
-        contentAnimation?.cancel();
-      };
-    } else {
-      return () => {};
-    }
-  }, [isLoadingFinal, loaderPosition]);
-
-  const handlePress = useEvent((event: aria.PressEvent): void => {
+  const handlePress = useEvent((event: aria.PressEvent) => {
     if (!isDisabled) {
       const result = onPress?.(event);
 
@@ -148,6 +120,31 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
         dialogContext.close();
       }
     }
+  });
+
+  props.onPressStart = undefined;
+
+  props.onPressEnd = useEvent((event: aria.PressEvent) => {
+    if (!isDisabled) {
+      handlePress(event);
+    }
+  });
+
+  const tooltipElement = shouldShowTooltip ? (tooltip ?? ariaProps["aria-label"]) : null;
+  const { buttonProps, isPressed } = aria.useButton(
+    props,
+    ref as RefObject<HTMLButtonElement | null>,
+  );
+  const { focusProps, isFocused, isFocusVisible } = aria.useFocusRing(props);
+  const { hoverProps, isHovered } = aria.useHover({
+    ...props,
+    isDisabled: props.isDisabled || isLoadingFinal,
+    onHoverStart: useEvent(() => {
+      prerenderContext.enablePrerender();
+    }),
+    onHoverEnd: useEvent(() => {
+      prerenderContext.disablePrerender();
+    }),
   });
 
   const styles = variants({
@@ -168,78 +165,65 @@ export function Button<IconType extends string>(propsReplacement: ButtonProps<Ic
 
   const shouldDisplayBorder = isJoined && (position === "first" || position === "middle");
 
+  const states = {
+    isDisabled,
+    isFocused,
+    isHovered,
+    isPressed,
+    isFocusVisible,
+    isCurrent: false,
+    defaultClassName: "",
+    isPending: isLoadingFinal,
+  };
+
+  const className = styles.base({
+    className: typeof props.className === "function" ? props.className(states) : props.className,
+    ...states,
+  });
+
+  const shouldShowOverlayLoader = () => {
+    if (hideLoader) {
+      return false;
+    }
+
+    return isLoadingFinal && loaderPosition === "full";
+  };
+
   const button = (
-    <Tag
-      // @ts-expect-error ts errors are expected here because we are merging props with different types
+    <button
       ref={ref}
+      className={className}
       // @ts-expect-error ts errors are expected here because we are merging props with different types
-      {...aria.mergeProps<aria.ButtonProps>()(goodDefaults, ariaProps, {
+      {...aria.mergeProps<aria.ButtonProps>()(buttonProps, hoverProps, focusProps, {
         isPending: isLoadingFinal,
         isDisabled,
-        onHoverStart: () => {
-          prerenderContext.enablePrerender();
-        },
-        onHoverEnd: () => {
-          prerenderContext.disablePrerender();
-        },
-        // we use onPressEnd instead of onPress because for some reason react-aria doesn't trigger
-        // onPress on EXTRA_CLICK_ZONE, but onPress{start,end} are triggered
-        onPressEnd: (e) => {
-          if (!isDisabled) {
-            handlePress(e);
-          }
-        },
-        // @ts-expect-error ts errors are expected here because we are merging props with different types
-        className: aria.composeRenderProps(className, (classNames, states) =>
-          styles.base({ className: classNames, ...states }),
-        ),
       })}
     >
-      {(render: aria.ButtonRenderProps | aria.LinkRenderProps) => {
-        const shouldShowOverlayLoader = () => {
-          if (hideLoader) {
-            return false;
-          }
+      <ButtonContent
+        isIconOnly={isIconOnly}
+        loaderPosition={loaderPosition}
+        hideLoader={hideLoader}
+        isLoading={isLoadingFinal}
+        /* @ts-expect-error ts errors are expected here because we are merging props with different types */
+        icon={icon}
+        styles={styles}
+        /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
+        addonStart={addonStart}
+        /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
+        addonEnd={addonEnd}
+      >
+        {/* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */}
+        {typeof children === "function" ? children(render) : children}
+      </ButtonContent>
 
-          return isLoadingFinal && loaderPosition === "full";
-        };
+      {shouldShowOverlayLoader() && (
+        <span ref={loaderRef} className={styles.loader()}>
+          <StatelessSpinner state="loading-medium" size={16} />
+        </span>
+      )}
 
-        return (
-          <>
-            <span className={styles.wrapper()}>
-              <span ref={contentRef} className={styles.content({ className: contentClassName })}>
-                <ButtonContent
-                  isIconOnly={isIconOnly}
-                  loaderPosition={loaderPosition}
-                  hideLoader={hideLoader}
-                  /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
-                  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                  isLoading={render.isPending}
-                  /* @ts-expect-error ts errors are expected here because we are merging props with different types */
-                  icon={typeof icon === "function" ? icon(render) : icon}
-                  styles={styles}
-                  /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
-                  addonStart={typeof addonStart === "function" ? addonStart(render) : addonStart}
-                  /* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */
-                  addonEnd={typeof addonEnd === "function" ? addonEnd(render) : addonEnd}
-                >
-                  {/* @ts-expect-error any here is safe because we transparently pass it to the children, and ts infer the type outside correctly */}
-                  {typeof children === "function" ? children(render) : children}
-                </ButtonContent>
-              </span>
-
-              {shouldShowOverlayLoader() && (
-                <span ref={loaderRef} className={styles.loader()}>
-                  <StatelessSpinner state="loading-medium" size={16} />
-                </span>
-              )}
-            </span>
-
-            {shouldDisplayBorder && <div className={styles.joinSeparator()} />}
-          </>
-        );
-      }}
-    </Tag>
+      {shouldDisplayBorder && <div className={styles.joinSeparator()} />}
+    </button>
   );
 
   if (tooltipElement == null) {
@@ -340,28 +324,12 @@ interface IconProps {
 const Icon = memo(function Icon(props: IconProps) {
   const { isLoading, loaderPosition, icon, styles, hideLoader } = props;
 
-  const [loaderIsVisible, setLoaderIsVisible] = useState(false);
-
-  useLayoutEffect(() => {
-    if (isLoading && loaderPosition === "icon") {
-      const timeout = setTimeout(() => {
-        setLoaderIsVisible(true);
-      }, ICON_LOADER_DELAY);
-
-      return () => {
-        clearTimeout(timeout);
-      };
-    } else {
-      setLoaderIsVisible(false);
-    }
-  }, [isLoading, loaderPosition]);
-
   const shouldShowLoader = (() => {
     if (hideLoader) {
       return false;
     }
 
-    return isLoading && loaderPosition === "icon" && loaderIsVisible;
+    return isLoading && loaderPosition === "icon";
   })();
 
   if (icon == null && !shouldShowLoader) {
@@ -372,7 +340,7 @@ const Icon = memo(function Icon(props: IconProps) {
     return typeof icon === "string" ? (
       <IconComponent className={styles.icon()}>{icon}</IconComponent>
     ) : (
-      <span className={styles.icon()}>{icon}</span>
+      icon
     );
   })();
 

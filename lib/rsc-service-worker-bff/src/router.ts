@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import type { CompiledRoute, RouteDefinition, RouteParams } from "./types";
+import type { CompiledRoute, RouteDefinition, RouteParams, URLPatternLike } from "./types";
 
 // Ensure URLPattern global types are available
 import "./types";
@@ -10,8 +10,11 @@ import "./types";
 export function compileRoute<TParams extends RouteParams>(
   route: RouteDefinition<TParams>,
 ): CompiledRoute<TParams> {
-  // URLPattern uses :param syntax natively
-  const pattern = new URLPattern({ pathname: route.path });
+  // URLPattern uses :param syntax natively.
+  const URLPatternCtor = (globalThis as unknown as { URLPattern: unknown }).URLPattern as {
+    new (init?: { pathname?: string } | string, baseURL?: string): URLPatternLike;
+  };
+  const pattern = new URLPatternCtor({ pathname: route.path });
 
   return {
     method: route.method,

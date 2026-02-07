@@ -110,9 +110,7 @@ self.addEventListener("message", async (event: MessageEvent<StressTestWorkerMess
   isCancelled = false;
 
   try {
-    const untracedStart = performance.now();
-    const untracedMs = await runStressTestUntraced();
-    const untracedDuration = performance.now() - untracedStart;
+    const untracedDuration = await runStressTestUntraced();
 
     const tracedDuration = await runTracingStressTest(async (phase, current, total) => {
       self.postMessage({
@@ -124,7 +122,7 @@ self.addEventListener("message", async (event: MessageEvent<StressTestWorkerMess
       });
     });
 
-    const response: WorkerResponse = {
+    const response: StressTestWorkerResponse = {
       type: "complete",
       id,
       untracedMs: untracedDuration,
@@ -133,7 +131,7 @@ self.addEventListener("message", async (event: MessageEvent<StressTestWorkerMess
 
     self.postMessage(response);
   } catch (error) {
-    const errorResponse: WorkerResponse = {
+    const errorResponse: StressTestWorkerResponse = {
       type: "error",
       id,
       error: error instanceof Error ? error.message : String(error),

@@ -1,4 +1,4 @@
-import { useState, use, useCallback, useEffect } from "react";
+import { useState, use, useEffect } from "react";
 import {
   Button,
   Text,
@@ -13,6 +13,7 @@ import { logsQuery } from "@/queries";
 import { useQuery } from "@lib/goat-query/react";
 import { z } from "zod";
 import { useSearchParamsState } from "@/hooks/searchParamsStateHooks";
+import { useEvent } from "../../../hooks/useEvent";
 
 const LOG_LEVELS: LogLevel[] = ["debug", "info", "warn", "error", "critical"];
 const TIME_PRESETS = [
@@ -92,38 +93,32 @@ export function LogsTable({
   }, [filters.levels, setLevelsParam]);
 
   // Handle filter submission from form
-  const handleFiltersSubmit = useCallback(
-    (values: FilterValues) => {
-      setFilters(values);
+  const handleFiltersSubmit = useEvent((values: FilterValues) => {
+    setFilters(values);
 
-      // Sync to URL immediately
-      setSearchParam(values.search || "");
-      setServiceParam(values.service || "");
-      setLevelsParam(values.levels.length > 0 ? values.levels : []);
+    // Sync to URL immediately
+    setSearchParam(values.search || "");
+    setServiceParam(values.service || "");
+    setLevelsParam(values.levels.length > 0 ? values.levels : []);
 
-      // If time range is selected, trigger time range change
-      if (values.timeRange) {
-        const newEndTime = Date.now();
-        const newStartTime = newEndTime - values.timeRange;
-        onTimeRangeChange?.(newStartTime, newEndTime);
-        setOffset(0);
-      }
-    },
-    [onTimeRangeChange, setSearchParam, setServiceParam, setLevelsParam],
-  );
+    // If time range is selected, trigger time range change
+    if (values.timeRange) {
+      const newEndTime = Date.now();
+      const newStartTime = newEndTime - values.timeRange;
+      onTimeRangeChange?.(newStartTime, newEndTime);
+      setOffset(0);
+    }
+  });
 
   // Handle load more
-  const handleLoadMore = useCallback(() => {
+  const handleLoadMore = useEvent(() => {
     setLimit((prev) => prev + 50);
-  }, []);
+  });
 
   // Handle view at time
-  const handleViewAtTime = useCallback(
-    (timestamp: number) => {
-      onViewAtTime?.(timestamp);
-    },
-    [onViewAtTime],
-  );
+  const handleViewAtTime = useEvent((timestamp: number) => {
+    onViewAtTime?.(timestamp);
+  });
 
   const { promise } = useQuery({
     query: logsQuery,
@@ -179,7 +174,7 @@ export function LogsTable({
           <line x1="16" y1="17" x2="8" y2="17" />
           <polyline points="10 9 9 9 8 9" />
         </svg>
-        <Text variant="h2" className="text-lg font-semibold">
+        <Text variant="h1" className="text-lg font-semibold">
           Recent Logs
         </Text>
       </div>

@@ -1,0 +1,185 @@
+name: CI Libraries
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "lib/**"
+      - ".changeset/**"
+      - ".github/workflows/ci-libs.yml"
+      - ".github/workflows/release-libs.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".oxlintrc.json"
+      - ".oxfmtrc.json"
+      - "tsconfig.json"
+  push:
+    branches:
+      - main
+    paths:
+      - "lib/**"
+      - ".changeset/**"
+      - ".github/workflows/ci-libs.yml"
+      - ".github/workflows/release-libs.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+      - ".oxlintrc.json"
+      - ".oxfmtrc.json"
+      - "tsconfig.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-libs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changeset-validation:
+    name: Changeset validation
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify changeset exists for library changes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = (context.payload.pull_request?.labels || []).map((label) => label.name);
+            const skipLabels = new Set(["skip-changeset", "no-changeset", "release"]);
+            const hasSkipLabel = labels.some((label) => skipLabels.has(label));
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+
+            const touchesLib = files.some((file) => file.filename.startsWith("lib/"));
+            const hasChangeset = files.some(
+              (file) => file.filename.startsWith(".changeset/") && file.filename.endsWith(".md"),
+            );
+
+            if (!touchesLib) {
+              core.info("PR does not touch lib/* packages. Skipping changeset requirement.");
+              return;
+            }
+
+            if (hasChangeset || hasSkipLabel) {
+              core.info("Changeset requirement satisfied.");
+              return;
+            }
+
+            core.setFailed(
+              "This PR modifies lib/* and must include a .changeset/*.md file, or apply one of labels: skip-changeset, no-changeset, release.",
+            );
+
+  quality:
+    name: Quality (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.5.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting (read-only)
+        run: pnpm run check:format:ci
+
+      - name: Lint (read-only)
+        run: pnpm run check:lint:ci
+
+      - name: Typecheck libraries
+        run: pnpm turbo run check:type --filter=./lib/*
+
+      - name: Build libraries
+        run: pnpm turbo run build --filter=./lib/*
+
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20.x", "22.x"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.5.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test libraries
+        run: pnpm turbo run test --filter=./lib/*
+
+  pack-smoke:
+    name: Pack smoke
+    needs:
+      - quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.5.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pack all libraries
+        run: |
+          mkdir -p ./.artifacts/packs
+          pnpm -r --filter "./lib/*" pack --pack-destination ./.artifacts/packs
+
+      - name: Upload packed tarballs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lib-packages
+          path: ./.artifacts/packs
+          if-no-files-found: error

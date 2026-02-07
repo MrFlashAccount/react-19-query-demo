@@ -13,7 +13,7 @@ const EMPTY_ARRAY: never[] = [];
  */
 export function useEvent<Func extends (...args: never[]) => unknown>(
   callback: Func | false | null | undefined,
-) {
+): Func {
   "use no memo";
   const callbackRef = useLatest(callback);
   const dontCallInRenderGuard = useEffectEvent(noop);
@@ -21,7 +21,7 @@ export function useEvent<Func extends (...args: never[]) => unknown>(
   // Make sure that the value of `this` provided for the call to fn is not `ref`
   // This type assertion is safe, because it's a transparent wrapper around the original callback
 
-  return useCallback<Func>(
+  return useCallback(
     // @ts-expect-error we know that the callbackRef.current is of type Func
     function eventCallback(...args: Parameters<Func>) {
       if (import.meta.env.DEV) {
@@ -30,7 +30,7 @@ export function useEvent<Func extends (...args: never[]) => unknown>(
 
       if (typeof callbackRef.current === "function") {
         // eslint-disable-next-line no-restricted-syntax
-        return callbackRef.current(...args) as ReturnType<Func>;
+        return callbackRef.current(...args);
       }
     },
     EMPTY_ARRAY,

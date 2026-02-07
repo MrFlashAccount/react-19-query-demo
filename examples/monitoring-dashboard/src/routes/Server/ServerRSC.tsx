@@ -16,6 +16,29 @@ type ClientRefs = {
   LogTimestampButton: React.ComponentType<{ timestamp: number; log: LogEntry }>;
   LogViewAtTimeButton: React.ComponentType<{ onPress: () => void }>;
   LoadMoreButton: React.ComponentType<{ onPress: () => void }>;
+  DialogTrigger: React.ComponentType<{ children: React.ReactNode }>;
+  Dialog: React.ComponentType<{
+    type: "sheet" | "modal" | "fullscreen";
+    size: "small" | "medium" | "large" | "xlarge" | "xxlarge" | "xxxlarge" | "xxxxlarge";
+    title: string;
+    children: React.ReactNode;
+  }>;
+  Button: React.ComponentType<{
+    variant:
+      | "primary"
+      | "secondary"
+      | "ghost"
+      | "link"
+      | "outline"
+      | "destructive"
+      | "success"
+      | "warning"
+      | "info"
+      | "muted";
+    size: "small" | "medium" | "large" | "xlarge" | "xxlarge" | "xxxlarge" | "xxxxlarge";
+    children: React.ReactNode;
+  }>;
+  LogDetailContent: React.ComponentType<{ log: LogEntry }>;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -573,6 +596,28 @@ function LogsSection({
         )}
       </div>
     </section>
+  );
+}
+
+export function LogTimestampButton({
+  Client,
+  timestamp,
+  log,
+}: {
+  Client: ClientRefs;
+  timestamp: number;
+  log: LogEntry;
+}) {
+  return (
+    <Client.DialogTrigger>
+      <Client.Button variant="ghost" size="xsmall">
+        {new Date(timestamp).toLocaleTimeString()}
+      </Client.Button>
+
+      <Client.Dialog type="sheet" size="large" title="Log Entry Details">
+        {() => <Client.LogDetailContent log={log} />}
+      </Client.Dialog>
+    </Client.DialogTrigger>
   );
 }
 

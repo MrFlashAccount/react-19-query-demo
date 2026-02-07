@@ -1,8 +1,27 @@
 {
   "name": "@lib/brand",
   "version": "0.0.0",
+  "description": "Type-safe nominal branding utilities for TypeScript.",
+  "keywords": [
+    "branding",
+    "nominal-types",
+    "types",
+    "typescript"
+  ],
+  "homepage": "https://github.com/MrFlashAccount/react-19-query-demo#readme",
+  "bugs": {
+    "url": "https://github.com/MrFlashAccount/react-19-query-demo/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MrFlashAccount/react-19-query-demo.git",
+    "directory": "lib/brand"
+  },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE*",
+    "README*"
   ],
   "type": "module",
   "sideEffects": false,
@@ -14,21 +33,30 @@
       "default": "./dist/brand.js"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "pnpm run build:lib && pnpm run build:dts",
     "build:lib": "tsdown",
     "build:dts": "tsgo --emitDeclarationOnly -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "test": "vitest run",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit",
     "check:lint": "oxlint --fix --type-aware",
     "check:format": "oxfmt --write"
   },
   "devDependencies": {
-    "@typescript/native-preview": "7.0.0-dev.20260124.1",
-    "typescript": "5.9.3",
-    "tsdown": "0.20.1",
-    "oxfmt": "0.26.0",
-    "oxlint": "1.41.0",
-    "oxlint-tsgolint": "0.11.1"
+    "@typescript/native-preview": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

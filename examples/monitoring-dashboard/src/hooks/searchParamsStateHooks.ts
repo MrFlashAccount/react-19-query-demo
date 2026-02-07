@@ -11,7 +11,6 @@ import * as eventCallback from "@/hooks/useEvent";
 import * as lazyMemo from "@/hooks/useLazyMemoHooks";
 
 import * as safeJsonParse from "@/utilities/safeJsonParse";
-import { useCallback } from "react";
 
 /** The return type of the `useSearchParamsState` hook. */
 type SearchParamsStateReturnType<T> = Readonly<
@@ -43,30 +42,25 @@ export function useSearchParamsState<T = unknown>(
 
   const searchParams = new URLSearchParams(searchStr);
 
-  const setSearchParams = useCallback(
-    (
-      nextSearchParams:
-        | URLSearchParams
-        | ((currentSearchParams: URLSearchParams) => URLSearchParams),
-      options: NavigateOptions = {},
-    ) => {
-      const params = new URLSearchParams(searchStr);
+  const setSearchParams = (
+    nextSearchParams: URLSearchParams | ((currentSearchParams: URLSearchParams) => URLSearchParams),
+    options: NavigateOptions = {},
+  ) => {
+    const params = new URLSearchParams(searchStr);
 
-      if (nextSearchParams instanceof Function) {
-        nextSearchParams = nextSearchParams(params);
-      }
+    if (nextSearchParams instanceof Function) {
+      nextSearchParams = nextSearchParams(params);
+    }
 
-      const nextSearch = Object.fromEntries(nextSearchParams.entries());
+    const nextSearch = Object.fromEntries(nextSearchParams.entries());
 
-      void navigate({
-        to: ".",
-        search: nextSearch,
-        replace: false,
-        ...options,
-      });
-    },
-    [navigate, searchStr],
-  );
+    void navigate({
+      to: ".",
+      search: nextSearch,
+      replace: false,
+      ...options,
+    });
+  };
 
   const prefixedKey = `${key}`;
 

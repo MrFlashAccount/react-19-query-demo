@@ -40,7 +40,7 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
     },
     resolve: {
       alias: {
-        "@lib/rsc-service-worker-bff": path.resolve(libDir, "rsc-service-worker-bff"),
+        "@lib/rsc-service-worker-bff": path.resolve(libDir, "rsc-service-worker-bff/src"),
       },
       // Required for react-server-dom-webpack/server
       conditions: [mode, "browser", "import", "default"],
@@ -108,16 +108,6 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(rootDir, "src"),
       "#": path.resolve(rootDir, "src/*"),
-
-      // Prefer TS sources for local dev
-      "@lib/goat-query/react": path.resolve(libDir, "goat-query/react.ts"),
-      "@lib/goat-query/devtools": path.resolve(libDir, "goat-query/devtools/index.ts"),
-      "@lib/goat-query": path.resolve(libDir, "goat-query/index.ts"),
-      "@lib/rsc-service-worker-bff": path.resolve(libDir, "rsc-service-worker-bff"),
-      "@lib/tracing/helpers": path.resolve(libDir, "tracing/helpers.ts"),
-      "@lib/tracing": path.resolve(libDir, "tracing"),
-      "@lib/brand": path.resolve(libDir, "brand/brand.ts"),
-      "@lib/performance-monitor": path.resolve(libDir, "performance-monitor/index.ts"),
     },
   },
   worker: { format: "es" },

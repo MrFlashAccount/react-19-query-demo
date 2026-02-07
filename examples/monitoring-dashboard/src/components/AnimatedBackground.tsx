@@ -5,7 +5,7 @@
 import type { Transition, Variants } from "framer-motion";
 import { AnimatePresence, motion } from "framer-motion";
 import type { PropsWithChildren } from "react";
-import { createContext, memo, useContext, useId, useMemo } from "react";
+import { createContext, useContext, useId } from "react";
 
 import { twJoin } from "@/utilities/tailwindMerge";
 import invariant from "tiny-invariant";
@@ -42,10 +42,7 @@ export function AnimatedBackground(props: AnimatedBackgroundProps) {
 
   const layoutId = useId();
 
-  const contextValue = useMemo(
-    () => ({ value, transition, layoutId }),
-    [value, transition, layoutId],
-  );
+  const contextValue = { value, transition, layoutId };
 
   return (
     <AnimatedBackgroundContext.Provider value={contextValue}>
@@ -76,7 +73,7 @@ interface AnimatedBackgroundItemPropsWithSelected {
 }
 
 /** Item within an {@link AnimatedBackground}. */
-AnimatedBackground.Item = memo(function AnimatedBackgroundItem(props: AnimatedBackgroundItemProps) {
+AnimatedBackground.Item = function AnimatedBackgroundItem(props: AnimatedBackgroundItemProps) {
   const {
     value,
     className,
@@ -86,12 +83,11 @@ AnimatedBackground.Item = memo(function AnimatedBackgroundItem(props: AnimatedBa
     underlayElement: rawUnderlayElement,
   } = props;
 
-  const defaultUnderlayElement = useMemo(
-    () => <div className={twJoin("h-full w-full", animationClassName)} />,
-    [animationClassName],
+  const defaultUnderlayElement = () => (
+    <div className={twJoin("h-full w-full", animationClassName)} />
   );
 
-  const underlayElement = rawUnderlayElement ?? defaultUnderlayElement;
+  const underlayElement = rawUnderlayElement ?? defaultUnderlayElement();
 
   const context = useContext(AnimatedBackgroundContext);
   invariant(context, "<AnimatedBackground.Item /> must be placed within an <AnimatedBackground />");
@@ -116,7 +112,7 @@ AnimatedBackground.Item = memo(function AnimatedBackgroundItem(props: AnimatedBa
       <div className="isolate contents *:isolate">{children}</div>
     </div>
   );
-});
+};
 
 /** Props for {@link AnimatedBackgroundItemUnderlay}. */
 interface AnimatedBackgroundItemUnderlayProps {
@@ -133,7 +129,7 @@ const VARIANTS: Variants = {
 
 /** Underlay for {@link AnimatedBackground.Item}. */
 
-const AnimatedBackgroundItemUnderlay = memo(function AnimatedBackgroundItemUnderlay(
+const AnimatedBackgroundItemUnderlay = function AnimatedBackgroundItemUnderlay(
   props: AnimatedBackgroundItemUnderlayProps,
 ) {
   const { isActive, underlayElement, layoutId, transition } = props;
@@ -156,4 +152,4 @@ const AnimatedBackgroundItemUnderlay = memo(function AnimatedBackgroundItemUnder
       )}
     </AnimatePresence>
   );
-});
+};
