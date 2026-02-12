@@ -82,6 +82,14 @@ declare module "react-server-dom-webpack/client" {
   export function encodeReply(args: unknown[]): Promise<FormData | string>;
 }
 
+declare module "react-server-dom-webpack/server.browser" {
+  export * from "react-server-dom-webpack/server";
+}
+
+declare module "react-server-dom-webpack/client.browser" {
+  export * from "react-server-dom-webpack/client";
+}
+
 declare module "web-streams-polyfill" {
   export class ReadableStream<R = unknown> extends globalThis.ReadableStream<R> {}
 }

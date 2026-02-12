@@ -24,7 +24,6 @@ export default defineConfig({
   dts: false,
   external: [
     "react",
-    "react-is",
     "react-server-dom-webpack",
     /^react-server-dom-webpack\/.+$/,
     "web-streams-polyfill",

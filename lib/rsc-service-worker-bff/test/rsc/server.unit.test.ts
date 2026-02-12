@@ -1,24 +1,48 @@
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-const renderToReadableStream = vi.fn(async () => new ReadableStream<Uint8Array>());
-const registerServerReference = vi.fn((fn) => fn);
-const createClientModuleProxy = vi.fn((moduleId: string) => ({ __id: moduleId }));
-const decodeReply = vi.fn(async (body: unknown) => {
-  if (typeof body === "string") {
-    return JSON.parse(body);
-  }
-  if (body instanceof FormData) {
-    return Array.from(body.entries()).map(([, value]) => value);
-  }
-  return [];
+const mocks = vi.hoisted(() => {
+  const renderToReadableStream = vi.fn(async () => new ReadableStream<Uint8Array>());
+  const registerServerReference = vi.fn((fn) => fn);
+  const createClientModuleProxy = vi.fn((moduleId: string) =>
+    new Proxy({}, {
+      get(_target, prop) {
+        if (typeof prop !== "string") return undefined;
+        const cache = (createClientModuleProxy as unknown as { __cache?: Map<string, unknown> }).__cache ??
+          ((createClientModuleProxy as unknown as { __cache?: Map<string, unknown> }).__cache = new Map());
+        const key = `${moduleId}#${prop}`;
+        if (!cache.has(key)) cache.set(key, { $$id: key });
+        return cache.get(key);
+      },
+    }),
+  );
+  const decodeReply = vi.fn(async (body: unknown) => {
+    if (typeof body === "string") {
+      return JSON.parse(body);
+    }
+    if (body instanceof FormData) {
+      return Array.from(body.entries()).map(([, value]) => value);
+    }
+    return [];
+  });
+
+  return {
+    renderToReadableStream,
+    registerServerReference,
+    createClientModuleProxy,
+    decodeReply,
+  };
 });
 
 vi.mock("react-server-dom-webpack/server", () => ({
-  renderToReadableStream,
-  registerServerReference,
-  createClientModuleProxy,
-  decodeReply,
+  default: {},
+}));
+
+vi.mock("react-server-dom-webpack/server.browser", () => ({
+  renderToReadableStream: mocks.renderToReadableStream,
+  registerServerReference: mocks.registerServerReference,
+  createClientModuleProxy: mocks.createClientModuleProxy,
+  decodeReply: mocks.decodeReply,
 }));
 
 import {
@@ -54,7 +78,7 @@ describe("rsc server", () => {
 
   it("creates client proxy", async () => {
     const proxy = await createClientProxy("client");
-    expect(proxy).toEqual({ __id: "client" });
+    expect((proxy as Record<string, { $$id?: string }>).Counter.$$id).toBe("client#Counter");
   });
 
   it("renders stream", async () => {
@@ -63,8 +87,8 @@ describe("rsc server", () => {
     const stream = await renderRSC(createElement("div", null, "ok"), ctx);
 
     expect(stream).toBeInstanceOf(ReadableStream);
-    expect(renderToReadableStream).toHaveBeenCalled();
-    const lastCall = renderToReadableStream.mock.calls.at(-1) as
+    expect(mocks.renderToReadableStream).toHaveBeenCalled();
+    const lastCall = mocks.renderToReadableStream.mock.calls.at(-1) as
       | [unknown, unknown, { onError?: (error: unknown) => string }]
       | undefined;
     const onError = lastCall?.[2]?.onError;
@@ -80,18 +104,28 @@ describe("rsc server", () => {
     expect(formArgs).toEqual(["1", "2"]);
   });
 
-  it("handles action lookup and module#name normalization", async () => {
+  it("handles action lookup without module#name normalization", async () => {
     const ctx = createRSCContext({});
     await registerAction(ctx, "run", async (...args: unknown[]) =>
       createElement("p", null, String(args[0] ?? "")),
     );
 
-    const stream = await handleAction(ctx, "mod#run", { type: "string", data: "[\"ok\"]" });
+    const stream = await handleAction(ctx, "run", { type: "string", data: "[\"ok\"]" });
     expect(stream).toBeInstanceOf(ReadableStream);
+
+    await expect(
+      handleAction(ctx, "mod#run", { type: "string", data: "[]" }),
+    ).rejects.toThrow('Action "mod#run" not found');
 
     await expect(
       handleAction(ctx, "missing", { type: "string", data: "[]" }),
     ).rejects.toThrow('Action "missing" not found');
+  });
+
+  it("uses server.browser API even when server module has default-only shape", async () => {
+    const ctx = createRSCContext({});
+    await renderRSC(createElement("div", null, "ok"), ctx);
+    expect(mocks.renderToReadableStream).toHaveBeenCalled();
   });
 
   it("extracts action id from headers", () => {

@@ -3,7 +3,27 @@ import { describe, expect, it, vi } from "vitest";
 
 const renderToReadableStream = vi.fn(async () => new ReadableStream<Uint8Array>());
 const registerServerReference = vi.fn((fn) => fn);
-const createClientModuleProxy = vi.fn((moduleId: string) => ({ __id: moduleId }));
+const createClientModuleProxy = vi.fn((moduleId: string) => {
+  const symbol = Symbol.for("react.client.reference");
+  const cache = new Map<string, { $$typeof: symbol; $$id: string; name: string }>();
+  return new Proxy(
+    {},
+    {
+      get(_target, prop: string) {
+        if (cache.has(prop)) {
+          return cache.get(prop);
+        }
+        const ref = {
+          $$typeof: symbol,
+          $$id: `${moduleId}#${prop}`,
+          name: prop,
+        };
+        cache.set(prop, ref);
+        return ref;
+      },
+    },
+  );
+});
 const decodeReply = vi.fn(async (body: unknown) => {
   if (typeof body === "string") {
     return JSON.parse(body);
@@ -54,7 +74,7 @@ describe("rsc server", () => {
 
   it("creates client proxy", async () => {
     const proxy = await createClientProxy("client");
-    expect(proxy).toEqual({ __id: "client" });
+    expect((proxy as { Counter: { $$id: string } }).Counter.$$id).toBe("client#Counter");
   });
 
   it("renders stream", async () => {
@@ -80,14 +100,18 @@ describe("rsc server", () => {
     expect(formArgs).toEqual(["1", "2"]);
   });
 
-  it("handles action lookup and module#name normalization", async () => {
+  it("handles action lookup by exact id", async () => {
     const ctx = createRSCContext({});
     await registerAction(ctx, "run", async (...args: unknown[]) =>
       createElement("p", null, String(args[0] ?? "")),
     );
 
-    const stream = await handleAction(ctx, "mod#run", { type: "string", data: "[\"ok\"]" });
+    const stream = await handleAction(ctx, "run", { type: "string", data: "[\"ok\"]" });
     expect(stream).toBeInstanceOf(ReadableStream);
+
+    await expect(
+      handleAction(ctx, "mod#run", { type: "string", data: "[]" }),
+    ).rejects.toThrow('Action "mod#run" not found');
 
     await expect(
       handleAction(ctx, "missing", { type: "string", data: "[]" }),
@@ -107,7 +131,7 @@ describe("rsc server", () => {
   });
 
   it("creates full RSC setup", async () => {
-    const setup = createRSC<{ Counter: unknown }>({
+    const setup = await createRSC<{ Counter: unknown }>({
       moduleId: "client",
       components: ["Counter"],
       actions: {
@@ -125,7 +149,7 @@ describe("rsc server", () => {
   });
 
   it("creates RSC setup without actions", async () => {
-    const setup = createRSC<{ Counter: unknown }>({
+    const setup = await createRSC<{ Counter: unknown }>({
       moduleId: "client",
       components: ["Counter"],
     });

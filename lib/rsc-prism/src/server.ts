@@ -12,23 +12,13 @@
  */
 
 import type { ReactNode } from "react";
+import {
+  createClientModuleProxy,
+  decodeReply,
+  registerServerReference,
+  renderToReadableStream,
+} from "react-server-dom-webpack/server.browser";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
-
-// Lazy imports to ensure webpack-shim loads first
-let _renderToReadableStream: typeof import("react-server-dom-webpack/server").renderToReadableStream;
-let _registerServerReference: typeof import("react-server-dom-webpack/server").registerServerReference;
-let _createClientModuleProxy: typeof import("react-server-dom-webpack/server").createClientModuleProxy;
-let _decodeReply: typeof import("react-server-dom-webpack/server").decodeReply;
-
-async function ensureImports(): Promise<void> {
-  if (!_renderToReadableStream) {
-    const mod = await import("react-server-dom-webpack/server");
-    _renderToReadableStream = mod.renderToReadableStream;
-    _registerServerReference = mod.registerServerReference;
-    _createClientModuleProxy = mod.createClientModuleProxy;
-    _decodeReply = mod.decodeReply;
-  }
-}
 
 /**
  * Create an RSC context for rendering
@@ -51,8 +41,7 @@ export async function registerAction(
   id: string,
   fn: (...args: unknown[]) => unknown,
 ): Promise<void> {
-  await ensureImports();
-  const registeredFn = _registerServerReference(fn, id, id);
+  const registeredFn = registerServerReference(fn, id, id);
   ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
 }
 
@@ -63,9 +52,8 @@ export async function registerActions(
   ctx: RSCContext,
   actions: Record<string, (...args: unknown[]) => unknown>,
 ): Promise<void> {
-  await ensureImports();
   for (const [id, fn] of Object.entries(actions)) {
-    const registeredFn = _registerServerReference(fn, id, id);
+    const registeredFn = registerServerReference(fn, id, id);
     ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
   }
 }
@@ -81,8 +69,7 @@ export async function registerActions(
  * ```
  */
 export async function createClientProxy<T = Record<string, unknown>>(moduleId: string): Promise<T> {
-  await ensureImports();
-  return _createClientModuleProxy(moduleId) as T;
+  return createClientModuleProxy(moduleId) as T;
 }
 
 /**
@@ -101,9 +88,7 @@ export async function renderRSC(
   ctx: RSCContext,
   options?: RSCRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
-  await ensureImports();
-
-  return _renderToReadableStream(element, ctx.manifest, {
+  return renderToReadableStream(element, ctx.manifest, {
     onError:
       options?.onError ??
       ((err) => {
@@ -118,8 +103,6 @@ export async function renderRSC(
  * Decode encoded action arguments back to JavaScript values
  */
 export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
-  await ensureImports();
-
   let body: FormData | string;
   if (encoded.type === "formdata") {
     body = new FormData();
@@ -130,7 +113,7 @@ export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unkn
     body = encoded.data;
   }
 
-  const decoded = await _decodeReply(body, {});
+  const decoded = await decodeReply(body, {});
   return Array.isArray(decoded) ? decoded : [decoded];
 }
 
@@ -151,21 +134,16 @@ export async function handleAction(
   encodedArgs: EncodedActionArgs,
   options?: RSCRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
-  await ensureImports();
-
-  // Handle "module#export" format
-  const actionName = actionId.includes("#") ? (actionId.split("#")[1] ?? actionId) : actionId;
-
-  const action = ctx.actions.get(actionName);
+  const action = ctx.actions.get(actionId);
   if (!action) {
     const available = Array.from(ctx.actions.keys()).join(", ") || "(none)";
-    throw new Error(`Action "${actionName}" not found. Available: ${available}`);
+    throw new Error(`Action "${actionId}" not found. Available: ${available}`);
   }
 
   const args = await decodeActionArgs(encodedArgs);
   const result = await action.fn(...args);
 
-  return _renderToReadableStream(result as ReactNode, ctx.manifest, {
+  return renderToReadableStream(result as ReactNode, ctx.manifest, {
     onError: options?.onError,
   });
 }
@@ -209,37 +187,6 @@ export interface CreateRSCResult<TComponents> {
   ready: Promise<void>;
 }
 
-// Symbol for client references
-const REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference");
-
-/**
- * Create a client module proxy synchronously (no async imports needed)
- *
- * This creates a Proxy that generates client references on-demand for any property access.
- * Works the same as react-server-dom-webpack's createClientModuleProxy but without async.
- */
-function createSyncClientProxy<T extends Record<string, unknown>>(moduleId: string): T {
-  const cache = new Map<string, unknown>();
-
-  return new Proxy({} as T, {
-    get(_target, prop: string) {
-      if (cache.has(prop)) {
-        return cache.get(prop);
-      }
-
-      // Create a client reference for this property
-      const ref = {
-        $$typeof: REACT_CLIENT_REFERENCE,
-        $$id: `${moduleId}#${prop}`,
-        name: prop,
-      };
-
-      cache.set(prop, ref);
-      return ref;
-    },
-  });
-}
-
 /**
  * Create RSC context, client proxy, and register actions in one call
  *
@@ -260,9 +207,9 @@ function createSyncClientProxy<T extends Record<string, unknown>>(moduleId: stri
  * ...http.rscRoutes("/rsc", () => <Client.Counter count={0} />, ctx, { ready })
  * ```
  */
-export function createRSC<TComponents extends Record<string, unknown>>(
+export async function createRSC<TComponents extends Record<string, unknown>>(
   config: CreateRSCConfig<TComponents>,
-): CreateRSCResult<TComponents> {
+): Promise<CreateRSCResult<TComponents>> {
   // Build manifest from component names
   const manifest: ClientManifest = {
     [config.moduleId]: { id: config.moduleId, chunks: [], name: "*" },
@@ -273,22 +220,17 @@ export function createRSC<TComponents extends Record<string, unknown>>(
 
   // Create context
   const ctx = createRSCContext(manifest);
+  const Client = createClientModuleProxy(config.moduleId) as TComponents;
 
-  // Create client proxy synchronously - no async needed!
-  // This works because client references are just marker objects
-  const Client = createSyncClientProxy<TComponents>(config.moduleId);
-
-  // Initialize async (only needed for actions)
-  const ready = (async () => {
-    // Register actions if provided
-    if (config.actions) {
-      await ensureImports();
-      for (const [id, fn] of Object.entries(config.actions)) {
-        const registeredFn = _registerServerReference(fn, id, id);
-        ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
-      }
+  // Register actions if provided
+  if (config.actions) {
+    for (const [id, fn] of Object.entries(config.actions)) {
+      const registeredFn = registerServerReference(fn, id, id);
+      ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
     }
-  })();
+  }
+
+  const ready = Promise.resolve();
 
   return { ctx, Client, ready };
 }

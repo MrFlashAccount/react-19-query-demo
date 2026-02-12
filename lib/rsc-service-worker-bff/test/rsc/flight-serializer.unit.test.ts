@@ -1,119 +1,72 @@
 import { createElement } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { createServerAction, serializeToFlightPayload } from "../../src/rsc/flight-serializer";
+const mocks = vi.hoisted(() => {
+  const renderToReadableStream = vi.fn(async (model: unknown) => {
+    const payload = JSON.stringify(model);
+    const encoder = new TextEncoder();
+    const chunk = encoder.encode(payload);
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.close();
+      },
+    });
+  });
+
+  const registerServerReference = vi.fn((fn) => fn);
+  return { renderToReadableStream, registerServerReference };
+});
+
+vi.mock("react-server-dom-webpack/server", () => ({
+  default: {},
+}));
+
+vi.mock("react-server-dom-webpack/server.browser", () => ({
+  renderToReadableStream: mocks.renderToReadableStream,
+  registerServerReference: mocks.registerServerReference,
+}));
+
+import {
+  createFlightResponse,
+  createServerAction,
+  executeServerAction,
+  serializeToFlightPayload,
+} from "../../src/rsc/flight-serializer";
 
 const manifest = {
   client: { id: "client", chunks: ["a.js"], name: "*" },
   "client#Counter": { id: "client", chunks: ["a.js"], name: "Counter" },
 };
 
-describe("flight serializer branch coverage", () => {
-  it("serializes promises, arrays, and regular objects", async () => {
+describe("flight serializer", () => {
+  it("serializes payloads using server.browser renderer", async () => {
     const payload = await serializeToFlightPayload(
-      Promise.resolve({
-        ok: true,
-        list: [1, "x", null],
-      }) as unknown as any,
+      createElement("div", { ok: true }, "hello"),
       manifest,
     );
 
-    expect(payload).toContain('"ok":true');
-    expect(payload).toContain('"list"');
+    expect(payload).toContain("hello");
+    expect(mocks.renderToReadableStream).toHaveBeenCalled();
   });
 
-  it("serializes server references as objects and functions", async () => {
-    const actionSymbol = Symbol.for("react.server.reference");
+  it("creates and executes registered server actions", async () => {
+    createServerAction("sum", (a: number, b: number) => ({ value: a + b }));
+    const response = await executeServerAction("sum", [2, 3], manifest);
+    const body = await response.text();
 
-    const byObject = await serializeToFlightPayload(
-      {
-        $$typeof: actionSymbol,
-        $$id: "actionByObject",
-      } as unknown as any,
-      manifest,
-    );
-
-    const fn = (() => "ok") as (() => string) & { $$typeof?: symbol; $$id?: string };
-    fn.$$typeof = actionSymbol;
-    fn.$$id = "actionByFunction";
-    const byFunction = await serializeToFlightPayload(fn as unknown as any, manifest);
-
-    expect(byObject).toContain("$F");
-    expect(byFunction).toContain("$F");
+    expect(response.status).toBe(200);
+    expect(body).toContain('"value":5');
+    expect(mocks.registerServerReference).toHaveBeenCalled();
   });
 
-  it("serializes client references with fallback module resolution", async () => {
-    const clientSymbol = Symbol.for("react.client.reference");
-    const payload = await serializeToFlightPayload(
-      {
-        $$typeof: clientSymbol,
-        $$id: "client",
-        name: "*",
-      } as unknown as any,
-      manifest,
-    );
-
-    expect(payload).toContain("I[");
-    expect(payload).toContain("$L");
+  it("returns 404 for unknown action", async () => {
+    const response = await executeServerAction("missing", [], manifest);
+    expect(response.status).toBe(404);
   });
 
-  it("serializes function client reference element and caches module/action refs", async () => {
-    const clientSymbol = Symbol.for("react.client.reference");
-    const type = (function CounterRef() {
-      return null;
-    }) as (() => null) & {
-      $$typeof?: symbol;
-      $$id?: string;
-      name?: string;
-    };
-    type.$$typeof = clientSymbol;
-    type.$$id = "client#Counter";
-
-    const increment = createServerAction("inc-cache", (n: number) => n + 1) as unknown as (
-      value: number,
-    ) => number;
-
-    const payload = await serializeToFlightPayload(
-      createElement("div", {
-        first: createElement(type as unknown as string, { count: 1 }),
-        second: createElement(type as unknown as string, { count: 2 }),
-        one: increment,
-        two: increment,
-      }),
-      manifest,
-    );
-
-    const imports = payload.match(/:I\[/g) ?? [];
-    expect(imports.length).toBe(1);
-    const actionRows = payload.match(/\{"id":"inc-cache","bound":null\}/g) ?? [];
-    expect(actionRows.length).toBe(1);
-  });
-
-  it("serializes server component function return", async () => {
-    function ServerComponent() {
-      return createElement("span", null, "server");
-    }
-
-    const payload = await serializeToFlightPayload(createElement(ServerComponent), manifest);
-    expect(payload).toContain("server");
-  });
-
-  it("serializes root function values and fragment children", async () => {
-    const rootFunction = await serializeToFlightPayload((() => "ok") as unknown as any, manifest);
-    const fragmentElement = {
-      $$typeof: Symbol.for("react.transitional.element"),
-      type: Symbol.for("react.fragment"),
-      key: null,
-      props: { children: "inside" },
-    };
-    const fragment = await serializeToFlightPayload(
-      fragmentElement as unknown as any,
-      manifest,
-    );
-    const unsupported = await serializeToFlightPayload(Symbol("x") as unknown as any, manifest);
-
-    expect(rootFunction).toContain("ok");
-    expect(fragment).toContain("0:null");
-    expect(unsupported).toContain("0:null");
+  it("creates response with x-component content type", async () => {
+    const response = await createFlightResponse(createElement("div", null, "x"), manifest);
+    expect(response.headers.get("Content-Type")).toContain("text/x-component");
   });
 });

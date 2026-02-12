@@ -97,7 +97,6 @@
     "check:format": "oxfmt --write"
   },
   "dependencies": {
-    "react-is": "catalog:",
     "react-server-dom-webpack": "catalog:",
     "web-streams-polyfill": "catalog:"
   },

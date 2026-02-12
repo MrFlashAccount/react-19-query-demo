@@ -45,7 +45,10 @@ function handleFetch(event: FetchEvent): void {
         });
       } catch (err) {
         console.error("[sw-bff] Handler error:", err);
-        return error(err instanceof Error ? err.message : String(err), 500);
+        if (err instanceof Error) {
+          return error(`${err.message}\n${err.stack ?? ""}`, 500);
+        }
+        return error(String(err), 500);
       }
     })(),
   );

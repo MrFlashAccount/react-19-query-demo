@@ -8,6 +8,7 @@ describe("client-reference", () => {
 
     expect(Counter.$$id).toBe("client#Counter");
     expect(Counter.$$typeof).toBe(Symbol.for("react.client.reference"));
+    expect(typeof Counter).toBe("function");
   });
 
   it("creates refs map", () => {

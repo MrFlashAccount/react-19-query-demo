@@ -1,85 +1,145 @@
-/**
- * Type declarations for react-server-dom-webpack
- *
- * These types cover the subset of the API used by this library.
- * For full types, see: https://github.com/facebook/react/tree/main/packages/react-server-dom-webpack
- */
+// Type declarations for react-server-dom-webpack
+// Based on Flow types from React source
 
 declare module "react-server-dom-webpack/server" {
-  import type { ReactNode } from "react";
+  import type { Thenable, ReactNode } from "react";
 
-  export interface ClientManifest {
+  export type TemporaryReferenceSet = Set<unknown>;
+
+  export type ClientManifest = {
     [moduleId: string]: {
       id: string;
       chunks: string[];
       name: string;
     };
-  }
+  };
 
-  export interface RenderOptions {
-    onError?: (error: unknown) => string | void;
+  export type ServerManifest = {
+    [id: string]: {
+      id: string;
+      chunks: string[];
+      name: string;
+    };
+  };
+
+  export type RenderOptions = {
+    debugChannel?: { readable?: ReadableStream; writable?: WritableStream };
+    environmentName?: string | (() => string);
+    filterStackFrame?: (url: string, functionName: string) => boolean;
+    identifierPrefix?: string;
     signal?: AbortSignal;
-  }
+    temporaryReferences?: TemporaryReferenceSet;
+    onError?: (error: unknown) => string | void;
+  };
 
-  /**
-   * Render a React element to an RSC stream
-   */
+  export type StaticResult = {
+    prelude: ReadableStream;
+  };
+
   export function renderToReadableStream(
-    element: ReactNode,
-    clientManifest: ClientManifest,
+    model: ReactNode,
+    webpackMap: ClientManifest,
     options?: RenderOptions,
   ): ReadableStream<Uint8Array>;
 
-  /**
-   * Register a function as a server reference (server action)
-   */
-  export function registerServerReference<T extends Function>(fn: T, id: string, name: string): T;
+  export function prerender(
+    model: ReactNode,
+    webpackMap: ClientManifest,
+    options?: RenderOptions,
+  ): Promise<StaticResult>;
 
-  /**
-   * Create a proxy for client module imports
-   */
-  export function createClientModuleProxy<T = unknown>(moduleId: string): T;
+  export function decodeReply<T = unknown>(
+    body: string | FormData,
+    webpackMap: ServerManifest,
+    options?: { temporaryReferences?: TemporaryReferenceSet },
+  ): Thenable<T>;
 
-  /**
-   * Register a client reference
-   */
-  export function registerClientReference<T = unknown>(ref: T, moduleId: string, name: string): T;
+  export function decodeAction<T = unknown>(
+    body: FormData,
+    serverManifest: ServerManifest,
+  ): Promise<() => T> | null;
 
-  /**
-   * Decode action arguments from wire format
-   */
-  export function decodeReply(
-    body: FormData | string,
-    webpackMap: Record<string, unknown>,
+  export function decodeFormState<S>(
+    actionResult: S,
+    body: FormData,
+    serverManifest: ServerManifest,
   ): Promise<unknown>;
+
+  export function registerServerReference<T extends Function>(
+    reference: T,
+    id: string,
+    exportName: string | null,
+  ): T;
+
+  export function registerClientReference<T>(
+    proxyImplementation: T,
+    id: string,
+    exportName: string,
+  ): T;
+
+  export function createClientModuleProxy<T = Record<string, unknown>>(moduleId: string): T;
+
+  export function createTemporaryReferenceSet(): TemporaryReferenceSet;
 }
 
 declare module "react-server-dom-webpack/client" {
-  export interface CreateFromStreamOptions {
-    callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
-  }
+  import type { Thenable } from "react";
 
-  /**
-   * Create React elements from an RSC stream
-   */
+  export type TemporaryReferenceSet = Set<unknown>;
+
+  export type CallServerCallback = (id: string, args: unknown[]) => Promise<unknown>;
+
+  export type FindSourceMapURLCallback = (
+    fileName: string,
+    environmentName: string,
+  ) => string | null | undefined;
+
+  export type Options = {
+    callServer?: CallServerCallback;
+    debugChannel?: { writable?: WritableStream; readable?: ReadableStream };
+    temporaryReferences?: TemporaryReferenceSet;
+    findSourceMapURL?: FindSourceMapURLCallback;
+    replayConsoleLogs?: boolean;
+    environmentName?: string;
+    startTime?: number;
+    endTime?: number;
+  };
+
   export function createFromReadableStream<T = unknown>(
     stream: ReadableStream<Uint8Array>,
-    options?: CreateFromStreamOptions,
-  ): Promise<T>;
+    options?: Options,
+  ): Thenable<T>;
 
-  /**
-   * Create React elements from a fetch response promise
-   * Convenience wrapper around createFromReadableStream
-   */
   export function createFromFetch<T = unknown>(
-    fetchPromise: Promise<Response>,
-    options?: CreateFromStreamOptions,
-  ): Promise<T>;
+    promiseForResponse: Promise<Response>,
+    options?: Options,
+  ): Thenable<T>;
 
-  /**
-   * Encode action arguments for sending to server
-   */
-  export function encodeReply(args: unknown[]): Promise<FormData | string>;
+  export function encodeReply(
+    value: unknown,
+    options?: { temporaryReferences?: TemporaryReferenceSet; signal?: AbortSignal },
+  ): Promise<string | FormData>;
+
+  export function createServerReference<T extends Function>(
+    id: string,
+    callServer: CallServerCallback,
+  ): T;
+
+  export function registerServerReference<T extends Function>(
+    reference: T,
+    id: string,
+    exportName: string | null,
+  ): T;
+
+  export function createTemporaryReferenceSet(): TemporaryReferenceSet;
+}
+
+declare module "react-server-dom-webpack/server.browser" {
+  export * from "react-server-dom-webpack/server";
+}
+
+declare module "react-server-dom-webpack/client.browser" {
+  export * from "react-server-dom-webpack/client";
 }
 
 declare module "web-streams-polyfill" {

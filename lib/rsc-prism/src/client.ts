@@ -2,20 +2,9 @@
  * RSC client helpers.
  */
 
+import { createFromReadableStream, encodeReply } from "react-server-dom-webpack/client.browser";
 import type { EncodedActionArgs } from "./types";
 import { createFetchTransport, type RSCTransport } from "./transport";
-
-// Lazy imports to ensure webpack-shim loads first
-let _createFromReadableStream: typeof import("react-server-dom-webpack/client").createFromReadableStream;
-let _encodeReply: typeof import("react-server-dom-webpack/client").encodeReply;
-
-async function ensureImports(): Promise<void> {
-  if (!_createFromReadableStream) {
-    const mod = await import("react-server-dom-webpack/client");
-    _createFromReadableStream = mod.createFromReadableStream;
-    _encodeReply = mod.encodeReply;
-  }
-}
 
 /**
  * Options for consuming an RSC stream
@@ -49,8 +38,7 @@ export async function consumeRSC<T = unknown>(
   stream: ReadableStream<Uint8Array>,
   options?: ConsumeRSCOptions,
 ): Promise<T> {
-  await ensureImports();
-  return _createFromReadableStream<T>(
+  return await createFromReadableStream<T>(
     stream,
     options?.callServer ? { callServer: options.callServer } : {},
   );
@@ -83,8 +71,7 @@ export async function consumeRSCResponse<T = unknown>(
  * ```
  */
 export async function encodeActionArgs(args: unknown[]): Promise<EncodedActionArgs> {
-  await ensureImports();
-  const encoded = await _encodeReply(args);
+  const encoded = await encodeReply(args);
 
   if (encoded instanceof FormData) {
     return {

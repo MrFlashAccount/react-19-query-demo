@@ -33,10 +33,12 @@ export function clientRef<P = Record<string, unknown>>(
   moduleId: string,
   exportName: string,
 ): ClientReference<P> {
-  return {
-    $$typeof: REACT_CLIENT_REFERENCE,
-    $$id: `${moduleId}#${exportName}`,
-  } as ClientReference<P>;
+  const reference = (() => null) as unknown as ClientReference<P> & { $$async?: boolean };
+  reference.$$typeof = REACT_CLIENT_REFERENCE;
+  reference.$$id = `${moduleId}#${exportName}`;
+  // Match server writer expectations for client references.
+  reference.$$async = false;
+  return reference;
 }
 
 /**
