@@ -12,8 +12,6 @@
 
 // Client utilities (fetch/consume RSC)
 export {
-  ensureWorkerReady,
-  createServiceWorkerTransport,
   consumeRSC,
   consumeRSCResponse,
   encodeActionArgs,
@@ -34,13 +32,28 @@ export {
   buildClientManifest,
   buildClientManifestFromModule,
   mergeManifests,
-} from "./module-registry";
+} from "./runtime/module-registry";
 
 // Polyfill
 export { polyfillReady, isPolyfillRequired } from "./polyfill";
 
 // Webpack shim (required for react-server-dom-webpack/client)
-export { moduleCache } from "./webpack-shim";
+export { moduleCache } from "./runtime/webpack-shim";
+
+// Transport
+export {
+  createFetchTransport,
+  createFunctionTransport,
+  createWorkerTransport,
+  createWorkerTransportMessageHandler,
+  type RSCTransport,
+  type FunctionTransportHandler,
+  type FunctionTransportRequest,
+  type WorkerMessageEndpoint,
+  type WorkerTransportOptions,
+  type WorkerTransportRequestMessage,
+  type WorkerTransportResponseMessage,
+} from "./transport";
 
 // Types (no runtime, just TS)
 export type { ClientManifest, ClientManifestEntry } from "./types";

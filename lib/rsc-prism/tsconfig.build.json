@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "types": ["vite/client"]
+  },
+  "include": ["./src/**/*.ts"],
+  "exclude": [
+    "./dist",
+    "./node_modules",
+    "./test",
+    "./**/__tests__/**",
+    "./**/*.test.*",
+    "./tsdown.config.ts"
+  ]
+}

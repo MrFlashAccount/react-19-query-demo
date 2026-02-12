@@ -1,12 +1,12 @@
 {
-  "name": "@lib/rsc-service-worker-bff",
+  "name": "@lib/rsc-prism",
   "version": "0.0.0",
-  "description": "Service worker backend-for-frontend toolkit with React Server Components support.",
+  "description": "Environment-agnostic React Server Components core primitives and transport helpers.",
   "keywords": [
-    "bff",
     "react-server-components",
     "rsc",
-    "service-worker",
+    "flight",
+    "transport",
     "web"
   ],
   "homepage": "https://github.com/MrFlashAccount/react-19-query-demo#readme",
@@ -17,7 +17,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MrFlashAccount/react-19-query-demo.git",
-    "directory": "lib/rsc-service-worker-bff"
+    "directory": "lib/rsc-prism"
   },
   "files": [
     "dist",
@@ -33,17 +33,49 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./rsc": {
-      "types": "./dist/rsc/index.d.ts",
-      "default": "./dist/rsc/index.js"
+    "./client-only": {
+      "types": "./dist/client-only.d.ts",
+      "default": "./dist/client-only.js"
     },
-    "./rsc/client-only": {
-      "types": "./dist/rsc/client-only.d.ts",
-      "default": "./dist/rsc/client-only.js"
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "default": "./dist/client.js"
     },
-    "./rsc/webpack-shim": {
-      "types": "./dist/rsc/webpack-shim.d.ts",
-      "default": "./dist/rsc/webpack-shim.js"
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
+    "./response": {
+      "types": "./dist/response.d.ts",
+      "default": "./dist/response.js"
+    },
+    "./polyfill": {
+      "types": "./dist/polyfill.d.ts",
+      "default": "./dist/polyfill.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./transport": {
+      "types": "./dist/transport.d.ts",
+      "default": "./dist/transport.js"
+    },
+    "./client-reference": {
+      "types": "./dist/client-reference.d.ts",
+      "default": "./dist/client-reference.js"
+    },
+    "./flight-serializer": {
+      "types": "./dist/flight-serializer.d.ts",
+      "default": "./dist/flight-serializer.js"
+    },
+    "./runtime/webpack-shim": {
+      "types": "./dist/runtime/webpack-shim.d.ts",
+      "default": "./dist/runtime/webpack-shim.js"
+    },
+    "./runtime/module-registry": {
+      "types": "./dist/runtime/module-registry.d.ts",
+      "default": "./dist/runtime/module-registry.js"
     }
   },
   "publishConfig": {
@@ -65,7 +97,6 @@
     "check:format": "oxfmt --write"
   },
   "dependencies": {
-    "@lib/rsc-prism": "workspace:*",
     "react-is": "catalog:",
     "react-server-dom-webpack": "catalog:",
     "web-streams-polyfill": "catalog:"

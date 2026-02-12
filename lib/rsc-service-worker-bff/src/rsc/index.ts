@@ -96,6 +96,7 @@ export {
 // Client (for main thread)
 export {
   ensureWorkerReady,
+  createServiceWorkerTransport,
   consumeRSC,
   consumeRSCResponse,
   encodeActionArgs,
@@ -104,7 +105,23 @@ export {
   callAction,
   type ConsumeRSCOptions,
   type CallActionOptions,
+  type RSCRequestOptions,
 } from "./client";
+
+// Core transport
+export {
+  createFetchTransport,
+  createFunctionTransport,
+  createWorkerTransport,
+  createWorkerTransportMessageHandler,
+  type RSCTransport,
+  type FunctionTransportHandler,
+  type FunctionTransportRequest,
+  type WorkerMessageEndpoint,
+  type WorkerTransportOptions,
+  type WorkerTransportRequestMessage,
+  type WorkerTransportResponseMessage,
+} from "@lib/rsc-prism/transport";
 
 // Module registry
 export {

@@ -40,6 +40,7 @@ export {
   buildClientManifest,
   // Client helpers
   ensureWorkerReady,
+  createServiceWorkerTransport,
   fetchRSC,
   consumeRSC,
   createCallServer,
@@ -48,6 +49,20 @@ export {
   // Polyfill
   polyfillReady,
 } from "./rsc";
+
+export {
+  createFetchTransport,
+  createFunctionTransport,
+  createWorkerTransport,
+  createWorkerTransportMessageHandler,
+  type RSCTransport,
+  type FunctionTransportHandler,
+  type FunctionTransportRequest,
+  type WorkerMessageEndpoint,
+  type WorkerTransportOptions,
+  type WorkerTransportRequestMessage,
+  type WorkerTransportResponseMessage,
+} from "@lib/rsc-prism/transport";
 
 // Client reference utilities (manual approach - for service worker)
 export {
