@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { error, html, json, noContent, passthrough, text } from "./response";
+import { error, html, json, noContent, passthrough, redirect, text } from "./response";
 
 describe("response helpers", () => {
   it("creates JSON responses with content-type", async () => {
@@ -28,6 +28,15 @@ describe("response helpers", () => {
     expect(empty.status).toBe(204);
     expect(failed.status).toBe(422);
     await expect(failed.json()).resolves.toEqual({ error: "boom" });
+  });
+
+  it("uses default redirect and error status", async () => {
+    const moved = redirect("https://example.com");
+    const failed = error("default");
+
+    expect(moved.status).toBe(302);
+    expect(failed.status).toBe(500);
+    await expect(failed.json()).resolves.toEqual({ error: "default" });
   });
 
   it("passes through request via fetch", async () => {

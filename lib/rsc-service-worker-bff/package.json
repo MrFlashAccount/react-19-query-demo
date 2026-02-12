@@ -52,6 +52,9 @@
     "build:dts": "tsgo --emitDeclarationOnly -p tsconfig.build.json",
     "prepack": "pnpm run build",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
+    "test:coverage": "vitest run --coverage",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit",
     "check:lint": "oxlint --fix --type-aware",
@@ -63,10 +66,13 @@
     "web-streams-polyfill": "catalog:"
   },
   "devDependencies": {
+    "@vitest/browser-playwright": "4.0.9",
+    "@vitest/coverage-istanbul": "4.0.9",
     "@typescript/native-preview": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
+    "playwright": "1.50.1",
     "react": "catalog:",
     "react-dom": "catalog:",
     "tsdown": "catalog:",
