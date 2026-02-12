@@ -122,10 +122,21 @@ export interface WorkerTransportRequestMessage {
 export interface WorkerTransportResponseMessage {
   type: string;
   id: string;
+}
+
+export interface WorkerTransportResponseHeadMessage extends WorkerTransportResponseMessage {
   status: number;
   headers?: [string, string][];
-  body?: string;
-  error?: string;
+}
+
+export interface WorkerTransportResponseNextMessage extends WorkerTransportResponseMessage {
+  chunk: Uint8Array;
+}
+
+export interface WorkerTransportResponseDoneMessage extends WorkerTransportResponseMessage {}
+
+export interface WorkerTransportResponseErrorMessage extends WorkerTransportResponseMessage {
+  error: string;
 }
 
 export interface WorkerTransportOptions {
@@ -136,6 +147,22 @@ export interface WorkerTransportOptions {
 
 const DEFAULT_REQUEST_TYPE = "rsc.transport.request";
 const DEFAULT_RESPONSE_TYPE = "rsc.transport.response";
+
+function responseHeadType(baseType: string): string {
+  return `${baseType}.head`;
+}
+
+function responseNextType(baseType: string): string {
+  return `${baseType}.next`;
+}
+
+function responseDoneType(baseType: string): string {
+  return `${baseType}.done`;
+}
+
+function responseErrorType(baseType: string): string {
+  return `${baseType}.error`;
+}
 
 let requestCounter = 0;
 
@@ -160,31 +187,127 @@ function sendWorkerRequest(
 
   return new Promise<Response>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+    let didResolveHead = false;
+    let isSettled = false;
+    let streamDone = false;
+    let streamError: Error | null = null;
+    const pendingChunks: Uint8Array[] = [];
 
     const cleanup = () => {
       endpoint.removeEventListener("message", onMessage);
       if (timer != null) clearTimeout(timer);
     };
 
+    const closeStream = () => {
+      if (streamDone) return;
+      streamDone = true;
+      if (streamController != null) {
+        streamController.close();
+      }
+    };
+
+    const failStream = (error: Error) => {
+      if (streamDone) return;
+      streamDone = true;
+      if (streamController != null) {
+        streamController.error(error);
+      } else {
+        streamError = error;
+      }
+    };
+
+    const setTimer = () => {
+      if (timeoutMs <= 0) return;
+      if (timer != null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!didResolveHead) {
+          cleanup();
+          isSettled = true;
+          reject(new Error(`Worker transport timed out after ${timeoutMs}ms`));
+          return;
+        }
+
+        cleanup();
+        failStream(new Error(`Worker transport timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    };
+
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        streamController = controller;
+        for (const chunk of pendingChunks) {
+          controller.enqueue(chunk);
+        }
+        pendingChunks.length = 0;
+
+        if (streamError != null) {
+          controller.error(streamError);
+          return;
+        }
+
+        if (streamDone) {
+          controller.close();
+        }
+      },
+      cancel() {
+        cleanup();
+      },
+    });
+
     const onMessage: MessageEventListener = (event) => {
-      const data = event.data as WorkerTransportResponseMessage;
-      if (data == null || data.type !== responseType || data.id !== id) return;
-      cleanup();
-      if (data.error) {
-        reject(new Error(data.error));
+      const data = event.data as WorkerTransportResponseMessage | null;
+      if (data == null || data.id !== id || typeof data.type !== "string") return;
+
+      if (data.type === responseHeadType(responseType)) {
+        const head = data as WorkerTransportResponseHeadMessage;
+        if (didResolveHead || isSettled) return;
+
+        didResolveHead = true;
+        isSettled = true;
+        resolve(
+          new Response(stream, {
+            status: head.status,
+            headers: head.headers,
+          }),
+        );
+        setTimer();
         return;
       }
-      resolve(new Response(data.body ?? null, { status: data.status, headers: data.headers }));
+
+      if (data.type === responseNextType(responseType)) {
+        if (!didResolveHead || streamDone) return;
+        const next = data as WorkerTransportResponseNextMessage;
+        if (streamController != null) {
+          streamController.enqueue(next.chunk);
+        } else {
+          pendingChunks.push(next.chunk);
+        }
+        setTimer();
+        return;
+      }
+
+      if (data.type === responseDoneType(responseType)) {
+        if (!didResolveHead || streamDone) return;
+        cleanup();
+        closeStream();
+        return;
+      }
+
+      if (data.type === responseErrorType(responseType)) {
+        const error = new Error((data as WorkerTransportResponseErrorMessage).error);
+        cleanup();
+        if (!didResolveHead && !isSettled) {
+          isSettled = true;
+          reject(error);
+        } else {
+          failStream(error);
+        }
+      }
     };
 
     endpoint.addEventListener("message", onMessage);
-
-    if (timeoutMs > 0) {
-      timer = setTimeout(() => {
-        cleanup();
-        reject(new Error(`Worker transport timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    }
+    setTimer();
 
     endpoint.postMessage({
       ...request,
@@ -266,23 +389,41 @@ export function createWorkerTransportMessageHandler(
 
     try {
       const response = await handler(request);
-      const body = await response.text();
       replyTarget.postMessage({
-        type: responseType,
+        type: responseHeadType(responseType),
         id: request.id,
         status: response.status,
         headers: [...response.headers.entries()],
-        body,
-      } satisfies WorkerTransportResponseMessage);
+      } satisfies WorkerTransportResponseHeadMessage);
+
+      if (response.body != null) {
+        const reader = response.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            replyTarget.postMessage({
+              type: responseNextType(responseType),
+              id: request.id,
+              chunk: value,
+            } satisfies WorkerTransportResponseNextMessage);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+
+      replyTarget.postMessage({
+        type: responseDoneType(responseType),
+        id: request.id,
+      } satisfies WorkerTransportResponseDoneMessage);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       replyTarget.postMessage({
-        type: responseType,
+        type: responseErrorType(responseType),
         id: request.id,
-        status: 500,
-        headers: [["content-type", "application/json"]],
         error: message,
-      } satisfies WorkerTransportResponseMessage);
+      } satisfies WorkerTransportResponseErrorMessage);
     }
   };
 }

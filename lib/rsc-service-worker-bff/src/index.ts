@@ -62,6 +62,10 @@ export {
   type WorkerTransportOptions,
   type WorkerTransportRequestMessage,
   type WorkerTransportResponseMessage,
+  type WorkerTransportResponseHeadMessage,
+  type WorkerTransportResponseNextMessage,
+  type WorkerTransportResponseDoneMessage,
+  type WorkerTransportResponseErrorMessage,
 } from "@lib/rsc-prism/transport";
 
 // Client reference utilities (manual approach - for service worker)

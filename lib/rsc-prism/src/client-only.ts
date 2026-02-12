@@ -53,6 +53,10 @@ export {
   type WorkerTransportOptions,
   type WorkerTransportRequestMessage,
   type WorkerTransportResponseMessage,
+  type WorkerTransportResponseHeadMessage,
+  type WorkerTransportResponseNextMessage,
+  type WorkerTransportResponseDoneMessage,
+  type WorkerTransportResponseErrorMessage,
 } from "./transport";
 
 // Types (no runtime, just TS)
