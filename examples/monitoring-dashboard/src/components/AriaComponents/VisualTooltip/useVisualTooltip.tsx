@@ -1,7 +1,7 @@
 /** @file A hook for creating a visual tooltip that appears when the target element is hovered over. */
 import * as aria from "@/components/aria";
 import * as ariaComponents from "@/components/AriaComponents";
-import * as eventCallback from "@/hooks/useEvent";
+import { useEvent } from "@/hooks/useEvent";
 import * as React from "react";
 
 /** Props for {@link useVisualTooltip}. */
@@ -11,8 +11,8 @@ export interface VisualTooltipOptions extends Pick<
 > {
   readonly children: React.ReactNode;
   readonly className?: string;
-  readonly targetRef: React.RefObject<HTMLElement>;
-  readonly triggerRef?: React.RefObject<HTMLElement> | undefined;
+  readonly targetRef: React.RefObject<HTMLElement | null>;
+  readonly triggerRef?: React.RefObject<HTMLElement | null> | undefined;
   readonly isDisabled?: boolean;
   readonly overlayPositionProps?: Pick<
     aria.AriaPositionProps,
@@ -24,7 +24,7 @@ export interface VisualTooltipOptions extends Pick<
    * - 'whenOverflowing': Tooltip is displayed only when the target element is overflowing.
    * - A function that returns a boolean. The function is called with the target element as an argument.
    */
-  readonly display?: DisplayStrategy | ((target: HTMLElement) => boolean);
+  readonly display?: ariaComponents.DisplayStrategy | ((target: HTMLElement) => boolean);
   readonly testId?: string;
 }
 
@@ -35,7 +35,7 @@ export interface VisualTooltipReturn {
 }
 
 /** The display strategy for the tooltip. */
-type DisplayStrategy = "always" | "whenOverflowing";
+export type DisplayStrategy = "always" | "whenOverflowing" | "never";
 
 const DEFAULT_DELAY = 250;
 
@@ -69,14 +69,14 @@ export function useVisualTooltip(props: VisualTooltipOptions): VisualTooltipRetu
 
   const [state, setState] = React.useState({ isOpen: false });
 
-  const open = eventCallback.useEvent(() => {
+  const open = useEvent(() => {
     setState((prev) => ({ ...prev, isOpen: true }));
   });
-  const close = eventCallback.useEvent(() => {
+  const close = useEvent(() => {
     setState((prev) => ({ ...prev, isOpen: false }));
   });
 
-  const handleHoverChange = eventCallback.useEvent((isHovered: boolean) => {
+  const handleHoverChange = useEvent((isHovered: boolean) => {
     if (disabled) {
       if (state.isOpen) {
         close();
@@ -225,6 +225,7 @@ function TooltipInner(props: TooltipInnerProps) {
 
 const DISPLAY_STRATEGIES: Record<DisplayStrategy, (target: HTMLElement) => boolean> = {
   always: () => true,
+  never: () => false,
   whenOverflowing: (target) =>
     target.scrollWidth > target.clientWidth || target.scrollHeight > target.clientHeight,
 };

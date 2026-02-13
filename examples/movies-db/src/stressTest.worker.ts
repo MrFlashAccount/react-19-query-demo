@@ -5,9 +5,6 @@ const STRESS_BREADTH = 5;
 const STRESS_BRANCHES = 1;
 const STRESS_TASKS = 25;
 
-const TOTAL_INVOCATIONS =
-  (STRESS_BRANCHES * ((STRESS_BREADTH ** (STRESS_DEPTH + 1) - 1) / (STRESS_BREADTH - 1)) + 2) *
-  STRESS_TASKS;
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 

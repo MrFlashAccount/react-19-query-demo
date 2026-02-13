@@ -27,7 +27,7 @@ export type ClientManifest = Record<string, ClientManifestEntry>;
  * Actions are serialized differently based on whether they contain FormData
  */
 export type EncodedActionArgs =
-  | { type: "formdata"; data: string }
+  | { type: "formdata"; data: FormData | string }
   | { type: "string"; data: string };
 
 /**

@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import { moduleCache } from "../src/runtime/webpack-shim";
 
 describe("webpack-shim", () => {
-  it("installs webpack globals", () => {
+  it("installs webpack globals", async () => {
     expect(globalThis.__webpack_module_cache__).toBe(moduleCache);
-    expect(typeof globalThis.__webpack_require__).toBe("function");
-    expect(typeof globalThis.__webpack_chunk_load__).toBe("function");
-    expect(typeof globalThis.__webpack_get_script_filename__).toBe("function");
     expect(globalThis.__webpack_public_path__).toBe("/");
+
+    await expect(globalThis.__webpack_chunk_load__()).resolves.toBeUndefined();
+    await expect(globalThis.__webpack_require__.e()).resolves.toBeUndefined();
+    expect(globalThis.__webpack_get_script_filename__()).toBe("");
   });
 
   it("loads modules from cache and throws on missing", () => {
@@ -44,11 +45,5 @@ describe("webpack-shim", () => {
     const mode2 = globalThis.__webpack_require__.t({ x: 1 }, 2) as Record<string, unknown>;
     expect(mode2.default).toEqual({ x: 1 });
     expect(mode2.x).toBe(1);
-  });
-
-  it("returns async chunk helpers", async () => {
-    await expect(globalThis.__webpack_chunk_load__()).resolves.toBeUndefined();
-    await expect(globalThis.__webpack_require__.e()).resolves.toBeUndefined();
-    expect(globalThis.__webpack_get_script_filename__()).toBe("");
   });
 });

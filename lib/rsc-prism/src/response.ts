@@ -108,13 +108,11 @@ export async function rscAction(
     });
   }
 
-  // Parse encoded args from request body
+  // Parse encoded args from request body without forcing text round-trips for form payloads.
   const contentType = request.headers.get("Content-Type") ?? "";
-  const body = await request.text();
-
   const encodedArgs: EncodedActionArgs = contentType.includes("form")
-    ? { type: "formdata", data: body }
-    : { type: "string", data: body };
+    ? { type: "formdata", data: await request.formData() }
+    : { type: "string", data: await request.text() };
 
   try {
     const stream = await handleAction(ctx, actionId, encodedArgs, { onError: options?.onError });
@@ -148,8 +146,8 @@ export function rscError(message: string, status: number = 500): Response {
  * Options for creating an RSC handler
  */
 export interface CreateRSCHandlerOptions {
-  /** Client manifest for resolving client components */
-  manifest: ClientManifest;
+  /** Client manifest for resolving client components (optional when worker plugin auto-registers client refs) */
+  manifest?: ClientManifest;
   /** Server actions to register */
   actions?: Record<string, (...args: unknown[]) => unknown>;
   /** Error handler */

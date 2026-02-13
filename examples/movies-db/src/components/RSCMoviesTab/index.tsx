@@ -6,22 +6,17 @@
  */
 
 // IMPORTANT: Import webpack shim FIRST - before any react-server-dom-webpack imports
-import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
+import "@lib/rsc-prism/runtime/webpack-shim";
 
-import { lazy, use, Suspense } from "react";
-import { registerClientModule } from "@lib/rsc-service-worker-bff/rsc/client-only";
+import { lazy, Suspense } from "react";
 import type { TabProps } from "../shared/types";
 import { SearchBox } from "../shared";
 import { appGraph, rscMoviesQuery } from "../../queries";
-import * as ClientComponents from "./client-components";
 
 const { QueryProvider, useQuery, QueryClient } = await import("@lib/goat-query/react");
 const LazyDevtools = lazy(() =>
   import("@lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
 );
-
-// Register client components so RSC can hydrate them
-registerClientModule("rsc-movies-client", ClientComponents);
 
 const queryClient = new QueryClient({ graph: appGraph });
 
@@ -49,8 +44,6 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
     params: { searchQuery, limit },
   });
 
-  const content = use(promise);
-
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
       <SearchBox formState={formState} onFormStateChange={onFormStateChange} />
@@ -64,7 +57,7 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
             </div>
           }
         >
-          {content}
+          {promise}
         </Suspense>
       </div>
     </div>

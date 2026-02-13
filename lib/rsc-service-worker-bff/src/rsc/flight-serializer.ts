@@ -1,9 +1,11 @@
-import "./webpack-shim";
-
 import type { ReactNode } from "react";
+import { moduleCache } from "./webpack-shim";
 import { registerServerReference, renderToReadableStream } from "react-server-dom-webpack/server.browser";
 import { polyfillReady } from "./polyfill";
 import type { ClientManifest } from "./types";
+
+// Keep webpack shim initialization from being tree-shaken in sideEffects:false builds.
+void moduleCache;
 
 const REACT_SERVER_REFERENCE = Symbol.for("react.server.reference");
 

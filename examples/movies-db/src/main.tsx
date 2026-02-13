@@ -1,4 +1,5 @@
 import "./index.css";
+import "virtual:rsc-prism/main-thread-modules";
 
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";

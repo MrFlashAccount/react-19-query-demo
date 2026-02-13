@@ -9,6 +9,7 @@ import type { TooltipElementType } from "@/components/AriaComponents";
 import type { RefProp } from "@/components/AriaComponents/types";
 import type { TestIdProps } from "../types";
 import * as visualTooltip from "../VisualTooltip";
+import { VisualTooltip } from "./VisualTooltip";
 
 /** Props for the Text component */
 export interface TextProps
@@ -149,7 +150,7 @@ export function Text(props: TextProps) {
     tooltipCrossOffset,
     textSelection,
     align,
-    ref: forwardedRef,
+    ref,
     ...ariaProps
   } = props;
 
@@ -179,41 +180,29 @@ export function Text(props: TextProps) {
     return tooltipDisplay === "never";
   };
 
-  const { tooltip, targetProps } = visualTooltip.useVisualTooltip({
-    isDisabled: isTooltipDisabled(),
-    targetRef: textElementRef as unknown as React.RefObject<HTMLElement>,
-    display: tooltipDisplay === "never" ? () => false : tooltipDisplay,
-    children: tooltipElement,
-    ...(tooltipPlacement || tooltipOffset != null || tooltipCrossOffset != null
-      ? {
-          overlayPositionProps: {
-            ...(tooltipPlacement && { placement: tooltipPlacement }),
-            ...(tooltipOffset != null && { offset: tooltipOffset }),
-            ...(tooltipCrossOffset != null && { crossOffset: tooltipCrossOffset }),
-          },
-        }
-      : {}),
-  });
-
   return (
-    <Client.VisualTooltip isDisabled={isTooltipDisabled()} display={tooltipDisplay}>
+    <VisualTooltip
+      isDisabled={isTooltipDisabled()}
+      display={tooltipDisplay}
+      tooltipPlacement={tooltipPlacement}
+      tooltipOffset={tooltipOffset}
+      tooltipCrossOffset={tooltipCrossOffset}
+    >
+      {/* @ts-expect-error This is caused by the type-safe `elementType` type. */}
       <ElementType
-        // @ts-expect-error This is caused by the type-safe `elementType` type.
-        ref={forwardedRef}
+        ref={ref}
         data-testid={testId}
         className={textClasses}
         {...aria.mergeProps<React.HTMLAttributes<HTMLElement>>()(
           ariaProps,
-          targetProps,
           truncate === "custom"
-            ? // eslint-disable-next-line @typescript-eslint/naming-convention,no-restricted-syntax
-              ({ style: { "--line-clamp": `${lineClamp}` } } as React.HTMLAttributes<HTMLElement>)
+            ? ({ style: { "--line-clamp": `${lineClamp}` } } as React.HTMLAttributes<HTMLElement>)
             : {},
         )}
       >
         {children}
       </ElementType>
-    </Client.VisualTooltip>
+    </VisualTooltip>
   );
 }
 

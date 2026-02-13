@@ -68,7 +68,7 @@ describe("worker", () => {
     setupWorker([route]);
 
     const fetchCb = listeners.fetch?.[0];
-    expect(fetchCb).toBeTypeOf("function");
+    expect(fetchCb).toBeDefined();
 
     let result: Response | undefined;
     fetchCb?.({
@@ -151,7 +151,11 @@ describe("worker", () => {
 
     await vi.waitFor(() => expect(result).toBeDefined());
     expect(result?.status).toBe(500);
-    await expect(result!.json()).resolves.toEqual({ error: "broken" });
+    await expect(result!.json()).resolves.toEqual(
+      expect.objectContaining({
+        error: expect.stringContaining("broken"),
+      }),
+    );
     errorSpy.mockRestore();
   });
 

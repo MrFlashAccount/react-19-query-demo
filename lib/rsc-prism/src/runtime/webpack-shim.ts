@@ -9,6 +9,8 @@
  * IMPORTANT: This file must be imported BEFORE any react-server-dom-webpack imports.
  */
 
+import * as React from "react";
+
 const g = globalThis as Record<string, unknown>;
 
 /**
@@ -46,6 +48,22 @@ g.__webpack_get_script_filename__ = (): string => "";
  * Public path - base URL for loading chunks
  */
 g.__webpack_public_path__ = "/";
+
+const reactInternalsKey = "__SERVER_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE";
+const reactClientInternalsKey = "__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE";
+const reactModule = React as Record<string, unknown>;
+if (reactModule[reactInternalsKey] == null && reactModule[reactClientInternalsKey] != null) {
+  try {
+    // Compatibility fallback for environments where resolve conditions are not
+    // honoring the React server entrypoint.
+    Object.defineProperty(reactModule, reactInternalsKey, {
+      configurable: true,
+      value: reactModule[reactClientInternalsKey],
+    });
+  } catch {
+    // Ignore if React internals are locked by the runtime.
+  }
+}
 
 /**
  * Async chunk handler - handles async module loading

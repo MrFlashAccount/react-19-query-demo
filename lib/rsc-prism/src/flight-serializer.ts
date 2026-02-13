@@ -6,6 +6,7 @@
  */
 
 import "./runtime/webpack-shim";
+import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 
 import type { ReactNode } from "react";
 import { registerServerReference, renderToReadableStream } from "react-server-dom-webpack/server.browser";
@@ -13,9 +14,11 @@ import { polyfillReady } from "./polyfill";
 import type { ClientManifest } from "./types";
 
 const REACT_SERVER_REFERENCE = Symbol.for("react.server.reference");
+const DEFAULT_SERVER_ACTION_REGISTRY_LIMIT = 1024;
 
 type ServerActionFn = (...args: unknown[]) => unknown;
 const serverActions = new Map<string, ServerActionFn>();
+let serverActionRegistryLimit = DEFAULT_SERVER_ACTION_REGISTRY_LIMIT;
 
 function annotateServerReference<T extends (...args: any[]) => any>(id: string, fn: T): T {
   const ref = fn as T & {
@@ -37,27 +40,112 @@ function normalizeHeaders(init?: HeadersInit): Headers {
   return headers;
 }
 
-async function renderFlight(element: ReactNode, manifest: ClientManifest): Promise<ReadableStream<Uint8Array>> {
-  await polyfillReady;
+function looksLikeClientManifest(value: unknown): value is ClientManifest {
+  if (typeof value !== "object" || value == null || Array.isArray(value)) {
+    return false;
+  }
 
-  return renderToReadableStream(element, manifest, {
+  const entries = Object.values(value as Record<string, unknown>);
+  if (entries.length === 0) {
+    return false;
+  }
+
+  return entries.every((entry) => {
+    if (typeof entry !== "object" || entry == null || Array.isArray(entry)) {
+      return false;
+    }
+
+    const manifestEntry = entry as { id?: unknown; chunks?: unknown; name?: unknown };
+    return (
+      typeof manifestEntry.id === "string" &&
+      Array.isArray(manifestEntry.chunks) &&
+      typeof manifestEntry.name === "string"
+    );
+  });
+}
+
+async function renderFlight(
+  element: ReactNode,
+  manifest?: ClientManifest,
+): Promise<ReadableStream<Uint8Array>> {
+  await polyfillReady;
+  const resolvedManifest = resolveClientManifestOrThrow(manifest);
+
+  return renderToReadableStream(element, resolvedManifest, {
     onError: () => "An error occurred during server rendering.",
   });
 }
 
-async function streamToString(stream: ReadableStream<Uint8Array>): Promise<string> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  let output = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    output += decoder.decode(value, { stream: true });
+async function streamToString(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<string> {
+  if (!Number.isFinite(maxBytes)) {
+    return new Response(stream).text();
   }
 
-  output += decoder.decode();
-  return output;
+  if (maxBytes < 0) {
+    throw new Error("maxBytes must be greater than or equal to 0");
+  }
+
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new Error(`Flight payload exceeded maxBytes (${maxBytes})`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const merged = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder("utf-8", { fatal: false }).decode(merged);
+}
+
+function setServerAction(id: string, fn: ServerActionFn): void {
+  if (serverActions.has(id)) {
+    serverActions.delete(id);
+    serverActions.set(id, fn);
+    return;
+  }
+
+  while (serverActions.size >= serverActionRegistryLimit) {
+    const oldest = serverActions.keys().next().value;
+    if (oldest == null) break;
+    serverActions.delete(oldest);
+  }
+
+  serverActions.set(id, fn);
+}
+
+export function configureServerActionRegistry(options?: { maxEntries?: number }): void {
+  const maxEntries = options?.maxEntries ?? DEFAULT_SERVER_ACTION_REGISTRY_LIMIT;
+  if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+    throw new Error("maxEntries must be a positive integer");
+  }
+
+  serverActionRegistryLimit = maxEntries;
+
+  while (serverActions.size > serverActionRegistryLimit) {
+    const oldest = serverActions.keys().next().value;
+    if (oldest == null) break;
+    serverActions.delete(oldest);
+  }
+}
+
+export function clearServerActionRegistry(): void {
+  serverActions.clear();
 }
 
 /**
@@ -67,10 +155,10 @@ export function createServerAction<T extends (...args: any[]) => any>(id: string
   const annotated = annotateServerReference(id, fn);
   try {
     const registered = registerServerReference(annotated, id, id);
-    serverActions.set(id, registered as unknown as ServerActionFn);
+    setServerAction(id, registered as unknown as ServerActionFn);
     return registered;
   } catch {
-    serverActions.set(id, annotated as unknown as ServerActionFn);
+    setServerAction(id, annotated as unknown as ServerActionFn);
     return annotated;
   }
 }
@@ -88,7 +176,7 @@ export function getServerAction(id: string): ((...args: unknown[]) => unknown) |
 export async function executeServerAction(
   actionId: string,
   args: unknown[],
-  manifest: ClientManifest,
+  manifest?: ClientManifest,
 ): Promise<Response> {
   const action = serverActions.get(actionId);
   if (!action) {
@@ -116,9 +204,31 @@ export async function executeServerAction(
 export async function serializeToFlightPayload(
   element: ReactNode,
   manifest: ClientManifest,
+  options?: {
+    maxBytes?: number;
+  },
+): Promise<string>;
+export async function serializeToFlightPayload(
+  element: ReactNode,
+  options?: {
+    maxBytes?: number;
+  },
+): Promise<string>;
+export async function serializeToFlightPayload(
+  element: ReactNode,
+  manifestOrOptions?:
+    | ClientManifest
+    | {
+        maxBytes?: number;
+      },
+  maybeOptions?: {
+    maxBytes?: number;
+  },
 ): Promise<string> {
+  const manifest = looksLikeClientManifest(manifestOrOptions) ? manifestOrOptions : undefined;
+  const options = looksLikeClientManifest(manifestOrOptions) ? maybeOptions : manifestOrOptions;
   const stream = await renderFlight(element, manifest);
-  return streamToString(stream);
+  return streamToString(stream, options?.maxBytes ?? Number.POSITIVE_INFINITY);
 }
 
 /**
@@ -126,7 +236,7 @@ export async function serializeToFlightPayload(
  */
 export async function serializeToFlightStream(
   element: ReactNode,
-  manifest: ClientManifest,
+  manifest?: ClientManifest,
 ): Promise<ReadableStream<Uint8Array>> {
   return renderFlight(element, manifest);
 }
@@ -138,7 +248,15 @@ export async function createFlightResponse(
   element: ReactNode,
   manifest: ClientManifest,
   init?: ResponseInit,
+): Promise<Response>;
+export async function createFlightResponse(element: ReactNode, init?: ResponseInit): Promise<Response>;
+export async function createFlightResponse(
+  element: ReactNode,
+  manifestOrInit?: ClientManifest | ResponseInit,
+  maybeInit?: ResponseInit,
 ): Promise<Response> {
+  const manifest = looksLikeClientManifest(manifestOrInit) ? manifestOrInit : undefined;
+  const init = looksLikeClientManifest(manifestOrInit) ? maybeInit : manifestOrInit;
   const stream = await renderFlight(element, manifest);
 
   return new Response(stream, {

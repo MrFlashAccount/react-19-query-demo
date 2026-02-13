@@ -19,6 +19,8 @@ export {
   fetchRSC,
   callAction,
   type ConsumeRSCOptions,
+  type FetchRSCOptions,
+  type WorkerComponentReference,
   type CallActionOptions,
   type RSCRequestOptions,
 } from "./client";

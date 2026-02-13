@@ -2,7 +2,7 @@ export interface SendActionInput {
   endpoint: string;
   actionId: string;
   body: BodyInit;
-  contentType: string;
+  contentType?: string;
   headers?: HeadersInit;
   requestInit?: Omit<RequestInit, "method" | "body" | "headers">;
 }
@@ -11,6 +11,8 @@ export interface FetchRSCInput {
   url: string;
   headers?: HeadersInit;
   requestInit?: Omit<RequestInit, "headers">;
+  componentId?: string;
+  componentProps?: unknown;
 }
 
 export interface RSCTransport {
@@ -21,24 +23,32 @@ export interface RSCTransport {
 export function createFetchTransport(): RSCTransport {
   return {
     async sendAction(input): Promise<Response> {
+      const headers = new Headers(input.headers);
+      headers.set("x-rsc-action", input.actionId);
+      if (input.contentType != null) {
+        headers.set("content-type", input.contentType);
+      }
+
       return fetch(input.endpoint, {
         method: "POST",
         body: input.body,
-        headers: {
-          "Content-Type": input.contentType,
-          "x-rsc-action": input.actionId,
-          ...input.headers,
-        },
+        headers,
         ...input.requestInit,
       });
     },
 
     async fetchRSC(input): Promise<Response> {
+      const headers = new Headers(input.headers);
+      headers.set("accept", "text/x-component");
+      if (input.componentId != null) {
+        headers.set("x-rsc-component-id", input.componentId);
+      }
+      if (input.componentProps !== undefined) {
+        headers.set("x-rsc-component-props", JSON.stringify(input.componentProps));
+      }
+
       return fetch(input.url, {
-        headers: {
-          Accept: "text/x-component",
-          ...input.headers,
-        },
+        headers,
         ...input.requestInit,
       });
     },
@@ -49,38 +59,27 @@ export interface FunctionTransportRequest {
   method: "GET" | "POST";
   url: string;
   headers: Headers;
-  body: string;
+  body: BodyInit;
   requestInit?: RequestInit;
 }
 
 export type FunctionTransportHandler = (request: FunctionTransportRequest) => Response | Promise<Response>;
 
-function normalizeBody(body: BodyInit): string {
-  if (typeof body === "string") return body;
-  if (body instanceof URLSearchParams) return body.toString();
-  if (body instanceof FormData) {
-    return new URLSearchParams(body as unknown as Record<string, string>).toString();
-  }
-  if (body instanceof ArrayBuffer) {
-    return new TextDecoder().decode(body);
-  }
-  if (ArrayBuffer.isView(body)) {
-    return new TextDecoder().decode(body);
-  }
-  throw new Error("Unsupported BodyInit for this transport. Use string, URLSearchParams, or typed array.");
-}
-
 export function createFunctionTransport(handler: FunctionTransportHandler): RSCTransport {
   return {
     async sendAction(input): Promise<Response> {
       const headers = new Headers(input.headers);
-      headers.set("content-type", input.contentType);
+      if (input.contentType != null) {
+        headers.set("content-type", input.contentType);
+      } else {
+        headers.delete("content-type");
+      }
       headers.set("x-rsc-action", input.actionId);
       return handler({
         method: "POST",
         url: input.endpoint,
         headers,
-        body: normalizeBody(input.body),
+        body: input.body,
         requestInit: input.requestInit,
       });
     },
@@ -88,6 +87,12 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
     async fetchRSC(input): Promise<Response> {
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
+      if (input.componentId != null) {
+        headers.set("x-rsc-component-id", input.componentId);
+      }
+      if (input.componentProps !== undefined) {
+        headers.set("x-rsc-component-props", JSON.stringify(input.componentProps));
+      }
       return handler({
         method: "GET",
         url: input.url,
@@ -102,7 +107,7 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
 type MessageEventListener = (event: MessageEvent<unknown>) => void;
 
 export interface WorkerMessageEndpoint {
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, transfer?: Transferable[]): void;
   addEventListener(type: "message", listener: MessageEventListener): void;
   removeEventListener(type: "message", listener: MessageEventListener): void;
 }
@@ -115,8 +120,10 @@ export interface WorkerTransportRequestMessage {
   actionId?: string;
   contentType?: string;
   headers?: [string, string][];
-  body?: string;
+  body?: BodyInit;
   requestInit?: Omit<RequestInit, "method" | "body" | "headers">;
+  componentId?: string;
+  componentProps?: unknown;
 }
 
 export interface WorkerTransportResponseMessage {
@@ -175,6 +182,59 @@ function toHeaderTuples(headers?: HeadersInit): [string, string][] {
   return [...new Headers(headers).entries()];
 }
 
+function transferListForChunk(chunk: Uint8Array): Transferable[] | undefined {
+  if (chunk.byteLength === 0) return undefined;
+  const buffer = chunk.buffer;
+  if (!(buffer instanceof ArrayBuffer)) return undefined;
+  return [buffer];
+}
+
+type WorkerResponseMessage =
+  | WorkerTransportResponseHeadMessage
+  | WorkerTransportResponseNextMessage
+  | WorkerTransportResponseDoneMessage
+  | WorkerTransportResponseErrorMessage;
+
+interface PendingWorkerRequest {
+  touchActivity: () => void;
+  handleMessage: (message: WorkerResponseMessage) => void;
+}
+
+interface WorkerEndpointState {
+  pending: Map<string, PendingWorkerRequest>;
+}
+
+const workerEndpointState = new WeakMap<WorkerMessageEndpoint, WorkerEndpointState>();
+
+function getWorkerEndpointState(endpoint: WorkerMessageEndpoint): WorkerEndpointState {
+  const existing = workerEndpointState.get(endpoint);
+  if (existing) {
+    return existing;
+  }
+
+  const state: WorkerEndpointState = {
+    pending: new Map(),
+  };
+
+  endpoint.addEventListener("message", (event) => {
+    const message = event.data as WorkerResponseMessage | null;
+    if (message == null || typeof message.id !== "string" || typeof message.type !== "string") {
+      return;
+    }
+
+    const pending = state.pending.get(message.id);
+    if (!pending) {
+      return;
+    }
+
+    pending.touchActivity();
+    pending.handleMessage(message);
+  });
+
+  workerEndpointState.set(endpoint, state);
+  return state;
+}
+
 function sendWorkerRequest(
   endpoint: WorkerMessageEndpoint,
   request: Omit<WorkerTransportRequestMessage, "id" | "type">,
@@ -184,6 +244,7 @@ function sendWorkerRequest(
   const responseType = options.responseType ?? DEFAULT_RESPONSE_TYPE;
   const timeoutMs = options.timeoutMs ?? 10000;
   const id = nextRequestId();
+  const endpointState = getWorkerEndpointState(endpoint);
 
   return new Promise<Response>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -192,14 +253,15 @@ function sendWorkerRequest(
     let isSettled = false;
     let streamDone = false;
     let streamError: Error | null = null;
+    let lastActivity = Date.now();
     const pendingChunks: Uint8Array[] = [];
 
-    const cleanup = () => {
-      endpoint.removeEventListener("message", onMessage);
+    const cleanup = (): void => {
+      endpointState.pending.delete(id);
       if (timer != null) clearTimeout(timer);
     };
 
-    const closeStream = () => {
+    const closeStream = (): void => {
       if (streamDone) return;
       streamDone = true;
       if (streamController != null) {
@@ -207,7 +269,7 @@ function sendWorkerRequest(
       }
     };
 
-    const failStream = (error: Error) => {
+    const failStream = (error: Error): void => {
       if (streamDone) return;
       streamDone = true;
       if (streamController != null) {
@@ -217,20 +279,30 @@ function sendWorkerRequest(
       }
     };
 
-    const setTimer = () => {
-      if (timeoutMs <= 0) return;
-      if (timer != null) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (!didResolveHead) {
-          cleanup();
-          isSettled = true;
-          reject(new Error(`Worker transport timed out after ${timeoutMs}ms`));
-          return;
-        }
+    const touchActivity = () => {
+      lastActivity = Date.now();
+    };
 
+    const watchTimeout = () => {
+      if (timeoutMs <= 0) return;
+      const elapsed = Date.now() - lastActivity;
+      const remaining = timeoutMs - elapsed;
+
+      if (remaining > 0) {
+        timer = setTimeout(watchTimeout, remaining);
+        return;
+      }
+
+      const timeoutError = new Error(`Worker transport timed out after ${timeoutMs}ms`);
+      if (!didResolveHead) {
         cleanup();
-        failStream(new Error(`Worker transport timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
+        isSettled = true;
+        reject(timeoutError);
+        return;
+      }
+
+      cleanup();
+      failStream(timeoutError);
     };
 
     const stream = new ReadableStream<Uint8Array>({
@@ -255,59 +327,58 @@ function sendWorkerRequest(
       },
     });
 
-    const onMessage: MessageEventListener = (event) => {
-      const data = event.data as WorkerTransportResponseMessage | null;
-      if (data == null || data.id !== id || typeof data.type !== "string") return;
+    endpointState.pending.set(id, {
+      touchActivity,
+      handleMessage: (data) => {
+        if (data.type === responseHeadType(responseType)) {
+          const head = data as WorkerTransportResponseHeadMessage;
+          if (didResolveHead || isSettled) return;
 
-      if (data.type === responseHeadType(responseType)) {
-        const head = data as WorkerTransportResponseHeadMessage;
-        if (didResolveHead || isSettled) return;
-
-        didResolveHead = true;
-        isSettled = true;
-        resolve(
-          new Response(stream, {
-            status: head.status,
-            headers: head.headers,
-          }),
-        );
-        setTimer();
-        return;
-      }
-
-      if (data.type === responseNextType(responseType)) {
-        if (!didResolveHead || streamDone) return;
-        const next = data as WorkerTransportResponseNextMessage;
-        if (streamController != null) {
-          streamController.enqueue(next.chunk);
-        } else {
-          pendingChunks.push(next.chunk);
-        }
-        setTimer();
-        return;
-      }
-
-      if (data.type === responseDoneType(responseType)) {
-        if (!didResolveHead || streamDone) return;
-        cleanup();
-        closeStream();
-        return;
-      }
-
-      if (data.type === responseErrorType(responseType)) {
-        const error = new Error((data as WorkerTransportResponseErrorMessage).error);
-        cleanup();
-        if (!didResolveHead && !isSettled) {
+          didResolveHead = true;
           isSettled = true;
-          reject(error);
-        } else {
-          failStream(error);
+          resolve(
+            new Response(stream, {
+              status: head.status,
+              headers: head.headers,
+            }),
+          );
+          return;
         }
-      }
-    };
 
-    endpoint.addEventListener("message", onMessage);
-    setTimer();
+        if (data.type === responseNextType(responseType)) {
+          if (!didResolveHead || streamDone) return;
+          const next = data as WorkerTransportResponseNextMessage;
+          if (streamController != null) {
+            streamController.enqueue(next.chunk);
+          } else {
+            pendingChunks.push(next.chunk);
+          }
+          return;
+        }
+
+        if (data.type === responseDoneType(responseType)) {
+          if (!didResolveHead || streamDone) return;
+          cleanup();
+          closeStream();
+          return;
+        }
+
+        if (data.type === responseErrorType(responseType)) {
+          const error = new Error((data as WorkerTransportResponseErrorMessage).error);
+          cleanup();
+          if (!didResolveHead && !isSettled) {
+            isSettled = true;
+            reject(error);
+          } else {
+            failStream(error);
+          }
+        }
+      },
+    });
+
+    if (timeoutMs > 0) {
+      timer = setTimeout(watchTimeout, timeoutMs);
+    }
 
     endpoint.postMessage({
       ...request,
@@ -331,7 +402,7 @@ export function createWorkerTransport(
           actionId: input.actionId,
           contentType: input.contentType,
           headers: toHeaderTuples(input.headers),
-          body: normalizeBody(input.body),
+          body: input.body,
           requestInit: input.requestInit,
         },
         options,
@@ -348,6 +419,8 @@ export function createWorkerTransport(
           endpoint: input.url,
           headers: toHeaderTuples(headers),
           requestInit: input.requestInit,
+          componentId: input.componentId,
+          componentProps: input.componentProps,
         },
         options,
       );
@@ -359,15 +432,44 @@ export type WorkerTransportRequestHandler = (
   request: WorkerTransportRequestMessage,
 ) => Promise<Response> | Response;
 
-function resolveReplyTarget(event: MessageEvent<unknown>): { postMessage: (message: unknown) => void } | null {
-  const currentTarget = event.currentTarget as { postMessage?: (message: unknown) => void } | null;
-  if (currentTarget?.postMessage) {
-    return { postMessage: (message) => currentTarget.postMessage?.(message) };
+function postMessageWithTransfer(
+  target: { postMessage: (message: unknown, transfer?: Transferable[]) => void },
+  message: unknown,
+  transfer?: Transferable[],
+): void {
+  if (transfer != null && transfer.length > 0) {
+    try {
+      target.postMessage(message, transfer);
+      return;
+    } catch {
+      // Some endpoints may not accept transfer lists in this environment.
+    }
   }
 
-  const globalTarget = globalThis as unknown as { postMessage?: (message: unknown) => void };
+  target.postMessage(message);
+}
+
+function resolveReplyTarget(
+  event: MessageEvent<unknown>,
+): { postMessage: (message: unknown, transfer?: Transferable[]) => void } | null {
+  const currentTarget = event.currentTarget as
+    | { postMessage?: (message: unknown, transfer?: Transferable[]) => void }
+    | null;
+  if (currentTarget?.postMessage) {
+    const target = currentTarget as { postMessage: (message: unknown, transfer?: Transferable[]) => void };
+    return {
+      postMessage: (message, transfer) => postMessageWithTransfer(target, message, transfer),
+    };
+  }
+
+  const globalTarget = globalThis as unknown as {
+    postMessage?: (message: unknown, transfer?: Transferable[]) => void;
+  };
   if (typeof globalTarget.postMessage === "function") {
-    return { postMessage: globalTarget.postMessage.bind(globalTarget) };
+    const target = globalTarget as { postMessage: (message: unknown, transfer?: Transferable[]) => void };
+    return {
+      postMessage: (message, transfer) => postMessageWithTransfer(target, message, transfer),
+    };
   }
 
   return null;
@@ -402,11 +504,12 @@ export function createWorkerTransportMessageHandler(
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
+            const transfer = transferListForChunk(value);
             replyTarget.postMessage({
               type: responseNextType(responseType),
               id: request.id,
               chunk: value,
-            } satisfies WorkerTransportResponseNextMessage);
+            } satisfies WorkerTransportResponseNextMessage, transfer);
           }
         } finally {
           reader.releaseLock();

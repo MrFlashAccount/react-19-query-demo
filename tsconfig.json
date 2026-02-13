@@ -28,7 +28,9 @@
       "@lib/tracing": ["./lib/tracing/src/index.ts"],
       "@lib/tracing/helpers": ["./lib/tracing/src/helpers.ts"],
       "@lib/brand": ["./lib/brand/src/brand.ts"],
-      "@lib/brand/*": ["./lib/brand/src/*.ts"]
+      "@lib/brand/*": ["./lib/brand/src/*.ts"],
+      "@lib/rsc-prism": ["./lib/rsc-prism/src/index.ts"],
+      "@lib/rsc-prism/*": ["./lib/rsc-prism/src/*"]
     }
   }
 }

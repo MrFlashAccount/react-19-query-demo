@@ -5,10 +5,13 @@ import { readFile } from "node:fs/promises";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, build as viteBuild } from "vite";
+import { rscPrism } from "@lib/rsc-prism/vite";
 
 const rootDir = import.meta.dirname;
 const repoRoot = path.resolve(rootDir, "../..");
 const libDir = path.resolve(repoRoot, "lib");
+const reactServerEntry = path.resolve(repoRoot, "node_modules/react/react.react-server.js");
+const reactDomServerEntry = path.resolve(repoRoot, "node_modules/react-dom/react-dom.react-server.js");
 
 // Service worker config (movies RSC + JSON API)
 const swConfig = {
@@ -26,7 +29,7 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
   await viteBuild({
     configFile: false,
     mode,
-    root: path.dirname(swConfig.entry),
+    root: rootDir,
     build: {
       write: true,
       outDir: swConfig.outDir,
@@ -39,13 +42,18 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
       },
     },
     resolve: {
-      alias: {
-        "@lib/rsc-service-worker-bff": path.resolve(libDir, "rsc-service-worker-bff/src"),
-      },
+      alias: [
+        { find: "@lib/rsc-service-worker-bff", replacement: path.resolve(libDir, "rsc-service-worker-bff/src") },
+        // Ensure react-server entry is used for bare "react" imports within SW RSC bundle.
+        { find: /^react$/, replacement: reactServerEntry },
+        { find: /^react-dom$/, replacement: reactDomServerEntry },
+        { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
+        { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
+      ],
       // Required for react-server-dom-webpack/server
-      conditions: [mode, "browser", "import", "default"],
+      conditions: [mode, "react-server", "browser", "import", "default"],
     },
-    plugins: [react({ babel: { plugins: ["babel-plugin-react-compiler"] } })],
+    plugins: [rscPrism({ mode: "worker" }), react()],
     define: { "process.env.NODE_ENV": JSON.stringify(mode) },
   });
 
@@ -58,6 +66,7 @@ export default defineConfig(({ mode }) => ({
   publicDir: path.resolve(repoRoot, "public"),
   plugins: [
     tailwindcss(),
+    rscPrism({ mode: "main" }),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }),
     {
       name: "sw-builder",

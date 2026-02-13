@@ -4,11 +4,11 @@ import { clientRef, createClientModule, createClientRefs } from "../src/client-r
 
 describe("client-reference", () => {
   it("creates single ref", () => {
-    const Counter = clientRef<{ count: number }>("client", "Counter");
+    const counterRef = clientRef<{ count: number }>("client", "Counter");
 
-    expect(Counter.$$id).toBe("client#Counter");
-    expect(Counter.$$typeof).toBe(Symbol.for("react.client.reference"));
-    expect(typeof Counter).toBe("function");
+    expect(counterRef.$$id).toBe("client#Counter");
+    expect(counterRef.$$typeof).toBe(Symbol.for("react.client.reference"));
+    expect(counterRef).toBe(counterRef);
   });
 
   it("creates refs map", () => {

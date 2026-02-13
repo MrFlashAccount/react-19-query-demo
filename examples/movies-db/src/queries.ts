@@ -27,8 +27,8 @@ export const movieQuery = query({
 export const rscMoviesQuery = query({
   queryFn: (params: { searchQuery: string; limit: number }, ctx) =>
     ctx.api.searchMoviesRSC(params.searchQuery, params.limit),
-  staleTime: 5000,
-  gcTime: 60000,
+  staleTime: 0,
+  gcTime: 0,
 });
 
 export const rscUpdateMovieRatingMutation = mutation({

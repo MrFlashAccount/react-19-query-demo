@@ -6,19 +6,12 @@
  */
 /// <reference lib="webworker" />
 
-import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
+import "@lib/rsc-prism/runtime/webpack-shim";
 
-import {
-  setupWorker,
-  http,
-  json,
-  createClientModule,
-  createFlightResponse,
-  createServerAction,
-  executeServerAction,
-} from "@lib/rsc-service-worker-bff";
+import { setupWorker, http, json } from "@lib/rsc-service-worker-bff";
+import { createFlightResponse, createServerAction, executeServerAction } from "@lib/rsc-prism/flight-serializer";
 import type { Movie } from "../../api/types";
-import type * as ClientComponents from "./client-components";
+import { RatingStars } from "./client-components";
 
 // ========== Movie Database ==========
 let movieDatabaseCache: Movie[] | null = null;
@@ -70,12 +63,6 @@ async function searchMovies(query: string, limit: number = 500): Promise<Movie[]
     })
     .slice(0, limit);
 }
-
-// ========== Create Client Module ==========
-const { manifest, refs: Client } = createClientModule<typeof ClientComponents>(
-  "rsc-movies-client",
-  ["RatingStars"],
-);
 
 // ========== Server Actions ==========
 createServerAction("updateRating", async (movieId: string, rating: number): Promise<Movie> => {
@@ -134,7 +121,7 @@ function MovieCard({ movie }: { movie: Movie }) {
 
         {/* Client Component: Interactive Star Rating */}
         <div className="flex items-center gap-2">
-          <Client.RatingStars movieId={movie.id} currentStars={currentStars} />
+          <RatingStars movieId={movie.id} currentStars={currentStars} />
         </div>
 
         {movie.plot && <div className="text-xs text-gray-600 line-clamp-2">{movie.plot}</div>}
@@ -227,7 +214,7 @@ setupWorker([
     const searchQuery = url.searchParams.get("q") ?? "";
     const limit = Number(url.searchParams.get("limit") ?? 100);
     console.log("[SW] Rendering RSC for movies:", { searchQuery, limit });
-    return await createFlightResponse(<App searchQuery={searchQuery} limit={limit} />, manifest);
+    return await createFlightResponse(<App searchQuery={searchQuery} limit={limit} />);
   }),
 
   // POST /rsc/movies - Server action
@@ -249,7 +236,7 @@ setupWorker([
       args = body ? [body] : [];
     }
 
-    return executeServerAction(actionId, args, manifest);
+    return executeServerAction(actionId, args);
   }),
 ]);
 

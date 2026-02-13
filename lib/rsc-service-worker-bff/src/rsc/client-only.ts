@@ -10,6 +10,8 @@
  * ```
  */
 
+import "./webpack-shim";
+
 // Client utilities (fetch/consume RSC)
 export {
   ensureWorkerReady,

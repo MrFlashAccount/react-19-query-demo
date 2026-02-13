@@ -1,11 +1,9 @@
-import { useCallback } from "react";
 import * as React from "react";
 
 import { useLatest } from "./useLatest";
 
-const emptyArray: Readonly<never[]> = [];
 const noop = () => {};
-const useEffectEvent = React.useEffectEvent ?? useCallback;
+const useEffectEvent = React.useEffectEvent ?? (() => noop);
 
 /**
  * Hook that returns a stable callback reference that always calls the latest version of the callback.
@@ -19,12 +17,13 @@ const useEffectEvent = React.useEffectEvent ?? useCallback;
 export function useEvent<T extends (...args: any[]) => any>(cb: T): T {
   const cbRef = useLatest(cb);
   const dontCallInRenderGuard = useEffectEvent(noop);
-  return useCallback((...args: Parameters<T>) => {
+
+  return function eventCallback() {
     // useEventHook shall never be called during the render phase.
     // Because otherwise it violates the rules of react, especially the idempotency rule.
     if (import.meta.env.DEV) {
       dontCallInRenderGuard();
     }
-    return cbRef.current(...args);
-  }, emptyArray) as T;
+    return cbRef.current.call(cbRef.current, arguments);
+  } as T;
 }

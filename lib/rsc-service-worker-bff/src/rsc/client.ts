@@ -2,6 +2,8 @@
  * Service worker client adapter for @lib/rsc-prism.
  */
 
+import "./webpack-shim";
+
 import {
   callAction as prismCallAction,
   consumeRSC,
@@ -62,11 +64,14 @@ export function createServiceWorkerTransport(
       return fetch(input.endpoint, {
         method: "POST",
         body: input.body,
-        headers: {
-          "Content-Type": input.contentType,
-          "x-rsc-action": input.actionId,
-          ...input.headers,
-        },
+        headers: (() => {
+          const headers = new Headers(input.headers);
+          headers.set("x-rsc-action", input.actionId);
+          if (input.contentType != null) {
+            headers.set("content-type", input.contentType);
+          }
+          return headers;
+        })(),
         ...input.requestInit,
       });
     },
@@ -77,10 +82,11 @@ export function createServiceWorkerTransport(
       }
 
       return fetch(input.url, {
-        headers: {
-          Accept: "text/x-component",
-          ...input.headers,
-        },
+        headers: (() => {
+          const headers = new Headers(input.headers);
+          headers.set("accept", "text/x-component");
+          return headers;
+        })(),
         ...input.requestInit,
       });
     },

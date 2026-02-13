@@ -12,19 +12,32 @@
  */
 
 import type { ReactNode } from "react";
-import {
+import "./runtime/webpack-shim";
+import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
+import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
+import * as ReactServerDomWebpackServer from "react-server-dom-webpack/server.browser";
+
+const {
   createClientModuleProxy,
   decodeReply,
   registerServerReference,
   renderToReadableStream,
-} from "react-server-dom-webpack/server.browser";
-import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
+} = ReactServerDomWebpackServer as {
+  createClientModuleProxy: (moduleId: string) => unknown;
+  decodeReply: (body: FormData | string, options: Record<string, unknown>) => Promise<unknown>;
+  registerServerReference: <T>(fn: T, id: string, name: string) => T;
+  renderToReadableStream: (
+    element: ReactNode,
+    manifest: ClientManifest,
+    options: { onError?: ((error: unknown) => string | void) | undefined; signal?: AbortSignal | undefined },
+  ) => Promise<ReadableStream<Uint8Array>>;
+};
 
 /**
  * Create an RSC context for rendering
  */
-export function createRSCContext(manifest: ClientManifest): RSCContext {
-  return { manifest, actions: new Map() };
+export function createRSCContext(manifest?: ClientManifest): RSCContext {
+  return { manifest: resolveClientManifestOrThrow(manifest), actions: new Map() };
 }
 
 /**
@@ -105,9 +118,13 @@ export async function renderRSC(
 export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
   let body: FormData | string;
   if (encoded.type === "formdata") {
-    body = new FormData();
-    for (const [key, value] of new URLSearchParams(encoded.data)) {
-      body.append(key, value);
+    if (encoded.data instanceof FormData) {
+      body = encoded.data;
+    } else {
+      body = new FormData();
+      for (const [key, value] of new URLSearchParams(encoded.data)) {
+        body.append(key, value);
+      }
     }
   } else {
     body = encoded.data;

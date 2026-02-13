@@ -1,6 +1,5 @@
-import "./webpack-shim";
-
 import type { ReactNode } from "react";
+import { moduleCache } from "./webpack-shim";
 import {
   createClientModuleProxy,
   decodeReply,
@@ -8,6 +7,9 @@ import {
   renderToReadableStream,
 } from "react-server-dom-webpack/server.browser";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
+
+// Keep webpack shim initialization from being tree-shaken in sideEffects:false builds.
+void moduleCache;
 
 /**
  * Create an RSC context for rendering
@@ -73,9 +75,13 @@ export async function renderRSC(
 export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
   let body: FormData | string;
   if (encoded.type === "formdata") {
-    body = new FormData();
-    for (const [key, value] of new URLSearchParams(encoded.data)) {
-      body.append(key, value);
+    if (encoded.data instanceof FormData) {
+      body = encoded.data;
+    } else {
+      body = new FormData();
+      for (const [key, value] of new URLSearchParams(encoded.data)) {
+        body.append(key, value);
+      }
     }
   } else {
     body = encoded.data;

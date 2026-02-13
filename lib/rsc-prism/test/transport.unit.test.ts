@@ -11,16 +11,20 @@ import {
 class MockWorkerEndpoint implements WorkerMessageEndpoint {
   private readonly listeners = new Set<(event: MessageEvent<unknown>) => void>();
   onPostMessage?: (message: unknown) => void;
+  addCalls = 0;
+  removeCalls = 0;
 
   postMessage(message: unknown): void {
     this.onPostMessage?.(message);
   }
 
   addEventListener(_type: "message", listener: (event: MessageEvent<unknown>) => void): void {
+    this.addCalls += 1;
     this.listeners.add(listener);
   }
 
   removeEventListener(_type: "message", listener: (event: MessageEvent<unknown>) => void): void {
+    this.removeCalls += 1;
     this.listeners.delete(listener);
   }
 
@@ -33,6 +37,10 @@ class MockWorkerEndpoint implements WorkerMessageEndpoint {
     for (const listener of this.listeners) {
       listener(event);
     }
+  }
+
+  listenerCount(): number {
+    return this.listeners.size;
   }
 }
 
@@ -119,6 +127,40 @@ describe("transport", () => {
     expect(first.value).toEqual(chunkA);
     expect(second.value).toEqual(chunkB);
     expect(third.done).toBe(true);
+  });
+
+  it("worker transport reuses a single message listener across requests", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      endpoint.emitMessage({
+        type: "rsc.transport.response.head",
+        id: request.id,
+        status: 200,
+      });
+      endpoint.emitMessage({
+        type: "rsc.transport.response.done",
+        id: request.id,
+      });
+    };
+
+    const transport = createWorkerTransport(endpoint);
+    await transport.sendAction({
+      endpoint: "/rsc",
+      actionId: "a",
+      body: "[]",
+      contentType: "text/plain",
+    });
+    await transport.sendAction({
+      endpoint: "/rsc",
+      actionId: "b",
+      body: "[]",
+      contentType: "text/plain",
+    });
+
+    expect(endpoint.listenerCount()).toBe(1);
+    expect(endpoint.addCalls).toBe(1);
+    expect(endpoint.removeCalls).toBe(0);
   });
 
   it("worker transport times out before response head", async () => {
@@ -248,6 +290,8 @@ describe("transport", () => {
     endpoint.onPostMessage = (message) => {
       const request = message as WorkerTransportRequestMessage;
       expect(request.operation).toBe("fetch");
+      expect(request.componentId).toBe("worker-view.tsx#TodoWorkerView");
+      expect(request.componentProps).toEqual({ filter: "active" });
       endpoint.emitMessage({
         type: "rsc.transport.response.head",
         id: request.id,
@@ -266,7 +310,11 @@ describe("transport", () => {
     };
 
     const transport = createWorkerTransport(endpoint);
-    const response = await transport.fetchRSC?.({ url: "/rsc" });
+    const response = await transport.fetchRSC?.({
+      url: "/rsc",
+      componentId: "worker-view.tsx#TodoWorkerView",
+      componentProps: { filter: "active" },
+    });
     expect(response?.status).toBe(200);
     await expect(response?.text()).resolves.toBe("RSC:1\n");
   });

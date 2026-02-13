@@ -1,10 +1,7 @@
-// Runtime shim (opt-in side effect import)
-export { moduleCache } from "./runtime/webpack-shim";
+// Root entrypoint intentionally exports client-safe APIs only to avoid eagerly loading
+// server-side React runtime code in browser bundles. Use explicit subpaths for server APIs.
+export * from "./client-only";
 
-// Polyfill
-export { polyfillReady, isPolyfillRequired } from "./polyfill";
-
-// Types
 export type {
   ClientManifest,
   ClientManifestEntry,
@@ -17,86 +14,9 @@ export type {
   RSCResponseOptions,
 } from "./types";
 
-// Server
-export {
-  createRSC,
-  createRSCContext,
-  registerAction,
-  registerActions,
-  createClientProxy,
-  renderRSC,
-  decodeActionArgs,
-  handleAction,
-  getActionIdFromRequest,
-  isActionRequest,
-  type CreateRSCConfig,
-  type CreateRSCResult,
-} from "./server";
+export type { CreateRSCConfig, CreateRSCResult } from "./server";
+export type { CreateRSCHandlerOptions } from "./response";
 
-// Client
-export {
-  consumeRSC,
-  consumeRSCResponse,
-  encodeActionArgs,
-  createCallServer,
-  fetchRSC,
-  callAction,
-  type ConsumeRSCOptions,
-  type CallActionOptions,
-  type RSCRequestOptions,
-} from "./client";
-
-// Transport
-export {
-  createFetchTransport,
-  createFunctionTransport,
-  createWorkerTransport,
-  createWorkerTransportMessageHandler,
-  type RSCTransport,
-  type FunctionTransportHandler,
-  type FunctionTransportRequest,
-  type WorkerMessageEndpoint,
-  type WorkerTransportOptions,
-  type WorkerTransportRequestMessage,
-  type WorkerTransportResponseMessage,
-  type WorkerTransportResponseHeadMessage,
-  type WorkerTransportResponseNextMessage,
-  type WorkerTransportResponseDoneMessage,
-  type WorkerTransportResponseErrorMessage,
-} from "./transport";
-
-// Module registry
-export {
-  registerClientModule,
-  registerClientModules,
-  hasModule,
-  getModule,
-  buildClientManifest,
-  buildClientManifestFromModule,
-  mergeManifests,
-} from "./runtime/module-registry";
-
-// Response helpers
-export {
-  RSC_CONTENT_TYPE,
-  rsc,
-  rscWithContext,
-  rscAction,
-  rscError,
-  createRSCHandler,
-  type CreateRSCHandlerOptions,
-} from "./response";
-
-// Flight serializer
-export {
-  serializeToFlightStream,
-  createFlightResponse,
-  createServerAction,
-  getServerAction,
-  executeServerAction,
-} from "./flight-serializer";
-
-// Client reference utilities
 export {
   clientRef,
   createClientRefs,

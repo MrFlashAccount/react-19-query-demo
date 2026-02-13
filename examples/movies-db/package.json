@@ -21,6 +21,7 @@
     "@lib/brand": "workspace:*",
     "@lib/goat-query": "workspace:*",
     "@lib/performance-monitor": "workspace:*",
+    "@lib/rsc-prism": "workspace:*",
     "@lib/rsc-service-worker-bff": "workspace:*",
     "@lib/tracing": "workspace:*",
     "@tanstack/react-query": "5.90.5",
@@ -29,7 +30,6 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-github-corner": "2.5.0",
-    "react-is": "catalog:",
     "react-lag-radar": "1.0.0",
     "react-server-dom-webpack": "catalog:",
     "web-streams-polyfill": "catalog:"
@@ -46,7 +46,6 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/react-is": "19.2.0",
     "@typescript/native-preview": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "catalog:",

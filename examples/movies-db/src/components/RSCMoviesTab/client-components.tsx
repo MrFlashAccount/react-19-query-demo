@@ -4,7 +4,7 @@
  * Only interactive parts are client components.
  * Everything else renders on the server (service worker).
  */
-"use client";
+"use main";
 
 import { useState } from "react";
 import { useMutation } from "@lib/goat-query/react";
