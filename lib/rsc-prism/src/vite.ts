@@ -76,16 +76,7 @@ export interface RscPrismWorkerRuntimeOptions {
   aliases?: NonNullable<UserConfig["resolve"]>["alias"];
 }
 
-export interface RscPrismWorkerBuilderOptions {
-  entry: string;
-  serveUrl: string;
-  outDir?: string;
-  aliases?: NonNullable<UserConfig["resolve"]>["alias"];
-  watchInclude?: string;
-}
-
 export interface RscPrismVitePluginOptions {
-  mode: "main" | "worker";
   directives?: Array<(typeof DEFAULT_DIRECTIVES)[number]>;
   workerDirectives?: Array<(typeof DEFAULT_WORKER_DIRECTIVES)[number]>;
   include?: FilterPattern;
@@ -96,30 +87,71 @@ export interface RscPrismVitePluginOptions {
   moduleId?: (absolutePath: string, config: ResolvedConfig) => string;
 }
 
-export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Plugin {
-  let config: ResolvedConfig | null = null;
+interface RscPrismInternalPluginOptions extends RscPrismVitePluginOptions {
+  mode: "main" | "worker";
+}
 
-  const normalizeAliases = (
-    aliases: NonNullable<UserConfig["resolve"]>["alias"] | undefined,
-  ): Array<{ find: string | RegExp; replacement: string }> => {
-    if (aliases == null) {
-      return [];
-    }
-    const aliasArray = Array.isArray(aliases) ? aliases : [aliases];
-    return aliasArray
-      .map((entry) => {
-        if (entry == null || typeof entry !== "object") return null;
-        const aliasEntry = entry as { find?: string | RegExp; replacement?: string };
-        if (aliasEntry.find == null || typeof aliasEntry.replacement !== "string") {
-          return null;
-        }
-        return {
-          find: aliasEntry.find,
-          replacement: aliasEntry.replacement,
-        };
-      })
-      .filter((entry): entry is { find: string | RegExp; replacement: string } => entry != null);
-  };
+function isSupportedFile(absolutePath: string): boolean {
+  return SUPPORTED_EXTENSIONS.has(path.extname(absolutePath));
+}
+
+function normalizeModuleId(absolutePath: string, config: ResolvedConfig): string {
+  const relativePath = path.relative(config.root, absolutePath);
+  if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
+    return normalizePath(relativePath);
+  }
+
+  return normalizePath(absolutePath);
+}
+
+function toAbsolutePath(id: string): string {
+  const resolved = id.split("?", 1)[0]!;
+  if (resolved.startsWith("/@fs/")) {
+    return resolved.slice(4);
+  }
+  return resolved;
+}
+
+function dedupeItems<T>(items: T[]): T[] {
+  return [...new Set(items)];
+}
+
+function toArray(value: string[] | undefined): string[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return [];
+}
+
+function normalizeAliases(
+  aliases: NonNullable<UserConfig["resolve"]>["alias"] | undefined,
+): Array<{ find: string | RegExp; replacement: string }> {
+  if (aliases == null) {
+    return [];
+  }
+  const aliasArray = Array.isArray(aliases) ? aliases : [aliases];
+  return aliasArray
+    .map((entry) => {
+      if (entry == null || typeof entry !== "object") return null;
+      const aliasEntry = entry as { find?: string | RegExp; replacement?: string };
+      if (aliasEntry.find == null || typeof aliasEntry.replacement !== "string") {
+        return null;
+      }
+      return {
+        find: aliasEntry.find,
+        replacement: aliasEntry.replacement,
+      };
+    })
+    .filter((entry): entry is { find: string | RegExp; replacement: string } => entry != null);
+}
+
+function createWorkerEntryBuilderPlugin(options: {
+  entry: string;
+  servePath: string;
+  outDir?: string;
+  aliases?: NonNullable<UserConfig["resolve"]>["alias"];
+}): Plugin {
+  let config: ResolvedConfig | null = null;
 
   const buildWorker = async (mode: string): Promise<void> => {
     if (config == null) {
@@ -127,12 +159,12 @@ export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Pl
     }
     const root = config.root;
     const outputDir = options.outDir != null ? path.resolve(root, options.outDir) : path.resolve(root, ".vite", "worker-cache");
-    const fileName = path.basename(options.serveUrl);
+    const fileName = path.basename(options.servePath);
     const reactServerEntry = await resolveNodeModuleFile(root, "react/react.react-server.js");
     const reactServerJsxRuntimeEntry = await resolveNodeModuleFile(root, "react/jsx-runtime.react-server.js");
     const reactServerJsxDevRuntimeEntry = await resolveNodeModuleFile(root, "react/jsx-dev-runtime.react-server.js");
     const reactDomServerEntry = await resolveNodeModuleFile(root, "react-dom/react-dom.react-server.js");
-    const customAliases = normalizeAliases(options.aliases ?? config.resolve.alias);
+    const customAliases = normalizeAliases(options.aliases ?? config.resolve?.alias);
 
     await viteBuild({
       configFile: false,
@@ -169,10 +201,10 @@ export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Pl
           { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
           { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
         ],
-        conditions: [mode, "react-server", "browser", "import", "default"],
+        conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
       },
       plugins: [
-        rscPrism({ mode: "worker" }),
+        rscPrismWorker(),
         react() as unknown as Plugin,
       ],
       define: { "process.env.NODE_ENV": JSON.stringify(mode) },
@@ -180,7 +212,7 @@ export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Pl
   };
 
   return {
-    name: "rsc-prism-worker-builder",
+    name: "rsc-prism-internal-worker-entry-builder",
     configResolved(resolvedConfig) {
       config = resolvedConfig;
     },
@@ -193,9 +225,9 @@ export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Pl
         return;
       }
       const outputDir = options.outDir != null ? path.resolve(config.root, options.outDir) : path.resolve(config.root, ".vite", "worker-cache");
-      const fileName = path.basename(options.serveUrl);
+      const fileName = path.basename(options.servePath);
       server.middlewares.use(async (req, res, next) => {
-        if (req.url !== options.serveUrl) {
+        if (req.url !== options.servePath) {
           next();
           return;
         }
@@ -218,45 +250,10 @@ export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Pl
       if (normalizedFile.startsWith(normalizedOutDir)) {
         return;
       }
-      if (options.watchInclude != null && !normalizedFile.includes(options.watchInclude)) {
-        return;
-      }
       await buildWorker(config.mode);
       server.ws.send({ type: "full-reload" });
     },
   };
-}
-
-function isSupportedFile(absolutePath: string): boolean {
-  return SUPPORTED_EXTENSIONS.has(path.extname(absolutePath));
-}
-
-function normalizeModuleId(absolutePath: string, config: ResolvedConfig): string {
-  const relativePath = path.relative(config.root, absolutePath);
-  if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
-    return normalizePath(relativePath);
-  }
-
-  return normalizePath(absolutePath);
-}
-
-function toAbsolutePath(id: string): string {
-  const resolved = id.split("?", 1)[0]!;
-  if (resolved.startsWith("/@fs/")) {
-    return resolved.slice(4);
-  }
-  return resolved;
-}
-
-function dedupeItems<T>(items: T[]): T[] {
-  return [...new Set(items)];
-}
-
-function toArray(value: string[] | undefined): string[] {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  return [];
 }
 
 function parseModule(code: string, id: string): ParsedFile {
@@ -796,7 +793,7 @@ async function pickWorkerServeFile(outDir: string): Promise<string> {
   return withSize[0]!.filePath;
 }
 
-export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
+function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   const mainDirectives = new Set(options.directives ?? DEFAULT_DIRECTIVES);
   const workerDirectives = new Set(options.workerDirectives ?? DEFAULT_WORKER_DIRECTIVES);
   const includeFilter = createFilter(options.include, options.exclude);
@@ -807,6 +804,15 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
   const workerEndpoint = options.workerRuntime?.endpoint ?? "/rsc/view";
   const workerServePath = options.workerRuntime?.servePath ?? "/rsc.worker.js";
   const workerFileName = options.workerRuntime?.fileName ?? path.basename(workerServePath);
+  const workerEntryBuilderPlugin =
+    options.mode === "main" && workerRuntimeEnabled && workerRuntimeEntry != null
+      ? createWorkerEntryBuilderPlugin({
+          entry: workerRuntimeEntry,
+          servePath: workerServePath,
+          outDir: options.workerRuntime?.outDir,
+          aliases: options.workerRuntime?.aliases,
+        })
+      : null;
 
   let config: ResolvedConfig | null = null;
   const parsedDirectiveModules = new Map<string, ParsedDirectiveModule>();
@@ -935,9 +941,9 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
       options.workerRuntime?.outDir != null
         ? path.resolve(config.root, options.workerRuntime.outDir)
         : path.resolve(config.root, ".vite", "rsc-prism-worker-runtime");
-    const entryPath =
-      workerRuntimeEntry != null ? path.resolve(config.root, workerRuntimeEntry) : (await ensureGeneratedWorkerSources()).entryPath;
+    const entryPath = (await ensureGeneratedWorkerSources()).entryPath;
     generatedWorkerOutDir = outDir;
+
     await viteBuild({
       configFile: false,
       mode,
@@ -953,9 +959,7 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
           fileName: () => workerFileName,
         },
         rollupOptions: {
-          treeshake: false,
           output: {
-            inlineDynamicImports: true,
             intro: [
               "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
               "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
@@ -967,11 +971,7 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
       },
       resolve: {
         alias: [
-          ...(Array.isArray(options.workerRuntime?.aliases)
-            ? options.workerRuntime.aliases
-            : options.workerRuntime?.aliases != null
-              ? [options.workerRuntime.aliases]
-              : []),
+          ...normalizeAliases(options.workerRuntime?.aliases ?? config.resolve?.alias),
           { find: /^react$/, replacement: reactServerEntry },
           { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
           { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
@@ -982,23 +982,11 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
         conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
       },
       plugins: [
-        rscPrism({
-          mode: "worker",
-          directives: [...mainDirectives],
-          workerDirectives: [...workerDirectives],
-          include: options.include,
-          exclude: options.exclude,
-          moduleId: options.moduleId,
-        }),
+        rscPrismWorker(),
         react() as unknown as Plugin,
       ],
       define: { "process.env.NODE_ENV": JSON.stringify(mode) },
     });
-
-    if (workerRuntimeEntry != null) {
-      generatedWorkerServeFile = path.resolve(outDir, workerFileName);
-      return;
-    }
 
     await viteBuild({
       configFile: false,
@@ -1026,14 +1014,7 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
         },
       },
       plugins: [
-        rscPrism({
-          mode: "worker",
-          directives: [...mainDirectives],
-          workerDirectives: [...workerDirectives],
-          include: options.include,
-          exclude: options.exclude,
-          moduleId: options.moduleId,
-        }),
+        rscPrismWorker(),
       ],
       define: { "process.env.NODE_ENV": JSON.stringify(mode) },
     });
@@ -1104,9 +1085,20 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
     },
     configResolved(resolvedConfig) {
       config = resolvedConfig;
+      const workerConfigResolved = workerEntryBuilderPlugin?.configResolved as ((resolved: ResolvedConfig) => void) | undefined;
+      if (typeof workerConfigResolved === "function") {
+        workerConfigResolved(resolvedConfig);
+      }
     },
     async buildStart() {
       if (!workerRuntimeEnabled || config == null) {
+        return;
+      }
+      if (workerRuntimeEntry != null) {
+        const workerBuildStart = workerEntryBuilderPlugin?.buildStart as (() => Promise<void> | void) | undefined;
+        if (typeof workerBuildStart === "function") {
+          await workerBuildStart();
+        }
         return;
       }
       await buildGeneratedWorkerRuntime(config.mode);
@@ -1237,6 +1229,13 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
       if (!workerRuntimeEnabled) {
         return;
       }
+      if (workerRuntimeEntry != null) {
+        const workerConfigureServer = workerEntryBuilderPlugin?.configureServer as ((server: any) => void) | undefined;
+        if (typeof workerConfigureServer === "function") {
+          workerConfigureServer(server);
+        }
+        return;
+      }
       const workerServeDir = workerServePath.slice(0, workerServePath.lastIndexOf("/"));
       server.middlewares.use(async (req, res, next) => {
         if (generatedWorkerOutDir == null) {
@@ -1310,6 +1309,13 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
       if (!workerRuntimeEnabled || config == null) {
         return;
       }
+      if (workerRuntimeEntry != null) {
+        const workerHandleHotUpdate = workerEntryBuilderPlugin?.handleHotUpdate as ((context: any) => Promise<void> | void) | undefined;
+        if (typeof workerHandleHotUpdate === "function") {
+          await workerHandleHotUpdate(context);
+        }
+        return;
+      }
       const normalizedFile = normalizePath(context.file);
       const normalizedOutDir = generatedWorkerOutDir ? normalizePath(generatedWorkerOutDir) : null;
       if (normalizedOutDir != null && normalizedFile.startsWith(normalizedOutDir)) {
@@ -1328,4 +1334,18 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
       context.server.ws.send({ type: "full-reload" });
     },
   };
+}
+
+export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
+  return createRscPrismPlugin({
+    ...options,
+    mode: "main",
+  });
+}
+
+export function rscPrismWorker(options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {}): Plugin {
+  return createRscPrismPlugin({
+    ...options,
+    mode: "worker",
+  });
 }

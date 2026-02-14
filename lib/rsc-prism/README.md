@@ -67,7 +67,7 @@ No public API additions are required. Use only:
 2. `createWorkerTransportMessageHandler`
 3. `fetchRSC`
 4. `callAction`
-5. `rscPrism({ mode: "main" })` and `rscPrism({ mode: "worker" })`
+5. `rscPrism()` (main-side) and `rscPrismWorker()` (worker-side, advanced/manual builds)
 
 ## Auto-Test Scenario Matrix
 

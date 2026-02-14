@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ResolvedConfig } from "vite";
 
-import { rscPrism } from "../src/vite";
+import { rscPrism, rscPrismWorker } from "../src/vite";
 
 function createResolvedConfig(root: string): ResolvedConfig {
   return { root } as ResolvedConfig;
@@ -46,7 +46,7 @@ describe("rscPrism vite plugin", () => {
   });
 
   it("transforms use main modules in worker mode", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -69,7 +69,7 @@ export const Button = () => null;
   });
 
   it("transforms use client modules in worker mode", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -86,7 +86,7 @@ export function Counter() { return null; }
   });
 
   it("does not transform use worker modules in worker mode", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -101,7 +101,7 @@ export function WorkerView() { return null; }
   });
 
   it("transforms use worker modules in main mode", async () => {
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -121,7 +121,7 @@ export function WorkerPanel() { return null; }
   });
 
   it("transforms modules when use directive is no longer a Babel directive", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -140,7 +140,7 @@ export function Counter() { return null; }
   });
 
   it("leaves non-directive modules unchanged in worker mode", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -152,7 +152,7 @@ export function Counter() { return null; }
   });
 
   it("throws on export star in worker mode", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const root = "/virtual/project";
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
@@ -180,7 +180,7 @@ export function A() { return null; }
     );
     await writeFile(path.join(root, "src", "non-client.tsx"), `export const value = 1;`, "utf8");
 
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
     const resolved = await callHook(
@@ -201,7 +201,7 @@ export function A() { return null; }
   });
 
   it("auto-injects main virtual module into html", () => {
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     const transformed = callHook(
       plugin.transformIndexHtml as any,
       undefined,
@@ -223,7 +223,7 @@ export function A() { return null; }
   });
 
   it("does not auto-inject when html already imports the virtual module", () => {
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     const transformed = callHook(
       plugin.transformIndexHtml as any,
       undefined,
@@ -235,7 +235,6 @@ export function A() { return null; }
 
   it("resolves and loads worker bootstrap virtual module when runtime is enabled", async () => {
     const plugin = rscPrism({
-      mode: "main",
       workerRuntime: {
         enabled: true,
         servePath: "/todo.worker.js",
@@ -262,7 +261,7 @@ export function A() { return null; }
   });
 
   it("injects react-server resolve config in worker environment", async () => {
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     const configured = await callHook(
       plugin.configEnvironment as any,
       undefined,
@@ -295,7 +294,7 @@ export function A() { return null; }
   });
 
   it("does not inject react-server resolve config in main mode", async () => {
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     const configured = await callHook(
       plugin.configEnvironment as any,
       undefined,
@@ -325,7 +324,7 @@ export function TodoComposer() { return null; }
     );
     await writeFile(importerPath, `import { TodoComposer } from "./client-components";`, "utf8");
 
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
     const resolveContext = {
@@ -367,7 +366,7 @@ export function WorkerView() { return null; }
     );
     await writeFile(importerPath, `import { WorkerView } from "./worker-view";`, "utf8");
 
-    const plugin = rscPrism({ mode: "worker" });
+    const plugin = rscPrismWorker();
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
     const resolveContext = {
@@ -402,7 +401,7 @@ export function WorkerView() { return null; }
     );
     await writeFile(importerPath, `import WorkerDefault, { WorkerView } from "./worker-view";`, "utf8");
 
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
     const resolveContext = {
@@ -445,7 +444,7 @@ export function WorkerView() { return null; }
     );
     await writeFile(importerPath, `import { WorkerView } from "/src/worker-view.tsx";`, "utf8");
 
-    const plugin = rscPrism({ mode: "main" });
+    const plugin = rscPrism();
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
 
     const resolveContext = {

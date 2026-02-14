@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, build as viteBuild } from "vite";
-import { rscPrism } from "@lib/rsc-prism/vite";
+import { rscPrism, rscPrismWorker } from "@lib/rsc-prism/vite";
 
 const rootDir = import.meta.dirname;
 const repoRoot = path.resolve(rootDir, "../..");
@@ -53,7 +53,7 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
       // Required for react-server-dom-webpack/server
       conditions: [mode, "react-server", "browser", "import", "default"],
     },
-    plugins: [rscPrism({ mode: "worker" }), react()],
+    plugins: [rscPrismWorker(), react()],
     define: { "process.env.NODE_ENV": JSON.stringify(mode) },
   });
 
@@ -66,7 +66,7 @@ export default defineConfig(({ mode }) => ({
   publicDir: path.resolve(repoRoot, "public"),
   plugins: [
     tailwindcss(),
-    rscPrism({ mode: "main" }),
+    rscPrism(),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }),
     {
       name: "sw-builder",
