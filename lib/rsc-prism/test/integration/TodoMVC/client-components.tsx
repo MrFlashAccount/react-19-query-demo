@@ -12,7 +12,14 @@ import {
 } from "react";
 import { callAction, type RSCTransport } from "@lib/rsc-prism/client-only";
 import type { TodoFilter, TodoRecord } from "./types";
-import { addTodo, clearCompleted, deleteTodo, renameTodo, toggleAll, toggleTodo } from "./todo-actions";
+import {
+  addTodo,
+  clearCompleted,
+  deleteTodo,
+  renameTodo,
+  toggleAll,
+  toggleTodo,
+} from "./todo-actions";
 
 interface TodoRuntime {
   transport: RSCTransport;
@@ -62,7 +69,8 @@ function useTodoAction() {
               runtime.refresh();
             }
           } catch (error) {
-            const actionId = typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
+            const actionId =
+              typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
             console.error(`[todo-action] ${actionId} failed`, error);
           }
         })();
@@ -146,29 +154,27 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
   }, [draft, runAction, todo.id, todo.title]);
 
   return (
-    <li className={`todo-row ${todo.completed ? "todo-row--completed" : ""} ${isEditing ? "editing" : ""}`}>
-      <div className="todo-view">
-        <input
-          type="checkbox"
-          className="todo-toggle"
-          checked={todo.completed}
-          disabled={isPending}
-          onChange={() => runAction(toggleTodo, [todo.id])}
-          aria-label={`Toggle ${todo.title}`}
-        />
-        <label className="todo-label" onDoubleClick={() => setIsEditing(true)}>
-          {todo.title}
-        </label>
-        <button
-          type="button"
-          className="todo-destroy"
-          disabled={isPending}
-          onClick={() => runAction(deleteTodo, [todo.id])}
-          aria-label={`Delete ${todo.title}`}
-        >
-          x
-        </button>
-      </div>
+    <>
+      <input
+        type="checkbox"
+        className="todo-toggle"
+        checked={todo.completed}
+        disabled={isPending}
+        onChange={() => runAction(toggleTodo, [todo.id])}
+        aria-label={`Toggle ${todo.title}`}
+      />
+      <label className="todo-label" onDoubleClick={() => setIsEditing(true)}>
+        {todo.title}
+      </label>
+      <button
+        type="button"
+        className="todo-destroy"
+        disabled={isPending}
+        onClick={() => runAction(deleteTodo, [todo.id])}
+        aria-label={`Delete ${todo.title}`}
+      >
+        x
+      </button>
 
       {isEditing && (
         <input
@@ -188,7 +194,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
           }}
         />
       )}
-    </li>
+    </>
   );
 }
 

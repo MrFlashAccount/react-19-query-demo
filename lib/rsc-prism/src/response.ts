@@ -12,6 +12,7 @@ import {
   getActionIdFromRequest,
   createRSCContext,
   registerActions,
+  registerActionModule,
 } from "./server";
 import type { ClientManifest, EncodedActionArgs, RSCResponseOptions, RSCContext } from "./types";
 
@@ -150,6 +151,11 @@ export interface CreateRSCHandlerOptions {
   manifest?: ClientManifest;
   /** Server actions to register */
   actions?: Record<string, (...args: unknown[]) => unknown>;
+  /** Worker action modules auto-registered as `${moduleId}#${exportName}` */
+  actionModules?: Array<{
+    moduleId: string;
+    moduleExports: Record<string, unknown>;
+  }>;
   /** Error handler */
   onError?: (error: unknown) => string | void;
 }
@@ -179,6 +185,11 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
     await polyfillReady;
     if (options.actions) {
       await registerActions(ctx, options.actions);
+    }
+    if (options.actionModules) {
+      for (const actionModule of options.actionModules) {
+        await registerActionModule(ctx, actionModule.moduleId, actionModule.moduleExports);
+      }
     }
   })();
 

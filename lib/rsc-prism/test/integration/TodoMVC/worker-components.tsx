@@ -1,18 +1,20 @@
 "use worker";
 
-import { TodoComposer, TodoItemRow, TodoFooterControls } from "./client-components";
-import type { TodoWorkerViewData } from "./todo-model";
+import {
+  TodoComposer,
+  TodoItemRow as TodoItemRowClient,
+  TodoFooterControls,
+} from "./client-components";
+import { buildTodoWorkerViewData } from "./todo-model";
+import type { TodoFilter, TodoRecord } from "./types";
 
-export type TodoWorkerViewProps = TodoWorkerViewData;
+export interface TodoViewProps {
+  filter: TodoFilter;
+}
 
-export function TodoWorkerView({
-  filter,
-  visibleTodos,
-  totalCount,
-  activeCount,
-  completedCount,
-  allCompleted,
-}: TodoWorkerViewProps) {
+export function TodoView({ filter }: TodoViewProps) {
+  const { visibleTodos, totalCount, activeCount, completedCount, allCompleted } =
+    buildTodoWorkerViewData(filter);
 
   return (
     <section className="todo-shell">
@@ -41,5 +43,15 @@ export function TodoWorkerView({
         />
       </section>
     </section>
+  );
+}
+
+export function TodoItemRow({ todo }: { todo: TodoRecord }) {
+  return (
+    <li className={`todo-row ${todo.completed ? "todo-row--completed" : ""}`}>
+      <div className="todo-view">
+        <TodoItemRowClient todo={todo} />
+      </div>
+    </li>
   );
 }

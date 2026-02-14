@@ -62,12 +62,12 @@ export interface WorkerActionReference<Args extends unknown[] = unknown[], Resul
   readonly __resultType__?: Result;
 }
 
-export interface FetchRSCOptions extends RequestInit, ConsumeRSCOptions, RSCRequestOptions {
+export interface FetchRSCOptions extends ConsumeRSCOptions, RSCRequestOptions {
   props?: unknown;
 }
 
 type FetchRSCOptionsForTarget<Props> = Omit<FetchRSCOptions, "props"> & {
-  props?: Partial<Props>;
+  props?: Props;
 };
 
 function isWorkerComponentReference(value: unknown): value is WorkerComponentReference {
@@ -194,13 +194,12 @@ export function createCallServer(
  * root.render(element);
  * ```
  */
-export async function fetchRSC<Target extends (props: any) => any>(
-  target: Target,
-  options?: FetchRSCOptionsForTarget<Parameters<Target>[0]>,
-): Promise<Awaited<ReturnType<Target>>>;
-export async function fetchRSC<T = unknown>(target: string, options?: FetchRSCOptions): Promise<T>;
+export async function fetchRSC<
+  Props,
+  Target extends (props: Props) => React.JSX.Element | null | React.JSX.Element[],
+>(target: Target, options?: FetchRSCOptionsForTarget<Props>): Promise<Awaited<ReturnType<Target>>>;
 export async function fetchRSC(
-  target: ((props: any) => any) | string,
+  target: ((props: unknown) => unknown) | string,
   options?: FetchRSCOptions,
 ): Promise<unknown> {
   const transport = options?.transport ?? defaultFetchTransport;
@@ -281,7 +280,12 @@ export async function callAction<T = void>(
   const actionId = action.$$id;
   const transport = options?.transport ?? defaultFetchTransport;
   const endpoint = options?.endpoint ?? DEFAULT_ACTION_ENDPOINT;
-  const { parseResponse = false, transport: _transport, endpoint: _endpoint, ...fetchOptions } = options ?? {};
+  const {
+    parseResponse = false,
+    transport: _transport,
+    endpoint: _endpoint,
+    ...fetchOptions
+  } = options ?? {};
   const encodedArgs = await encodeActionArgs(args);
   const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
 

@@ -17,21 +17,20 @@ import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
 import * as ReactServerDomWebpackServer from "react-server-dom-webpack/server.browser";
 
-const {
-  createClientModuleProxy,
-  decodeReply,
-  registerServerReference,
-  renderToReadableStream,
-} = ReactServerDomWebpackServer as {
-  createClientModuleProxy: (moduleId: string) => unknown;
-  decodeReply: (body: FormData | string, options: Record<string, unknown>) => Promise<unknown>;
-  registerServerReference: <T>(fn: T, id: string, name: string) => T;
-  renderToReadableStream: (
-    element: ReactNode,
-    manifest: ClientManifest,
-    options: { onError?: ((error: unknown) => string | void) | undefined; signal?: AbortSignal | undefined },
-  ) => Promise<ReadableStream<Uint8Array>>;
-};
+const { createClientModuleProxy, decodeReply, registerServerReference, renderToReadableStream } =
+  ReactServerDomWebpackServer as unknown as {
+    createClientModuleProxy: (moduleId: string) => unknown;
+    decodeReply: (body: FormData | string, options: Record<string, unknown>) => Promise<unknown>;
+    registerServerReference: <T>(fn: T, id: string, name: string) => T;
+    renderToReadableStream: (
+      element: ReactNode,
+      manifest: ClientManifest,
+      options: {
+        onError?: ((error: unknown) => string | void) | undefined;
+        signal?: AbortSignal | undefined;
+      },
+    ) => Promise<ReadableStream<Uint8Array>>;
+  };
 
 /**
  * Create an RSC context for rendering
@@ -69,6 +68,38 @@ export async function registerActions(
     const registeredFn = registerServerReference(fn, id, id);
     ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
   }
+}
+
+/**
+ * Build action IDs from a module namespace.
+ * Each function export becomes `${moduleId}#${exportName}`.
+ */
+export function createActionModuleMap(
+  moduleId: string,
+  moduleExports: Record<string, unknown>,
+): Record<string, (...args: unknown[]) => unknown> {
+  const actions: Record<string, (...args: unknown[]) => unknown> = {};
+  for (const [exportName, value] of Object.entries(moduleExports)) {
+    if (typeof value !== "function") {
+      continue;
+    }
+    if (exportName.startsWith("__rscPrism")) {
+      continue;
+    }
+    actions[`${moduleId}#${exportName}`] = value as (...args: unknown[]) => unknown;
+  }
+  return actions;
+}
+
+/**
+ * Register all function exports from a module namespace as actions.
+ */
+export async function registerActionModule(
+  ctx: RSCContext,
+  moduleId: string,
+  moduleExports: Record<string, unknown>,
+): Promise<void> {
+  await registerActions(ctx, createActionModuleMap(moduleId, moduleExports));
 }
 
 /**

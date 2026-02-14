@@ -8,6 +8,7 @@ const rootDir = import.meta.dirname;
 const rscPrismSourceDir = path.resolve(rootDir, "../../../src");
 const rscPrismAliases = [
   { find: /^@lib\/rsc-prism$/, replacement: path.resolve(rscPrismSourceDir, "index.ts") },
+  { find: /^@lib\/rsc-prism\/react$/, replacement: path.resolve(rscPrismSourceDir, "react.tsx") },
   { find: /^@lib\/rsc-prism\/(.*)$/, replacement: `${rscPrismSourceDir}/$1` },
 ] as const;
 

@@ -68,6 +68,11 @@ interface MainThreadModuleEntry {
   importPath: string;
 }
 
+interface WorkerRuntimeModuleEntry extends MainThreadModuleEntry {
+  exportsInfo: ParsedModuleExports;
+  isWorkerDirectiveModule: boolean;
+}
+
 export interface RscPrismWorkerRuntimeOptions {
   enabled?: boolean;
   entry?: string;
@@ -769,21 +774,58 @@ function buildMainVirtualModuleCode(modules: MainThreadModuleEntry[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-function buildWorkerComponentRegistryCode(modules: MainThreadModuleEntry[]): string {
+function buildWorkerComponentRegistryCode(modules: WorkerRuntimeModuleEntry[]): string {
   const lines: string[] = [];
-  lines.push("const registry = new Map();");
+  lines.push("const componentRegistry = new Map();");
+  lines.push("const actionRegistry = new Map();");
+  lines.push("const actionModules = [];");
   lines.push("");
   modules.forEach((entry, index) => {
     const importName = `__rscPrismWorkerModule${index}`;
     lines.push(`import * as ${importName} from ${JSON.stringify(entry.importPath)};`);
-    lines.push(`for (const [key, value] of Object.entries(${importName})) {`);
-    lines.push(`  registry.set(${JSON.stringify(entry.moduleId)} + "#" + key, value);`);
-    lines.push("}");
+    const actionExports = new Set(entry.exportsInfo.actionExports);
+    const exportNames: string[] = [];
+    if (entry.exportsInfo.hasDefault) {
+      exportNames.push("default");
+    }
+    exportNames.push(...entry.exportsInfo.named);
+
+    if (actionExports.size > 0) {
+      lines.push(`actionModules.push({ moduleId: ${JSON.stringify(entry.moduleId)}, moduleExports: ${importName} });`);
+    }
+
+    for (const exportName of exportNames) {
+      const accessExpression = exportName === "default" ? `${importName}.default` : `${importName}.${exportName}`;
+      if (actionExports.has(exportName)) {
+        lines.push(`if (typeof ${accessExpression} === "function") {`);
+        lines.push(`  actionRegistry.set(${JSON.stringify(`${entry.moduleId}#${exportName}`)}, ${accessExpression});`);
+        lines.push("}");
+      } else if (entry.isWorkerDirectiveModule) {
+        lines.push(`componentRegistry.set(${JSON.stringify(`${entry.moduleId}#${exportName}`)}, ${accessExpression});`);
+      }
+    }
   });
   lines.push("");
   lines.push("export function resolveWorkerComponent(componentId) {");
   lines.push("  if (typeof componentId !== 'string' || componentId.length === 0) return null;");
-  lines.push("  return registry.get(componentId) ?? null;");
+  lines.push("  return componentRegistry.get(componentId) ?? null;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export function resolveWorkerAction(actionId) {");
+  lines.push("  if (typeof actionId !== 'string' || actionId.length === 0) return null;");
+  lines.push("  return actionRegistry.get(actionId) ?? null;");
+  lines.push("}");
+  lines.push("");
+  lines.push("export const workerActionModules = actionModules;");
+  lines.push("");
+  lines.push("export const workerActionCount = actionRegistry.size;");
+  lines.push("");
+  lines.push("export const workerComponentCount = componentRegistry.size;");
+  lines.push("");
+  lines.push("export const workerRegistry = { componentRegistry, actionRegistry };");
+  lines.push("");
+  lines.push("export function hasWorkerAction(actionId) {");
+  lines.push("  return actionRegistry.has(actionId);");
   lines.push("}");
   return `${lines.join("\n")}\n`;
 }
@@ -793,10 +835,27 @@ function buildGeneratedWorkerEntryCode(endpoint: string): string {
 import "@lib/rsc-prism/runtime/webpack-shim";
 import { createRSCHandler } from "@lib/rsc-prism/response";
 import { createWorkerTransportMessageHandler } from "@lib/rsc-prism/transport";
-import { resolveWorkerComponent } from "./worker-component-registry";
+import { resolveWorkerComponent, workerActionModules } from "./worker-component-registry";
 
 const WORKER_ORIGIN = "https://rsc.prism.local";
-const handler = createRSCHandler({});
+const ACTION_ENDPOINT = "/rsc/action";
+const handler = createRSCHandler({ actionModules: workerActionModules });
+
+function toActionRequest(message, endpoint) {
+  const headers = new Headers(message.headers ?? []);
+  if (message.actionId != null) {
+    headers.set("x-rsc-action", message.actionId);
+  }
+  if (message.contentType != null) {
+    headers.set("content-type", message.contentType);
+  }
+  return new Request(endpoint.toString(), {
+    ...message.requestInit,
+    method: "POST",
+    headers,
+    body: message.body ?? "",
+  });
+}
 
 self.addEventListener(
   "message",
@@ -823,9 +882,15 @@ self.addEventListener(
     }
 
     if (request.operation === "action") {
-      return new Response(JSON.stringify({ error: "Worker actions are deferred in this runtime phase." }), {
-        status: 501,
-        headers: { "Content-Type": "application/json" },
+      if (target.pathname !== ACTION_ENDPOINT) {
+        return new Response(JSON.stringify({ error: "Unknown endpoint: " + target.pathname }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      const actionRequest = toActionRequest(request, target);
+      return handler.action(actionRequest, {
+        status: 200,
       });
     }
 
@@ -1045,11 +1110,60 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     return result;
   };
 
-  const collectWorkerModulesForRuntime = async (): Promise<MainThreadModuleEntry[]> => {
+  const collectWorkerModulesForRuntime = async (): Promise<WorkerRuntimeModuleEntry[]> => {
     if (config == null) {
       throw new Error("[rsc-prism] Vite config is not resolved yet.");
     }
-    return collectMainThreadModules(config.root, includeFilter, workerDirectives, mapModuleId);
+    const root = config.root;
+
+    const collected: WorkerRuntimeModuleEntry[] = [];
+
+    async function visit(directory: string): Promise<void> {
+      const entries = await readdir(directory, { withFileTypes: true });
+      for (const entry of entries) {
+        const absolutePath = path.join(directory, entry.name);
+
+        if (entry.isDirectory()) {
+          if (shouldSkipDirectory(entry.name)) {
+            continue;
+          }
+          await visit(absolutePath);
+          continue;
+        }
+
+        if (!entry.isFile() || !isSupportedFile(absolutePath) || !includeFilter(absolutePath)) {
+          continue;
+        }
+
+        const parsed = await parseDirectiveModule(absolutePath);
+        if (parsed.exportsInfo == null) {
+          continue;
+        }
+        const includeAsWorkerModule = parsed.isDirectiveModule && parsed.type === "worker";
+        const includeAsActionModule = parsed.hasWorkerActionExports === true;
+        if (!includeAsWorkerModule && !includeAsActionModule) {
+          continue;
+        }
+
+        collected.push({
+          moduleId: mapModuleId(absolutePath),
+          importPath: normalizePath(absolutePath),
+          exportsInfo: parsed.exportsInfo,
+          isWorkerDirectiveModule: includeAsWorkerModule,
+        });
+      }
+    }
+
+    await visit(root);
+
+    const deduped = new Map<string, WorkerRuntimeModuleEntry>();
+    for (const entry of collected) {
+      if (!deduped.has(entry.moduleId)) {
+        deduped.set(entry.moduleId, entry);
+      }
+    }
+
+    return [...deduped.values()].sort((left, right) => left.moduleId.localeCompare(right.moduleId));
   };
 
   const ensureGeneratedWorkerSources = async (): Promise<{
@@ -1160,7 +1274,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
             format: "es",
             entryFileNames: "rsc.worker.js",
             inlineDynamicImports: true,
-            preserveModules: true,
             intro: [
               "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
               "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
@@ -1169,6 +1282,18 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
             ].join("\\n"),
           },
         },
+      },
+      resolve: {
+        alias: [
+          ...normalizeAliases(options.workerRuntime?.aliases ?? config.resolve?.alias),
+          { find: /^react$/, replacement: reactServerEntry },
+          { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
+          { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
+          { find: /^react-dom$/, replacement: reactDomServerEntry },
+          { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
+          { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
+        ],
+        conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
       },
       plugins: [
         rscPrismWorker(),
