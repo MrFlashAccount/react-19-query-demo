@@ -21,5 +21,6 @@ pnpm --filter @lib/rsc-prism exec vite build --config test/integration/TodoMVC/v
 ## Contract
 
 - Read endpoint: `GET /rsc/view`
-- Action endpoint: `POST /rsc/action`
-- Worker transport: `createWorkerTransport` + `createWorkerTransportMessageHandler`
+- Worker runtime bootstrap: `bootstrapWorkerRuntime()` from `virtual:rsc-prism/worker-bootstrap`
+- Worker transport wiring is plugin-generated in this scenario
+- Actions are intentionally deferred in this phase

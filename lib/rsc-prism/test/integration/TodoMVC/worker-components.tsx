@@ -20,6 +20,7 @@ export function TodoWorkerView({
   completedCount,
   allCompleted,
 }: TodoWorkerViewProps) {
+
   return (
     <section className="todo-shell">
       <section className="todoapp">

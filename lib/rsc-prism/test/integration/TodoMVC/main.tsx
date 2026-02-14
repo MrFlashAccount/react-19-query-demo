@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 import { createWorkerTransport, fetchRSC, type RSCTransport } from "@lib/rsc-prism/client-only";
 import { TodoRuntimeProvider } from "./client-components";
 import type { TodoFilter } from "./types";
+import { TodoWorkerView } from "./worker-components";
 
 function parseFilterFromLocation(): TodoFilter {
   const params = new URLSearchParams(window.location.search);
@@ -25,8 +26,7 @@ function parseFilterFromLocation(): TodoFilter {
 }
 
 function loadTodoView(filter: TodoFilter, transport: RSCTransport): Promise<ReactNode> {
-  const endpoint = filter === "all" ? "/rsc/view" : `/rsc/view?filter=${encodeURIComponent(filter)}`;
-  return fetchRSC<ReactNode>(endpoint, { transport }).catch((error: unknown) => {
+  return fetchRSC(TodoWorkerView, { transport, props: { filter } }).catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
     return (
       <section className="todo-shell">

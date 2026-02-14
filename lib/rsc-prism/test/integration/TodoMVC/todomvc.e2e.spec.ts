@@ -36,16 +36,22 @@ test.describe("TodoMVC integration", () => {
     await page.locator("input.todo-edit").press("Enter");
 
     await expect(page.getByText(nextTitle)).toBeVisible();
-    await expect(page.getByRole("checkbox", { name: /^Toggle Read worker transport docs$/ })).toHaveCount(0);
+    await expect(
+      page.getByRole("checkbox", { name: /^Toggle Read worker transport docs$/ }),
+    ).toHaveCount(0);
     await expect(page.getByRole("checkbox", { name: `Toggle ${nextTitle}` })).toBeVisible();
   });
 
   test("checks and unchecks a todo", async ({ page }) => {
     await page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }).click();
-    await expect(page.getByRole("checkbox", { name: "Toggle Read worker transport docs" })).toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }),
+    ).toBeChecked();
 
     await page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }).click();
-    await expect(page.getByRole("checkbox", { name: "Toggle Read worker transport docs" })).not.toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }),
+    ).not.toBeChecked();
   });
 
   test("filters todos by all states", async ({ page }) => {

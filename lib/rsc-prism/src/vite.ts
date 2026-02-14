@@ -1,5 +1,5 @@
 import path from "path";
-import { readdir, readFile } from "fs/promises";
+import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { parse, type ParserPlugin } from "@babel/parser";
 import {
   createFilter,
@@ -9,11 +9,15 @@ import {
   type ResolvedConfig,
   type UserConfig,
 } from "vite";
+import { build as viteBuild } from "vite";
+import react from "@vitejs/plugin-react";
 
 const DEFAULT_DIRECTIVES = ["use main", "use client"] as const;
 const DEFAULT_WORKER_DIRECTIVES = ["use worker"] as const;
 const DEFAULT_MAIN_VIRTUAL_ID = "virtual:rsc-prism/main-thread-modules";
 const RESOLVED_MAIN_VIRTUAL_ID = "\0rsc-prism:main-thread-modules";
+const DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID = "virtual:rsc-prism/worker-bootstrap";
+const RESOLVED_WORKER_BOOTSTRAP_VIRTUAL_ID = "\0rsc-prism:worker-bootstrap";
 const WORKER_PROXY_VIRTUAL_ID_PREFIX = "\0rsc-prism:worker-proxy:";
 const MAIN_WORKER_REF_VIRTUAL_ID_PREFIX = "\0rsc-prism:main-worker-ref:";
 
@@ -23,6 +27,7 @@ const SKIPPED_DIRECTORIES = new Set([
   ".git",
   ".turbo",
   ".sw-cache",
+  ".vite",
   "dist",
   "build",
   "coverage",
@@ -61,6 +66,24 @@ interface MainThreadModuleEntry {
   importPath: string;
 }
 
+export interface RscPrismWorkerRuntimeOptions {
+  enabled?: boolean;
+  entry?: string;
+  endpoint?: string;
+  servePath?: string;
+  fileName?: string;
+  outDir?: string;
+  aliases?: NonNullable<UserConfig["resolve"]>["alias"];
+}
+
+export interface RscPrismWorkerBuilderOptions {
+  entry: string;
+  serveUrl: string;
+  outDir?: string;
+  aliases?: NonNullable<UserConfig["resolve"]>["alias"];
+  watchInclude?: string;
+}
+
 export interface RscPrismVitePluginOptions {
   mode: "main" | "worker";
   directives?: Array<(typeof DEFAULT_DIRECTIVES)[number]>;
@@ -68,7 +91,140 @@ export interface RscPrismVitePluginOptions {
   include?: FilterPattern;
   exclude?: FilterPattern;
   mainVirtualId?: string;
+  workerBootstrapVirtualId?: string;
+  workerRuntime?: RscPrismWorkerRuntimeOptions;
   moduleId?: (absolutePath: string, config: ResolvedConfig) => string;
+}
+
+export function rscPrismWorkerBuilder(options: RscPrismWorkerBuilderOptions): Plugin {
+  let config: ResolvedConfig | null = null;
+
+  const normalizeAliases = (
+    aliases: NonNullable<UserConfig["resolve"]>["alias"] | undefined,
+  ): Array<{ find: string | RegExp; replacement: string }> => {
+    if (aliases == null) {
+      return [];
+    }
+    const aliasArray = Array.isArray(aliases) ? aliases : [aliases];
+    return aliasArray
+      .map((entry) => {
+        if (entry == null || typeof entry !== "object") return null;
+        const aliasEntry = entry as { find?: string | RegExp; replacement?: string };
+        if (aliasEntry.find == null || typeof aliasEntry.replacement !== "string") {
+          return null;
+        }
+        return {
+          find: aliasEntry.find,
+          replacement: aliasEntry.replacement,
+        };
+      })
+      .filter((entry): entry is { find: string | RegExp; replacement: string } => entry != null);
+  };
+
+  const buildWorker = async (mode: string): Promise<void> => {
+    if (config == null) {
+      return;
+    }
+    const root = config.root;
+    const outputDir = options.outDir != null ? path.resolve(root, options.outDir) : path.resolve(root, ".vite", "worker-cache");
+    const fileName = path.basename(options.serveUrl);
+    const reactServerEntry = await resolveNodeModuleFile(root, "react/react.react-server.js");
+    const reactServerJsxRuntimeEntry = await resolveNodeModuleFile(root, "react/jsx-runtime.react-server.js");
+    const reactServerJsxDevRuntimeEntry = await resolveNodeModuleFile(root, "react/jsx-dev-runtime.react-server.js");
+    const reactDomServerEntry = await resolveNodeModuleFile(root, "react-dom/react-dom.react-server.js");
+    const customAliases = normalizeAliases(options.aliases ?? config.resolve.alias);
+
+    await viteBuild({
+      configFile: false,
+      mode,
+      root,
+      build: {
+        write: true,
+        outDir: outputDir,
+        emptyOutDir: true,
+        lib: {
+          entry: path.resolve(root, options.entry),
+          formats: ["iife"],
+          name: "RscPrismWorker",
+          fileName: () => fileName,
+        },
+        rollupOptions: {
+          output: {
+            intro: [
+              "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
+              "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
+              "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
+              "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
+            ].join("\n"),
+          },
+        },
+      },
+      resolve: {
+        alias: [
+          ...customAliases,
+          { find: /^react$/, replacement: reactServerEntry },
+          { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
+          { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
+          { find: /^react-dom$/, replacement: reactDomServerEntry },
+          { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
+          { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
+        ],
+        conditions: [mode, "react-server", "browser", "import", "default"],
+      },
+      plugins: [
+        rscPrism({ mode: "worker" }),
+        react() as unknown as Plugin,
+      ],
+      define: { "process.env.NODE_ENV": JSON.stringify(mode) },
+    });
+  };
+
+  return {
+    name: "rsc-prism-worker-builder",
+    configResolved(resolvedConfig) {
+      config = resolvedConfig;
+    },
+    async buildStart() {
+      if (config == null) return;
+      await buildWorker(config.mode);
+    },
+    configureServer(server) {
+      if (config == null) {
+        return;
+      }
+      const outputDir = options.outDir != null ? path.resolve(config.root, options.outDir) : path.resolve(config.root, ".vite", "worker-cache");
+      const fileName = path.basename(options.serveUrl);
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url !== options.serveUrl) {
+          next();
+          return;
+        }
+        try {
+          const content = await readFile(path.resolve(outputDir, fileName), "utf8");
+          res.setHeader("Content-Type", "application/javascript");
+          res.setHeader("Cache-Control", "no-cache");
+          res.end(content);
+          return;
+        } catch {
+          next();
+        }
+      });
+    },
+    async handleHotUpdate({ file, server }) {
+      if (config == null) return;
+      const outputDir = options.outDir != null ? path.resolve(config.root, options.outDir) : path.resolve(config.root, ".vite", "worker-cache");
+      const normalizedOutDir = normalizePath(outputDir);
+      const normalizedFile = normalizePath(file);
+      if (normalizedFile.startsWith(normalizedOutDir)) {
+        return;
+      }
+      if (options.watchInclude != null && !normalizedFile.includes(options.watchInclude)) {
+        return;
+      }
+      await buildWorker(config.mode);
+      server.ws.send({ type: "full-reload" });
+    },
+  };
 }
 
 function isSupportedFile(absolutePath: string): boolean {
@@ -466,14 +622,198 @@ function buildMainVirtualModuleCode(modules: MainThreadModuleEntry[]): string {
   return `${lines.join("\n")}\n`;
 }
 
+function buildWorkerComponentRegistryCode(modules: MainThreadModuleEntry[]): string {
+  const lines: string[] = [];
+  lines.push("const registry = new Map();");
+  lines.push("");
+  modules.forEach((entry, index) => {
+    const importName = `__rscPrismWorkerModule${index}`;
+    lines.push(`import * as ${importName} from ${JSON.stringify(entry.importPath)};`);
+    lines.push(`for (const [key, value] of Object.entries(${importName})) {`);
+    lines.push(`  registry.set(${JSON.stringify(entry.moduleId)} + "#" + key, value);`);
+    lines.push("}");
+  });
+  lines.push("");
+  lines.push("export function resolveWorkerComponent(componentId) {");
+  lines.push("  if (typeof componentId !== 'string' || componentId.length === 0) return null;");
+  lines.push("  return registry.get(componentId) ?? null;");
+  lines.push("}");
+  return `${lines.join("\n")}\n`;
+}
+
+function buildGeneratedWorkerEntryCode(endpoint: string): string {
+  return `
+import "@lib/rsc-prism/runtime/webpack-shim";
+import { createRSCHandler } from "@lib/rsc-prism/response";
+import { createWorkerTransportMessageHandler } from "@lib/rsc-prism/transport";
+import { resolveWorkerComponent } from "./worker-component-registry";
+
+const WORKER_ORIGIN = "https://rsc.prism.local";
+const handler = createRSCHandler({});
+
+self.addEventListener(
+  "message",
+  createWorkerTransportMessageHandler(async (request) => {
+    const target = new URL(request.endpoint, WORKER_ORIGIN);
+
+    if (request.operation === "fetch") {
+      if (target.pathname !== ${JSON.stringify(endpoint)}) {
+        return new Response(JSON.stringify({ error: "Unknown endpoint: " + target.pathname }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      const component = resolveWorkerComponent(request.componentId);
+      if (component == null) {
+        return new Response(JSON.stringify({ error: "Missing or unknown worker component reference." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return handler.render(component(request.componentProps ?? {}));
+    }
+
+    if (request.operation === "action") {
+      return new Response(JSON.stringify({ error: "Worker actions are deferred in this runtime phase." }), {
+        status: 501,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unsupported operation" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+);
+self.postMessage({ type: "rsc.prism.worker.ready" });
+`;
+}
+
+function buildWorkerBootstrapCode(servePath: string): string {
+  return `
+import { createWorkerTransport } from "@lib/rsc-prism/client-only";
+
+export async function bootstrapWorkerRuntime() {
+  const worker = new Worker(${JSON.stringify(servePath)}, { type: "module" });
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error("Worker runtime failed to initialize."));
+    }, 1500);
+    const cleanup = () => {
+      clearTimeout(timeout);
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+    };
+    const onMessage = (event) => {
+      if (event.data != null && event.data.type === "rsc.prism.worker.ready") {
+        cleanup();
+        resolve(undefined);
+      }
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error("Worker runtime failed to initialize."));
+    };
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+  });
+  const transport = createWorkerTransport(worker, { timeoutMs: 3000 });
+  return {
+    worker,
+    transport,
+    dispose() {
+      worker.terminate();
+    },
+  };
+}
+`;
+}
+
+async function resolveNodeModuleFile(startDir: string, filePathFromNodeModules: string): Promise<string> {
+  let currentDir = startDir;
+  while (true) {
+    const candidate = path.resolve(currentDir, "node_modules", filePathFromNodeModules);
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // continue searching upwards
+    }
+
+    const parent = path.dirname(currentDir);
+    if (parent === currentDir) {
+      break;
+    }
+    currentDir = parent;
+  }
+
+  throw new Error(`[rsc-prism] Unable to resolve node_modules/${filePathFromNodeModules} from ${startDir}`);
+}
+
+async function collectJavaScriptFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const absolutePath = path.resolve(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await collectJavaScriptFiles(absolutePath)));
+      continue;
+    }
+    if (entry.isFile() && absolutePath.endsWith(".js")) {
+      files.push(absolutePath);
+    }
+  }
+  return files;
+}
+
+async function pickWorkerServeFile(outDir: string): Promise<string> {
+  const directEntry = path.resolve(outDir, "rsc.worker.js");
+  try {
+    const entryStats = await stat(directEntry);
+    if (entryStats.size > 0) {
+      return directEntry;
+    }
+  } catch {
+    // fall through to scanning output files
+  }
+
+  const jsFiles = await collectJavaScriptFiles(outDir);
+  if (jsFiles.length === 0) {
+    throw new Error(`[rsc-prism] Generated worker runtime output has no JavaScript files: ${outDir}`);
+  }
+
+  const withSize = await Promise.all(
+    jsFiles.map(async (filePath) => ({
+      filePath,
+      size: (await stat(filePath)).size,
+    })),
+  );
+  withSize.sort((left, right) => right.size - left.size);
+  return withSize[0]!.filePath;
+}
+
 export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
   const mainDirectives = new Set(options.directives ?? DEFAULT_DIRECTIVES);
   const workerDirectives = new Set(options.workerDirectives ?? DEFAULT_WORKER_DIRECTIVES);
   const includeFilter = createFilter(options.include, options.exclude);
   const virtualId = options.mainVirtualId ?? DEFAULT_MAIN_VIRTUAL_ID;
+  const workerBootstrapVirtualId = options.workerBootstrapVirtualId ?? DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID;
+  const workerRuntimeEnabled = options.mode === "main" && options.workerRuntime?.enabled === true;
+  const workerRuntimeEntry = options.workerRuntime?.entry;
+  const workerEndpoint = options.workerRuntime?.endpoint ?? "/rsc/view";
+  const workerServePath = options.workerRuntime?.servePath ?? "/rsc.worker.js";
+  const workerFileName = options.workerRuntime?.fileName ?? path.basename(workerServePath);
 
   let config: ResolvedConfig | null = null;
   const parsedDirectiveModules = new Map<string, ParsedDirectiveModule>();
+  let generatedWorkerOutDir: string | null = null;
+  let generatedWorkerServeFile: string | null = null;
+  let generatedWorkerEntryPath: string | null = null;
+  let generatedWorkerRegistryPath: string | null = null;
 
   const mapModuleId = (absolutePath: string): string => {
     if (config == null) {
@@ -542,6 +882,164 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
     return result;
   };
 
+  const collectWorkerModulesForRuntime = async (): Promise<MainThreadModuleEntry[]> => {
+    if (config == null) {
+      throw new Error("[rsc-prism] Vite config is not resolved yet.");
+    }
+    return collectMainThreadModules(config.root, includeFilter, workerDirectives, mapModuleId);
+  };
+
+  const ensureGeneratedWorkerSources = async (): Promise<{
+    entryPath: string;
+    registryPath: string;
+    outDir: string;
+  }> => {
+    if (config == null) {
+      throw new Error("[rsc-prism] Vite config is not resolved yet.");
+    }
+
+    const outDir =
+      options.workerRuntime?.outDir != null
+        ? path.resolve(config.root, options.workerRuntime.outDir)
+        : path.resolve(config.root, ".vite", "rsc-prism-worker-runtime");
+    const sourceDir = path.resolve(config.root, ".vite", "rsc-prism-worker-runtime-src");
+    const entryPath = path.resolve(sourceDir, "generated.worker.ts");
+    const registryPath = path.resolve(sourceDir, "worker-component-registry.ts");
+    await mkdir(sourceDir, { recursive: true });
+
+    const workerModules = await collectWorkerModulesForRuntime();
+    await writeFile(registryPath, buildWorkerComponentRegistryCode(workerModules), "utf8");
+    await writeFile(entryPath, buildGeneratedWorkerEntryCode(workerEndpoint), "utf8");
+
+    generatedWorkerOutDir = outDir;
+    generatedWorkerEntryPath = entryPath;
+    generatedWorkerRegistryPath = registryPath;
+
+    return { entryPath, registryPath, outDir };
+  };
+
+  const buildGeneratedWorkerRuntime = async (mode: string): Promise<void> => {
+    if (!workerRuntimeEnabled) {
+      return;
+    }
+    if (config == null) {
+      throw new Error("[rsc-prism] Vite config is not resolved yet.");
+    }
+
+    generatedWorkerServeFile = null;
+    const reactServerEntry = await resolveNodeModuleFile(config.root, "react/react.react-server.js");
+    const reactServerJsxRuntimeEntry = await resolveNodeModuleFile(config.root, "react/jsx-runtime.react-server.js");
+    const reactServerJsxDevRuntimeEntry = await resolveNodeModuleFile(config.root, "react/jsx-dev-runtime.react-server.js");
+    const reactDomServerEntry = await resolveNodeModuleFile(config.root, "react-dom/react-dom.react-server.js");
+    const outDir =
+      options.workerRuntime?.outDir != null
+        ? path.resolve(config.root, options.workerRuntime.outDir)
+        : path.resolve(config.root, ".vite", "rsc-prism-worker-runtime");
+    const entryPath =
+      workerRuntimeEntry != null ? path.resolve(config.root, workerRuntimeEntry) : (await ensureGeneratedWorkerSources()).entryPath;
+    generatedWorkerOutDir = outDir;
+    await viteBuild({
+      configFile: false,
+      mode,
+      root: config.root,
+      build: {
+        write: true,
+        outDir,
+        emptyOutDir: true,
+        lib: {
+          entry: entryPath,
+          formats: ["iife"],
+          name: "RscPrismWorkerRuntime",
+          fileName: () => workerFileName,
+        },
+        rollupOptions: {
+          treeshake: false,
+          output: {
+            inlineDynamicImports: true,
+            intro: [
+              "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
+              "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
+              "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
+              "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
+            ].join("\\n"),
+          },
+        },
+      },
+      resolve: {
+        alias: [
+          ...(Array.isArray(options.workerRuntime?.aliases)
+            ? options.workerRuntime.aliases
+            : options.workerRuntime?.aliases != null
+              ? [options.workerRuntime.aliases]
+              : []),
+          { find: /^react$/, replacement: reactServerEntry },
+          { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
+          { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
+          { find: /^react-dom$/, replacement: reactDomServerEntry },
+          { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
+          { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
+        ],
+        conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
+      },
+      plugins: [
+        rscPrism({
+          mode: "worker",
+          directives: [...mainDirectives],
+          workerDirectives: [...workerDirectives],
+          include: options.include,
+          exclude: options.exclude,
+          moduleId: options.moduleId,
+        }),
+        react() as unknown as Plugin,
+      ],
+      define: { "process.env.NODE_ENV": JSON.stringify(mode) },
+    });
+
+    if (workerRuntimeEntry != null) {
+      generatedWorkerServeFile = path.resolve(outDir, workerFileName);
+      return;
+    }
+
+    await viteBuild({
+      configFile: false,
+      mode,
+      root: config.root,
+      build: {
+        write: true,
+        outDir,
+        emptyOutDir: true,
+        rollupOptions: {
+          input: entryPath,
+          treeshake: false,
+          output: {
+            format: "es",
+            entryFileNames: "rsc.worker.js",
+            inlineDynamicImports: true,
+            preserveModules: true,
+            intro: [
+              "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
+              "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
+              "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
+              "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
+            ].join("\\n"),
+          },
+        },
+      },
+      plugins: [
+        rscPrism({
+          mode: "worker",
+          directives: [...mainDirectives],
+          workerDirectives: [...workerDirectives],
+          include: options.include,
+          exclude: options.exclude,
+          moduleId: options.moduleId,
+        }),
+      ],
+      define: { "process.env.NODE_ENV": JSON.stringify(mode) },
+    });
+    generatedWorkerServeFile = await pickWorkerServeFile(outDir);
+  };
+
   return {
     name: "rsc-prism",
     enforce: "pre",
@@ -607,6 +1105,12 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
     configResolved(resolvedConfig) {
       config = resolvedConfig;
     },
+    async buildStart() {
+      if (!workerRuntimeEnabled || config == null) {
+        return;
+      }
+      await buildGeneratedWorkerRuntime(config.mode);
+    },
     transformIndexHtml(html) {
       if (options.mode !== "main") {
         return undefined;
@@ -616,23 +1120,43 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
         return undefined;
       }
 
+      const tags: Array<{
+        tag: string;
+        attrs: Record<string, string>;
+        injectTo: "head-prepend";
+      }> = [
+        {
+          tag: "script",
+          attrs: {
+            type: "module",
+            src: `/@id/${virtualId}`,
+          },
+          injectTo: "head-prepend",
+        },
+      ];
+
+      if (workerRuntimeEnabled && !html.includes(workerBootstrapVirtualId)) {
+        tags.push({
+          tag: "script",
+          attrs: {
+            type: "module",
+            src: `/@id/${workerBootstrapVirtualId}`,
+          },
+          injectTo: "head-prepend",
+        });
+      }
+
       return {
         html,
-        tags: [
-          {
-            tag: "script",
-            attrs: {
-              type: "module",
-              src: `/@id/${virtualId}`,
-            },
-            injectTo: "head-prepend",
-          },
-        ],
+        tags,
       };
     },
     async resolveId(id, importer) {
       if (options.mode === "main" && id === virtualId) {
         return RESOLVED_MAIN_VIRTUAL_ID;
+      }
+      if (options.mode === "main" && workerRuntimeEnabled && id === workerBootstrapVirtualId) {
+        return RESOLVED_WORKER_BOOTSTRAP_VIRTUAL_ID;
       }
       if (importer == null || id.startsWith("\0")) {
         return null;
@@ -691,6 +1215,9 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
       }
 
       if (options.mode !== "main" || id !== RESOLVED_MAIN_VIRTUAL_ID) {
+        if (options.mode === "main" && workerRuntimeEnabled && id === RESOLVED_WORKER_BOOTSTRAP_VIRTUAL_ID) {
+          return buildWorkerBootstrapCode(workerServePath);
+        }
         return null;
       }
 
@@ -705,6 +1232,42 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
         mapModuleId,
       );
       return buildMainVirtualModuleCode(modules);
+    },
+    configureServer(server) {
+      if (!workerRuntimeEnabled) {
+        return;
+      }
+      const workerServeDir = workerServePath.slice(0, workerServePath.lastIndexOf("/"));
+      server.middlewares.use(async (req, res, next) => {
+        if (generatedWorkerOutDir == null) {
+          next();
+          return;
+        }
+
+        const requestPath = (req.url ?? "").split("?", 1)[0]!;
+        let targetFile: string | null = null;
+        if (requestPath === workerServePath && generatedWorkerServeFile != null) {
+          targetFile = generatedWorkerServeFile;
+        } else if (workerServeDir.length > 0 && requestPath.startsWith(`${workerServeDir}/`)) {
+          const relative = requestPath.slice(workerServeDir.length + 1);
+          targetFile = path.resolve(generatedWorkerOutDir, relative);
+        }
+
+        if (targetFile == null) {
+          next();
+          return;
+        }
+
+        try {
+          const content = await readFile(targetFile, "utf8");
+          res.setHeader("Content-Type", "application/javascript");
+          res.setHeader("Cache-Control", "no-cache");
+          res.end(content);
+          return;
+        } catch {
+          next();
+        }
+      });
     },
     transform(code, id) {
       if (!shouldProcessFile(id)) {
@@ -740,9 +1303,29 @@ export function rscPrism(options: RscPrismVitePluginOptions): Plugin {
         map: { mappings: "" },
       };
     },
-    handleHotUpdate(context) {
+    async handleHotUpdate(context) {
       parsedDirectiveModules.delete(normalizePath(context.file));
       parsedDirectiveModules.delete(context.file);
+
+      if (!workerRuntimeEnabled || config == null) {
+        return;
+      }
+      const normalizedFile = normalizePath(context.file);
+      const normalizedOutDir = generatedWorkerOutDir ? normalizePath(generatedWorkerOutDir) : null;
+      if (normalizedOutDir != null && normalizedFile.startsWith(normalizedOutDir)) {
+        return;
+      }
+      if (
+        generatedWorkerEntryPath != null &&
+        generatedWorkerRegistryPath != null &&
+        (normalizedFile === normalizePath(generatedWorkerEntryPath) ||
+          normalizedFile === normalizePath(generatedWorkerRegistryPath))
+      ) {
+        return;
+      }
+
+      await buildGeneratedWorkerRuntime(config.mode);
+      context.server.ws.send({ type: "full-reload" });
     },
   };
 }

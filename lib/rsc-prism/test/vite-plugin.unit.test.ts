@@ -233,6 +233,34 @@ export function A() { return null; }
     expect(transformed).toBeUndefined();
   });
 
+  it("resolves and loads worker bootstrap virtual module when runtime is enabled", async () => {
+    const plugin = rscPrism({
+      mode: "main",
+      workerRuntime: {
+        enabled: true,
+        servePath: "/todo.worker.js",
+      },
+    });
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const resolved = await callHook(
+      plugin.resolveId as any,
+      undefined,
+      "virtual:rsc-prism/worker-bootstrap",
+      undefined,
+      undefined,
+    );
+    expect(resolved).toBe("\0rsc-prism:worker-bootstrap");
+
+    const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:worker-bootstrap");
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+    expect(loadedCode).toContain("export async function bootstrapWorkerRuntime()");
+    expect(loadedCode).toContain('new Worker("/todo.worker.js", { type: "module" })');
+    expect(loadedCode).toContain("createWorkerTransport");
+    expect(loadedCode).toContain("dispose()");
+  });
+
   it("injects react-server resolve config in worker environment", async () => {
     const plugin = rscPrism({ mode: "worker" });
     const configured = await callHook(

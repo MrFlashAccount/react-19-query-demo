@@ -176,23 +176,18 @@ export function createCallServer(
  * root.render(element);
  * ```
  */
-export async function fetchRSC<T = unknown>(target: string, options?: FetchRSCOptions): Promise<T>;
-export async function fetchRSC<Props, Result>(
-  target: WorkerComponentReference<Props, Result>,
-  options?: FetchRSCOptionsForTarget<Props>,
-): Promise<Result>;
 export async function fetchRSC<Target extends (props: any) => any>(
   target: Target,
   options?: FetchRSCOptionsForTarget<Parameters<Target>[0]>,
 ): Promise<Awaited<ReturnType<Target>>>;
 export async function fetchRSC(
-  target: string | WorkerComponentReference | ((props: any) => any),
+  target: (props: any) => any,
   options?: FetchRSCOptions,
 ): Promise<unknown> {
   const transport = options?.transport ?? defaultFetchTransport;
-  const { callServer, props, transport: _transport, ...fetchOptions } = options ?? {};
+  const { callServer, props, transport: _transport } = options ?? {};
   const workerComponent = typeof target === "string" ? null : target;
-  const url = typeof target === "string" ? target : "/rsc/view";
+  const url = "/rsc/view";
 
   if (workerComponent != null && !isWorkerComponentReference(workerComponent)) {
     throw new Error(
@@ -204,18 +199,10 @@ export async function fetchRSC(
     transport.fetchRSC != null
       ? await transport.fetchRSC({
           url,
-          headers: fetchOptions?.headers,
-          requestInit: fetchOptions,
           componentId: workerComponent?.$$id,
           componentProps: props,
         })
-      : await fetch(url, {
-          headers: {
-            Accept: "text/x-component",
-            ...fetchOptions?.headers,
-          },
-          ...fetchOptions,
-        });
+      : await fetch(url, { headers: { Accept: "text/x-component" } });
 
   if (!response.ok) {
     throw new Error(`RSC fetch failed: ${response.status}`);
