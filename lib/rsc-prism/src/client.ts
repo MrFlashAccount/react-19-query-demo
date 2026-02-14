@@ -32,7 +32,7 @@ export interface ConsumeRSCOptions {
  * Transport-aware request options.
  */
 export interface RSCRequestOptions {
-  transport?: RSCTransport;
+  transport?: RSCTransport | null | undefined;
 }
 
 const WORKER_COMPONENT_REFERENCE = Symbol.for("rsc.worker.reference");

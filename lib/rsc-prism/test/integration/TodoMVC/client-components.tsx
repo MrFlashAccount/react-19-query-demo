@@ -2,9 +2,7 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
-  useMemo,
   useState,
   useTransition,
   type FormEvent,
@@ -52,32 +50,26 @@ function useTodoAction() {
   const runtime = useTodoRuntime();
   const [isPending, startTransition] = useTransition();
 
-  const runAction = useCallback(
-    (
-      action: ((...args: any[]) => unknown) & { $$id?: string },
-      args: any[] = [],
-      options?: { refresh?: boolean; onSuccess?: () => void },
-    ) => {
-      startTransition(() => {
-        void (async () => {
-          try {
-            await callAction(action, args, {
-              transport: runtime.transport,
-            });
-            options?.onSuccess?.();
-            if (options?.refresh ?? true) {
-              runtime.refresh();
-            }
-          } catch (error) {
-            const actionId =
-              typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
-            console.error(`[todo-action] ${actionId} failed`, error);
-          }
-        })();
-      });
-    },
-    [runtime],
-  );
+  const runAction = (
+    action: ((...args: any[]) => unknown) & { $$id?: string },
+    args: any[] = [],
+    options?: { refresh?: boolean; onSuccess?: () => void },
+  ) => {
+    startTransition(async () => {
+      try {
+        await callAction(action, args, {
+          transport: runtime.transport,
+        });
+        options?.onSuccess?.();
+        if (options?.refresh ?? true) {
+          runtime.refresh();
+        }
+      } catch (error) {
+        const actionId = typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
+        console.error(`[todo-action] ${actionId} failed`, error);
+      }
+    });
+  };
 
   return { isPending, runAction };
 }
@@ -92,22 +84,19 @@ export function TodoComposer({
   const [title, setTitle] = useState("");
   const { isPending, runAction } = useTodoAction();
 
-  const handleSubmit = useCallback(
-    (event: FormEvent) => {
-      event.preventDefault();
-      const nextTitle = title.trim();
-      if (nextTitle.length === 0) {
-        return;
-      }
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    const nextTitle = title.trim();
+    if (nextTitle.length === 0) {
+      return;
+    }
 
-      runAction(addTodo, [nextTitle], {
-        onSuccess: () => {
-          setTitle("");
-        },
-      });
-    },
-    [runAction, title],
-  );
+    runAction(addTodo, [nextTitle], {
+      onSuccess: () => {
+        setTitle("");
+      },
+    });
+  };
 
   return (
     <header className="todo-compose">
@@ -139,7 +128,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
   const [draft, setDraft] = useState(todo.title);
   const { isPending, runAction } = useTodoAction();
 
-  const finishEditing = useCallback(() => {
+  const finishEditing = () => {
     const nextTitle = draft.trim();
     setIsEditing(false);
 
@@ -151,7 +140,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
     if (nextTitle !== todo.title) {
       runAction(renameTodo, [todo.id, nextTitle]);
     }
-  }, [draft, runAction, todo.id, todo.title]);
+  };
 
   return (
     <>
@@ -219,27 +208,23 @@ export function TodoFooterControls({
   const { isPending, runAction } = useTodoAction();
   const itemLabel = activeCount === 1 ? "item" : "items";
 
-  const filters = useMemo(
-    () =>
-      FILTER_LABELS.map((entry) => {
-        const isSelected = entry.filter === filter;
-        return (
-          <li key={entry.filter}>
-            <a
-              href={entry.filter === "all" ? "?" : `?filter=${entry.filter}`}
-              className={isSelected ? "selected" : undefined}
-              onClick={(event) => {
-                event.preventDefault();
-                runtime.setFilter(entry.filter);
-              }}
-            >
-              {entry.label}
-            </a>
-          </li>
-        );
-      }),
-    [filter, runtime],
-  );
+  const filters = FILTER_LABELS.map((entry) => {
+    const isSelected = entry.filter === filter;
+    return (
+      <li key={entry.filter}>
+        <a
+          href={entry.filter === "all" ? "?" : `?filter=${entry.filter}`}
+          className={isSelected ? "selected" : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            runtime.setFilter(entry.filter);
+          }}
+        >
+          {entry.label}
+        </a>
+      </li>
+    );
+  });
 
   return (
     <footer className="todo-footer">

@@ -1,6 +1,6 @@
 import "./styles.css";
 
-import { Suspense, useEffect, useMemo, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "react-error-boundary";
 
@@ -8,7 +8,7 @@ import { createWorkerTransport } from "@lib/rsc-prism/client-only";
 import { TodoRuntimeProvider } from "./client-components";
 import type { TodoFilter } from "./types";
 import { TodoView } from "./worker-components";
-import { rsc } from "@lib/rsc-prism/react";
+import { rsc, RSCTransportProvider } from "@lib/rsc-prism/react";
 
 const TodoViewRSC = rsc(TodoView);
 
@@ -23,19 +23,20 @@ function parseFilterFromLocation(): TodoFilter {
   return "all";
 }
 
-function App() {
-  const [runtime] = useState(() => {
-    const worker = new Worker("/todo.worker.js", { type: "module" });
-    return { worker, transport: createWorkerTransport(worker) };
-  });
+const runtime = (() => {
+  const worker = new Worker("/todo.worker.js", { type: "module" });
+  return { worker, transport: createWorkerTransport(worker) };
+})();
 
-  const [filter, setFilterState] = useState<TodoFilter>(() => parseFilterFromLocation());
+function App() {
+  const [filter, setFilterState] = useState<TodoFilter>(parseFilterFromLocation);
   const [isPending, startTransition] = useTransition();
+  const [refreshCount, setRefreshCount] = useState(0);
 
   const refresh = () => {
     startTransition(() => {
-      const nextFilter = parseFilterFromLocation();
-      setFilterState(nextFilter);
+      setFilterState(parseFilterFromLocation());
+      setRefreshCount((count) => count + 1);
     });
   };
 
@@ -60,8 +61,7 @@ function App() {
   useEffect(() => {
     const handlePopState = () => {
       startTransition(() => {
-        const nextFilter = parseFilterFromLocation();
-        setFilterState(nextFilter);
+        setFilterState(parseFilterFromLocation());
       });
     };
 
@@ -69,62 +69,58 @@ function App() {
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [runtime.transport]);
+  }, []);
 
-  useEffect(() => {
-    return () => {
-      runtime.worker.terminate();
-    };
-  }, [runtime.worker]);
-
-  const contextValue = useMemo(
-    () => ({
-      transport: runtime.transport,
-      filter,
-      setFilter,
-      refresh,
-    }),
-    [filter, refresh, runtime.transport, setFilter],
-  );
+  useEffect(() => runtime.worker.terminate.bind(runtime.worker), [runtime.worker]);
 
   return (
-    <TodoRuntimeProvider value={contextValue}>
-      <main className="app-shell">
-        <header className="app-header">
-          <h2>RSC TodoMVC</h2>
-          <p>View rendering and data fetches run through React Server Components in a worker.</p>
-        </header>
+    <RSCTransportProvider transport={runtime.transport}>
+      <TodoRuntimeProvider
+        value={{
+          transport: runtime.transport,
+          filter,
+          setFilter,
+          refresh,
+        }}
+      >
+        <main className="app-shell">
+          <header className="app-header">
+            <h2>RSC TodoMVC</h2>
+            <p>View rendering and data fetches run through React Server Components in a worker.</p>
+          </header>
 
-        {isPending && <p className="app-status">Refreshing RSC view...</p>}
+          {isPending && <p className="app-status">Refreshing RSC view...</p>}
 
-        <ErrorBoundary
-          fallbackRender={({ error }) => {
-            const message = error instanceof Error ? error.message : String(error);
-            return (
-              <section className="todo-shell">
-                <section className="todoapp todoapp--error">
-                  <h1 className="todo-title">todos</h1>
-                  <p className="todo-error">Failed to load RSC payload: {message}</p>
+          <ErrorBoundary
+            fallbackRender={({ error }) => {
+              const message = error instanceof Error ? error.message : String(error);
+              return (
+                <section className="todo-shell">
+                  <section className="todoapp todoapp--error">
+                    <h1 className="todo-title">todos</h1>
+                    <p className="todo-error">Failed to load RSC payload: {message}</p>
+                  </section>
                 </section>
-              </section>
-            );
-          }}
-        >
-          <Suspense
-            fallback={
-              <section className="todo-shell">
-                <section className="todoapp">
-                  <h1 className="todo-title">todos</h1>
-                  <p className="todo-empty">Loading...</p>
-                </section>
-              </section>
-            }
+              );
+            }}
           >
-            <TodoViewRSC filter={filter} />
-          </Suspense>
-        </ErrorBoundary>
-      </main>
-    </TodoRuntimeProvider>
+            <Suspense
+              fallback={
+                <section className="todo-shell">
+                  <section className="todoapp">
+                    <h1 className="todo-title">todos</h1>
+                    <p className="todo-empty">Loading...</p>
+                  </section>
+                </section>
+              }
+            >
+              {/* @ts-expect-error - __refreshCount is a workaround to force a refresh of the RSC component */}
+              <TodoViewRSC filter={filter} __refreshCount={refreshCount} />
+            </Suspense>
+          </ErrorBoundary>
+        </main>
+      </TodoRuntimeProvider>
+    </RSCTransportProvider>
   );
 }
 

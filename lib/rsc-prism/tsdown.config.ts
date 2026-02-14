@@ -3,6 +3,7 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/react.tsx",
     "src/client-only.ts",
     "src/client.ts",
     "src/client-reference.ts",
@@ -30,6 +31,8 @@ export default defineConfig({
     "@babel/parser",
     "vite",
     "web-streams-polyfill",
+    "path",
+    "fs/promises",
     /^@lib\//,
   ],
   copy: [

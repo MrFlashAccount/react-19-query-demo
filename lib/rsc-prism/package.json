@@ -33,6 +33,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
     "./client-only": {
       "types": "./dist/client-only.d.ts",
       "default": "./dist/client-only.js"
@@ -124,7 +128,8 @@
     "react-dom": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "react-error-boundary": "6.1.1"
   },
   "peerDependencies": {
     "react": "^19.0.0",
