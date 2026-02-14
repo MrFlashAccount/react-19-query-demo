@@ -12,8 +12,7 @@ import {
 } from "react";
 import { callAction, type RSCTransport } from "@lib/rsc-prism/client-only";
 import type { TodoFilter, TodoRecord } from "./types";
-
-const ACTION_ENDPOINT = "/rsc/action";
+import { addTodo, clearCompleted, deleteTodo, renameTodo, toggleAll, toggleTodo } from "./todo-actions";
 
 interface TodoRuntime {
   transport: RSCTransport;
@@ -47,11 +46,15 @@ function useTodoAction() {
   const [isPending, startTransition] = useTransition();
 
   const runAction = useCallback(
-    (actionId: string, args: unknown[] = [], options?: { refresh?: boolean; onSuccess?: () => void }) => {
+    (
+      action: ((...args: any[]) => unknown) & { $$id?: string },
+      args: any[] = [],
+      options?: { refresh?: boolean; onSuccess?: () => void },
+    ) => {
       startTransition(() => {
         void (async () => {
           try {
-            await callAction(ACTION_ENDPOINT, actionId, args, {
+            await callAction(action, args, {
               transport: runtime.transport,
             });
             options?.onSuccess?.();
@@ -59,6 +62,7 @@ function useTodoAction() {
               runtime.refresh();
             }
           } catch (error) {
+            const actionId = typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
             console.error(`[todo-action] ${actionId} failed`, error);
           }
         })();
@@ -88,7 +92,7 @@ export function TodoComposer({
         return;
       }
 
-      runAction("addTodo", [nextTitle], {
+      runAction(addTodo, [nextTitle], {
         onSuccess: () => {
           setTitle("");
         },
@@ -104,7 +108,7 @@ export function TodoComposer({
         className="toggle-all"
         disabled={totalCount === 0 || isPending}
         aria-label={allCompleted ? "Mark all as active" : "Mark all as completed"}
-        onClick={() => runAction("toggleAll")}
+        onClick={() => runAction(toggleAll)}
       >
         {allCompleted ? "v" : ">"}
       </button>
@@ -132,12 +136,12 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
     setIsEditing(false);
 
     if (nextTitle.length === 0) {
-      runAction("deleteTodo", [todo.id]);
+      runAction(deleteTodo, [todo.id]);
       return;
     }
 
     if (nextTitle !== todo.title) {
-      runAction("renameTodo", [todo.id, nextTitle]);
+      runAction(renameTodo, [todo.id, nextTitle]);
     }
   }, [draft, runAction, todo.id, todo.title]);
 
@@ -149,7 +153,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
           className="todo-toggle"
           checked={todo.completed}
           disabled={isPending}
-          onChange={() => runAction("toggleTodo", [todo.id])}
+          onChange={() => runAction(toggleTodo, [todo.id])}
           aria-label={`Toggle ${todo.title}`}
         />
         <label className="todo-label" onDoubleClick={() => setIsEditing(true)}>
@@ -159,7 +163,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
           type="button"
           className="todo-destroy"
           disabled={isPending}
-          onClick={() => runAction("deleteTodo", [todo.id])}
+          onClick={() => runAction(deleteTodo, [todo.id])}
           aria-label={`Delete ${todo.title}`}
         >
           x
@@ -243,7 +247,7 @@ export function TodoFooterControls({
         type="button"
         className="clear-completed"
         disabled={completedCount === 0 || totalCount === 0 || isPending}
-        onClick={() => runAction("clearCompleted")}
+        onClick={() => runAction(clearCompleted)}
       >
         Clear completed
       </button>

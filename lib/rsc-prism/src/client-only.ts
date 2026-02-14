@@ -21,6 +21,7 @@ export {
   type ConsumeRSCOptions,
   type FetchRSCOptions,
   type WorkerComponentReference,
+  type WorkerActionReference,
   type CallActionOptions,
   type RSCRequestOptions,
 } from "./client";

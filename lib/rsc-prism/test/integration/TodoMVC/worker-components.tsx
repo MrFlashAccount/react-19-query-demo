@@ -1,16 +1,9 @@
 "use worker";
 
 import { TodoComposer, TodoItemRow, TodoFooterControls } from "./client-components";
-import type { TodoFilter, TodoRecord } from "./types";
+import type { TodoWorkerViewData } from "./todo-model";
 
-export interface TodoWorkerViewProps {
-  filter: TodoFilter;
-  visibleTodos: TodoRecord[];
-  totalCount: number;
-  activeCount: number;
-  completedCount: number;
-  allCompleted: boolean;
-}
+export type TodoWorkerViewProps = TodoWorkerViewData;
 
 export function TodoWorkerView({
   filter,

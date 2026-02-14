@@ -18,7 +18,7 @@ describe("client-only browser workflows", () => {
     });
 
     expect(clientOnly.hasModule(moduleId)).toBe(true);
-    expect(clientOnly.getModule(moduleId)?.Counter).toBeDefined();
+    expect((clientOnly.getModule(moduleId) as { Counter?: unknown } | undefined)?.Counter).toBeDefined();
 
     const manifest = clientOnly.buildClientManifest(moduleId, ["Counter"]);
     expect(manifest[`${moduleId}#Counter`]?.name).toBe("Counter");
@@ -29,10 +29,15 @@ describe("client-only browser workflows", () => {
       }
       return flightValueResponse("action-ok");
     });
+    const runActionRef = {
+      $$typeof: Symbol.for("react.server.reference"),
+      $$id: "todo-actions.ts#run",
+      $$bound: null,
+    };
 
-    await expect(clientOnly.fetchRSC<string>("/rsc", { transport })).resolves.toBe("fetch-ok");
+    await expect(clientOnly.fetchRSC("/rsc", { transport })).resolves.toBe("fetch-ok");
     await expect(
-      clientOnly.callAction<string>("/rsc", "run", [1], { transport, parseResponse: true }),
+      clientOnly.callAction<string>(runActionRef, [1], { transport, parseResponse: true }),
     ).resolves.toBe("action-ok");
   });
 });

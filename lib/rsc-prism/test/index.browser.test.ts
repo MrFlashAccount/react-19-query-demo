@@ -18,11 +18,16 @@ describe("root entrypoint browser workflows", () => {
       }
       return flightValueResponse("root-action");
     });
+    const runActionRef = {
+      $$typeof: Symbol.for("react.server.reference"),
+      $$id: "todo-actions.ts#run",
+      $$bound: null,
+    };
 
     await expect(rsc.fetchRSC<string>("/rsc", { transport })).resolves.toBe("root-fetch");
-    await expect(
-      rsc.callAction<string>("/rsc", "run", [], { transport, parseResponse: true }),
-    ).resolves.toBe("root-action");
+    await expect(rsc.callAction<string>(runActionRef, [], { transport, parseResponse: true })).resolves.toBe(
+      "root-action",
+    );
 
     const ref = rsc.clientRef<{ count: number }>("client", "Counter");
     expect(ref.$$id).toBe("client#Counter");

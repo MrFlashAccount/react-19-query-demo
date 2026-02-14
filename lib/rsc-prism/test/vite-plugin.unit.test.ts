@@ -462,4 +462,81 @@ export function WorkerView() { return null; }
     expect((resolved as string)!.startsWith("\0rsc-prism:main-worker-ref:")).toBe(true);
   });
 
+  it("redirects main imports of function-level use worker actions", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-worker-action-ref-test-"));
+    tempRoots.push(root);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    const actionModulePath = path.join(root, "src", "todo-actions.ts");
+    const importerPath = path.join(root, "src", "main.tsx");
+
+    await writeFile(
+      actionModulePath,
+      `
+export function addTodo() {
+  "use worker";
+  return "ok";
+}
+`,
+      "utf8",
+    );
+    await writeFile(importerPath, `import { addTodo } from "./todo-actions";`, "utf8");
+
+    const plugin = rscPrism();
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const resolveContext = {
+      resolve: async () => ({ id: actionModulePath }),
+    };
+
+    const resolved = await callHook(
+      plugin.resolveId as any,
+      resolveContext,
+      "./todo-actions",
+      importerPath,
+      undefined,
+    );
+    expect(typeof resolved).toBe("string");
+    expect((resolved as string)!.startsWith("\0rsc-prism:main-worker-action-ref:")).toBe(true);
+
+    const loaded = await callHook(plugin.load, undefined, resolved as string);
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+    expect(loadedCode).toContain('Symbol.for("react.server.reference")');
+    expect(loadedCode).toContain('__rscPrismCreateActionRef("addTodo")');
+  });
+
+  it("requires use worker to be first statement inside exported functions", async () => {
+    const plugin = rscPrism();
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const id = `${root}/src/todo-actions.ts`;
+    const source = `
+export function addTodo() {
+  const first = 1;
+  "use worker";
+  return first;
+}
+`;
+
+    const transformed = await callHook(plugin.transform, undefined, source, id);
+    expect(transformed).toBeNull();
+  });
+
+  it("throws when action modules export non-action values", async () => {
+    const plugin = rscPrism();
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const id = `${root}/src/todo-actions.ts`;
+    const source = `
+export function addTodo() {
+  "use worker";
+  return "ok";
+}
+export const metadata = { feature: true };
+`;
+
+    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow("must only export actions");
+  });
+
 });

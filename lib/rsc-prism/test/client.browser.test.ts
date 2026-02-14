@@ -23,10 +23,11 @@ describe("rsc client browser workflows", () => {
       expect(Array.from(encoded.data.entries()).length).toBeGreaterThan(0);
     }
 
-    const seenRequests: Array<{ method: string; accept: string | null; actionId: string | null }> = [];
+    const seenRequests: Array<{ method: string; url: string; accept: string | null; actionId: string | null }> = [];
     const transport = createFunctionTransport(async (request) => {
       seenRequests.push({
         method: request.method,
+        url: request.url,
         accept: request.headers.get("accept"),
         actionId: request.headers.get("x-rsc-action"),
       });
@@ -38,21 +39,32 @@ describe("rsc client browser workflows", () => {
       return flightValueResponse("action-ok");
     });
 
+    const runActionRef = {
+      $$typeof: Symbol.for("react.server.reference"),
+      $$id: "todo-actions.ts#run",
+      $$bound: null,
+    };
     await expect(fetchRSC<string>("/rsc", { transport })).resolves.toBe("fetch-ok");
-    await expect(callAction<string>("/rsc", "run", [1], { transport, parseResponse: true })).resolves.toBe(
-      "action-ok",
-    );
+    await expect(callAction<string>(runActionRef, [1], { transport, parseResponse: true })).resolves.toBe("action-ok");
 
     expect(seenRequests[0]).toEqual({
       method: "GET",
+      url: "/rsc/view",
       accept: "text/x-component",
       actionId: null,
     });
     expect(seenRequests[1]).toEqual({
       method: "POST",
+      url: "/rsc/action",
       accept: null,
-      actionId: "run",
+      actionId: "todo-actions.ts#run",
     });
+  });
+
+  it("rejects non-reference action calls", async () => {
+    await expect(callAction("not-a-ref" as unknown as (...args: never[]) => unknown, [])).rejects.toThrow(
+      "expects a \"use worker\" action reference",
+    );
   });
 
   it("creates callServer function that posts action request", async () => {
