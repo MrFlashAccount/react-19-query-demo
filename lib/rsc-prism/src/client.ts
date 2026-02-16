@@ -3,7 +3,7 @@
  */
 
 import "./runtime/webpack-shim";
-import type { EncodedActionArgs } from "./types";
+import type { ComponentReference, EncodedActionArgs } from "./types";
 import { createFetchTransport, type RSCTransport } from "./transport";
 import * as ReactServerDomWebpackClient from "react-server-dom-webpack/client.browser";
 
@@ -194,10 +194,10 @@ export function createCallServer(
  * root.render(element);
  * ```
  */
-export async function fetchRSC<
-  Props,
-  Target extends (props: Props) => React.JSX.Element | null | React.JSX.Element[],
->(target: Target, options?: FetchRSCOptionsForTarget<Props>): Promise<Awaited<ReturnType<Target>>>;
+export async function fetchRSC<Props, Target extends ComponentReference<Props>>(
+  target: Target,
+  options?: FetchRSCOptionsForTarget<Props>,
+): Promise<Awaited<ReturnType<Target>>>;
 export async function fetchRSC(
   target: ((props: unknown) => unknown) | string,
   options?: FetchRSCOptions,

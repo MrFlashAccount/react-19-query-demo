@@ -12,9 +12,9 @@ export interface TodoViewProps {
   filter: TodoFilter;
 }
 
-export function TodoView({ filter }: TodoViewProps) {
+export async function TodoView({ filter }: TodoViewProps) {
   const { visibleTodos, totalCount, activeCount, completedCount, allCompleted } =
-    buildTodoWorkerViewData(filter);
+    await buildTodoWorkerViewData(filter);
 
   return (
     <section className="todo-shell">
@@ -46,7 +46,7 @@ export function TodoView({ filter }: TodoViewProps) {
   );
 }
 
-export function TodoItemRow({ todo }: { todo: TodoRecord }) {
+function TodoItemRow({ todo }: { todo: TodoRecord }) {
   return (
     <li className={`todo-row ${todo.completed ? "todo-row--completed" : ""}`}>
       <div className="todo-view">

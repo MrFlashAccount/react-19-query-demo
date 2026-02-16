@@ -8,38 +8,38 @@ import {
   toggleTodoItem,
 } from "./todo-model";
 
-export function addTodo(title: string) {
+export async function addTodo(title: string) {
   "use worker";
-  addTodoItem(title);
+  await addTodoItem(title);
   return readMutationResult();
 }
 
-export function toggleTodo(id: string) {
+export async function toggleTodo(id: string) {
   "use worker";
-  toggleTodoItem(id);
+  await toggleTodoItem(id);
   return readMutationResult();
 }
 
-export function renameTodo(id: string, title: string) {
+export async function renameTodo(id: string, title: string) {
   "use worker";
-  renameTodoItem(id, title);
+  await renameTodoItem(id, title);
   return readMutationResult();
 }
 
-export function deleteTodo(id: string) {
+export async function deleteTodo(id: string) {
   "use worker";
-  deleteTodoItem(id);
+  await deleteTodoItem(id);
   return readMutationResult();
 }
 
-export function clearCompleted() {
+export async function clearCompleted() {
   "use worker";
-  clearCompletedTodos();
+  await clearCompletedTodos();
   return readMutationResult();
 }
 
-export function toggleAll() {
+export async function toggleAll() {
   "use worker";
-  toggleAllTodos();
+  await toggleAllTodos();
   return readMutationResult();
 }

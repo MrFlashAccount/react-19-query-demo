@@ -1,6 +1,7 @@
 import { createContext, use, useEffect, useState } from "react";
 import { fetchRSC } from "./client";
 import type { RSCTransport } from "./transport";
+import type { ComponentReference } from "./types";
 
 const $$invalidations = new Set<WeakRef<() => void>>();
 export function invalidateRSC() {
@@ -21,9 +22,7 @@ export function RSCTransportProvider({
   return <RSCTransportContext.Provider value={transport}>{children}</RSCTransportContext.Provider>;
 }
 
-export function rsc<Props = unknown>(
-  reference: (props: Props) => React.JSX.Element | null | React.JSX.Element[],
-) {
+export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
   let __cacheKey: string | undefined;
   let __cachePromise: Promise<React.ReactNode> | undefined;
 

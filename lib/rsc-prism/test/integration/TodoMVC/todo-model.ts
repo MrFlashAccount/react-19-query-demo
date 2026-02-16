@@ -4,93 +4,295 @@ interface TodoState extends TodoRecord {
   createdAt: number;
 }
 
-let todos: TodoState[] = [
-  { id: "todo-1", title: "Read worker transport docs", completed: false, createdAt: 1 },
-  { id: "todo-2", title: "Ship TodoMVC scenario", completed: false, createdAt: 2 },
-  { id: "todo-3", title: "Verify RSC refresh cycle", completed: true, createdAt: 3 },
-  { id: "todo-4", title: "Verify RSC action cycle", completed: false, createdAt: 4 },
-  { id: "todo-5", title: "Verify RSC action cycle", completed: false, createdAt: 5 },
-  { id: "todo-6", title: "Verify RSC action cycle", completed: false, createdAt: 6 },
-  { id: "todo-7", title: "Verify RSC action cycle", completed: false, createdAt: 7 },
-  { id: "todo-8", title: "Verify RSC action cycle", completed: false, createdAt: 8 },
-  { id: "todo-9", title: "Verify RSC action cycle", completed: false, createdAt: 9 },
-  { id: "todo-10", title: "Verify RSC action cycle", completed: false, createdAt: 10 },
-  { id: "todo-11", title: "Verify RSC action cycle", completed: false, createdAt: 11 },
-  { id: "todo-12", title: "Verify RSC action cycle", completed: false, createdAt: 12 },
-  { id: "todo-13", title: "Verify RSC action cycle", completed: false, createdAt: 13 },
-  { id: "todo-14", title: "Verify RSC action cycle", completed: false, createdAt: 14 },
-  { id: "todo-15", title: "Verify RSC action cycle", completed: false, createdAt: 15 },
-  { id: "todo-16", title: "Verify RSC action cycle", completed: false, createdAt: 16 },
-  { id: "todo-17", title: "Verify RSC action cycle", completed: false, createdAt: 17 },
-  { id: "todo-18", title: "Verify RSC action cycle", completed: false, createdAt: 18 },
-  { id: "todo-19", title: "Verify RSC action cycle", completed: false, createdAt: 19 },
-  { id: "todo-20", title: "Verify RSC action cycle", completed: false, createdAt: 20 },
-  { id: "todo-21", title: "Verify RSC action cycle", completed: false, createdAt: 21 },
-  { id: "todo-22", title: "Verify RSC action cycle", completed: false, createdAt: 22 },
-  { id: "todo-23", title: "Verify RSC action cycle", completed: false, createdAt: 23 },
-  { id: "todo-24", title: "Verify RSC action cycle", completed: false, createdAt: 24 },
-  { id: "todo-25", title: "Verify RSC action cycle", completed: false, createdAt: 25 },
-  { id: "todo-26", title: "Verify RSC action cycle", completed: false, createdAt: 26 },
-  { id: "todo-27", title: "Verify RSC action cycle", completed: false, createdAt: 27 },
-  { id: "todo-28", title: "Verify RSC action cycle", completed: false, createdAt: 28 },
-  { id: "todo-29", title: "Verify RSC action cycle", completed: false, createdAt: 29 },
-  { id: "todo-30", title: "Verify RSC action cycle", completed: false, createdAt: 30 },
-  { id: "todo-31", title: "Verify RSC action cycle", completed: false, createdAt: 31 },
-  { id: "todo-32", title: "Verify RSC action cycle", completed: false, createdAt: 32 },
-  { id: "todo-33", title: "Verify RSC action cycle", completed: false, createdAt: 33 },
-  { id: "todo-34", title: "Verify RSC action cycle", completed: false, createdAt: 34 },
-  { id: "todo-35", title: "Verify RSC action cycle", completed: false, createdAt: 35 },
-  { id: "todo-36", title: "Verify RSC action cycle", completed: false, createdAt: 36 },
-  { id: "todo-37", title: "Verify RSC action cycle", completed: false, createdAt: 37 },
-  { id: "todo-38", title: "Verify RSC action cycle", completed: false, createdAt: 38 },
-  { id: "todo-39", title: "Verify RSC action cycle", completed: false, createdAt: 39 },
-  { id: "todo-40", title: "Verify RSC action cycle", completed: false, createdAt: 40 },
-  { id: "todo-41", title: "Verify RSC action cycle", completed: false, createdAt: 41 },
-  { id: "todo-42", title: "Verify RSC action cycle", completed: false, createdAt: 42 },
-  { id: "todo-43", title: "Verify RSC action cycle", completed: false, createdAt: 43 },
-  { id: "todo-44", title: "Verify RSC action cycle", completed: false, createdAt: 44 },
-  { id: "todo-45", title: "Verify RSC action cycle", completed: false, createdAt: 45 },
-  { id: "todo-46", title: "Verify RSC action cycle", completed: false, createdAt: 46 },
-  { id: "todo-47", title: "Verify RSC action cycle", completed: false, createdAt: 47 },
-  { id: "todo-48", title: "Verify RSC action cycle", completed: false, createdAt: 48 },
-  { id: "todo-49", title: "Verify RSC action cycle", completed: false, createdAt: 49 },
-  { id: "todo-50", title: "Verify RSC action cycle", completed: false, createdAt: 50 },
-  { id: "todo-51", title: "Verify RSC action cycle", completed: false, createdAt: 51 },
-  { id: "todo-52", title: "Verify RSC action cycle", completed: false, createdAt: 52 },
-  { id: "todo-53", title: "Verify RSC action cycle", completed: false, createdAt: 53 },
-  { id: "todo-54", title: "Verify RSC action cycle", completed: false, createdAt: 54 },
-  { id: "todo-55", title: "Verify RSC action cycle", completed: false, createdAt: 55 },
-  { id: "todo-56", title: "Verify RSC action cycle", completed: false, createdAt: 56 },
-  { id: "todo-57", title: "Verify RSC action cycle", completed: false, createdAt: 57 },
-  { id: "todo-58", title: "Verify RSC action cycle", completed: false, createdAt: 58 },
-  { id: "todo-59", title: "Verify RSC action cycle", completed: false, createdAt: 59 },
-  { id: "todo-60", title: "Verify RSC action cycle", completed: false, createdAt: 60 },
-  { id: "todo-61", title: "Verify RSC action cycle", completed: false, createdAt: 61 },
-  { id: "todo-62", title: "Verify RSC action cycle", completed: false, createdAt: 62 },
-  { id: "todo-63", title: "Verify RSC action cycle", completed: false, createdAt: 63 },
-  { id: "todo-64", title: "Verify RSC action cycle", completed: false, createdAt: 64 },
-  { id: "todo-65", title: "Verify RSC action cycle", completed: false, createdAt: 65 },
-  { id: "todo-66", title: "Verify RSC action cycle", completed: false, createdAt: 66 },
-  { id: "todo-67", title: "Verify RSC action cycle", completed: false, createdAt: 67 },
-  { id: "todo-68", title: "Verify RSC action cycle", completed: false, createdAt: 68 },
-  { id: "todo-69", title: "Verify RSC action cycle", completed: false, createdAt: 69 },
-  { id: "todo-70", title: "Verify RSC action cycle", completed: false, createdAt: 70 },
-  { id: "todo-71", title: "Verify RSC action cycle", completed: false, createdAt: 71 },
-  { id: "todo-72", title: "Verify RSC action cycle", completed: false, createdAt: 72 },
-  { id: "todo-73", title: "Verify RSC action cycle", completed: false, createdAt: 73 },
-  { id: "todo-74", title: "Verify RSC action cycle", completed: false, createdAt: 74 },
-  { id: "todo-75", title: "Verify RSC action cycle", completed: false, createdAt: 75 },
-  { id: "todo-76", title: "Verify RSC action cycle", completed: false, createdAt: 76 },
-  { id: "todo-77", title: "Verify RSC action cycle", completed: false, createdAt: 77 },
-  { id: "todo-78", title: "Verify RSC action cycle", completed: false, createdAt: 78 },
-  { id: "todo-79", title: "Verify RSC action cycle", completed: false, createdAt: 79 },
-];
+const TODO_DB_NAME = "rsc-prism-todomvc";
+const TODO_DB_VERSION = 1;
+const TODO_STORE_NAME = "todos";
+const TODO_CREATED_AT_INDEX = "byCreatedAt";
+
+const SEED_TODO_TITLES = [
+  "Read worker transport docs",
+  "Ship TodoMVC scenario",
+  "Verify RSC refresh cycle",
+  "Verify RSC action cycle",
+  "Review pull request feedback from design team",
+  "Draft release notes for the next milestone",
+  "Prepare demo script for product walkthrough",
+  "Update onboarding checklist for new hires",
+  "Refine caching strategy for API responses",
+  "Schedule one-on-one with project mentor",
+  "Audit analytics events on checkout page",
+  "Fix flaky integration test in CI",
+  "Write migration plan for legacy endpoints",
+  "Sync roadmap priorities with leadership",
+  "Document incident response playbook",
+  "Clean up stale feature flags in config",
+  "Research alternatives for image optimization",
+  "Reply to vendor renewal questionnaire",
+  "Create quarterly goals draft",
+  "Review accessibility report findings",
+  "Prepare handoff notes for support team",
+  "Add retry handling for payment webhooks",
+  "Confirm launch checklist with operations",
+  "Consolidate duplicate bug tickets",
+  "Validate telemetry in staging environment",
+  "Set up alerts for background worker failures",
+  "Refactor auth middleware for clarity",
+  "Verify GDPR data export workflow",
+  "Backfill missing unit tests for utils",
+  "Update API contract examples",
+  "Call landlord about lease extension",
+  "Book annual dentist appointment",
+  "Plan meals for next week",
+  "Buy groceries for weekend dinner",
+  "Drop off package at shipping store",
+  "Pay electricity bill",
+  "Renew car registration",
+  "Refill prescription at pharmacy",
+  "Schedule oil change for car",
+  "Clean out garage shelves",
+  "Sort photos from summer trip",
+  "Back up laptop to external drive",
+  "Organize tax receipts folder",
+  "Cancel unused streaming subscription",
+  "Research hiking trail for Saturday",
+  "Invite friends to game night",
+  "Practice interview questions",
+  "Update resume with latest project",
+  "Apply to three engineering roles",
+  "Read chapter on distributed systems",
+  "Watch React conference recordings",
+  "Complete TypeScript kata exercises",
+  "Review notes from architecture meeting",
+  "Prepare sprint planning agenda",
+  "Estimate stories for next iteration",
+  "Triage incoming support requests",
+  "Close outdated project board cards",
+  "Pair on bug reproduction with QA",
+  "Run dependency vulnerability scan",
+  "Update changelog for patch release",
+  "Rotate API keys in staging",
+  "Test disaster recovery procedure",
+  "Create dashboard for conversion funnel",
+  "Analyze churn trends by segment",
+  "Draft customer interview questions",
+  "Follow up with beta testers",
+  "Summarize weekly metrics for team",
+  "Prepare agenda for retrospective",
+  "Review contract redlines with legal",
+  "Confirm budget allocation for Q3",
+  "Review SaaS invoices for duplicates",
+  "Set up recurring backups",
+  "Benchmark cold-start latency",
+  "Investigate memory spike in worker pool",
+  "Write runbook for deployment rollback",
+  "Verify feature gate behavior in prod",
+  "Add synthetic monitoring for login flow",
+  "Tune database index for search query",
+  "Create checklist for release candidate",
+  "Coordinate translation updates with locale team",
+  "Update help center screenshots",
+  "Record short demo for sales enablement",
+  "Draft announcement post for community forum",
+  "Review open source license obligations",
+  "Prepare workshop slides for interns",
+  "Set goals for personal learning plan",
+  "Practice keyboard shortcuts for editor",
+  "Declutter downloads folder",
+  "Repair bike tire",
+  "Book hotel for conference trip",
+  "Plan birthday dinner reservation",
+  "Buy gift for niece",
+  "Replace hallway light bulb",
+  "Water indoor plants",
+  "Clean coffee machine",
+  "Review monthly budget spreadsheet",
+  "Finish reading saved articles",
+  "Plan weekend family visit",
+  "Organize workspace desk drawers",
+  "Update emergency contacts list",
+] as const;
+
+const COMPLETED_SEED_INDICES = new Set([2, 8, 13, 21, 28, 34, 40, 46, 52, 59, 65, 72, 79, 87, 94]);
+
+let dbPromise: Promise<IDBDatabase | null> | null = null;
+let todosCache: TodoState[] | null = null;
+let loadTodosPromise: Promise<TodoState[]> | null = null;
+let mutationQueue: Promise<void> = Promise.resolve();
+let shouldUseInMemoryFallback = false;
 
 function normalizeTitle(title: string): string {
   return title.trim().replace(/\s+/g, " ");
 }
 
-function getVisibleTodos(filter: TodoFilter): TodoState[] {
+function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB request failed."));
+  });
+}
+
+function waitForTransaction(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB transaction aborted."));
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("IndexedDB transaction failed."));
+  });
+}
+
+function openTodoDatabase(): Promise<IDBDatabase | null> {
+  if (shouldUseInMemoryFallback) {
+    return Promise.resolve(null);
+  }
+
+  if (dbPromise != null) {
+    return dbPromise;
+  }
+
+  dbPromise = new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      resolve(null);
+      return;
+    }
+
+    const openRequest = indexedDB.open(TODO_DB_NAME, TODO_DB_VERSION);
+
+    openRequest.onupgradeneeded = () => {
+      const database = openRequest.result;
+      const store = database.objectStoreNames.contains(TODO_STORE_NAME)
+        ? openRequest.transaction?.objectStore(TODO_STORE_NAME)
+        : database.createObjectStore(TODO_STORE_NAME, { keyPath: "id" });
+
+      if (store != null && !store.indexNames.contains(TODO_CREATED_AT_INDEX)) {
+        store.createIndex(TODO_CREATED_AT_INDEX, "createdAt");
+      }
+    };
+
+    openRequest.onsuccess = () => {
+      resolve(openRequest.result);
+    };
+
+    openRequest.onerror = () => {
+      reject(openRequest.error ?? new Error("Failed to open todo IndexedDB database."));
+    };
+  });
+
+  return dbPromise.catch(() => {
+    shouldUseInMemoryFallback = true;
+    dbPromise = null;
+    return null;
+  });
+}
+
+function buildSeedTodos(): TodoState[] {
+  const baseCreatedAt = Date.now() + SEED_TODO_TITLES.length;
+
+  return SEED_TODO_TITLES.map((title, index) => ({
+    id: `seed-todo-${index + 1}`,
+    title,
+    completed: COMPLETED_SEED_INDICES.has(index),
+    createdAt: baseCreatedAt - index,
+  }));
+}
+
+async function ensureSeedTodos(database: IDBDatabase): Promise<void> {
+  const readTransaction = database.transaction(TODO_STORE_NAME, "readonly");
+  const readStore = readTransaction.objectStore(TODO_STORE_NAME);
+  const existingCount = await requestToPromise(readStore.count());
+  await waitForTransaction(readTransaction);
+
+  if (existingCount > 0) {
+    return;
+  }
+
+  const seedTodos = buildSeedTodos();
+  const writeTransaction = database.transaction(TODO_STORE_NAME, "readwrite");
+  const writeStore = writeTransaction.objectStore(TODO_STORE_NAME);
+
+  for (const todo of seedTodos) {
+    writeStore.put(todo);
+  }
+
+  await waitForTransaction(writeTransaction);
+}
+
+async function readTodosFromDatabase(database: IDBDatabase): Promise<TodoState[]> {
+  const transaction = database.transaction(TODO_STORE_NAME, "readonly");
+  const store = transaction.objectStore(TODO_STORE_NAME);
+  const byCreatedAt = store.index(TODO_CREATED_AT_INDEX);
+  const todos: TodoState[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    const cursorRequest = byCreatedAt.openCursor(null, "prev");
+
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (cursor == null) {
+        resolve();
+        return;
+      }
+
+      todos.push(cursor.value as TodoState);
+      cursor.continue();
+    };
+
+    cursorRequest.onerror = () => {
+      reject(cursorRequest.error ?? new Error("Failed to read todos from IndexedDB."));
+    };
+  });
+
+  await waitForTransaction(transaction);
+  return todos;
+}
+
+async function loadTodos(): Promise<TodoState[]> {
+  if (todosCache != null) {
+    return todosCache;
+  }
+
+  if (loadTodosPromise != null) {
+    return loadTodosPromise;
+  }
+
+  loadTodosPromise = (async () => {
+    const database = await openTodoDatabase();
+    if (database == null) {
+      const seedTodos = buildSeedTodos();
+      todosCache = seedTodos;
+      return seedTodos;
+    }
+
+    await ensureSeedTodos(database);
+    const todos = await readTodosFromDatabase(database);
+    todosCache = todos;
+    return todos;
+  })();
+
+  try {
+    return await loadTodosPromise;
+  } finally {
+    loadTodosPromise = null;
+  }
+}
+
+async function persistTodos(todos: TodoState[]): Promise<void> {
+  const database = await openTodoDatabase();
+  if (database != null) {
+    const transaction = database.transaction(TODO_STORE_NAME, "readwrite");
+    const store = transaction.objectStore(TODO_STORE_NAME);
+    store.clear();
+
+    for (const todo of todos) {
+      store.put(todo);
+    }
+
+    await waitForTransaction(transaction);
+  }
+  todosCache = todos;
+}
+
+function getVisibleTodos(todos: TodoState[], filter: TodoFilter): TodoState[] {
   switch (filter) {
     case "active":
       return todos.filter((todo) => !todo.completed);
@@ -101,11 +303,31 @@ function getVisibleTodos(filter: TodoFilter): TodoState[] {
   }
 }
 
-function getCounts() {
+function getCounts(todos: TodoState[]) {
   const totalCount = todos.length;
   const completedCount = todos.reduce((count, todo) => count + (todo.completed ? 1 : 0), 0);
   const activeCount = totalCount - completedCount;
   return { totalCount, activeCount, completedCount };
+}
+
+async function updateTodos(mutator: (todos: TodoState[]) => TodoState[]): Promise<TodoState[]> {
+  const update = mutationQueue.then(async () => {
+    const todos = await loadTodos();
+    const nextTodos = mutator(todos);
+
+    if (nextTodos !== todos) {
+      await persistTodos(nextTodos);
+    }
+
+    return nextTodos;
+  });
+
+  mutationQueue = update.then(
+    () => undefined,
+    () => undefined,
+  );
+
+  return update;
 }
 
 export interface TodoWorkerViewData {
@@ -124,9 +346,10 @@ export function parseFilter(value: string | null): TodoFilter {
   return "all";
 }
 
-export function buildTodoWorkerViewData(filter: TodoFilter): TodoWorkerViewData {
-  const visibleTodos = getVisibleTodos(filter);
-  const { totalCount, activeCount, completedCount } = getCounts();
+export async function buildTodoWorkerViewData(filter: TodoFilter): Promise<TodoWorkerViewData> {
+  const todos = await loadTodos();
+  const visibleTodos = getVisibleTodos(todos, filter);
+  const { totalCount, activeCount, completedCount } = getCounts(todos);
   const allCompleted = totalCount > 0 && activeCount === 0;
   return {
     filter,
@@ -138,75 +361,80 @@ export function buildTodoWorkerViewData(filter: TodoFilter): TodoWorkerViewData 
   };
 }
 
-export function readMutationResult() {
+export async function readMutationResult() {
+  const todos = await loadTodos();
   return {
     ok: true,
-    ...getCounts(),
+    ...getCounts(todos),
   };
 }
 
-export function addTodoItem(title: string): TodoState[] {
+export async function addTodoItem(title: string): Promise<TodoState[]> {
   const nextTitle = normalizeTitle(title);
   if (nextTitle.length === 0) {
-    return todos;
+    return loadTodos();
   }
-  todos = [
-    {
-      id: crypto.randomUUID(),
-      title: nextTitle,
-      completed: false,
-      createdAt: Date.now(),
-    },
-    ...todos,
-  ];
 
-  return todos;
+  return updateTodos((todos) => {
+    const nextCreatedAt = Math.max(Date.now(), (todos[0]?.createdAt ?? 0) + 1);
+    return [
+      {
+        id: crypto.randomUUID(),
+        title: nextTitle,
+        completed: false,
+        createdAt: nextCreatedAt,
+      },
+      ...todos,
+    ];
+  });
 }
 
-export function toggleTodoItem(id: string): TodoState[] {
-  todos = todos.map((todo) =>
-    todo.id === id
-      ? {
-          ...todo,
-          completed: !todo.completed,
-        }
-      : todo,
+export async function toggleTodoItem(id: string): Promise<TodoState[]> {
+  return updateTodos((todos) =>
+    todos.map((todo) =>
+      todo.id === id
+        ? {
+            ...todo,
+            completed: !todo.completed,
+          }
+        : todo,
+    ),
   );
-  return todos;
 }
 
-export function renameTodoItem(id: string, title: string): TodoState[] {
+export async function renameTodoItem(id: string, title: string): Promise<TodoState[]> {
   const nextTitle = normalizeTitle(title);
+
   if (nextTitle.length === 0) {
-    deleteTodoItem(id);
-    return todos;
+    return deleteTodoItem(id);
   }
-  todos = todos.map((todo) =>
-    todo.id === id
-      ? {
-          ...todo,
-          title: nextTitle,
-        }
-      : todo,
+
+  return updateTodos((todos) =>
+    todos.map((todo) =>
+      todo.id === id
+        ? {
+            ...todo,
+            title: nextTitle,
+          }
+        : todo,
+    ),
   );
-  return todos;
 }
 
-export function deleteTodoItem(id: string): TodoState[] {
-  todos = todos.filter((todo) => todo.id !== id);
-  return todos;
+export async function deleteTodoItem(id: string): Promise<TodoState[]> {
+  return updateTodos((todos) => todos.filter((todo) => todo.id !== id));
 }
 
-export function clearCompletedTodos(): TodoState[] {
-  todos = todos.filter((todo) => !todo.completed);
-  return todos;
+export async function clearCompletedTodos(): Promise<TodoState[]> {
+  return updateTodos((todos) => todos.filter((todo) => !todo.completed));
 }
 
-export function toggleAllTodos(): TodoState[] {
-  const shouldComplete = todos.some((todo) => !todo.completed);
-  todos = todos.map((todo) => ({
-    ...todo,
-    completed: shouldComplete,
-  }));
-  return todos;
+export async function toggleAllTodos(): Promise<TodoState[]> {
+  return updateTodos((todos) => {
+    const shouldComplete = todos.some((todo) => !todo.completed);
+    return todos.map((todo) => ({
+      ...todo,
+      completed: shouldComplete,
+    }));
+  });
 }

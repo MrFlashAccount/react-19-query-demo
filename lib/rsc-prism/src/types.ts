@@ -91,3 +91,9 @@ export interface RSCResponseOptions {
   /** Called when an error occurs */
   onError?: (error: unknown) => string | void;
 }
+
+export type ComponentReference<Props = unknown> = (
+  props: Props,
+) =>
+  | (React.JSX.Element | null | React.JSX.Element[])
+  | Promise<React.JSX.Element | null | React.JSX.Element[]>;
