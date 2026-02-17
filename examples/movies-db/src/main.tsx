@@ -6,7 +6,7 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App.tsx";
 import { Loader } from "./components/shared/Loader.tsx";
-import { SwLoader } from "./SwLoader.tsx";
+import { RuntimeBootstrap } from "./RuntimeBootstrap.tsx";
 
 const root = ReactDOM.createRoot(document.getElementById("root")!);
 
@@ -14,7 +14,7 @@ React.startTransition(() => {
   root.render(
     <React.StrictMode>
       <Suspense fallback={<Loader />}>
-        <SwLoader />
+        <RuntimeBootstrap />
         <Suspense fallback={<Loader />}>
           <App />
         </Suspense>

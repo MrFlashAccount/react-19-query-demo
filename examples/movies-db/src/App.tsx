@@ -6,7 +6,6 @@ import {
   searchMovies,
   getMovieById,
   updateMovieRating,
-  searchMoviesRSC,
   updateMovieRatingRSC,
 } from "./api/movieApi";
 import { TabSelector } from "./components/shared";
@@ -133,7 +132,6 @@ export default function App() {
     getMovieById,
     searchMovies,
     updateMovieRating,
-    searchMoviesRSC,
     updateMovieRatingRSC,
   };
 

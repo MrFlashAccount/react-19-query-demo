@@ -22,7 +22,6 @@
     "@lib/goat-query": "workspace:*",
     "@lib/performance-monitor": "workspace:*",
     "@lib/rsc-prism": "workspace:*",
-    "@lib/rsc-service-worker-bff": "workspace:*",
     "@lib/tracing": "workspace:*",
     "@tanstack/react-query": "5.90.5",
     "@tanstack/react-query-devtools": "5.90.2",

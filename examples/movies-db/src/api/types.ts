@@ -82,6 +82,5 @@ export interface MovieApi {
   searchMovies: (query: string, limit: number) => Promise<Movie[]>;
   getMovieById: (movieId: string) => Promise<Movie>;
   updateMovieRating: (movieId: string, newRating: number) => Promise<Movie>;
-  searchMoviesRSC: (query: string, limit: number) => Promise<React.ReactNode>;
   updateMovieRatingRSC: (movieId: string, newRating: number) => Promise<void>;
 }

@@ -45,7 +45,10 @@ async function renderFlight(
   });
 }
 
-async function streamToString(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<string> {
+async function streamToString(
+  stream: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<string> {
   if (!Number.isFinite(maxBytes)) {
     return new Response(stream).text();
   }
@@ -145,7 +148,7 @@ export function getServerAction(id: string): ((...args: unknown[]) => unknown) |
 export async function executeServerAction(
   actionId: string,
   args: unknown[],
-  manifest?: ClientManifest,
+  manifest: ClientManifest,
 ): Promise<Response> {
   const action = serverActions.get(actionId);
   if (!action) {
@@ -218,7 +221,7 @@ export async function createFlightResponse(
   manifest: ClientManifest,
   init?: ResponseInit,
 ): Promise<Response>;
-export async function createFlightResponse(element: ReactNode, init?: ResponseInit): Promise<Response>;
+export async function createFlightResponse(element: ReactNode): Promise<Response>;
 export async function createFlightResponse(
   element: ReactNode,
   manifestOrInit?: ClientManifest | ResponseInit,

@@ -94,6 +94,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
+    "perf:decode": "RSC_PERF=1 vitest run --project unit test/perf/flight-runtime.decode-perf.unit.test.ts",
     "test:coverage": "vitest run --coverage",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit",

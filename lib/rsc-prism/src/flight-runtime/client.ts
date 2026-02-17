@@ -12,10 +12,7 @@ function getMainThreadModules(): Record<string, Record<string, unknown>> {
   return modules as Record<string, Record<string, unknown>>;
 }
 
-function resolveClientReferenceById(
-  id: string,
-  manifest?: ClientManifestMap | null,
-): unknown {
+function resolveClientReferenceById(id: string, manifest?: ClientManifestMap | null): unknown {
   const mapped = manifest?.[id];
   const resolvedId = mapped == null ? id : `${mapped.id}#${mapped.name}`;
 
@@ -108,43 +105,13 @@ function collectMissingRowRefs(
   }
 }
 
-function materializeRows(value: unknown, rowsById: Map<string, unknown>, visiting: Set<string>): unknown {
-  if (typeof value !== "object" || value == null) {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => materializeRows(item, rowsById, visiting));
-  }
-
-  const tagged = value as Record<string, unknown>;
-  if (tagged.$t === "rowRef") {
-    const rowId = String(tagged.id);
-    if (visiting.has(rowId)) {
-      throw new Error(`[rsc-prism] Circular row reference "${rowId}" in Flight payload.`);
-    }
-    const rowValue = rowsById.get(rowId);
-    if (rowValue == null) {
-      throw new Error(`[rsc-prism] Missing row "${rowId}" in Flight payload.`);
-    }
-
-    visiting.add(rowId);
-    const materialized = materializeRows(rowValue, rowsById, visiting);
-    visiting.delete(rowId);
-    return materialized;
-  }
-
-  const result: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(tagged)) {
-    result[key] = materializeRows(item, rowsById, visiting);
-  }
-  return result;
-}
-
-async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>): Promise<unknown> {
+async function parseFlightPayloadFromStream(
+  stream: ReadableStream<Uint8Array>,
+  resolveClientReference: (id: string) => unknown,
+): Promise<unknown> {
   const reader = stream.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: false });
-  let buffered = "";
+  let carry = "";
   let fallbackPayload: unknown = null;
   let hasFallbackPayload = false;
   const rowsById = new Map<string, unknown>();
@@ -152,6 +119,7 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
   let hasRootPayload = false;
   let pendingRootRefs: Set<string> | null = null;
   let shouldCancelReader = false;
+  const resolveRowReference = (rowId: string): unknown => rowsById.get(rowId);
 
   const tryResolveRoot = (): unknown => {
     if (!hasRootPayload || rootPayload == null) {
@@ -163,7 +131,7 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
       pendingRootRefs = missing;
     }
     if (pendingRootRefs.size === 0) {
-      return materializeRows(rootPayload, rowsById, new Set<string>());
+      return decodeWireValue(rootPayload, resolveClientReference, resolveRowReference);
     }
     return undefined;
   };
@@ -181,7 +149,7 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
     }
 
     if (parsed.id == null) {
-      return parsed.payload;
+      return decodeWireValue(parsed.payload, resolveClientReference, resolveRowReference);
     }
 
     rowsById.set(parsed.id, parsed.payload);
@@ -204,7 +172,9 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffered += decoder.decode(value, { stream: true });
+      const chunk = decoder.decode(value, { stream: true });
+      let buffered = carry.length === 0 ? chunk : `${carry}${chunk}`;
+      carry = "";
 
       while (true) {
         const lineBreakIndex = buffered.indexOf("\n");
@@ -218,9 +188,11 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
           return parsed;
         }
       }
+      carry = buffered;
     }
 
-    buffered += decoder.decode();
+    const trailing = decoder.decode();
+    const buffered = carry.length === 0 ? trailing : `${carry}${trailing}`;
     if (buffered.length > 0) {
       const parsed = consumeLine(buffered);
       if (parsed !== undefined) {
@@ -247,15 +219,16 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
   if (!hasFallbackPayload) {
     return null;
   }
-  return fallbackPayload;
+  return decodeWireValue(fallbackPayload, resolveClientReference, resolveRowReference);
 }
 
 export async function createFromReadableStream<T>(
   stream: ReadableStream<Uint8Array>,
   options?: FlightClientOptions,
 ): Promise<T> {
-  const parsed = await parseFlightPayloadFromStream(stream);
-  return decodeWireValue(parsed, createClientReferenceResolver(options)) as T;
+  const resolveClientReference = createClientReferenceResolver(options);
+  const parsed = await parseFlightPayloadFromStream(stream, resolveClientReference);
+  return parsed as T;
 }
 
 export async function encodeReply(value: unknown): Promise<FormData | string> {

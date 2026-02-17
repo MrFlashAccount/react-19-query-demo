@@ -1,36 +1,25 @@
 /**
  * RSC Movies Tab
  *
- * Renders movie list via React Server Components from service worker.
- * Uses goat-query for state management, same pattern as CustomLibraryTab.
+ * Renders movie list via React Server Components from dedicated worker runtime.
  */
 
-// IMPORTANT: Import webpack shim FIRST - before any react-server-dom-webpack imports
-import "@lib/rsc-prism/runtime/webpack-shim";
-
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
+import { RuntimeProvider, rsc } from "@lib/rsc-prism/react";
 import type { TabProps } from "../shared/types";
 import { SearchBox } from "../shared";
-import { appGraph, rscMoviesQuery } from "../../queries";
+import { MoviesRSCView } from "./worker-components";
 
-const { QueryProvider, useQuery, QueryClient } = await import("@lib/goat-query/react");
-const LazyDevtools = lazy(() =>
-  import("@lib/goat-query/devtools").then((d) => ({ default: d.QueryDevtools })),
-);
-
-const queryClient = new QueryClient({ graph: appGraph });
+const MoviesRSC = rsc(MoviesRSCView);
 
 export default function RSCMoviesTab({ formState, onFormStateChange, api, devtools }: TabProps) {
   return (
-    <QueryProvider queryClient={queryClient} context={{ api }}>
-      <RSCMoviesTabContent
-        devtools={devtools}
-        formState={formState}
-        onFormStateChange={onFormStateChange}
-        api={api}
-      />
-      {devtools && <LazyDevtools />}
-    </QueryProvider>
+    <RSCMoviesTabContent
+      devtools={devtools}
+      formState={formState}
+      onFormStateChange={onFormStateChange}
+      api={api}
+    />
   );
 }
 
@@ -38,11 +27,6 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
   const searchQueryValue = formState.get("searchQuery");
   const searchQuery = typeof searchQueryValue === "string" ? searchQueryValue : "";
   const limit = Number(formState.get("movieLimit") ?? 100);
-
-  const { promise } = useQuery({
-    query: rscMoviesQuery,
-    params: { searchQuery, limit },
-  });
 
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pb-20 md:pb-60">
@@ -57,7 +41,9 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
             </div>
           }
         >
-          {promise}
+          <RuntimeProvider>
+            <MoviesRSC searchQuery={searchQuery} limit={limit} />
+          </RuntimeProvider>
         </Suspense>
       </div>
     </div>

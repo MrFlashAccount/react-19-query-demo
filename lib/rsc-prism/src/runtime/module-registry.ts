@@ -73,7 +73,11 @@ export function buildClientManifestFromModule(
  * Merge multiple manifests into one
  */
 export function mergeManifests(...manifests: ClientManifest[]): ClientManifest {
-  return manifests.findLast((manifest) => manifest.length > 0) ?? "/";
+  return (
+    manifests.findLast((manifest) =>
+      Array.isArray(manifest) ? manifest.length > 0 : Object.keys(manifest).length > 0,
+    ) ?? "/"
+  );
 }
 
 // Re-export types

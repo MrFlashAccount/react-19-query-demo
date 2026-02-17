@@ -33,7 +33,9 @@
       "@lib/goat-query/react": ["../../lib/goat-query/react.ts"],
       "@lib/goat-query/devtools": ["../../lib/goat-query/devtools/index.ts"],
       "@lib/performance-monitor": ["../../lib/performance-monitor/index.ts"],
-      "@lib/rsc-service-worker-bff": ["../../lib/rsc-service-worker-bff/index.ts"]
+      "@lib/rsc-prism": ["../../lib/rsc-prism/src/index.ts"],
+      "@lib/rsc-prism/react": ["../../lib/rsc-prism/src/react.tsx"],
+      "@lib/rsc-prism/*": ["../../lib/rsc-prism/src/*"]
     }
   },
   "include": ["src", "../../lib/**/*.ts", "../../lib/**/*.tsx"]

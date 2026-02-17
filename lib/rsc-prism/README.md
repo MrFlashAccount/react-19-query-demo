@@ -140,3 +140,27 @@ await callAction(increment, []);
 ```
 
 `workerRuntime.entry`, `workerRuntime.servePath`, and `workerRuntime.fileName` are no longer supported; the plugin owns worker runtime generation, hashed asset naming, and virtual bootstrap internals.
+
+## Experimental
+
+Component-level worker directives are opt-in behind `experimental.componentLevelDirectives`.
+
+```ts
+import { defineConfig } from "vite";
+import { rscPrism } from "@lib/rsc-prism/vite";
+
+export default defineConfig({
+  plugins: [
+    rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+      experimental: {
+        componentLevelDirectives: true,
+      },
+    }),
+  ],
+});
+```
+
+When enabled, exported functions with leading `"use worker"` inside non-`"use worker"` modules are proxied as worker references (component-like exports) or action references (action-like exports). The generated virtual module exports only directive-marked exports; unmarked exports are intentionally omitted.

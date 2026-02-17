@@ -24,17 +24,9 @@ export const movieQuery = query({
   gcTime: 60000,
 });
 
-export const rscMoviesQuery = query({
-  queryFn: (params: { searchQuery: string; limit: number }, ctx) =>
-    ctx.api.searchMoviesRSC(params.searchQuery, params.limit),
-  staleTime: 0,
-  gcTime: 0,
-});
-
 export const rscUpdateMovieRatingMutation = mutation({
   mutationFn: (params: { movieId: string; rating: number }, ctx) =>
     ctx.api.updateMovieRatingRSC(params.movieId, params.rating),
-  invalidates: [rscMoviesQuery],
 });
 
 /**
@@ -57,7 +49,6 @@ export const appGraph = new DependencyGraph([
   moviesQuery,
   movieQuery,
   updateMovieRatingMutation,
-  rscMoviesQuery,
   rscUpdateMovieRatingMutation,
 ]);
 

@@ -629,4 +629,90 @@ export const metadata = { feature: true };
     expect(() => callHook(plugin.transform, undefined, source, id)).toThrow("must only export actions");
   });
 
+  it("supports mixed component/action worker directives behind experimental flag", async () => {
+    const plugin = rscPrism({
+      experimental: {
+        componentLevelDirectives: true,
+      },
+    });
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const id = `${root}/src/worker-directives.tsx`;
+    const source = `
+export function WorkerPanel() {
+  "use worker";
+  return null;
+}
+export async function addTodo() {
+  "use worker";
+  return "ok";
+}
+export const metadata = { stable: true };
+`;
+
+    const transformed = await callHook(plugin.transform, undefined, source, id);
+    const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
+
+    expect(transformedCode).toContain('Symbol.for("rsc.worker.reference")');
+    expect(transformedCode).toContain('Symbol.for("react.server.reference")');
+    expect(transformedCode).toContain('__rscPrismCreateWorkerRef("WorkerPanel")');
+    expect(transformedCode).toContain('__rscPrismCreateActionRef("addTodo")');
+    expect(transformedCode).toContain("metadata");
+    expect(transformedCode).toContain("rsc-prism-original");
+  });
+
+  it("resolves mixed worker directives to dedicated virtual module when experimental flag is enabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-worker-directive-ref-test-"));
+    tempRoots.push(root);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    const directiveModulePath = path.join(root, "src", "worker-directives.tsx");
+    const importerPath = path.join(root, "src", "main.tsx");
+
+    await writeFile(
+      directiveModulePath,
+      `
+export function WorkerPanel() {
+  "use worker";
+  return null;
+}
+export function addTodo() {
+  "use worker";
+  return "ok";
+}
+export const metadata = { stable: true };
+`,
+      "utf8",
+    );
+    await writeFile(importerPath, `import { WorkerPanel, addTodo } from "./worker-directives";`, "utf8");
+
+    const plugin = rscPrism({
+      experimental: {
+        componentLevelDirectives: true,
+      },
+    });
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const resolveContext = {
+      resolve: async () => ({ id: directiveModulePath }),
+    };
+
+    const resolved = await callHook(
+      plugin.resolveId as any,
+      resolveContext,
+      "./worker-directives",
+      importerPath,
+      undefined,
+    );
+    expect(typeof resolved).toBe("string");
+    expect((resolved as string)!.startsWith("\0rsc-prism:main-worker-directive-ref:")).toBe(true);
+
+    const loaded = await callHook(plugin.load, undefined, resolved as string);
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+    expect(loadedCode).toContain('__rscPrismCreateWorkerRef("WorkerPanel")');
+    expect(loadedCode).toContain('__rscPrismCreateActionRef("addTodo")');
+    expect(loadedCode).toContain("metadata");
+    expect(loadedCode).toContain("rsc-prism-original");
+  });
+
 });
