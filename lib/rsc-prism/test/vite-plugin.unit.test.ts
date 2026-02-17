@@ -210,6 +210,10 @@ export function A() { return null; }
     expect(loadedCode).not.toContain("@lib/rsc-prism/runtime/module-registry");
     expect(loadedCode).toContain("src/client-a.tsx");
     expect(loadedCode).not.toContain("src/non-client.tsx");
+    expect(loadedCode).toContain("__RSC_PRISM_CLIENT_MANIFEST__");
+    expect(loadedCode).toContain('"/src/client-a.tsx#A"');
+    expect(loadedCode).toContain('name: "A"');
+    expect(loadedCode).toContain('"/src/client-a.tsx#*"');
   });
 
   it("auto-injects main virtual module into html", () => {
@@ -226,7 +230,7 @@ export function A() { return null; }
           tag: "script",
           attrs: {
             type: "module",
-            src: "/@id/virtual:rsc-prism/main-thread-modules",
+            src: "virtual:rsc-prism/main-thread-modules",
           },
           injectTo: "head-prepend",
         },

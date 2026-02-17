@@ -15,9 +15,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../src/client", () => ({
   fetchRSC: mocks.fetchRSC,
+  bootstrapWorkerRuntime: vi.fn(async () => ({
+    worker: {} as Worker,
+    transport: { sendAction: vi.fn() },
+    dispose: vi.fn(),
+  })),
 }));
 
 vi.mock("react", () => ({
+  startTransition: mocks.startTransition,
   useEffect: (effect: () => void | (() => void)) => {
     const loader = mocks.activeLoader;
     if (loader == null) {

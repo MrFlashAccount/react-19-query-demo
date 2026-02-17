@@ -32,6 +32,24 @@ function createRSCHeaders(init?: HeadersInit): Headers {
   return headers;
 }
 
+async function createFlightErrorResponse(
+  ctx: RSCContext,
+  message: string,
+  status: number,
+  options?: RSCResponseOptions,
+): Promise<Response> {
+  const errorRecord = {
+    __rscPrismError: true,
+    message,
+    status,
+  } as unknown as ReactNode;
+  const stream = await renderRSC(errorRecord, ctx, { onError: options?.onError });
+  return new Response(stream, {
+    status,
+    headers: createRSCHeaders(options?.headers),
+  });
+}
+
 /**
  * Create an RSC streaming response from a React element
  *
@@ -103,10 +121,7 @@ export async function rscAction(
 
   const actionId = getActionIdFromRequest(request);
   if (!actionId) {
-    return new Response(JSON.stringify({ error: "Missing action ID" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    return createFlightErrorResponse(ctx, "Missing action ID", 400, options);
   }
 
   // Parse encoded args from request body without forcing text round-trips for form payloads.
@@ -125,11 +140,7 @@ export async function rscAction(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[rsc-sw-bff] Action error:", err);
-
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return createFlightErrorResponse(ctx, message, 500, options);
   }
 }
 

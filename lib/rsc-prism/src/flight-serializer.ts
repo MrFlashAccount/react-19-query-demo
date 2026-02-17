@@ -5,7 +5,8 @@
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 
 import type { ReactNode } from "react";
-import { registerServerReference, renderToReadableStream } from "./flight-runtime/server";
+import { registerServerReference } from "./flight-runtime/server";
+import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { annotateServerReference as annotateRuntimeServerReference } from "./flight-runtime/references";
 import { polyfillReady } from "./polyfill";
 import type { ClientManifest } from "./types";
@@ -39,7 +40,7 @@ async function renderFlight(
   await polyfillReady;
   const resolvedManifest = resolveClientManifestOrThrow(manifest);
 
-  return renderToReadableStream(element, resolvedManifest, {
+  return defaultFlightProtocolAdapter.renderStream(element, resolvedManifest, {
     onError: () => "An error occurred during server rendering.",
   });
 }

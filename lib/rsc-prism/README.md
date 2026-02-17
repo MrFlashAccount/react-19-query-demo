@@ -25,6 +25,24 @@ Migration notes:
 2. Ensure your worker/main modules use plugin-generated references (`"use main"`, `"use client"`, `"use worker"`).
 3. Keep browser-runtime tests as the source of truth for stream and action behavior.
 
+## Flight Compliance Gaps (Current Runtime)
+
+`@lib/rsc-prism` intentionally implements a custom browser-first Flight-like runtime, not full official React Flight wire compatibility.
+
+Current known gaps:
+
+1. Wire protocol rows are custom line-delimited records (`id:json\\n`) with custom deferred references (`{ "$t": "rowRef", "id": n }`).
+2. Value serialization uses custom tagged wire values (for example `$t: "element"`, `$t: "clientRef"`, `$t: "serverRef"`) instead of official React Flight record encoding.
+3. Action error payloads are runtime-specific records (`{ "__rscPrismError": true, ... }`) consumed by `@lib/rsc-prism/client`.
+4. Client manifest support is ESM-focused and minimal (`id`, `name`, `chunks`, `async`) and does not implement official bundler/runtime record plumbing.
+5. Module/chunk loading semantics remain plugin-managed ESM lookups (no webpack-style runtime requirements or official RSC module loader contract).
+6. Compatibility guarantees apply to `@lib/rsc-prism` client/server pairs only; cross-runtime interop with other Flight implementations is not guaranteed.
+
+Performance notes:
+
+- Transport is stream-first (`head -> next* -> done`) and client parsing is incremental.
+- Deferred row resolution is optimized to avoid full root graph re-checks for unrelated rows, but this is still a custom resolver path.
+
 ## Ultra-Small Use Cases for Auto Testing
 
 The following micro apps are intentionally TodoMVC-scale (or smaller), deterministic, and suitable for automated tests.

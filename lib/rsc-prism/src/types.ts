@@ -18,10 +18,27 @@ export type RscModuleReferenceId = string;
 export type RscActionId = string;
 
 /**
- * Client manifest in the ESM runtime.
- * This is the module base URL used by React Flight to resolve client references.
+ * Client manifest entry aligned with Flight-like module maps.
  */
-export type ClientManifest = string;
+export interface ClientManifestEntry {
+  id: string;
+  name: string;
+  chunks: string[];
+  async?: boolean;
+}
+
+/**
+ * Client manifest map keyed by "<moduleId>#<exportName>".
+ */
+export type ClientManifestMap = Record<string, ClientManifestEntry>;
+
+/**
+ * Client manifest in the ESM runtime.
+ *
+ * - string: legacy base URL compatibility mode.
+ * - map: explicit per-export module map.
+ */
+export type ClientManifest = string | ClientManifestMap;
 
 /**
  * Encoded action arguments for transfer

@@ -9,7 +9,8 @@
 import type { ReactNode } from "react";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
-import { decodeReply, registerServerReference, renderToReadableStream } from "./flight-runtime/server";
+import { registerServerReference } from "./flight-runtime/server";
+import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { createClientModuleProxy } from "./flight-runtime/references";
 
 
@@ -113,7 +114,7 @@ export async function renderRSC(
   ctx: RSCContext,
   options?: RSCRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
-  return renderToReadableStream(element, ctx.manifest, {
+  return defaultFlightProtocolAdapter.renderStream(element, ctx.manifest, {
     onError:
       options?.onError ??
       ((err) => {
@@ -128,22 +129,8 @@ export async function renderRSC(
  * Decode encoded action arguments back to JavaScript values
  */
 export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
-  let body: FormData | string;
-  if (encoded.type === "formdata") {
-    if (encoded.data instanceof FormData) {
-      body = encoded.data;
-    } else {
-      body = new FormData();
-      for (const [key, value] of new URLSearchParams(encoded.data)) {
-        body.append(key, value);
-      }
-    }
-  } else {
-    body = encoded.data;
-  }
-
   const manifest = resolveClientManifestOrThrow();
-  const decoded = await decodeReply(body, manifest, {});
+  const decoded = await defaultFlightProtocolAdapter.decodeActionArgs(encoded, manifest);
   return Array.isArray(decoded) ? decoded : [decoded];
 }
 
@@ -173,7 +160,7 @@ export async function handleAction(
   const args = await decodeActionArgs(encodedArgs);
   const result = await action.fn(...args);
 
-  return renderToReadableStream(result as ReactNode, ctx.manifest, {
+  return defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
     onError: options?.onError,
     signal: options?.signal,
   });

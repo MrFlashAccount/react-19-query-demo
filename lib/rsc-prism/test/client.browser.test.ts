@@ -3,10 +3,18 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { callAction, consumeRSCResponse, createCallServer, encodeActionArgs, fetchRSC } from "../src/client";
 import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
 import { createFunctionTransport } from "../src/transport";
+import { setAutoClientManifest } from "../src/runtime/client-manifest";
 
 function flightValueResponse(value: unknown): Response {
   return new Response(`0:${JSON.stringify(value)}\n`, {
     status: 200,
+    headers: { "content-type": "text/x-component" },
+  });
+}
+
+function flightErrorResponse(message: string, status = 500): Response {
+  return new Response(`0:${JSON.stringify({ __rscPrismError: true, message, status })}\n`, {
+    status,
     headers: { "content-type": "text/x-component" },
   });
 }
@@ -19,6 +27,7 @@ function clearDefaultWorkerRuntimeGlobals() {
 describe("rsc client browser workflows", () => {
   beforeEach(() => {
     setInvalidateRSC(() => {});
+    setAutoClientManifest("/");
   });
 
   it("consumes flight response payloads", async () => {
@@ -195,5 +204,51 @@ describe("rsc client browser workflows", () => {
     const callServer = createCallServer("/rsc/action", { transport });
     await expect(callServer("increment", [1])).resolves.toBe("call-server-ok");
     expect(seenActionIds).toEqual(["increment"]);
+  });
+
+  it("surfaces flight-streamed action errors", async () => {
+    const transport = createFunctionTransport(async (request) => {
+      if (request.method === "POST") {
+        return flightErrorResponse("Action exploded", 500);
+      }
+      return flightValueResponse("ok");
+    });
+
+    const runActionRef = {
+      $$typeof: Symbol.for("react.server.reference"),
+      $$id: "todo-actions.ts#run",
+      $$bound: null,
+    };
+
+    await expect(callAction(runActionRef, [1], { transport })).rejects.toThrow("Action exploded");
+  });
+
+  it("resolves client refs via auto manifest map entries", async () => {
+    const moduleKey = "__rscPrismMainThreadModules";
+    const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+    globalState[moduleKey] = {
+      "/src/client-components.tsx": {
+        TodoClientView: "client-view-ok",
+      },
+    };
+
+    setAutoClientManifest({
+      "/alias/view#default": {
+        id: "/src/client-components.tsx",
+        name: "TodoClientView",
+        chunks: [],
+      },
+    });
+
+    const payload = {
+      $t: "clientRef",
+      id: "/alias/view#default",
+    };
+    const response = new Response(`0:${JSON.stringify(payload)}\n`, {
+      status: 200,
+      headers: { "content-type": "text/x-component" },
+    });
+
+    await expect(consumeRSCResponse<string>(response)).resolves.toBe("client-view-ok");
   });
 });

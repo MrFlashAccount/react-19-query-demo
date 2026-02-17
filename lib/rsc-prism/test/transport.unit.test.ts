@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setInvalidateRSC } from "../src/runtime-globals";
 
 import {
   createFunctionTransport,
@@ -45,6 +46,10 @@ class MockWorkerEndpoint implements WorkerMessageEndpoint {
 }
 
 describe("transport", () => {
+  beforeEach(() => {
+    setInvalidateRSC(() => {});
+  });
+
   it("function transport maps action and fetch requests", async () => {
     const handler = vi.fn(async (request) => {
       if (request.method === "POST") {

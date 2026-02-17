@@ -86,6 +86,7 @@ interface ParsedModuleExports {
 interface MainThreadModuleEntry {
   moduleId: string;
   importPath: string;
+  exportsInfo: ParsedModuleExports;
 }
 
 interface WorkerRuntimeModuleEntry extends MainThreadModuleEntry {
@@ -688,6 +689,7 @@ async function collectMainThreadModules(
       collected.push({
         moduleId: mapModuleId(absolutePath),
         importPath: `/${normalizePath(path.relative(root, absolutePath))}`,
+        exportsInfo: collectRuntimeExports(ast, absolutePath),
       });
     }
   }
@@ -713,12 +715,29 @@ function buildMainVirtualModuleCode(modules: MainThreadModuleEntry[]): string {
       MAIN_THREAD_MODULES_GLOBAL_KEY,
     )}] ??= Object.create(null));`,
   );
+  lines.push(
+    'const __rscPrismClientManifest = (__rscPrismGlobalState["__RSC_PRISM_CLIENT_MANIFEST__"] ??= Object.create(null));',
+  );
   lines.push("");
 
   modules.forEach((entry, index) => {
     const importName = `__rscPrismMainModule${index}`;
     lines.push(`import * as ${importName} from ${JSON.stringify(entry.importPath)};`);
     lines.push(`__rscPrismMainThreadModules[${JSON.stringify(entry.moduleId)}] = ${importName};`);
+
+    const exportsList = entry.exportsInfo.hasDefault
+      ? ["default", ...entry.exportsInfo.named]
+      : [...entry.exportsInfo.named];
+    exportsList.push("*");
+    for (const exportName of exportsList) {
+      const referenceId = `${entry.moduleId}#${exportName}`;
+      lines.push(`__rscPrismClientManifest[${JSON.stringify(referenceId)}] = {`);
+      lines.push(`  id: ${JSON.stringify(entry.moduleId)},`);
+      lines.push(`  name: ${JSON.stringify(exportName)},`);
+      lines.push("  chunks: [],");
+      lines.push("  async: false,");
+      lines.push("};");
+    }
   });
 
   lines.push("");

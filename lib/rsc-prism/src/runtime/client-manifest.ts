@@ -27,13 +27,35 @@ export function ensureAutoClientManifest(): ClientManifest {
   return manifest;
 }
 
-export function setAutoClientManifest(baseURL: ClientManifest): void {
-  getManifestStore()[CLIENT_MANIFEST_GLOBAL_KEY] = baseURL;
+export function setAutoClientManifest(manifest: ClientManifest): void {
+  getManifestStore()[CLIENT_MANIFEST_GLOBAL_KEY] = manifest;
 }
 
-export function registerAutoClientManifestEntry(_moduleId: string, _name: string = "*"): void {
-  // Kept for compatibility with generated code. ESM Flight only needs the base URL.
-  ensureAutoClientManifest();
+function ensureManifestMap(): Record<string, { id: string; name: string; chunks: string[]; async?: boolean }> {
+  const store = getManifestStore();
+  const current = store[CLIENT_MANIFEST_GLOBAL_KEY];
+  if (typeof current === "object" && current != null) {
+    return current as Record<string, { id: string; name: string; chunks: string[]; async?: boolean }>;
+  }
+
+  const manifestMap: Record<string, { id: string; name: string; chunks: string[]; async?: boolean }> = {};
+  store[CLIENT_MANIFEST_GLOBAL_KEY] = manifestMap;
+  return manifestMap;
+}
+
+export function registerAutoClientManifestEntry(moduleId: string, name: string = "*"): void {
+  const manifest = ensureManifestMap();
+  const key = `${moduleId}#${name}`;
+  if (manifest[key] != null) {
+    return;
+  }
+
+  manifest[key] = {
+    id: moduleId,
+    name,
+    chunks: [],
+    async: false,
+  };
 }
 
 export function resolveClientManifestOrThrow(manifest?: ClientManifest): ClientManifest {
@@ -42,6 +64,10 @@ export function resolveClientManifestOrThrow(manifest?: ClientManifest): ClientM
   }
 
   const autoManifest = getAutoClientManifest();
+  if (typeof autoManifest === "object" && autoManifest != null) {
+    return autoManifest;
+  }
+
   if (typeof autoManifest === "string" && autoManifest.length > 0) {
     return autoManifest;
   }

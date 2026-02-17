@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as clientOnly from "../src/client-only";
 import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
+  setInvalidateRSC,
 } from "../src/runtime-globals";
 import { createFunctionTransport } from "../src/transport";
 
@@ -19,6 +20,9 @@ function flightValueResponse(value: unknown): Response {
 }
 
 describe("client-only browser workflows", () => {
+  beforeEach(() => {
+    setInvalidateRSC(() => {});
+  });
   afterEach(() => {
     const target = globalThis as typeof globalThis & Record<string, unknown>;
     if (initialWorkerBootstrap === undefined) {

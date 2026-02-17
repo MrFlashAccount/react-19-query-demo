@@ -6,7 +6,7 @@ import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
-import { createFromReadableStream, encodeReply } from "./flight-runtime/client";
+import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ComponentReference, EncodedActionArgs } from "./types";
 import { createFetchTransport, type RSCTransport } from "./transport";
@@ -195,11 +195,8 @@ export async function consumeRSC<T = unknown>(
   stream: ReadableStream<Uint8Array>,
   options?: ConsumeRSCOptions,
 ): Promise<T> {
-  const moduleBaseURL = resolveClientManifestOrThrow();
-  return await createFromReadableStream<T>(
-    stream,
-    options?.callServer ? { moduleBaseURL, callServer: options.callServer } : { moduleBaseURL },
-  );
+  const manifest = resolveClientManifestOrThrow();
+  return await defaultFlightProtocolAdapter.consumeStream<T>(stream, manifest, options?.callServer);
 }
 
 /**
@@ -213,6 +210,37 @@ export async function consumeRSCResponse<T = unknown>(
     throw new Error("Response has no body");
   }
   return consumeRSC<T>(response.body, options);
+}
+
+async function readActionErrorMessage(response: Response): Promise<string | null> {
+  if (response.body == null) {
+    return null;
+  }
+
+  try {
+    const manifest = resolveClientManifestOrThrow();
+    const parsed = await defaultFlightProtocolAdapter.consumeStream<unknown>(response.body, manifest);
+    if (typeof parsed === "string" && parsed.length > 0) {
+      return parsed;
+    }
+    if (typeof parsed === "object" && parsed != null) {
+      const tagged = parsed as {
+        __rscPrismError?: unknown;
+        message?: unknown;
+        error?: unknown;
+      };
+      if (tagged.__rscPrismError === true && typeof tagged.message === "string") {
+        return tagged.message;
+      }
+      if (typeof tagged.error === "string") {
+        return tagged.error;
+      }
+    }
+  } catch {
+    // Ignore parsing errors; caller will fallback to HTTP status.
+  }
+
+  return null;
 }
 
 /**
@@ -229,16 +257,7 @@ export async function consumeRSCResponse<T = unknown>(
  * ```
  */
 export async function encodeActionArgs(args: unknown[]): Promise<EncodedActionArgs> {
-  const encoded = await encodeReply(args);
-
-  if (encoded instanceof FormData) {
-    return {
-      type: "formdata",
-      data: encoded,
-    };
-  }
-
-  return { type: "string", data: encoded as string };
+  return defaultFlightProtocolAdapter.encodeActionArgs(args);
 }
 
 /**
@@ -269,7 +288,8 @@ export function createCallServer(
     });
 
     if (!response.ok) {
-      throw new Error(`Action request failed: ${response.status}`);
+      const message = await readActionErrorMessage(response);
+      throw new Error(message ?? `Action request failed: ${response.status}`);
     }
 
     return consumeRSC(response.body!, { callServer });
@@ -388,7 +408,8 @@ export async function callAction<T = void>(
   });
 
   if (!response.ok) {
-    throw new Error(`Action '${actionId}' failed: ${response.status}`);
+    const message = await readActionErrorMessage(response);
+    throw new Error(message ?? `Action '${actionId}' failed: ${response.status}`);
   }
 
   if (parseResponse && response.body) {

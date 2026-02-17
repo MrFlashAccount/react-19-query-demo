@@ -1,6 +1,7 @@
 import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
 import { decodeWireValue, encodeWireValue } from "./wire";
+import type { ClientManifestMap } from "../types";
 
 function getMainThreadModules(): Record<string, Record<string, unknown>> {
   const globalState = globalThis as typeof globalThis & Record<string, unknown>;
@@ -11,10 +12,16 @@ function getMainThreadModules(): Record<string, Record<string, unknown>> {
   return modules as Record<string, Record<string, unknown>>;
 }
 
-function resolveClientReferenceById(id: string): unknown {
-  const hashIndex = id.lastIndexOf("#");
-  const moduleId = hashIndex === -1 ? id : id.slice(0, hashIndex);
-  const exportName = hashIndex === -1 ? "default" : id.slice(hashIndex + 1);
+function resolveClientReferenceById(
+  id: string,
+  manifest?: ClientManifestMap | null,
+): unknown {
+  const mapped = manifest?.[id];
+  const resolvedId = mapped == null ? id : `${mapped.id}#${mapped.name}`;
+
+  const hashIndex = resolvedId.lastIndexOf("#");
+  const moduleId = hashIndex === -1 ? resolvedId : resolvedId.slice(0, hashIndex);
+  const exportName = hashIndex === -1 ? "default" : resolvedId.slice(hashIndex + 1);
   const modules = getMainThreadModules();
   const moduleExports = modules[moduleId];
   if (moduleExports == null) {
@@ -24,9 +31,22 @@ function resolveClientReferenceById(id: string): unknown {
     return moduleExports;
   }
   if (!(exportName in moduleExports)) {
-    throw new Error(`[rsc-prism] Unknown client export "${id}" in minimal Flight runtime.`);
+    throw new Error(`[rsc-prism] Unknown client export "${resolvedId}" in minimal Flight runtime.`);
   }
   return moduleExports[exportName];
+}
+
+function toManifestMap(options?: FlightClientOptions): ClientManifestMap | null {
+  const manifest = options?.manifest;
+  if (manifest == null || typeof manifest === "string") {
+    return null;
+  }
+  return manifest;
+}
+
+function createClientReferenceResolver(options?: FlightClientOptions): (id: string) => unknown {
+  const manifest = toManifestMap(options);
+  return (id: string) => resolveClientReferenceById(id, manifest);
 }
 
 interface ParsedFlightRow {
@@ -49,32 +69,43 @@ function parseFlightRow(row: string): ParsedFlightRow {
   };
 }
 
-function canResolveRows(value: unknown, rowsById: Map<string, unknown>, visiting: Set<string>): boolean {
+function collectMissingRowRefs(
+  value: unknown,
+  rowsById: Map<string, unknown>,
+  missing: Set<string>,
+  visiting: Set<string>,
+): void {
   if (typeof value !== "object" || value == null) {
-    return true;
+    return;
   }
 
   if (Array.isArray(value)) {
-    return value.every((item) => canResolveRows(item, rowsById, visiting));
+    for (const item of value) {
+      collectMissingRowRefs(item, rowsById, missing, visiting);
+    }
+    return;
   }
 
   const tagged = value as Record<string, unknown>;
   if (tagged.$t === "rowRef") {
     const rowId = String(tagged.id);
-    if (!rowsById.has(rowId)) {
-      return false;
+    const rowValue = rowsById.get(rowId);
+    if (rowValue == null) {
+      missing.add(rowId);
+      return;
     }
     if (visiting.has(rowId)) {
-      return true;
+      return;
     }
-
     visiting.add(rowId);
-    const canResolve = canResolveRows(rowsById.get(rowId), rowsById, visiting);
+    collectMissingRowRefs(rowValue, rowsById, missing, visiting);
     visiting.delete(rowId);
-    return canResolve;
+    return;
   }
 
-  return Object.values(tagged).every((item) => canResolveRows(item, rowsById, visiting));
+  for (const item of Object.values(tagged)) {
+    collectMissingRowRefs(item, rowsById, missing, visiting);
+  }
 }
 
 function materializeRows(value: unknown, rowsById: Map<string, unknown>, visiting: Set<string>): unknown {
@@ -117,7 +148,25 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
   let fallbackPayload: unknown = null;
   let hasFallbackPayload = false;
   const rowsById = new Map<string, unknown>();
+  let rootPayload: unknown = null;
+  let hasRootPayload = false;
+  let pendingRootRefs: Set<string> | null = null;
   let shouldCancelReader = false;
+
+  const tryResolveRoot = (): unknown => {
+    if (!hasRootPayload || rootPayload == null) {
+      return undefined;
+    }
+    if (pendingRootRefs == null) {
+      const missing = new Set<string>();
+      collectMissingRowRefs(rootPayload, rowsById, missing, new Set<string>());
+      pendingRootRefs = missing;
+    }
+    if (pendingRootRefs.size === 0) {
+      return materializeRows(rootPayload, rowsById, new Set<string>());
+    }
+    return undefined;
+  };
 
   const consumeLine = (line: string): unknown => {
     const trimmed = line.trim();
@@ -136,9 +185,16 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
     }
 
     rowsById.set(parsed.id, parsed.payload);
-    const root = rowsById.get("0");
-    if (root != null && canResolveRows(root, rowsById, new Set<string>())) {
-      return materializeRows(root, rowsById, new Set<string>());
+    if (parsed.id === "0") {
+      rootPayload = parsed.payload;
+      hasRootPayload = true;
+      pendingRootRefs = null;
+      return tryResolveRoot();
+    }
+
+    if (pendingRootRefs != null && pendingRootRefs.has(parsed.id)) {
+      pendingRootRefs = null;
+      return tryResolveRoot();
     }
 
     return undefined;
@@ -183,9 +239,9 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
     reader.releaseLock();
   }
 
-  const root = rowsById.get("0");
-  if (root != null && canResolveRows(root, rowsById, new Set<string>())) {
-    return materializeRows(root, rowsById, new Set<string>());
+  const resolvedRoot = tryResolveRoot();
+  if (resolvedRoot !== undefined) {
+    return resolvedRoot;
   }
 
   if (!hasFallbackPayload) {
@@ -196,10 +252,10 @@ async function parseFlightPayloadFromStream(stream: ReadableStream<Uint8Array>):
 
 export async function createFromReadableStream<T>(
   stream: ReadableStream<Uint8Array>,
-  _options?: FlightClientOptions,
+  options?: FlightClientOptions,
 ): Promise<T> {
   const parsed = await parseFlightPayloadFromStream(stream);
-  return decodeWireValue(parsed, resolveClientReferenceById) as T;
+  return decodeWireValue(parsed, createClientReferenceResolver(options)) as T;
 }
 
 export async function encodeReply(value: unknown): Promise<FormData | string> {
