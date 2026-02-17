@@ -1,6 +1,6 @@
-// Root entrypoint intentionally exports client-safe APIs only to avoid eagerly loading
-// server-side React runtime code in browser bundles. Use explicit subpaths for server APIs.
-export * from "./client-only";
+// Root entrypoint intentionally avoids broad runtime re-exports to keep bundle
+// surfaces small. Import runtime APIs from explicit subpaths (e.g. /client-only,
+// /transport, /runtime/*) when needed.
 
 export type {
   ClientManifest,

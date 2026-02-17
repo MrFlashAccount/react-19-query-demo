@@ -151,6 +151,18 @@ export function Counter() { return null; }
     expect(transformed).toBeNull();
   });
 
+  it("short-circuits non-directive modules before export analysis", async () => {
+    const plugin = rscPrismWorker();
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const id = `${root}/src/non-directive.ts`;
+    const source = `export * from "./other";`;
+
+    const transformed = await callHook(plugin.transform, undefined, source, id);
+    expect(transformed).toBeNull();
+  });
+
   it("throws on export star in worker mode", async () => {
     const plugin = rscPrismWorker();
     const root = "/virtual/project";
@@ -256,6 +268,7 @@ export function A() { return null; }
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
     expect(loadedCode).toContain("export async function bootstrapWorkerRuntime()");
     expect(loadedCode).toContain('new Worker("/todo.worker.js", { type: "module" })');
+    expect(loadedCode).toContain('import { createWorkerTransport } from "@lib/rsc-prism/transport";');
     expect(loadedCode).toContain("createWorkerTransport");
     expect(loadedCode).toContain("dispose()");
     expect(loadedCode).toContain("let __rscPrismBootstrappedRuntime = null;");
@@ -290,6 +303,29 @@ export function A() { return null; }
     const send = vi.fn();
     await callHook(plugin.handleHotUpdate as any, undefined, {
       file: path.join(root, "README.md"),
+      server: { ws: { send } },
+    });
+
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("skips worker runtime rebuild for non-worker source module updates", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-worker-hmr-non-worker-test-"));
+    tempRoots.push(root);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    const nonWorkerFile = path.join(root, "src", "plain.ts");
+    await writeFile(nonWorkerFile, "export const value = 1;", "utf8");
+
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+    });
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const send = vi.fn();
+    await callHook(plugin.handleHotUpdate as any, undefined, {
+      file: nonWorkerFile,
       server: { ws: { send } },
     });
 

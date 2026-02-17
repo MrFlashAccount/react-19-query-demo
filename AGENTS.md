@@ -16,3 +16,4 @@
 6. Scenario/example apps used for browser integration coverage must be self-contained per scenario (own app + worker implementation) and must not rely on a shared generic app-shell abstraction.
 7. When introducing library-managed runtime state consumed by both plugin-generated bootstrap modules and app imports, store the active runtime/transport on `globalThis` (not module-local variables) so behavior remains consistent even if Vite creates multiple module instances.
 8. Do not store critical UI invalidation callbacks only in `WeakRef`; for deterministic refresh behavior, keep strong callback references and remove them explicitly on component unmount.
+9. Suspense data loaders must not rely only on per-instance `useRef` caches for in-flight request deduplication; keep a stable cache outside component instance state (keyed by request identity) so pre-commit Suspense retries reuse the same promise and do not trigger infinite refetch loops.

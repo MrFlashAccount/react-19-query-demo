@@ -15,6 +15,7 @@ import { WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY } from "./runtime-globals";
 
 const DEFAULT_DIRECTIVES = ["use main", "use client"] as const;
 const DEFAULT_WORKER_DIRECTIVES = ["use worker"] as const;
+const WORKER_ACTION_DIRECTIVE = "use worker";
 const DEFAULT_MAIN_VIRTUAL_ID = "virtual:rsc-prism/main-thread-modules";
 const RESOLVED_MAIN_VIRTUAL_ID = "\0rsc-prism:main-thread-modules";
 const DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID = "virtual:rsc-prism/worker-bootstrap";
@@ -205,6 +206,19 @@ function hasDirective(ast: ParsedFile, directives: Set<string>): boolean {
 
     return directives.has(literal.value);
   });
+}
+
+function sourceContainsDirectiveLiteral(source: string, directive: string): boolean {
+  return source.includes(`"${directive}"`) || source.includes(`'${directive}'`);
+}
+
+function sourceContainsAnyDirectiveLiteral(source: string, directives: Set<string>): boolean {
+  for (const directive of directives) {
+    if (sourceContainsDirectiveLiteral(source, directive)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function assertNamedExportIdentifier(name: string, id: string): void {
@@ -667,6 +681,9 @@ async function collectMainThreadModules(
       }
 
       const code = await readFile(absolutePath, "utf8");
+      if (!sourceContainsAnyDirectiveLiteral(code, directives)) {
+        continue;
+      }
       const ast = parseModule(code, absolutePath);
       if (!hasDirective(ast, directives)) {
         continue;
@@ -847,7 +864,7 @@ export const __rscPrismWorkerRuntimeMarker = true;
 
 function buildWorkerBootstrapCode(servePath: string): string {
   return `
-import { createWorkerTransport } from "@lib/rsc-prism/client-only";
+import { createWorkerTransport } from "@lib/rsc-prism/transport";
 
 const __RSC_PRISM_BOOTSTRAP_GLOBAL_KEY = ${JSON.stringify(WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY)};
 let __rscPrismBootstrappedRuntime = null;
@@ -1024,6 +1041,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   let generatedWorkerServeFile: string | null = null;
   let generatedWorkerEntryPath: string | null = null;
   let generatedWorkerRegistryPath: string | null = null;
+  const workerActionDirectives = new Set([...workerDirectives, WORKER_ACTION_DIRECTIVE]);
 
   const mapModuleId = (absolutePath: string): string => {
     if (config == null) {
@@ -1075,6 +1093,17 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     }
 
     const source = await readFile(absolutePath, "utf8");
+    const mayContainDirective =
+      sourceContainsAnyDirectiveLiteral(source, mainDirectives) ||
+      sourceContainsAnyDirectiveLiteral(source, workerActionDirectives);
+    if (!mayContainDirective) {
+      const result: ParsedDirectiveModule = {
+        isDirectiveModule: false,
+        hasWorkerActionExports: false,
+      };
+      parsedDirectiveModules.set(absolutePath, result);
+      return result;
+    }
     const ast = parseModule(source, absolutePath);
     const directiveType = resolveDirectiveModuleType(ast, mainDirectives, workerDirectives);
     const exportsInfo = collectRuntimeExports(ast, absolutePath);
@@ -1097,6 +1126,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     };
     parsedDirectiveModules.set(absolutePath, result);
     return result;
+  };
+
+  const isWorkerRuntimeRelevantModule = (parsed: ParsedDirectiveModule): boolean => {
+    return (parsed.isDirectiveModule && parsed.type === "worker") || parsed.hasWorkerActionExports === true;
   };
 
   const collectWorkerModulesForRuntime = async (): Promise<WorkerRuntimeModuleEntry[]> => {
@@ -1232,7 +1265,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         },
         rollupOptions: {
           preserveEntrySignatures: "strict",
-          treeshake: false,
+          treeshake: true,
           output: {
             intro: [
               "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
@@ -1562,10 +1595,37 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         return null;
       }
 
+      const hasMainDirectiveLiteral = sourceContainsAnyDirectiveLiteral(code, mainDirectives);
+      const hasWorkerDirectiveLiteral = sourceContainsAnyDirectiveLiteral(code, workerDirectives);
+      const hasWorkerActionDirectiveLiteral = sourceContainsDirectiveLiteral(
+        code,
+        WORKER_ACTION_DIRECTIVE,
+      );
+
+      if (options.mode === "worker" && !hasMainDirectiveLiteral) {
+        return null;
+      }
+      if (options.mode === "main" && !hasWorkerDirectiveLiteral && !hasWorkerActionDirectiveLiteral) {
+        return null;
+      }
+
       const absolutePath = toAbsolutePath(id);
       const projectFilePath = toProjectFilePath(absolutePath);
       const ast = parseModule(code, absolutePath);
       const directiveType = resolveDirectiveModuleType(ast, mainDirectives, workerDirectives);
+      if (
+        options.mode === "worker" &&
+        directiveType !== "main"
+      ) {
+        return null;
+      }
+      if (
+        options.mode === "main" &&
+        directiveType !== "worker" &&
+        !hasWorkerActionDirectiveLiteral
+      ) {
+        return null;
+      }
       const exportsInfo = collectRuntimeExports(ast, absolutePath);
       const hasWorkerActionExports = exportsInfo.actionExports.length > 0;
       if (directiveType == null && !hasWorkerActionExports) {
@@ -1596,13 +1656,14 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       };
     },
     async handleHotUpdate(context) {
-      parsedDirectiveModules.delete(normalizePath(context.file));
-      parsedDirectiveModules.delete(context.file);
-
       if (!workerRuntimeEnabled || config == null) {
         return;
       }
       const normalizedFile = normalizePath(context.file);
+      const previousParsed =
+        parsedDirectiveModules.get(normalizedFile) ?? parsedDirectiveModules.get(context.file);
+      parsedDirectiveModules.delete(normalizedFile);
+      parsedDirectiveModules.delete(context.file);
       const normalizedOutDir = generatedWorkerOutDir ? normalizePath(generatedWorkerOutDir) : null;
       if (normalizedOutDir != null && normalizedFile.startsWith(normalizedOutDir)) {
         return;
@@ -1616,6 +1677,18 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         return;
       }
       if (!shouldProcessFile(normalizedFile)) {
+        return;
+      }
+
+      let nextParsed: ParsedDirectiveModule | null = null;
+      try {
+        nextParsed = await parseDirectiveModule(toProjectFilePath(normalizedFile));
+      } catch {
+        // Fall back to previous known state for deleted/temporarily invalid files.
+      }
+      const wasRelevant = previousParsed != null && isWorkerRuntimeRelevantModule(previousParsed);
+      const isRelevant = nextParsed != null && isWorkerRuntimeRelevantModule(nextParsed);
+      if (!wasRelevant && !isRelevant) {
         return;
       }
 

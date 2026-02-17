@@ -29,17 +29,10 @@ describe("client-only browser workflows", () => {
     delete target[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY];
   });
 
-  it("registers modules and runs fetch/action flows", async () => {
-    const moduleId = `client-only-${Date.now()}`;
-    clientOnly.registerClientModule(moduleId, {
-      Counter: () => null,
-    });
-
-    expect(clientOnly.hasModule(moduleId)).toBe(true);
-    expect((clientOnly.getModule(moduleId) as { Counter?: unknown } | undefined)?.Counter).toBeDefined();
-
-    const manifest = clientOnly.buildClientManifest(moduleId, ["Counter"]);
-    expect(manifest[`${moduleId}#Counter`]?.name).toBe("Counter");
+  it("runs fetch/action flows from the narrowed client-only surface", async () => {
+    const clientOnlyApi = clientOnly as unknown as Record<string, unknown>;
+    expect(clientOnlyApi.registerClientModule).toBeUndefined();
+    expect(clientOnlyApi.createWorkerTransport).toBeUndefined();
 
     const transport = createFunctionTransport(async (request) => {
       if (request.method === "GET") {
@@ -53,7 +46,7 @@ describe("client-only browser workflows", () => {
       $$bound: null,
     };
 
-    await expect(clientOnly.fetchRSC("/rsc", { transport })).resolves.toBe("fetch-ok");
+    await expect(clientOnly.fetchRSC("/rsc" as any, { transport })).resolves.toBe("fetch-ok");
     await expect(
       clientOnly.callAction<string>(runActionRef, [1], { transport, parseResponse: true }),
     ).resolves.toBe("action-ok");
@@ -90,7 +83,7 @@ describe("client-only browser workflows", () => {
     expect(bootstrapped).toBe(runtime);
     expect(bootstrap).toHaveBeenCalledTimes(1);
 
-    await expect(clientOnly.fetchRSC("/rsc")).resolves.toBe("default-fetch-ok");
+    await expect(clientOnly.fetchRSC("/rsc" as any)).resolves.toBe("default-fetch-ok");
     await expect(clientOnly.callAction<string>(runActionRef, [1], { parseResponse: true })).resolves.toBe(
       "default-action-ok",
     );
@@ -101,7 +94,7 @@ describe("client-only browser workflows", () => {
 
     bootstrapped.dispose();
     expect(dispose).toHaveBeenCalledTimes(1);
-    await expect(clientOnly.fetchRSC("/rsc")).rejects.toThrow("Missing RSC transport");
+    await expect(clientOnly.fetchRSC("/rsc" as any)).rejects.toThrow("Missing RSC transport");
   });
 
   it("throws when worker runtime bootstrap hook is unavailable", async () => {
