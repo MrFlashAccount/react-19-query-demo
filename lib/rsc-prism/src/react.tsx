@@ -179,9 +179,15 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
   };
 }
 
-const runtimePromise = bootstrapWorkerRuntime();
+const runtimePromise = bootstrapWorkerRuntime().then((runtime) => {
+  return {
+    runtime,
+    dispose: runtime.dispose.bind(runtime),
+  };
+});
 
 export function RuntimeProvider({ children }: React.PropsWithChildren) {
-  use(runtimePromise);
+  const { dispose } = use(runtimePromise);
+  useEffect(() => dispose, [dispose]);
   return children;
 }
