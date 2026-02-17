@@ -36,9 +36,7 @@ export function createFetchTransport(): RSCTransport {
         body: input.body,
         headers,
         ...input.requestInit,
-      }).finally(() => {
-        invalidateRSC();
-      });
+      }).finally(invalidateRSC);
     },
 
     async fetchRSC(input): Promise<Response> {
@@ -85,9 +83,7 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
         headers,
         body: input.body,
         requestInit: input.requestInit,
-      }).finally(() => {
-        invalidateRSC();
-      });
+      }).finally(invalidateRSC);
     },
 
     async fetchRSC(input): Promise<Response> {
@@ -105,8 +101,6 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
         headers,
         body: "",
         requestInit: input.requestInit,
-      }).finally(() => {
-        invalidateRSC();
       });
     },
   };
@@ -414,7 +408,7 @@ export function createWorkerTransport(
           requestInit: input.requestInit,
         },
         options,
-      );
+      ).finally(invalidateRSC);
     },
 
     async fetchRSC(input): Promise<Response> {
