@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { callAction, type RSCTransport } from "@lib/rsc-prism/client-only";
+import { callAction } from "@lib/rsc-prism/client-only";
 import type { TodoFilter, TodoRecord } from "./types";
 import {
   addTodo,
@@ -20,7 +20,6 @@ import {
 } from "./todo-actions";
 
 interface TodoRuntime {
-  transport: RSCTransport;
   filter: TodoFilter;
   setFilter: (filter: TodoFilter) => void;
   refresh: () => void;
@@ -57,9 +56,7 @@ function useTodoAction() {
   ) => {
     startTransition(async () => {
       try {
-        await callAction(action, args, {
-          transport: runtime.transport,
-        });
+        await callAction(action, args);
         options?.onSuccess?.();
         if (options?.refresh ?? true) {
           runtime.refresh();

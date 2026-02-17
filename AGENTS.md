@@ -14,3 +14,5 @@
 4. Default Vitest test suites must not include files that require server-only React conditions to import; such behavior must be covered through browser-runtime workflow tests instead.
 5. When using `createWorkerTransportMessageHandler`, do not return `204`/`205`/`304` responses from worker handlers; use a `200` response for successful action acknowledgements because worker transport reconstructs a streamed `Response` body on the client.
 6. Scenario/example apps used for browser integration coverage must be self-contained per scenario (own app + worker implementation) and must not rely on a shared generic app-shell abstraction.
+7. When introducing library-managed runtime state consumed by both plugin-generated bootstrap modules and app imports, store the active runtime/transport on `globalThis` (not module-local variables) so behavior remains consistent even if Vite creates multiple module instances.
+8. Do not store critical UI invalidation callbacks only in `WeakRef`; for deterministic refresh behavior, keep strong callback references and remove them explicitly on component unmount.

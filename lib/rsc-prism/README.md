@@ -64,7 +64,7 @@ For all micro apps, keep the integration contract identical:
 Use plugin-managed worker runtime wiring:
 
 1. `rscPrism()` with `workerRuntime.enabled: true`
-2. `bootstrapWorkerRuntime()` from `virtual:rsc-prism/worker-bootstrap`
+2. `bootstrapWorkerRuntime()` from `@lib/rsc-prism/client-only`
 3. `fetchRSC`
 4. `callAction`
 5. Worker modules/actions discovered from local `"use worker"` exports
@@ -86,8 +86,8 @@ Use browser-runtime workflow tests for RSC behavior.
 ```ts
 import { defineConfig } from "vite";
 import { rscPrism } from "@lib/rsc-prism/vite";
-import { bootstrapWorkerRuntime } from "virtual:rsc-prism/worker-bootstrap";
-import { fetchRSC, callAction } from "@lib/rsc-prism/client-only";
+import { bootstrapWorkerRuntime, fetchRSC, callAction } from "@lib/rsc-prism/client-only";
+import { increment } from "./todo-actions";
 
 export default defineConfig({
   plugins: [
@@ -100,10 +100,9 @@ export default defineConfig({
 });
 
 // Main thread app code
-const runtime = await bootstrapWorkerRuntime();
-const transport = runtime.transport;
-const tree = await fetchRSC("/rsc/view", { transport });
-await callAction("/rsc/action", "inc", [], { transport });
+await bootstrapWorkerRuntime();
+const tree = await fetchRSC("/rsc/view");
+await callAction(increment, []);
 ```
 
-`workerRuntime.entry` is no longer supported; the plugin owns worker runtime generation and worker bootstrap details.
+`workerRuntime.entry` is no longer supported; the plugin owns worker runtime generation and virtual bootstrap internals.

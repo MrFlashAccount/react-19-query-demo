@@ -1,3 +1,5 @@
+import { invalidateRSC } from "./react";
+
 export interface SendActionInput {
   endpoint: string;
   actionId: string;
@@ -34,6 +36,8 @@ export function createFetchTransport(): RSCTransport {
         body: input.body,
         headers,
         ...input.requestInit,
+      }).finally(() => {
+        invalidateRSC();
       });
     },
 
@@ -63,7 +67,7 @@ export interface FunctionTransportRequest {
   requestInit?: RequestInit;
 }
 
-export type FunctionTransportHandler = (request: FunctionTransportRequest) => Response | Promise<Response>;
+export type FunctionTransportHandler = (request: FunctionTransportRequest) => Promise<Response>;
 
 export function createFunctionTransport(handler: FunctionTransportHandler): RSCTransport {
   return {
@@ -81,6 +85,8 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
         headers,
         body: input.body,
         requestInit: input.requestInit,
+      }).finally(() => {
+        invalidateRSC();
       });
     },
 
@@ -99,6 +105,8 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
         headers,
         body: "",
         requestInit: input.requestInit,
+      }).finally(() => {
+        invalidateRSC();
       });
     },
   };
@@ -452,11 +460,13 @@ function postMessageWithTransfer(
 function resolveReplyTarget(
   event: MessageEvent<unknown>,
 ): { postMessage: (message: unknown, transfer?: Transferable[]) => void } | null {
-  const currentTarget = event.currentTarget as
-    | { postMessage?: (message: unknown, transfer?: Transferable[]) => void }
-    | null;
+  const currentTarget = event.currentTarget as {
+    postMessage?: (message: unknown, transfer?: Transferable[]) => void;
+  } | null;
   if (currentTarget?.postMessage) {
-    const target = currentTarget as { postMessage: (message: unknown, transfer?: Transferable[]) => void };
+    const target = currentTarget as {
+      postMessage: (message: unknown, transfer?: Transferable[]) => void;
+    };
     return {
       postMessage: (message, transfer) => postMessageWithTransfer(target, message, transfer),
     };
@@ -466,7 +476,9 @@ function resolveReplyTarget(
     postMessage?: (message: unknown, transfer?: Transferable[]) => void;
   };
   if (typeof globalTarget.postMessage === "function") {
-    const target = globalTarget as { postMessage: (message: unknown, transfer?: Transferable[]) => void };
+    const target = globalTarget as {
+      postMessage: (message: unknown, transfer?: Transferable[]) => void;
+    };
     return {
       postMessage: (message, transfer) => postMessageWithTransfer(target, message, transfer),
     };
@@ -505,11 +517,14 @@ export function createWorkerTransportMessageHandler(
             const { done, value } = await reader.read();
             if (done) break;
             const transfer = transferListForChunk(value);
-            replyTarget.postMessage({
-              type: responseNextType(responseType),
-              id: request.id,
-              chunk: value,
-            } satisfies WorkerTransportResponseNextMessage, transfer);
+            replyTarget.postMessage(
+              {
+                type: responseNextType(responseType),
+                id: request.id,
+                chunk: value,
+              } satisfies WorkerTransportResponseNextMessage,
+              transfer,
+            );
           }
         } finally {
           reader.releaseLock();

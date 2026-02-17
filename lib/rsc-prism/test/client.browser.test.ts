@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { callAction, consumeRSCResponse, createCallServer, encodeActionArgs, fetchRSC } from "../src/client";
+import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY } from "../src/runtime-globals";
 import { createFunctionTransport } from "../src/transport";
 
 function flightValueResponse(value: unknown): Response {
@@ -8,6 +9,11 @@ function flightValueResponse(value: unknown): Response {
     status: 200,
     headers: { "content-type": "text/x-component" },
   });
+}
+
+function clearDefaultWorkerRuntimeGlobals() {
+  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+  delete globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY];
 }
 
 describe("rsc client browser workflows", () => {
@@ -65,6 +71,22 @@ describe("rsc client browser workflows", () => {
     await expect(callAction("not-a-ref" as unknown as (...args: never[]) => unknown, [])).rejects.toThrow(
       "expects a \"use worker\" action reference",
     );
+  });
+
+  it("throws when fetchRSC has no explicit or bootstrapped transport", async () => {
+    clearDefaultWorkerRuntimeGlobals();
+    await expect(fetchRSC("/rsc")).rejects.toThrow("Missing RSC transport");
+  });
+
+  it("throws when callAction has no explicit or bootstrapped transport", async () => {
+    clearDefaultWorkerRuntimeGlobals();
+    const runActionRef = {
+      $$typeof: Symbol.for("react.server.reference"),
+      $$id: "todo-actions.ts#run",
+      $$bound: null,
+    };
+
+    await expect(callAction(runActionRef, [])).rejects.toThrow("Missing RSC transport");
   });
 
   it("creates callServer function that posts action request", async () => {

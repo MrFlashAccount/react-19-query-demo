@@ -14,10 +14,12 @@
 export {
   consumeRSC,
   consumeRSCResponse,
+  bootstrapWorkerRuntime,
   encodeActionArgs,
   createCallServer,
   fetchRSC,
   callAction,
+  type BootstrappedWorkerRuntime,
   type ConsumeRSCOptions,
   type FetchRSCOptions,
   type WorkerComponentReference,

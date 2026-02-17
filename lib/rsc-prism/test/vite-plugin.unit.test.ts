@@ -261,6 +261,7 @@ export function A() { return null; }
     expect(loadedCode).toContain("let __rscPrismBootstrappedRuntime = null;");
     expect(loadedCode).toContain("let __rscPrismBootstrapPromise = null;");
     expect(loadedCode).toContain("if (__rscPrismBootstrappedRuntime != null)");
+    expect(loadedCode).toContain('globalThis[__RSC_PRISM_BOOTSTRAP_GLOBAL_KEY] = bootstrapWorkerRuntime;');
   });
 
   it("throws when workerRuntime.entry is provided", () => {

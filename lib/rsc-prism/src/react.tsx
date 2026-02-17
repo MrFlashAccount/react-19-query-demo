@@ -3,10 +3,10 @@ import { fetchRSC } from "./client";
 import type { RSCTransport } from "./transport";
 import type { ComponentReference } from "./types";
 
-const $$invalidations = new Set<WeakRef<() => void>>();
+const $$invalidations = new Set<() => void>();
 export function invalidateRSC() {
   for (const invalidation of $$invalidations) {
-    invalidation.deref()?.();
+    invalidation();
   }
 }
 
@@ -39,21 +39,24 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
     const [, $$refresh] = useState({});
 
     useEffect(() => {
-      const ref = new WeakRef(() => {
+      const invalidate = () => {
         __cachePromise = undefined;
         __cacheKey = undefined;
         return $$refresh({});
-      });
-      $$invalidations.add(ref);
+      };
+      $$invalidations.add(invalidate);
       return () => {
-        $$invalidations.delete(ref);
+        $$invalidations.delete(invalidate);
       };
     }, []);
+
     if (__cacheKey === key) {
       return __cachePromise;
     }
+
     __cacheKey = key;
     __cachePromise = fetchRSC(reference, { props, transport });
+
     return __cachePromise;
   };
 }

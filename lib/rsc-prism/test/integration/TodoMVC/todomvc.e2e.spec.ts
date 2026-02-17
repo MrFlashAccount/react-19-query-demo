@@ -43,15 +43,19 @@ test.describe("TodoMVC integration", () => {
   });
 
   test("checks and unchecks a todo", async ({ page }) => {
-    await page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }).click();
-    await expect(
-      page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }),
-    ).toBeChecked();
+    const target = page.getByRole("checkbox", { name: "Toggle Read worker transport docs" });
 
-    await page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }).click();
-    await expect(
-      page.getByRole("checkbox", { name: "Toggle Read worker transport docs" }),
-    ).not.toBeChecked();
+    await target.click();
+    await expect(target).toBeChecked();
+
+    await target.click();
+    await expect(target).not.toBeChecked();
+
+    await target.click();
+    await expect(target).toBeChecked();
+
+    await target.click();
+    await expect(target).not.toBeChecked();
   });
 
   test("filters todos by all states", async ({ page }) => {

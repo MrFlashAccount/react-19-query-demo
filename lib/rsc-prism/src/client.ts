@@ -3,6 +3,10 @@
  */
 
 import "./runtime/webpack-shim";
+import {
+  DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
+  WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
+} from "./runtime-globals";
 import type { ComponentReference, EncodedActionArgs } from "./types";
 import { createFetchTransport, type RSCTransport } from "./transport";
 import * as ReactServerDomWebpackClient from "react-server-dom-webpack/client.browser";
@@ -16,6 +20,104 @@ const { createFromReadableStream, encodeReply } = ReactServerDomWebpackClient as
 };
 
 const defaultFetchTransport = createFetchTransport();
+const MISSING_TRANSPORT_ERROR_MESSAGE =
+  '[rsc-prism] Missing RSC transport. Call bootstrapWorkerRuntime() from "@lib/rsc-prism/client-only" first, or pass options.transport explicitly.';
+
+export interface BootstrappedWorkerRuntime {
+  worker: Worker;
+  transport: RSCTransport;
+  dispose: () => void;
+}
+
+type WorkerRuntimeBootstrap = () => Promise<BootstrappedWorkerRuntime>;
+
+const wrappedBootstrappedRuntimes = new WeakSet<BootstrappedWorkerRuntime>();
+
+function getRscPrismGlobalState(): typeof globalThis & Record<string, unknown> {
+  return globalThis as typeof globalThis & Record<string, unknown>;
+}
+
+function getWorkerRuntimeBootstrap(): WorkerRuntimeBootstrap {
+  const bootstrap = getRscPrismGlobalState()[WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY];
+
+  if (typeof bootstrap === "function") {
+    return bootstrap as WorkerRuntimeBootstrap;
+  }
+
+  throw new Error(
+    "[rsc-prism] Worker runtime bootstrap is unavailable. Ensure rscPrism({ workerRuntime: { enabled: true } }) is configured and the plugin-generated bootstrap runtime has loaded.",
+  );
+}
+
+function isRSCTransport(value: unknown): value is RSCTransport {
+  return (
+    typeof value === "object" &&
+    value != null &&
+    typeof (value as Partial<RSCTransport>).sendAction === "function"
+  );
+}
+
+function isBootstrappedWorkerRuntime(value: unknown): value is BootstrappedWorkerRuntime {
+  return (
+    typeof value === "object" &&
+    value != null &&
+    typeof (value as Partial<BootstrappedWorkerRuntime>).dispose === "function" &&
+    isRSCTransport((value as Partial<BootstrappedWorkerRuntime>).transport)
+  );
+}
+
+function getDefaultWorkerRuntime(): BootstrappedWorkerRuntime | null {
+  const runtime = getRscPrismGlobalState()[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY];
+  return isBootstrappedWorkerRuntime(runtime) ? runtime : null;
+}
+
+function setDefaultWorkerRuntime(runtime: BootstrappedWorkerRuntime): void {
+  const globalState = getRscPrismGlobalState();
+  globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] = runtime;
+}
+
+function clearDefaultWorkerRuntime(runtime: BootstrappedWorkerRuntime): void {
+  const globalState = getRscPrismGlobalState();
+  if (globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] !== runtime) {
+    return;
+  }
+  delete globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY];
+}
+
+function registerDefaultWorkerRuntime(
+  runtime: BootstrappedWorkerRuntime,
+): BootstrappedWorkerRuntime {
+  setDefaultWorkerRuntime(runtime);
+
+  if (!wrappedBootstrappedRuntimes.has(runtime)) {
+    const originalDispose = runtime.dispose.bind(runtime);
+    runtime.dispose = () => {
+      originalDispose();
+      clearDefaultWorkerRuntime(runtime);
+    };
+    wrappedBootstrappedRuntimes.add(runtime);
+  }
+
+  return runtime;
+}
+
+function resolveTransport(transport: RSCTransport | null | undefined): RSCTransport {
+  if (transport != null) {
+    return transport;
+  }
+
+  const defaultWorkerRuntime = getDefaultWorkerRuntime();
+  if (defaultWorkerRuntime != null) {
+    return defaultWorkerRuntime.transport;
+  }
+
+  throw new Error(MISSING_TRANSPORT_ERROR_MESSAGE);
+}
+
+export async function bootstrapWorkerRuntime(): Promise<BootstrappedWorkerRuntime> {
+  const runtime = await getWorkerRuntimeBootstrap()();
+  return registerDefaultWorkerRuntime(runtime);
+}
 
 /**
  * Options for consuming an RSC stream
@@ -202,7 +304,7 @@ export async function fetchRSC(
   target: ((props: unknown) => unknown) | string,
   options?: FetchRSCOptions,
 ): Promise<unknown> {
-  const transport = options?.transport ?? defaultFetchTransport;
+  const transport = resolveTransport(options?.transport);
   const { callServer, props, transport: _transport } = options ?? {};
   const workerComponent = typeof target === "string" ? null : target;
   const url = "/rsc/view";
@@ -213,14 +315,15 @@ export async function fetchRSC(
     );
   }
 
-  const response =
-    transport.fetchRSC != null
-      ? await transport.fetchRSC({
-          url,
-          componentId: workerComponent?.$$id,
-          componentProps: props,
-        })
-      : await fetch(url, { headers: { Accept: "text/x-component" } });
+  if (transport.fetchRSC == null) {
+    throw new Error("[rsc-prism] Active transport does not support fetchRSC().");
+  }
+
+  const response = await transport.fetchRSC({
+    url,
+    componentId: workerComponent?.$$id,
+    componentProps: props,
+  });
 
   if (!response.ok) {
     throw new Error(`RSC fetch failed: ${response.status}`);
@@ -269,7 +372,7 @@ export async function callAction<T = void>(
 export async function callAction<T = void>(
   action: WorkerActionReference | ((...args: any[]) => any),
   args: unknown[],
-  options?: CallActionOptions,
+  options: CallActionOptions = {},
 ): Promise<T> {
   if (!isWorkerActionReference(action)) {
     throw new Error(
@@ -278,14 +381,9 @@ export async function callAction<T = void>(
   }
 
   const actionId = action.$$id;
-  const transport = options?.transport ?? defaultFetchTransport;
-  const endpoint = options?.endpoint ?? DEFAULT_ACTION_ENDPOINT;
-  const {
-    parseResponse = false,
-    transport: _transport,
-    endpoint: _endpoint,
-    ...fetchOptions
-  } = options ?? {};
+  const transport = resolveTransport(options?.transport);
+  const endpoint = DEFAULT_ACTION_ENDPOINT;
+  const { parseResponse = false } = options;
   const encodedArgs = await encodeActionArgs(args);
   const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
 
@@ -294,8 +392,6 @@ export async function callAction<T = void>(
     actionId,
     body: encodedArgs.data,
     contentType,
-    headers: fetchOptions?.headers,
-    requestInit: fetchOptions,
   });
 
   if (!response.ok) {
@@ -306,7 +402,7 @@ export async function callAction<T = void>(
     return consumeRSC<T>(response.body);
   }
 
-  return undefined as T;
+  return response.body as T;
 }
 
 // Re-export types

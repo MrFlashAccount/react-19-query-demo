@@ -7,11 +7,8 @@ import { ErrorBoundary } from "react-error-boundary";
 import { TodoRuntimeProvider } from "./client-components";
 import type { TodoFilter } from "./types";
 import { TodoView } from "./worker-components";
-import { rsc, RSCTransportProvider } from "@lib/rsc-prism/react";
-import {
-  bootstrapWorkerRuntime,
-  type BootstrappedWorkerRuntime,
-} from "virtual:rsc-prism/worker-bootstrap";
+import { bootstrapWorkerRuntime, type BootstrappedWorkerRuntime } from "@lib/rsc-prism/client-only";
+import { rsc } from "@lib/rsc-prism/react";
 
 const TodoViewRSC = rsc(TodoView);
 
@@ -133,52 +130,45 @@ function App() {
   }
 
   return (
-    <RSCTransportProvider transport={runtime.transport}>
-      <TodoRuntimeProvider
-        value={{
-          transport: runtime.transport,
-          filter,
-          setFilter,
-          refresh,
-        }}
-      >
-        <main className="app-shell">
-          <header className="app-header">
-            <h2>RSC TodoMVC</h2>
-            <p>View rendering and data fetches run through React Server Components in a worker.</p>
-          </header>
+    <TodoRuntimeProvider value={{ filter, setFilter, refresh }}>
+      <main className="app-shell">
+        <header className="app-header">
+          <h2>RSC TodoMVC</h2>
+          <p>View rendering and data fetches run through React Server Components in a worker.</p>
+        </header>
 
-          {isPending && <p className="app-status">Refreshing RSC view...</p>}
+        <p className="app-status" aria-live="polite">
+          {isPending ? "Refreshing RSC view..." : ""}
+        </p>
 
-          <ErrorBoundary
-            fallbackRender={({ error }) => {
-              const message = error instanceof Error ? error.message : String(error);
-              return (
-                <section className="todo-shell">
-                  <section className="todoapp todoapp--error">
-                    <h1 className="todo-title">todos</h1>
-                    <p className="todo-error">Failed to load RSC payload: {message}</p>
-                  </section>
+        <ErrorBoundary
+          fallbackRender={({ error }) => {
+            const message = error instanceof Error ? error.message : String(error);
+            return (
+              <section className="todo-shell">
+                <section className="todoapp todoapp--error">
+                  <h1 className="todo-title">todos</h1>
+                  <p className="todo-error">Failed to load RSC payload: {message}</p>
                 </section>
-              );
-            }}
+              </section>
+            );
+          }}
+        >
+          <Suspense
+            fallback={
+              <section className="todo-shell">
+                <section className="todoapp">
+                  <h1 className="todo-title">todos</h1>
+                  <p className="todo-empty">Loading...</p>
+                </section>
+              </section>
+            }
           >
-            <Suspense
-              fallback={
-                <section className="todo-shell">
-                  <section className="todoapp">
-                    <h1 className="todo-title">todos</h1>
-                    <p className="todo-empty">Loading...</p>
-                  </section>
-                </section>
-              }
-            >
-              <TodoViewRSC filter={filter} />
-            </Suspense>
-          </ErrorBoundary>
-        </main>
-      </TodoRuntimeProvider>
-    </RSCTransportProvider>
+            <TodoViewRSC filter={filter} />
+          </Suspense>
+        </ErrorBoundary>
+      </main>
+    </TodoRuntimeProvider>
   );
 }
 
