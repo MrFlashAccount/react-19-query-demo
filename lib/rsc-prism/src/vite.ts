@@ -75,7 +75,6 @@ interface WorkerRuntimeModuleEntry extends MainThreadModuleEntry {
 
 export interface RscPrismWorkerRuntimeOptions {
   enabled?: boolean;
-  entry?: string;
   endpoint?: string;
   servePath?: string;
   fileName?: string;
@@ -150,117 +149,6 @@ function normalizeAliases(
       };
     })
     .filter((entry): entry is { find: string | RegExp; replacement: string } => entry != null);
-}
-
-function createWorkerEntryBuilderPlugin(options: {
-  entry: string;
-  servePath: string;
-  outDir?: string;
-  aliases?: NonNullable<UserConfig["resolve"]>["alias"];
-}): Plugin {
-  let config: ResolvedConfig | null = null;
-
-  const buildWorker = async (mode: string): Promise<void> => {
-    if (config == null) {
-      return;
-    }
-    const root = config.root;
-    const outputDir = options.outDir != null ? path.resolve(root, options.outDir) : path.resolve(root, ".vite", "worker-cache");
-    const fileName = path.basename(options.servePath);
-    const reactServerEntry = await resolveNodeModuleFile(root, "react/react.react-server.js");
-    const reactServerJsxRuntimeEntry = await resolveNodeModuleFile(root, "react/jsx-runtime.react-server.js");
-    const reactServerJsxDevRuntimeEntry = await resolveNodeModuleFile(root, "react/jsx-dev-runtime.react-server.js");
-    const reactDomServerEntry = await resolveNodeModuleFile(root, "react-dom/react-dom.react-server.js");
-    const customAliases = normalizeAliases(options.aliases ?? config.resolve?.alias);
-
-    await viteBuild({
-      configFile: false,
-      mode,
-      root,
-      build: {
-        write: true,
-        outDir: outputDir,
-        emptyOutDir: true,
-        lib: {
-          entry: path.resolve(root, options.entry),
-          formats: ["iife"],
-          name: "RscPrismWorker",
-          fileName: () => fileName,
-        },
-        rollupOptions: {
-          output: {
-            intro: [
-              "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
-              "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
-              "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
-              "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
-            ].join("\n"),
-          },
-        },
-      },
-      resolve: {
-        alias: [
-          ...customAliases,
-          { find: /^react$/, replacement: reactServerEntry },
-          { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
-          { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
-          { find: /^react-dom$/, replacement: reactDomServerEntry },
-          { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
-          { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
-        ],
-        conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
-      },
-      plugins: [
-        rscPrismWorker(),
-        react() as unknown as Plugin,
-      ],
-      define: { "process.env.NODE_ENV": JSON.stringify(mode) },
-    });
-  };
-
-  return {
-    name: "rsc-prism-internal-worker-entry-builder",
-    configResolved(resolvedConfig) {
-      config = resolvedConfig;
-    },
-    async buildStart() {
-      if (config == null) return;
-      await buildWorker(config.mode);
-    },
-    configureServer(server) {
-      if (config == null) {
-        return;
-      }
-      const outputDir = options.outDir != null ? path.resolve(config.root, options.outDir) : path.resolve(config.root, ".vite", "worker-cache");
-      const fileName = path.basename(options.servePath);
-      server.middlewares.use(async (req, res, next) => {
-        if (req.url !== options.servePath) {
-          next();
-          return;
-        }
-        try {
-          const content = await readFile(path.resolve(outputDir, fileName), "utf8");
-          res.setHeader("Content-Type", "application/javascript");
-          res.setHeader("Cache-Control", "no-cache");
-          res.end(content);
-          return;
-        } catch {
-          next();
-        }
-      });
-    },
-    async handleHotUpdate({ file, server }) {
-      if (config == null) return;
-      const outputDir = options.outDir != null ? path.resolve(config.root, options.outDir) : path.resolve(config.root, ".vite", "worker-cache");
-      const normalizedOutDir = normalizePath(outputDir);
-      const normalizedFile = normalizePath(file);
-      if (normalizedFile.startsWith(normalizedOutDir)) {
-        return;
-      }
-      await buildWorker(config.mode);
-      server.ws.send({ type: "full-reload" });
-    },
-  };
 }
 
 function parseModule(code: string, id: string): ParsedFile {
@@ -901,6 +789,7 @@ self.addEventListener(
   }),
 );
 self.postMessage({ type: "rsc.prism.worker.ready" });
+export const __rscPrismWorkerRuntimeMarker = true;
 `;
 }
 
@@ -908,39 +797,78 @@ function buildWorkerBootstrapCode(servePath: string): string {
   return `
 import { createWorkerTransport } from "@lib/rsc-prism/client-only";
 
-export async function bootstrapWorkerRuntime() {
+let __rscPrismBootstrappedRuntime = null;
+let __rscPrismBootstrapPromise = null;
+
+async function initializeWorkerRuntime() {
   const worker = new Worker(${JSON.stringify(servePath)}, { type: "module" });
-  await new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error("Worker runtime failed to initialize."));
-    }, 1500);
-    const cleanup = () => {
-      clearTimeout(timeout);
-      worker.removeEventListener("message", onMessage);
-      worker.removeEventListener("error", onError);
-    };
-    const onMessage = (event) => {
-      if (event.data != null && event.data.type === "rsc.prism.worker.ready") {
+  try {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
         cleanup();
-        resolve(undefined);
-      }
-    };
-    const onError = () => {
-      cleanup();
-      reject(new Error("Worker runtime failed to initialize."));
-    };
-    worker.addEventListener("message", onMessage);
-    worker.addEventListener("error", onError);
-  });
+        reject(new Error("Worker runtime failed to initialize."));
+      }, 1500);
+      const cleanup = () => {
+        clearTimeout(timeout);
+        worker.removeEventListener("message", onMessage);
+        worker.removeEventListener("error", onError);
+      };
+      const onMessage = (event) => {
+        if (event.data != null && event.data.type === "rsc.prism.worker.ready") {
+          cleanup();
+          resolve(undefined);
+        }
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("Worker runtime failed to initialize."));
+      };
+      worker.addEventListener("message", onMessage);
+      worker.addEventListener("error", onError);
+    });
+  } catch (error) {
+    worker.terminate();
+    throw error;
+  }
+
   const transport = createWorkerTransport(worker, { timeoutMs: 3000 });
-  return {
+  let isDisposed = false;
+  const runtime = {
     worker,
     transport,
     dispose() {
+      if (isDisposed) {
+        return;
+      }
+      isDisposed = true;
       worker.terminate();
+      if (__rscPrismBootstrappedRuntime === runtime) {
+        __rscPrismBootstrappedRuntime = null;
+      }
+      __rscPrismBootstrapPromise = null;
     },
   };
+  return runtime;
+}
+
+export async function bootstrapWorkerRuntime() {
+  if (__rscPrismBootstrappedRuntime != null) {
+    return __rscPrismBootstrappedRuntime;
+  }
+
+  if (__rscPrismBootstrapPromise == null) {
+    __rscPrismBootstrapPromise = initializeWorkerRuntime()
+      .then((runtime) => {
+        __rscPrismBootstrappedRuntime = runtime;
+        return runtime;
+      })
+      .catch((error) => {
+        __rscPrismBootstrapPromise = null;
+        throw error;
+      });
+  }
+
+  return __rscPrismBootstrapPromise;
 }
 `;
 }
@@ -1009,25 +937,22 @@ async function pickWorkerServeFile(outDir: string): Promise<string> {
 }
 
 function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
+  const legacyWorkerRuntimeEntry = (options.workerRuntime as { entry?: unknown } | undefined)?.entry;
+  if (options.mode === "main" && legacyWorkerRuntimeEntry != null) {
+    throw new Error(
+      '[rsc-prism] workerRuntime.entry has been removed. Delete "workerRuntime.entry" and rely on plugin-generated worker runtime from discovered "use worker" modules/actions.',
+    );
+  }
+
   const mainDirectives = new Set(options.directives ?? DEFAULT_DIRECTIVES);
   const workerDirectives = new Set(options.workerDirectives ?? DEFAULT_WORKER_DIRECTIVES);
   const includeFilter = createFilter(options.include, options.exclude);
   const virtualId = options.mainVirtualId ?? DEFAULT_MAIN_VIRTUAL_ID;
   const workerBootstrapVirtualId = options.workerBootstrapVirtualId ?? DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID;
   const workerRuntimeEnabled = options.mode === "main" && options.workerRuntime?.enabled === true;
-  const workerRuntimeEntry = options.workerRuntime?.entry;
   const workerEndpoint = options.workerRuntime?.endpoint ?? "/rsc/view";
   const workerServePath = options.workerRuntime?.servePath ?? "/rsc.worker.js";
   const workerFileName = options.workerRuntime?.fileName ?? path.basename(workerServePath);
-  const workerEntryBuilderPlugin =
-    options.mode === "main" && workerRuntimeEnabled && workerRuntimeEntry != null
-      ? createWorkerEntryBuilderPlugin({
-          entry: workerRuntimeEntry,
-          servePath: workerServePath,
-          outDir: options.workerRuntime?.outDir,
-          aliases: options.workerRuntime?.aliases,
-        })
-      : null;
 
   let config: ResolvedConfig | null = null;
   const parsedDirectiveModules = new Map<string, ParsedDirectiveModule>();
@@ -1230,13 +1155,15 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           fileName: () => workerFileName,
         },
         rollupOptions: {
+          preserveEntrySignatures: "strict",
+          treeshake: false,
           output: {
             intro: [
               "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
               "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
               "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
               "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
-            ].join("\\n"),
+            ].join("\n"),
           },
         },
       },
@@ -1257,49 +1184,20 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         react() as unknown as Plugin,
       ],
       define: { "process.env.NODE_ENV": JSON.stringify(mode) },
-    });
-
-    await viteBuild({
-      configFile: false,
-      mode,
-      root: config.root,
-      build: {
-        write: true,
-        outDir,
-        emptyOutDir: true,
-        rollupOptions: {
-          input: entryPath,
-          treeshake: false,
-          output: {
-            format: "es",
-            entryFileNames: "rsc.worker.js",
-            inlineDynamicImports: true,
-            intro: [
-              "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
-              "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
-              "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
-              "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
-            ].join("\\n"),
-          },
-        },
+      experimental: {
+        enableNativePlugin: false,
       },
-      resolve: {
-        alias: [
-          ...normalizeAliases(options.workerRuntime?.aliases ?? config.resolve?.alias),
-          { find: /^react$/, replacement: reactServerEntry },
-          { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
-          { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
-          { find: /^react-dom$/, replacement: reactDomServerEntry },
-          { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
-          { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
-        ],
-        conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
-      },
-      plugins: [
-        rscPrismWorker(),
-      ],
-      define: { "process.env.NODE_ENV": JSON.stringify(mode) },
     });
+    const preferredWorkerServeFile = path.resolve(outDir, workerFileName);
+    try {
+      const preferredStats = await stat(preferredWorkerServeFile);
+      if (preferredStats.size > 0) {
+        generatedWorkerServeFile = preferredWorkerServeFile;
+        return;
+      }
+    } catch {
+      // Fall back to scanning output in case Vite rewrites the output name.
+    }
     generatedWorkerServeFile = await pickWorkerServeFile(outDir);
   };
 
@@ -1367,20 +1265,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     },
     configResolved(resolvedConfig) {
       config = resolvedConfig;
-      const workerConfigResolved = workerEntryBuilderPlugin?.configResolved as ((resolved: ResolvedConfig) => void) | undefined;
-      if (typeof workerConfigResolved === "function") {
-        workerConfigResolved(resolvedConfig);
-      }
     },
     async buildStart() {
       if (!workerRuntimeEnabled || config == null) {
-        return;
-      }
-      if (workerRuntimeEntry != null) {
-        const workerBuildStart = workerEntryBuilderPlugin?.buildStart as (() => Promise<void> | void) | undefined;
-        if (typeof workerBuildStart === "function") {
-          await workerBuildStart();
-        }
         return;
       }
       await buildGeneratedWorkerRuntime(config.mode);
@@ -1525,13 +1412,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       if (!workerRuntimeEnabled) {
         return;
       }
-      if (workerRuntimeEntry != null) {
-        const workerConfigureServer = workerEntryBuilderPlugin?.configureServer as ((server: any) => void) | undefined;
-        if (typeof workerConfigureServer === "function") {
-          workerConfigureServer(server);
-        }
-        return;
-      }
       const workerServeDir = workerServePath.slice(0, workerServePath.lastIndexOf("/"));
       server.middlewares.use(async (req, res, next) => {
         if (generatedWorkerOutDir == null) {
@@ -1609,13 +1489,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       if (!workerRuntimeEnabled || config == null) {
         return;
       }
-      if (workerRuntimeEntry != null) {
-        const workerHandleHotUpdate = workerEntryBuilderPlugin?.handleHotUpdate as ((context: any) => Promise<void> | void) | undefined;
-        if (typeof workerHandleHotUpdate === "function") {
-          await workerHandleHotUpdate(context);
-        }
-        return;
-      }
       const normalizedFile = normalizePath(context.file);
       const normalizedOutDir = generatedWorkerOutDir ? normalizePath(generatedWorkerOutDir) : null;
       if (normalizedOutDir != null && normalizedFile.startsWith(normalizedOutDir)) {
@@ -1627,6 +1500,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         (normalizedFile === normalizePath(generatedWorkerEntryPath) ||
           normalizedFile === normalizePath(generatedWorkerRegistryPath))
       ) {
+        return;
+      }
+      if (!shouldProcessFile(normalizedFile)) {
         return;
       }
 

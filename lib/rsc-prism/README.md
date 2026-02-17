@@ -61,13 +61,13 @@ For all micro apps, keep the integration contract identical:
 
 ## Required `rsc-prism` Primitives
 
-No public API additions are required. Use only:
+Use plugin-managed worker runtime wiring:
 
-1. `createWorkerTransport`
-2. `createWorkerTransportMessageHandler`
+1. `rscPrism()` with `workerRuntime.enabled: true`
+2. `bootstrapWorkerRuntime()` from `virtual:rsc-prism/worker-bootstrap`
 3. `fetchRSC`
 4. `callAction`
-5. `rscPrism()` (main-side) and `rscPrismWorker()` (worker-side, advanced/manual builds)
+5. Worker modules/actions discovered from local `"use worker"` exports
 
 ## Auto-Test Scenario Matrix
 
@@ -84,29 +84,26 @@ Use browser-runtime workflow tests for RSC behavior.
 ## Minimal Wiring Pattern
 
 ```ts
-import {
-  createWorkerTransport,
-  createWorkerTransportMessageHandler,
-  fetchRSC,
-  callAction,
-} from "@lib/rsc-prism/client-only";
+import { defineConfig } from "vite";
+import { rscPrism } from "@lib/rsc-prism/vite";
+import { bootstrapWorkerRuntime } from "virtual:rsc-prism/worker-bootstrap";
+import { fetchRSC, callAction } from "@lib/rsc-prism/client-only";
 
-// Main thread
-const worker = new Worker(new URL("./rsc.worker.ts", import.meta.url), { type: "module" });
-const transport = createWorkerTransport(worker);
+export default defineConfig({
+  plugins: [
+    rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+    }),
+  ],
+});
 
+// Main thread app code
+const runtime = await bootstrapWorkerRuntime();
+const transport = runtime.transport;
 const tree = await fetchRSC("/rsc/view", { transport });
 await callAction("/rsc/action", "inc", [], { transport });
-
-// Worker thread
-self.addEventListener(
-  "message",
-  createWorkerTransportMessageHandler(async (request) => {
-    if (request.operation === "fetch") {
-      return handleViewRequest(request);
-    }
-    return handleActionRequest(request);
-  }),
-);
 ```
 
+`workerRuntime.entry` is no longer supported; the plugin owns worker runtime generation and worker bootstrap details.

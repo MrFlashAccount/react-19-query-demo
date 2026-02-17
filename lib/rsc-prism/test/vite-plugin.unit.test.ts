@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -258,6 +258,41 @@ export function A() { return null; }
     expect(loadedCode).toContain('new Worker("/todo.worker.js", { type: "module" })');
     expect(loadedCode).toContain("createWorkerTransport");
     expect(loadedCode).toContain("dispose()");
+    expect(loadedCode).toContain("let __rscPrismBootstrappedRuntime = null;");
+    expect(loadedCode).toContain("let __rscPrismBootstrapPromise = null;");
+    expect(loadedCode).toContain("if (__rscPrismBootstrappedRuntime != null)");
+  });
+
+  it("throws when workerRuntime.entry is provided", () => {
+    expect(() =>
+      rscPrism({
+        workerRuntime: {
+          enabled: true,
+          entry: "todo.worker.tsx",
+        } as any,
+      }),
+    ).toThrow("workerRuntime.entry has been removed");
+  });
+
+  it("skips worker runtime rebuild for irrelevant hot updates", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-worker-hmr-ignore-test-"));
+    tempRoots.push(root);
+    await mkdir(path.join(root, "src"), { recursive: true });
+
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+    });
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const send = vi.fn();
+    await callHook(plugin.handleHotUpdate as any, undefined, {
+      file: path.join(root, "README.md"),
+      server: { ws: { send } },
+    });
+
+    expect(send).not.toHaveBeenCalled();
   });
 
   it("injects react-server resolve config in worker environment", async () => {

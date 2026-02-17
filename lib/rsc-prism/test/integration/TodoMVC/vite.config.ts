@@ -19,7 +19,6 @@ export default defineConfig(() => ({
     rscPrism({
       workerRuntime: {
         enabled: true,
-        entry: "todo.worker.tsx",
         servePath: "/todo.worker.js",
         outDir: ".vite/todo-worker-cache",
       },
