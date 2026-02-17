@@ -8,9 +8,9 @@ import { Suspense } from "react";
 import { RuntimeProvider, rsc } from "@lib/rsc-prism/react";
 import type { TabProps } from "../shared/types";
 import { SearchBox } from "../shared";
-import { MoviesRSCView } from "./worker-components";
+import { MovieList } from "./worker-components";
 
-const MoviesRSC = rsc(MoviesRSCView);
+const MoviesListRSC = rsc(MovieList);
 
 export default function RSCMoviesTab({ formState, onFormStateChange, api, devtools }: TabProps) {
   return (
@@ -42,7 +42,7 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
           }
         >
           <RuntimeProvider>
-            <MoviesRSC searchQuery={searchQuery} limit={limit} />
+            <MoviesListRSC searchQuery={searchQuery} limit={limit} />
           </RuntimeProvider>
         </Suspense>
       </div>

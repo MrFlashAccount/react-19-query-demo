@@ -58,7 +58,9 @@ async function MovieCard({ movie }: { movie: Movie }) {
   );
 }
 
-function MovieList({ movies }: { movies: Movie[] }) {
+export async function MovieList({ searchQuery, limit }: { searchQuery: string; limit: number }) {
+  const movies = await searchMovies(searchQuery, limit);
+
   if (movies.length === 0) {
     return (
       <div className="text-center py-12 md:py-20">
@@ -83,9 +85,4 @@ function MovieList({ movies }: { movies: Movie[] }) {
       </div>
     </div>
   );
-}
-
-export async function MoviesRSCView({ searchQuery, limit }: MoviesRSCViewProps) {
-  const movies = await searchMovies(searchQuery, limit);
-  return <MovieList movies={movies} />;
 }

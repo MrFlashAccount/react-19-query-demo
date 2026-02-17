@@ -247,17 +247,10 @@ describe("transport", () => {
       expect.objectContaining({
         type: "rsc.transport.response.next",
         id: "abc",
-        chunk: Uint8Array.from([10, 11]),
+        chunk: Uint8Array.from([10, 11, 12]),
       }),
     );
     expect(postMessage.mock.calls[2]?.[0]).toEqual(
-      expect.objectContaining({
-        type: "rsc.transport.response.next",
-        id: "abc",
-        chunk: Uint8Array.from([12]),
-      }),
-    );
-    expect(postMessage.mock.calls[3]?.[0]).toEqual(
       expect.objectContaining({
         type: "rsc.transport.response.done",
         id: "abc",

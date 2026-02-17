@@ -160,6 +160,7 @@ export interface WorkerTransportOptions {
 
 const DEFAULT_REQUEST_TYPE = "rsc.transport.request";
 const DEFAULT_RESPONSE_TYPE = "rsc.transport.response";
+const WORKER_STREAM_CHUNK_BATCH_BYTES = 32 * 1024;
 
 function responseHeadType(baseType: string): string {
   return `${baseType}.head`;
@@ -193,6 +194,20 @@ function transferListForChunk(chunk: Uint8Array): Transferable[] | undefined {
   const buffer = chunk.buffer;
   if (!(buffer instanceof ArrayBuffer)) return undefined;
   return [buffer];
+}
+
+function concatUint8Chunks(chunks: Uint8Array[], totalBytes: number): Uint8Array {
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+  const merged = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (let i = 0; i < chunks.length; i += 1) {
+    const chunk = chunks[i];
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged;
 }
 
 type WorkerResponseMessage =
@@ -513,18 +528,37 @@ export function createWorkerTransportMessageHandler(
       if (response.body != null) {
         const reader = response.body.getReader();
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const transfer = transferListForChunk(value);
+          const chunkBatch: Uint8Array[] = [];
+          let batchBytes = 0;
+          const flushBatch = (): void => {
+            if (chunkBatch.length === 0) {
+              return;
+            }
+            const chunk = concatUint8Chunks(chunkBatch, batchBytes);
+            const transfer = transferListForChunk(chunk);
             replyTarget.postMessage(
               {
                 type: responseNextType(responseType),
                 id: request.id,
-                chunk: value,
+                chunk,
               } satisfies WorkerTransportResponseNextMessage,
               transfer,
             );
+            chunkBatch.length = 0;
+            batchBytes = 0;
+          };
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              flushBatch();
+              break;
+            }
+            chunkBatch.push(value);
+            batchBytes += value.byteLength;
+            if (batchBytes >= WORKER_STREAM_CHUNK_BATCH_BYTES) {
+              flushBatch();
+            }
           }
         } finally {
           reader.releaseLock();
