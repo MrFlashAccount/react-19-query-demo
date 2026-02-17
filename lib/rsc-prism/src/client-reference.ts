@@ -33,11 +33,9 @@ export function clientRef<P = Record<string, unknown>>(
   moduleId: string,
   exportName: string,
 ): ClientReference<P> {
-  const reference = (() => null) as unknown as ClientReference<P> & { $$async?: boolean };
+  const reference = (() => null) as unknown as ClientReference<P>;
   reference.$$typeof = REACT_CLIENT_REFERENCE;
   reference.$$id = `${moduleId}#${exportName}`;
-  // Match server writer expectations for client references.
-  reference.$$async = false;
   return reference;
 }
 
@@ -119,13 +117,10 @@ export function createClientModule<M extends ComponentModule>(
   manifest: ClientManifest;
   refs: ClientReferences<Pick<M, (typeof exportNames)[number]>>;
 } {
-  const manifest: ClientManifest = {
-    [moduleId]: { id: moduleId, chunks: [], name: "*" },
-  };
-
-  for (const name of exportNames) {
-    manifest[`${moduleId}#${name}`] = { id: moduleId, chunks: [], name };
-  }
+  const hashIndex = moduleId.lastIndexOf("#");
+  const normalizedModuleId = hashIndex === -1 ? moduleId : moduleId.slice(0, hashIndex);
+  const slashIndex = normalizedModuleId.lastIndexOf("/");
+  const manifest: ClientManifest = slashIndex === -1 ? "/" : normalizedModuleId.slice(0, slashIndex + 1);
 
   const refs = createClientRefs<M>(moduleId, exportNames);
 

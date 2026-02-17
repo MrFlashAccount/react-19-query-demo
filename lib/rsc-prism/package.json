@@ -77,10 +77,6 @@
       "types": "./dist/vite.d.ts",
       "default": "./dist/vite.js"
     },
-    "./runtime/webpack-shim": {
-      "types": "./dist/runtime/webpack-shim.d.ts",
-      "default": "./dist/runtime/webpack-shim.js"
-    },
     "./runtime/module-registry": {
       "types": "./dist/runtime/module-registry.d.ts",
       "default": "./dist/runtime/module-registry.js"
@@ -110,15 +106,14 @@
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
-    "react-server-dom-webpack": "catalog:",
     "web-streams-polyfill": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
     "@typescript/native-preview": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
     "@vitest/browser-playwright": "4.0.9",
     "@vitest/coverage-istanbul": "4.0.9",
-    "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
@@ -126,10 +121,10 @@
     "playwright": "1.50.1",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "react-error-boundary": "6.1.1",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:",
-    "react-error-boundary": "6.1.1"
+    "vite": "catalog:"
   },
   "peerDependencies": {
     "react": "^19.0.0",

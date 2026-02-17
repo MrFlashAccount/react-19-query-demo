@@ -28,22 +28,15 @@ export default defineConfig(({ mode }) => ({
       { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
       { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
       { find: /^react-dom$/, replacement: reactDomServerEntry },
-      { find: "react-server-dom-webpack/server", replacement: "react-server-dom-webpack/server.browser" },
-      { find: "react-server-dom-webpack/client", replacement: "react-server-dom-webpack/client.browser" },
     ],
   },
   optimizeDeps: {
-    include: ["react-server-dom-webpack/client.browser", "web-streams-polyfill"],
+    include: ["web-streams-polyfill"],
     exclude: [
       "react",
       "react/jsx-runtime",
       "react/jsx-dev-runtime",
       "react-dom",
-      "react-server-dom-webpack",
-      "react-server-dom-webpack/client",
-      "react-server-dom-webpack/client.browser",
-      "react-server-dom-webpack/server",
-      "react-server-dom-webpack/server.browser",
     ],
   },
   test: {
@@ -59,7 +52,7 @@ export default defineConfig(({ mode }) => ({
     },
     server: {
       deps: {
-        inline: [/^react$/, /^react-dom$/, /^react-server-dom-webpack/],
+        inline: [/^react$/, /^react-dom$/],
       },
     },
     projects: [

@@ -19,8 +19,6 @@ export default defineConfig(() => ({
     rscPrism({
       workerRuntime: {
         enabled: true,
-        servePath: "/todo.worker.js",
-        outDir: ".vite/todo-worker-cache",
       },
     }),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }) as unknown as PluginOption,

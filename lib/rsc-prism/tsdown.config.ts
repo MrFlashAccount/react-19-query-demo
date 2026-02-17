@@ -15,7 +15,6 @@ export default defineConfig({
     "src/types.ts",
     "src/vite.ts",
     "src/runtime/module-registry.ts",
-    "src/runtime/webpack-shim.ts",
   ],
   outDir: "dist",
   format: "esm",
@@ -26,8 +25,6 @@ export default defineConfig({
   dts: false,
   external: [
     "react",
-    "react-server-dom-webpack",
-    /^react-server-dom-webpack\/.+$/,
     "@babel/parser",
     "vite",
     "web-streams-polyfill",
@@ -35,10 +32,5 @@ export default defineConfig({
     "fs/promises",
     /^@lib\//,
   ],
-  copy: [
-    {
-      from: "src/react-server-dom-webpack.d.ts",
-      to: "dist",
-    },
-  ],
+  copy: [],
 });

@@ -2,22 +2,14 @@
  * RSC client helpers.
  */
 
-import "./runtime/webpack-shim";
 import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
+import { createFromReadableStream, encodeReply } from "./flight-runtime/client";
+import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ComponentReference, EncodedActionArgs } from "./types";
 import { createFetchTransport, type RSCTransport } from "./transport";
-import * as ReactServerDomWebpackClient from "react-server-dom-webpack/client.browser";
-
-const { createFromReadableStream, encodeReply } = ReactServerDomWebpackClient as {
-  createFromReadableStream: <T>(
-    stream: ReadableStream<Uint8Array>,
-    options?: { callServer?: (actionId: string, args: unknown[]) => Promise<unknown> },
-  ) => Promise<T>;
-  encodeReply: (value: unknown) => Promise<FormData | string>;
-};
 
 const defaultFetchTransport = createFetchTransport();
 const MISSING_TRANSPORT_ERROR_MESSAGE =
@@ -203,9 +195,10 @@ export async function consumeRSC<T = unknown>(
   stream: ReadableStream<Uint8Array>,
   options?: ConsumeRSCOptions,
 ): Promise<T> {
+  const moduleBaseURL = resolveClientManifestOrThrow();
   return await createFromReadableStream<T>(
     stream,
-    options?.callServer ? { callServer: options.callServer } : {},
+    options?.callServer ? { moduleBaseURL, callServer: options.callServer } : { moduleBaseURL },
   );
 }
 

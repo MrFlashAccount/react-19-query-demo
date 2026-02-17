@@ -5,22 +5,22 @@
 import type { ReactNode, ComponentType } from "react";
 
 /**
- * Client manifest entry - describes a client component module
+ * ESM module reference identifier used by RSC.
+ * Format: <module-specifier>#<export-name>
  */
-export interface ClientManifestEntry {
-  /** Module identifier */
-  id: string;
-  /** Chunk files to load (empty for service worker - all pre-loaded) */
-  chunks: string[];
-  /** Export name (* for default/namespace) */
-  name: string;
-}
+export type RscModuleReferenceId = string;
 
 /**
- * Client manifest - maps module references to their metadata
- * Used by RSC to serialize client component references
+ * ESM server action identifier used by RSC.
+ * Format: <module-specifier>#<export-name>
  */
-export type ClientManifest = Record<string, ClientManifestEntry>;
+export type RscActionId = string;
+
+/**
+ * Client manifest in the ESM runtime.
+ * This is the module base URL used by React Flight to resolve client references.
+ */
+export type ClientManifest = string;
 
 /**
  * Encoded action arguments for transfer
@@ -57,7 +57,7 @@ export interface ServerActionEntry {
   /** Action function */
   fn: (...args: unknown[]) => unknown;
   /** Action ID */
-  id: string;
+  id: RscActionId;
 }
 
 /**

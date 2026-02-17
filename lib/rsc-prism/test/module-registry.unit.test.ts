@@ -1,6 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
-
-import { moduleCache } from "../src/runtime/webpack-shim";
+import { describe, expect, it } from "vitest";
 import {
   buildClientManifest,
   buildClientManifestFromModule,
@@ -12,21 +10,12 @@ import {
 } from "../src/runtime/module-registry";
 
 describe("module registry", () => {
-  beforeEach(() => {
-    for (const key of Object.keys(moduleCache)) {
-      delete moduleCache[key];
-    }
+  it("accepts module registration as a no-op in ESM mode", () => {
+    registerClientModule("/src/client.tsx", { Counter: () => "counter" });
+    expect(hasModule("/src/client.tsx")).toBe(true);
   });
 
-  it("registers and resolves client modules", () => {
-    const exports = { Counter: () => "counter" };
-    registerClientModule("client", exports);
-
-    expect(hasModule("client")).toBe(true);
-    expect(getModule("client")).toBe(exports);
-  });
-
-  it("registers multiple modules", () => {
+  it("accepts multi registration as a no-op in ESM mode", () => {
     registerClientModules({
       alpha: { one: 1 },
       beta: { two: 2 },
@@ -36,11 +25,11 @@ describe("module registry", () => {
     expect(hasModule("beta")).toBe(true);
   });
 
-  it("throws when requesting an unknown module", () => {
-    expect(() => getModule("missing")).toThrow('Module "missing" not registered');
+  it("throws when requesting sync module resolution in ESM mode", () => {
+    expect(() => getModule("missing")).toThrow("cannot be synchronously resolved in ESM mode");
   });
 
-  it("builds manifest from module names and exports", () => {
+  it("builds manifest base URL from module ids", () => {
     const manifest = buildClientManifest("client", ["Counter", "Button"]);
     const fromModule = buildClientManifestFromModule("client", {
       Counter: () => null,
@@ -48,18 +37,15 @@ describe("module registry", () => {
       constant: 1,
     });
 
-    expect(manifest["client#Counter"]).toEqual({ id: "client", chunks: [], name: "Counter" });
-    expect(manifest["client#Button"]).toEqual({ id: "client", chunks: [], name: "Button" });
-    expect(fromModule["client#Counter"]).toEqual({ id: "client", chunks: [], name: "Counter" });
-    expect(fromModule["client#constant"]).toBeUndefined();
+    expect(manifest).toBe("/");
+    expect(fromModule).toBe("/");
   });
 
-  it("merges manifests", () => {
-    const first = buildClientManifest("a", ["One"]);
-    const second = buildClientManifest("b", ["Two"]);
+  it("returns last non-empty manifest in merge", () => {
+    const first = "/a/";
+    const second = "/b/";
     const merged = mergeManifests(first, second);
 
-    expect(merged["a#One"]).toEqual({ id: "a", chunks: [], name: "One" });
-    expect(merged["b#Two"]).toEqual({ id: "b", chunks: [], name: "Two" });
+    expect(merged).toBe("/b/");
   });
 });

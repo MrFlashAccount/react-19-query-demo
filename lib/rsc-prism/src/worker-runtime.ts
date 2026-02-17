@@ -1,4 +1,3 @@
-import "./runtime/webpack-shim";
 import { createRSCHandler } from "./response";
 import {
   createWorkerTransportMessageHandler,

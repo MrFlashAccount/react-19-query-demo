@@ -391,14 +391,7 @@ export async function addTodoItem(title: string): Promise<TodoState[]> {
 
 export async function toggleTodoItem(id: string): Promise<TodoState[]> {
   return updateTodos((todos) =>
-    todos.map((todo) =>
-      todo.id === id
-        ? {
-            ...todo,
-            completed: !todo.completed,
-          }
-        : todo,
-    ),
+    todos.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)),
   );
 }
 
@@ -410,14 +403,7 @@ export async function renameTodoItem(id: string, title: string): Promise<TodoSta
   }
 
   return updateTodos((todos) =>
-    todos.map((todo) =>
-      todo.id === id
-        ? {
-            ...todo,
-            title: nextTitle,
-          }
-        : todo,
-    ),
+    todos.map((todo) => (todo.id === id ? { ...todo, title: nextTitle } : todo)),
   );
 }
 
@@ -432,9 +418,6 @@ export async function clearCompletedTodos(): Promise<TodoState[]> {
 export async function toggleAllTodos(): Promise<TodoState[]> {
   return updateTodos((todos) => {
     const shouldComplete = todos.some((todo) => !todo.completed);
-    return todos.map((todo) => ({
-      ...todo,
-      completed: shouldComplete,
-    }));
+    return todos.map((todo) => ({ ...todo, completed: shouldComplete }));
   });
 }

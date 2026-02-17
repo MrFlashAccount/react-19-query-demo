@@ -4,7 +4,8 @@
 
 export type {
   ClientManifest,
-  ClientManifestEntry,
+  RscModuleReferenceId,
+  RscActionId,
   EncodedActionArgs,
   ServerModule,
   RSCRenderOptions,

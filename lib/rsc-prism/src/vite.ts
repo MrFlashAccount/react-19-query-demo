@@ -1,5 +1,5 @@
 import path from "path";
-import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
+import { access, copyFile, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
 import { parse, type ParserPlugin } from "@babel/parser";
 import {
   createFilter,
@@ -11,11 +11,12 @@ import {
 } from "vite";
 import { build as viteBuild } from "vite";
 import react from "@vitejs/plugin-react";
-import { WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY } from "./runtime-globals";
+import { MAIN_THREAD_MODULES_GLOBAL_KEY, WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY } from "./runtime-globals";
 
 const DEFAULT_DIRECTIVES = ["use main", "use client"] as const;
 const DEFAULT_WORKER_DIRECTIVES = ["use worker"] as const;
 const WORKER_ACTION_DIRECTIVE = "use worker";
+const INTERNAL_WORKER_RUNTIME_ASSET_NAME = "rsc-prism-worker-runtime";
 const DEFAULT_MAIN_VIRTUAL_ID = "virtual:rsc-prism/main-thread-modules";
 const RESOLVED_MAIN_VIRTUAL_ID = "\0rsc-prism:main-thread-modules";
 const DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID = "virtual:rsc-prism/worker-bootstrap";
@@ -92,8 +93,6 @@ interface WorkerRuntimeModuleEntry extends MainThreadModuleEntry {
 export interface RscPrismWorkerRuntimeOptions {
   enabled?: boolean;
   endpoint?: string;
-  servePath?: string;
-  fileName?: string;
   outDir?: string;
   aliases?: NonNullable<UserConfig["resolve"]>["alias"];
 }
@@ -120,7 +119,7 @@ function isSupportedFile(absolutePath: string): boolean {
 function normalizeModuleId(absolutePath: string, config: ResolvedConfig): string {
   const relativePath = path.relative(config.root, absolutePath);
   if (!relativePath.startsWith("..") && !path.isAbsolute(relativePath)) {
-    return normalizePath(relativePath);
+    return `/${normalizePath(relativePath)}`;
   }
 
   return normalizePath(absolutePath);
@@ -482,18 +481,11 @@ function collectRuntimeExports(ast: ParsedFile, id: string): ParsedModuleExports
 
 function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleExports): string {
   const lines: string[] = [];
-  lines.push(
-    'import { registerAutoClientManifestEntry } from "@lib/rsc-prism/runtime/client-manifest";',
-  );
-  lines.push("");
   lines.push('const __rscPrismClientReferenceSymbol = Symbol.for("react.client.reference");');
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
-  lines.push(
-    "const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id, $$async: false });",
-  );
+  lines.push("const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id });");
   lines.push("");
   if (exportsInfo.hasDefault) {
-    lines.push('registerAutoClientManifestEntry(__rscPrismModuleId, "default");');
     lines.push(
       `const __rscPrismDefault = __rscPrismCreateClientRef(${JSON.stringify(`${moduleId}#default`)});`,
     );
@@ -501,7 +493,6 @@ function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleE
   }
   exportsInfo.named.forEach((name, index) => {
     const localName = `__rscPrismExport${index}`;
-    lines.push(`registerAutoClientManifestEntry(__rscPrismModuleId, ${JSON.stringify(name)});`);
     lines.push(
       `const ${localName} = __rscPrismCreateClientRef(${JSON.stringify(`${moduleId}#${name}`)});`,
     );
@@ -710,13 +701,19 @@ async function collectMainThreadModules(
 
 function buildMainVirtualModuleCode(modules: MainThreadModuleEntry[]): string {
   const lines: string[] = [];
-  lines.push('import { registerClientModule } from "@lib/rsc-prism/runtime/module-registry";');
+
+  lines.push("const __rscPrismGlobalState = globalThis;");
+  lines.push(
+    `const __rscPrismMainThreadModules = (__rscPrismGlobalState[${JSON.stringify(
+      MAIN_THREAD_MODULES_GLOBAL_KEY,
+    )}] ??= Object.create(null));`,
+  );
   lines.push("");
 
   modules.forEach((entry, index) => {
-    const importName = `__rscPrismModule${index}`;
+    const importName = `__rscPrismMainModule${index}`;
     lines.push(`import * as ${importName} from ${JSON.stringify(entry.importPath)};`);
-    lines.push(`registerClientModule(${JSON.stringify(entry.moduleId)}, ${importName});`);
+    lines.push(`__rscPrismMainThreadModules[${JSON.stringify(entry.moduleId)}] = ${importName};`);
   });
 
   lines.push("");
@@ -789,7 +786,6 @@ function buildWorkerComponentRegistryCode(modules: WorkerRuntimeModuleEntry[]): 
 
 function buildGeneratedWorkerEntryCode(endpoint: string): string {
   return `
-import "@lib/rsc-prism/runtime/webpack-shim";
 import { createRSCHandler } from "@lib/rsc-prism/response";
 import { createWorkerTransportMessageHandler } from "@lib/rsc-prism/transport";
 import { resolveWorkerComponent, workerActionModules } from "./worker-component-registry";
@@ -874,24 +870,54 @@ async function initializeWorkerRuntime() {
   const worker = new Worker(${JSON.stringify(servePath)}, { type: "module" });
   try {
     await new Promise((resolve, reject) => {
+      let settled = false;
       const timeout = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         cleanup();
         reject(new Error("Worker runtime failed to initialize."));
       }, 1500);
       const cleanup = () => {
         clearTimeout(timeout);
+        clearTimeout(fallbackReady);
         worker.removeEventListener("message", onMessage);
         worker.removeEventListener("error", onError);
       };
+      const fallbackReady = setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve(undefined);
+      }, 50);
       const onMessage = (event) => {
         if (event.data != null && event.data.type === "rsc.prism.worker.ready") {
+          if (settled) {
+            return;
+          }
+          settled = true;
           cleanup();
           resolve(undefined);
         }
       };
-      const onError = () => {
+      const onError = (event) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         cleanup();
-        reject(new Error("Worker runtime failed to initialize."));
+        const message =
+          event != null &&
+          typeof event === "object" &&
+          "message" in event &&
+          typeof event.message === "string" &&
+          event.message.length > 0
+            ? event.message
+            : "Worker runtime failed to initialize.";
+        reject(new Error(message));
       };
       worker.addEventListener("message", onMessage);
       worker.addEventListener("error", onError);
@@ -945,6 +971,23 @@ globalThis[__RSC_PRISM_BOOTSTRAP_GLOBAL_KEY] = bootstrapWorkerRuntime;
 `;
 }
 
+function trimLeadingSlash(value: string): string {
+  return value.replace(/^\/+/, "");
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function buildPublicPath(base: string, relativePath: string): string {
+  const normalizedRelative = trimLeadingSlash(relativePath);
+  const normalizedBase = trimTrailingSlash(base);
+  if (normalizedBase.length === 0) {
+    return `/${normalizedRelative}`;
+  }
+  return `${normalizedBase}/${normalizedRelative}`;
+}
+
 async function resolveNodeModuleFile(
   startDir: string,
   filePathFromNodeModules: string,
@@ -987,22 +1030,41 @@ async function collectJavaScriptFiles(directory: string): Promise<string[]> {
   return files;
 }
 
-async function pickWorkerServeFile(outDir: string): Promise<string> {
-  const directEntry = path.resolve(outDir, "rsc.worker.js");
-  try {
-    const entryStats = await stat(directEntry);
-    if (entryStats.size > 0) {
-      return directEntry;
-    }
-  } catch {
-    // fall through to scanning output files
-  }
+async function copyDirectoryContents(sourceDir: string, targetDir: string): Promise<void> {
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
 
+  for (const entry of entries) {
+    const sourcePath = path.resolve(sourceDir, entry.name);
+    const targetPath = path.resolve(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDirectoryContents(sourcePath, targetPath);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await copyFile(sourcePath, targetPath);
+  }
+}
+
+async function pickWorkerServeFile(outDir: string): Promise<string> {
   const jsFiles = await collectJavaScriptFiles(outDir);
   if (jsFiles.length === 0) {
     throw new Error(
       `[rsc-prism] Generated worker runtime output has no JavaScript files: ${outDir}`,
     );
+  }
+
+  const entryCandidates = jsFiles.filter((filePath) =>
+    path.basename(filePath).startsWith(`${INTERNAL_WORKER_RUNTIME_ASSET_NAME}-`),
+  );
+  if (entryCandidates.length > 0) {
+    return entryCandidates.sort((left, right) => left.localeCompare(right))[0]!;
   }
 
   const withSize = await Promise.all(
@@ -1023,6 +1085,20 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       '[rsc-prism] workerRuntime.entry has been removed. Delete "workerRuntime.entry" and rely on plugin-generated worker runtime from discovered "use worker" modules/actions.',
     );
   }
+  const legacyWorkerRuntimeServePath = (options.workerRuntime as { servePath?: unknown } | undefined)
+    ?.servePath;
+  if (options.mode === "main" && legacyWorkerRuntimeServePath != null) {
+    throw new Error(
+      '[rsc-prism] workerRuntime.servePath is now internal. Delete "workerRuntime.servePath" and rely on plugin-managed worker asset URLs.',
+    );
+  }
+  const legacyWorkerRuntimeFileName = (options.workerRuntime as { fileName?: unknown } | undefined)
+    ?.fileName;
+  if (options.mode === "main" && legacyWorkerRuntimeFileName != null) {
+    throw new Error(
+      '[rsc-prism] workerRuntime.fileName is now internal. Delete "workerRuntime.fileName" and rely on plugin-managed worker asset URLs.',
+    );
+  }
 
   const mainDirectives = new Set(options.directives ?? DEFAULT_DIRECTIVES);
   const workerDirectives = new Set(options.workerDirectives ?? DEFAULT_WORKER_DIRECTIVES);
@@ -1032,13 +1108,13 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     options.workerBootstrapVirtualId ?? DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID;
   const workerRuntimeEnabled = options.mode === "main" && options.workerRuntime?.enabled === true;
   const workerEndpoint = options.workerRuntime?.endpoint ?? "/rsc/view";
-  const workerServePath = options.workerRuntime?.servePath ?? "/rsc.worker.js";
-  const workerFileName = options.workerRuntime?.fileName ?? path.basename(workerServePath);
 
   let config: ResolvedConfig | null = null;
   const parsedDirectiveModules = new Map<string, ParsedDirectiveModule>();
   let generatedWorkerOutDir: string | null = null;
   let generatedWorkerServeFile: string | null = null;
+  let generatedWorkerServePublicPath: string | null = null;
+  let generatedWorkerServeSourceDir: string | null = null;
   let generatedWorkerEntryPath: string | null = null;
   let generatedWorkerRegistryPath: string | null = null;
   const workerActionDirectives = new Set([...workerDirectives, WORKER_ACTION_DIRECTIVE]);
@@ -1226,6 +1302,8 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     }
 
     generatedWorkerServeFile = null;
+    generatedWorkerServePublicPath = null;
+    generatedWorkerServeSourceDir = null;
     const reactServerEntry = await resolveNodeModuleFile(
       config.root,
       "react/react.react-server.js",
@@ -1257,22 +1335,14 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         write: true,
         outDir,
         emptyOutDir: true,
-        lib: {
-          entry: entryPath,
-          formats: ["iife"],
-          name: "RscPrismWorkerRuntime",
-          fileName: () => workerFileName,
-        },
         rollupOptions: {
+          input: entryPath,
           preserveEntrySignatures: "strict",
           treeshake: true,
           output: {
-            intro: [
-              "var __webpack_require__ = globalThis.__webpack_require__ || function(id) { return globalThis.__webpack_require__(id); };",
-              "var __webpack_chunk_load__ = globalThis.__webpack_chunk_load__ || function(id) { return globalThis.__webpack_chunk_load__(id); };",
-              "var __webpack_get_script_filename__ = globalThis.__webpack_get_script_filename__ || function(id) { return globalThis.__webpack_get_script_filename__(id); };",
-              "var __webpack_public_path__ = globalThis.__webpack_public_path__ || '/';",
-            ].join("\n"),
+            format: "es",
+            entryFileNames: `assets/${INTERNAL_WORKER_RUNTIME_ASSET_NAME}-[hash].js`,
+            chunkFileNames: "assets/[name]-[hash].js",
           },
         },
       },
@@ -1283,14 +1353,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           { find: /^react\/jsx-runtime$/, replacement: reactServerJsxRuntimeEntry },
           { find: /^react\/jsx-dev-runtime$/, replacement: reactServerJsxDevRuntimeEntry },
           { find: /^react-dom$/, replacement: reactDomServerEntry },
-          {
-            find: "react-server-dom-webpack/server",
-            replacement: "react-server-dom-webpack/server.browser",
-          },
-          {
-            find: "react-server-dom-webpack/client",
-            replacement: "react-server-dom-webpack/client.browser",
-          },
         ],
         conditions: dedupeItems([mode, "react-server", "browser", "import", "default"]),
       },
@@ -1300,17 +1362,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         enableNativePlugin: false,
       },
     });
-    const preferredWorkerServeFile = path.resolve(outDir, workerFileName);
-    try {
-      const preferredStats = await stat(preferredWorkerServeFile);
-      if (preferredStats.size > 0) {
-        generatedWorkerServeFile = preferredWorkerServeFile;
-        return;
-      }
-    } catch {
-      // Fall back to scanning output in case Vite rewrites the output name.
-    }
     generatedWorkerServeFile = await pickWorkerServeFile(outDir);
+    const workerRelativePath = normalizePath(path.relative(outDir, generatedWorkerServeFile));
+    generatedWorkerServeSourceDir = normalizePath(path.posix.dirname(workerRelativePath));
+    generatedWorkerServePublicPath = buildPublicPath(config.base, workerRelativePath);
   };
 
   return {
@@ -1323,8 +1378,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       if (options.mode === "main" && name !== "worker") {
         const excludeDeps = dedupeItems([
           ...toArray(userConfig.optimizeDeps?.exclude),
-          "react-server-dom-webpack/server",
-          "react-server-dom-webpack/server.browser",
         ]);
 
         return {
@@ -1343,16 +1396,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
 
       const aliases: NonNullable<UserConfig["resolve"]>["alias"] extends infer T
         ? Exclude<T, undefined>
-        : never = [
-        {
-          find: "react-server-dom-webpack/server",
-          replacement: "react-server-dom-webpack/server.browser",
-        },
-        {
-          find: "react-server-dom-webpack/client",
-          replacement: "react-server-dom-webpack/client.browser",
-        },
-      ];
+        : never = [];
 
       const excludeDeps = dedupeItems([
         ...toArray(userConfig.optimizeDeps?.exclude),
@@ -1360,10 +1404,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
         "react-dom",
-        "react-server-dom-webpack/server",
-        "react-server-dom-webpack/server.browser",
-        "react-server-dom-webpack/client",
-        "react-server-dom-webpack/client.browser",
       ]);
 
       return {
@@ -1397,45 +1437,59 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       }
       await buildGeneratedWorkerRuntime(config.mode);
     },
-    transformIndexHtml(html) {
-      if (options.mode !== "main") {
-        return undefined;
-      }
+    transformIndexHtml: {
+      order: "pre",
+      handler(html) {
+        if (options.mode !== "main") {
+          return undefined;
+        }
 
-      if (html.includes(virtualId) || html.includes(RESOLVED_MAIN_VIRTUAL_ID)) {
-        return undefined;
-      }
+        const mainVirtualSrc = `/@id/${virtualId}`;
+        const workerBootstrapSrc = `/@id/${workerBootstrapVirtualId}`;
 
-      const tags: Array<{
-        tag: string;
-        attrs: Record<string, string>;
-        injectTo: "head-prepend";
-      }> = [
-        {
-          tag: "script",
-          attrs: {
-            type: "module",
-            src: `/@id/${virtualId}`,
+        if (
+          html.includes(virtualId) ||
+          html.includes(RESOLVED_MAIN_VIRTUAL_ID) ||
+          html.includes(mainVirtualSrc)
+        ) {
+          return undefined;
+        }
+
+        const tags: Array<{
+          tag: string;
+          attrs: Record<string, string>;
+          injectTo: "head-prepend";
+        }> = [
+          {
+            tag: "script",
+            attrs: {
+              type: "module",
+              src: mainVirtualSrc,
+            },
+            injectTo: "head-prepend",
           },
-          injectTo: "head-prepend",
-        },
-      ];
+        ];
 
-      if (workerRuntimeEnabled && !html.includes(workerBootstrapVirtualId)) {
-        tags.push({
-          tag: "script",
-          attrs: {
-            type: "module",
-            src: `/@id/${workerBootstrapVirtualId}`,
-          },
-          injectTo: "head-prepend",
-        });
-      }
+        if (
+          workerRuntimeEnabled &&
+          !html.includes(workerBootstrapVirtualId) &&
+          !html.includes(workerBootstrapSrc)
+        ) {
+          tags.push({
+            tag: "script",
+            attrs: {
+              type: "module",
+              src: workerBootstrapSrc,
+            },
+            injectTo: "head-prepend",
+          });
+        }
 
-      return {
-        html,
-        tags,
-      };
+        return {
+          html,
+          tags,
+        };
+      },
     },
     async resolveId(id, importer) {
       if (options.mode === "main" && id === virtualId) {
@@ -1537,7 +1591,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           workerRuntimeEnabled &&
           id === RESOLVED_WORKER_BOOTSTRAP_VIRTUAL_ID
         ) {
-          return buildWorkerBootstrapCode(workerServePath);
+          const fallbackWorkerPath = buildPublicPath(
+            config?.base ?? "/",
+            `assets/${INTERNAL_WORKER_RUNTIME_ASSET_NAME}.js`,
+          );
+          return buildWorkerBootstrapCode(generatedWorkerServePublicPath ?? fallbackWorkerPath);
         }
         return null;
       }
@@ -1558,20 +1616,31 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       if (!workerRuntimeEnabled) {
         return;
       }
-      const workerServeDir = workerServePath.slice(0, workerServePath.lastIndexOf("/"));
       server.middlewares.use(async (req, res, next) => {
-        if (generatedWorkerOutDir == null) {
+        if (
+          generatedWorkerOutDir == null ||
+          generatedWorkerServePublicPath == null ||
+          generatedWorkerServeSourceDir == null
+        ) {
           next();
           return;
         }
 
         const requestPath = (req.url ?? "").split("?", 1)[0]!;
         let targetFile: string | null = null;
-        if (requestPath === workerServePath && generatedWorkerServeFile != null) {
+        if (requestPath === generatedWorkerServePublicPath && generatedWorkerServeFile != null) {
           targetFile = generatedWorkerServeFile;
-        } else if (workerServeDir.length > 0 && requestPath.startsWith(`${workerServeDir}/`)) {
-          const relative = requestPath.slice(workerServeDir.length + 1);
-          targetFile = path.resolve(generatedWorkerOutDir, relative);
+        } else {
+          const workerServeDir = path.posix.dirname(generatedWorkerServePublicPath);
+          const normalizedWorkerServeDir =
+            workerServeDir.length > 1 ? trimTrailingSlash(workerServeDir) : workerServeDir;
+          if (
+            normalizedWorkerServeDir.length > 0 &&
+            requestPath.startsWith(`${normalizedWorkerServeDir}/`)
+          ) {
+            const relative = requestPath.slice(normalizedWorkerServeDir.length + 1);
+            targetFile = path.resolve(generatedWorkerOutDir, generatedWorkerServeSourceDir, relative);
+          }
         }
 
         if (targetFile == null) {
@@ -1589,6 +1658,27 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           next();
         }
       });
+    },
+    async closeBundle() {
+      if (!workerRuntimeEnabled || config == null || config.command !== "build") {
+        return;
+      }
+      if (
+        generatedWorkerOutDir == null ||
+        generatedWorkerServePublicPath == null ||
+        generatedWorkerServeSourceDir == null
+      ) {
+        return;
+      }
+
+      const outDir = path.resolve(config.root, config.build.outDir);
+      const serveDirectory = path.posix.dirname(generatedWorkerServePublicPath);
+      const relativeServeDirectory =
+        serveDirectory === "/" ? "" : serveDirectory.replace(/^\/+/, "");
+      const workerTargetDir = path.resolve(outDir, relativeServeDirectory);
+      const workerSourceDir = path.resolve(generatedWorkerOutDir, generatedWorkerServeSourceDir);
+
+      await copyDirectoryContents(workerSourceDir, workerTargetDir);
     },
     transform(code, id) {
       if (!shouldProcessFile(id)) {

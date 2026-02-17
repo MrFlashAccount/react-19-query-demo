@@ -4,33 +4,14 @@
  * Provides utilities for rendering React Server Components
  * and handling server actions within a service worker.
  *
- * IMPORTANT: Import webpack-shim before this module:
- * ```ts
- * import './rsc/webpack-shim';
- * import { renderRSC } from './rsc/server';
- * ```
  */
 
 import type { ReactNode } from "react";
-import "./runtime/webpack-shim";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
-import * as ReactServerDomWebpackServer from "react-server-dom-webpack/server.browser";
+import { decodeReply, registerServerReference, renderToReadableStream } from "./flight-runtime/server";
+import { createClientModuleProxy } from "./flight-runtime/references";
 
-const { createClientModuleProxy, decodeReply, registerServerReference, renderToReadableStream } =
-  ReactServerDomWebpackServer as unknown as {
-    createClientModuleProxy: (moduleId: string) => unknown;
-    decodeReply: (body: FormData | string, options: Record<string, unknown>) => Promise<unknown>;
-    registerServerReference: <T>(fn: T, id: string, name: string) => T;
-    renderToReadableStream: (
-      element: ReactNode,
-      manifest: ClientManifest,
-      options: {
-        onError?: ((error: unknown) => string | void) | undefined;
-        signal?: AbortSignal | undefined;
-      },
-    ) => Promise<ReadableStream<Uint8Array>>;
-  };
 
 /**
  * Create an RSC context for rendering
@@ -161,7 +142,8 @@ export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unkn
     body = encoded.data;
   }
 
-  const decoded = await decodeReply(body, {});
+  const manifest = resolveClientManifestOrThrow();
+  const decoded = await decodeReply(body, manifest, {});
   return Array.isArray(decoded) ? decoded : [decoded];
 }
 
@@ -193,6 +175,7 @@ export async function handleAction(
 
   return renderToReadableStream(result as ReactNode, ctx.manifest, {
     onError: options?.onError,
+    signal: options?.signal,
   });
 }
 
@@ -259,12 +242,8 @@ export async function createRSC<TComponents extends Record<string, unknown>>(
   config: CreateRSCConfig<TComponents>,
 ): Promise<CreateRSCResult<TComponents>> {
   // Build manifest from component names
-  const manifest: ClientManifest = {
-    [config.moduleId]: { id: config.moduleId, chunks: [], name: "*" },
-  };
-  for (const name of config.components) {
-    manifest[`${config.moduleId}#${name}`] = { id: config.moduleId, chunks: [], name };
-  }
+  const slashIndex = config.moduleId.lastIndexOf("/");
+  const manifest: ClientManifest = slashIndex === -1 ? "/" : config.moduleId.slice(0, slashIndex + 1);
 
   // Create context
   const ctx = createRSCContext(manifest);

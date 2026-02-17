@@ -9,6 +9,22 @@ This package focuses on:
 - Client/server action wiring for browser runtimes
 - Vite transforms for `"use main"` / `"use client"` module proxying
 
+## Breaking Changes (ESM-only runtime)
+
+`rsc-prism` now uses an ESM-only RSC binding path.
+
+- Removed webpack runtime shims and webpack cache/module registration behavior.
+- Removed `react-server-dom-webpack` integration from runtime and plugin wiring.
+- Client reference IDs are now normalized as ESM specifier IDs (for project files this is root-relative, e.g. `/src/file.tsx#Export`).
+- Internal client manifest behavior now uses ESM base URL semantics.
+- `./runtime/webpack-shim` export is removed.
+
+Migration notes:
+
+1. Stop importing any webpack shim/runtime helpers from `rsc-prism`.
+2. Ensure your worker/main modules use plugin-generated references (`"use main"`, `"use client"`, `"use worker"`).
+3. Keep browser-runtime tests as the source of truth for stream and action behavior.
+
 ## Ultra-Small Use Cases for Auto Testing
 
 The following micro apps are intentionally TodoMVC-scale (or smaller), deterministic, and suitable for automated tests.
@@ -105,4 +121,4 @@ const tree = await fetchRSC("/rsc/view");
 await callAction(increment, []);
 ```
 
-`workerRuntime.entry` is no longer supported; the plugin owns worker runtime generation and virtual bootstrap internals.
+`workerRuntime.entry`, `workerRuntime.servePath`, and `workerRuntime.fileName` are no longer supported; the plugin owns worker runtime generation, hashed asset naming, and virtual bootstrap internals.

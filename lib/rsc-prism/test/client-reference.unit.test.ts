@@ -27,8 +27,7 @@ describe("client-reference", () => {
       ["Counter"],
     );
 
-    expect(manifest.client).toEqual({ id: "client", chunks: [], name: "*" });
-    expect(manifest["client#Counter"]).toEqual({ id: "client", chunks: [], name: "Counter" });
+    expect(manifest).toEqual("/");
     expect(refs.Counter.$$id).toBe("client#Counter");
   });
 });

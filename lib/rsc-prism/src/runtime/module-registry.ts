@@ -1,30 +1,16 @@
 /**
- * Module Registry - Client Component Registration
+ * ESM module registry helpers.
  *
- * Registers client component modules in the webpack cache
- * so RSC can resolve client references during hydration.
- *
- * IMPORTANT: Import webpack-shim before this module:
- * ```ts
- * import './rsc/webpack-shim';
- * import { registerClientModule } from './rsc/module-registry';
- * ```
+ * In ESM mode React Flight resolves client references through `import(specifier)`.
+ * We only keep lightweight helpers to normalize module ids and derive base URLs.
  */
-
-import { moduleCache } from "./webpack-shim";
 import type { ClientManifest } from "../types";
 
 /**
- * Register a client module in the webpack cache
- *
- * @example
- * ```ts
- * import * as ClientComponents from './components';
- * registerClientModule('client', ClientComponents);
- * ```
+ * Legacy compatibility no-op.
  */
-export function registerClientModule(moduleId: string, moduleExports: unknown): void {
-  moduleCache[moduleId] = { exports: moduleExports };
+export function registerClientModule(_moduleId: string, _moduleExports: unknown): void {
+  // No-op in ESM mode.
 }
 
 /**
@@ -38,55 +24,33 @@ export function registerClientModule(moduleId: string, moduleExports: unknown): 
  * });
  * ```
  */
-export function registerClientModules(modules: Record<string, unknown>): void {
-  for (const [id, exports] of Object.entries(modules)) {
-    registerClientModule(id, exports);
-  }
+export function registerClientModules(_modules: Record<string, unknown>): void {
+  // No-op in ESM mode.
 }
 
 /**
  * Check if a module is registered
  */
 export function hasModule(moduleId: string): boolean {
-  return moduleId in moduleCache;
+  return moduleId.length > 0;
 }
 
 /**
  * Get a registered module (throws if not found)
  */
 export function getModule<T = unknown>(moduleId: string): T {
-  const cached = moduleCache[moduleId];
-  if (!cached) {
-    throw new Error(`Module "${moduleId}" not registered`);
-  }
-  return cached.exports as T;
+  throw new Error(
+    `Module "${moduleId}" cannot be synchronously resolved in ESM mode. Use dynamic import via React Flight resolution.`,
+  );
 }
 
 /**
- * Build a client manifest from export names
- *
- * @example
- * ```ts
- * const manifest = buildClientManifest('client', ['Counter', 'Button', 'Form']);
- * // Result:
- * // {
- * //   'client': { id: 'client', chunks: [], name: '*' },
- * //   'client#Counter': { id: 'client', chunks: [], name: 'Counter' },
- * //   'client#Button': { id: 'client', chunks: [], name: 'Button' },
- * //   'client#Form': { id: 'client', chunks: [], name: 'Form' },
- * // }
- * ```
+ * Build an ESM manifest base URL from a module id.
  */
-export function buildClientManifest(moduleId: string, exportNames: string[]): ClientManifest {
-  const manifest: ClientManifest = {
-    [moduleId]: { id: moduleId, chunks: [], name: "*" },
-  };
-
-  for (const name of exportNames) {
-    manifest[`${moduleId}#${name}`] = { id: moduleId, chunks: [], name };
-  }
-
-  return manifest;
+export function buildClientManifest(moduleId: string, _exportNames: string[]): ClientManifest {
+  const normalizedModuleId = moduleId.split("#", 1)[0]!;
+  const slashIndex = normalizedModuleId.lastIndexOf("/");
+  return slashIndex === -1 ? "/" : normalizedModuleId.slice(0, slashIndex + 1);
 }
 
 /**
@@ -100,19 +64,16 @@ export function buildClientManifest(moduleId: string, exportNames: string[]): Cl
  */
 export function buildClientManifestFromModule(
   moduleId: string,
-  moduleExports: Record<string, unknown>,
+  _moduleExports: Record<string, unknown>,
 ): ClientManifest {
-  const exportNames = Object.keys(moduleExports).filter(
-    (key) => typeof moduleExports[key] === "function",
-  );
-  return buildClientManifest(moduleId, exportNames);
+  return buildClientManifest(moduleId, []);
 }
 
 /**
  * Merge multiple manifests into one
  */
 export function mergeManifests(...manifests: ClientManifest[]): ClientManifest {
-  return Object.assign({}, ...manifests);
+  return manifests.findLast((manifest) => manifest.length > 0) ?? "/";
 }
 
 // Re-export types

@@ -1,4 +1,12 @@
-import { invalidateRSC } from "./react";
+import { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
+
+function invalidateRSC(): void {
+  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+  const invalidate = globalState[INVALIDATE_RSC_GLOBAL_KEY];
+  if (typeof invalidate === "function") {
+    invalidate();
+  }
+}
 
 export interface SendActionInput {
   endpoint: string;

@@ -62,10 +62,10 @@ export const Button = () => null;
     const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('Symbol.for("react.client.reference")');
-    expect(transformedCode).toContain('__rscPrismModuleId = "src/client-components.tsx"');
-    expect(transformedCode).toContain('"src/client-components.tsx#Counter"');
-    expect(transformedCode).toContain('"src/client-components.tsx#Button"');
-    expect(transformedCode).toContain('"src/client-components.tsx#default"');
+    expect(transformedCode).toContain('__rscPrismModuleId = "/src/client-components.tsx"');
+    expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
+    expect(transformedCode).toContain('"/src/client-components.tsx#Button"');
+    expect(transformedCode).toContain('"/src/client-components.tsx#default"');
   });
 
   it("transforms use client modules in worker mode", async () => {
@@ -82,7 +82,7 @@ export function Counter() { return null; }
     const transformed = await callHook(plugin.transform, undefined, source, id);
     const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain('"src/client-components.tsx#Counter"');
+    expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
   });
 
   it("does not transform use worker modules in worker mode", async () => {
@@ -136,7 +136,7 @@ export function Counter() { return null; }
     const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('Symbol.for("react.client.reference")');
-    expect(transformedCode).toContain('"src/client-components.tsx#Counter"');
+    expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
   });
 
   it("leaves non-directive modules unchanged in worker mode", async () => {
@@ -207,7 +207,7 @@ export function A() { return null; }
     const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:main-thread-modules");
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
 
-    expect(loadedCode).toContain('import { registerClientModule } from "@lib/rsc-prism/runtime/module-registry"');
+    expect(loadedCode).not.toContain("@lib/rsc-prism/runtime/module-registry");
     expect(loadedCode).toContain("src/client-a.tsx");
     expect(loadedCode).not.toContain("src/non-client.tsx");
   });
@@ -249,7 +249,6 @@ export function A() { return null; }
     const plugin = rscPrism({
       workerRuntime: {
         enabled: true,
-        servePath: "/todo.worker.js",
       },
     });
     const root = "/virtual/project";
@@ -267,7 +266,7 @@ export function A() { return null; }
     const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:worker-bootstrap");
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
     expect(loadedCode).toContain("export async function bootstrapWorkerRuntime()");
-    expect(loadedCode).toContain('new Worker("/todo.worker.js", { type: "module" })');
+    expect(loadedCode).toContain('new Worker("/assets/rsc-prism-worker-runtime');
     expect(loadedCode).toContain('import { createWorkerTransport } from "@lib/rsc-prism/transport";');
     expect(loadedCode).toContain("createWorkerTransport");
     expect(loadedCode).toContain("dispose()");
@@ -286,6 +285,28 @@ export function A() { return null; }
         } as any,
       }),
     ).toThrow("workerRuntime.entry has been removed");
+  });
+
+  it("throws when workerRuntime.servePath is provided", () => {
+    expect(() =>
+      rscPrism({
+        workerRuntime: {
+          enabled: true,
+          servePath: "/todo.worker.js",
+        } as any,
+      }),
+    ).toThrow("workerRuntime.servePath is now internal");
+  });
+
+  it("throws when workerRuntime.fileName is provided", () => {
+    expect(() =>
+      rscPrism({
+        workerRuntime: {
+          enabled: true,
+          fileName: "todo.worker.js",
+        } as any,
+      }),
+    ).toThrow("workerRuntime.fileName is now internal");
   });
 
   it("skips worker runtime rebuild for irrelevant hot updates", async () => {
@@ -347,20 +368,13 @@ export function A() { return null; }
     expect(resolveConfig?.conditions).toContain("react-server");
     expect(resolveConfig?.conditions).toContain("development");
     expect(resolveConfig?.conditions).toContain("browser");
-    expect(resolveConfig?.alias).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ find: "react-server-dom-webpack/server" }),
-        expect.objectContaining({ find: "react-server-dom-webpack/client" }),
-      ]),
-    );
+    expect(resolveConfig?.alias).toEqual([]);
     expect(configured?.optimizeDeps?.exclude).toEqual(
       expect.arrayContaining([
         "react",
         "react/jsx-runtime",
         "react/jsx-dev-runtime",
         "react-dom",
-        "react-server-dom-webpack/server.browser",
-        "react-server-dom-webpack/client.browser",
       ]),
     );
   });
@@ -376,7 +390,7 @@ export function A() { return null; }
     );
     expect(configured).toBeDefined();
     expect(configured?.resolve).toBeUndefined();
-    expect(configured?.optimizeDeps?.exclude).toContain("react-server-dom-webpack/server.browser");
+    expect(configured?.optimizeDeps?.exclude).toEqual([]);
   });
 
   it("redirects worker imports of use main modules to proxy virtual modules", async () => {
@@ -418,7 +432,7 @@ export function TodoComposer() { return null; }
 
     expect(loadedCode).toContain('Symbol.for("react.client.reference")');
     expect(loadedCode).toContain("$$id");
-    expect(loadedCode).toContain('"src/client-components.tsx#TodoComposer"');
+    expect(loadedCode).toContain('"/src/client-components.tsx#TodoComposer"');
   });
 
   it("does not redirect worker imports of use worker modules", async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { fetchRSC } from "./client";
 import type { ComponentReference } from "./types";
-import console from "console";
+import { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
 
 const $$invalidations = new Set<() => void>();
 export function invalidateRSC() {
@@ -13,6 +13,8 @@ export function invalidateRSC() {
     }
   }
 }
+
+(globalThis as typeof globalThis & Record<string, unknown>)[INVALIDATE_RSC_GLOBAL_KEY] = invalidateRSC;
 
 export type RSCLoaderProps<Props = unknown> = Props & {
   /**

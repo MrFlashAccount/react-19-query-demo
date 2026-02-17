@@ -1,6 +1,7 @@
-import type { ClientManifest, ClientManifestEntry } from "../types";
+import type { ClientManifest } from "../types";
 
 const CLIENT_MANIFEST_GLOBAL_KEY = "__RSC_PRISM_CLIENT_MANIFEST__";
+const DEFAULT_CLIENT_MANIFEST_BASE_URL = "/";
 
 type GlobalWithClientManifest = typeof globalThis & {
   __RSC_PRISM_CLIENT_MANIFEST__?: ClientManifest;
@@ -21,28 +22,18 @@ export function ensureAutoClientManifest(): ClientManifest {
     return existing;
   }
 
-  const manifest: ClientManifest = {};
+  const manifest: ClientManifest = DEFAULT_CLIENT_MANIFEST_BASE_URL;
   store[CLIENT_MANIFEST_GLOBAL_KEY] = manifest;
   return manifest;
 }
 
-export function registerAutoClientManifestEntry(moduleId: string, name: string = "*"): void {
-  const manifest = ensureAutoClientManifest();
+export function setAutoClientManifest(baseURL: ClientManifest): void {
+  getManifestStore()[CLIENT_MANIFEST_GLOBAL_KEY] = baseURL;
+}
 
-  const moduleEntry: ClientManifestEntry = {
-    id: moduleId,
-    chunks: [],
-    name: "*",
-  };
-  manifest[moduleId] = moduleEntry;
-
-  if (name !== "*") {
-    manifest[`${moduleId}#${name}`] = {
-      id: moduleId,
-      chunks: [],
-      name,
-    };
-  }
+export function registerAutoClientManifestEntry(_moduleId: string, _name: string = "*"): void {
+  // Kept for compatibility with generated code. ESM Flight only needs the base URL.
+  ensureAutoClientManifest();
 }
 
 export function resolveClientManifestOrThrow(manifest?: ClientManifest): ClientManifest {
@@ -51,13 +42,11 @@ export function resolveClientManifestOrThrow(manifest?: ClientManifest): ClientM
   }
 
   const autoManifest = getAutoClientManifest();
-  if (autoManifest != null && Object.keys(autoManifest).length > 0) {
+  if (typeof autoManifest === "string" && autoManifest.length > 0) {
     return autoManifest;
   }
 
-  throw new Error(
-    'Client manifest is required. Pass a manifest explicitly or use @lib/rsc-prism/vite with mode:"worker" for "use main"/"use client" modules.',
-  );
+  return DEFAULT_CLIENT_MANIFEST_BASE_URL;
 }
 
 declare global {

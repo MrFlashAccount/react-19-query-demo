@@ -4,5 +4,12 @@
     "composite": false,
     "types": ["vite/client"]
   },
-  "include": ["./**/*.ts", "./**/*.tsx", "../../../src/**/*.ts", "../../../src/**/*.tsx"]
+  "include": [
+    "./src/**/*.ts",
+    "./src/**/*.tsx",
+    "./tests/**/*.ts",
+    "./tests/**/*.tsx",
+    "../../../src/**/*.ts",
+    "../../../src/**/*.tsx"
+  ]
 }

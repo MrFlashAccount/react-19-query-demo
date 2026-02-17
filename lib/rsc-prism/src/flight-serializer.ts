@@ -1,19 +1,15 @@
 /**
- * Flight serializer helpers backed by react-server-dom-webpack.
- *
- * This module intentionally delegates wire-format generation to React's
- * renderer instead of implementing protocol framing locally.
+ * Flight serializer helpers backed by the internal runtime.
  */
 
-import "./runtime/webpack-shim";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 
 import type { ReactNode } from "react";
-import { registerServerReference, renderToReadableStream } from "react-server-dom-webpack/server.browser";
+import { registerServerReference, renderToReadableStream } from "./flight-runtime/server";
+import { annotateServerReference as annotateRuntimeServerReference } from "./flight-runtime/references";
 import { polyfillReady } from "./polyfill";
 import type { ClientManifest } from "./types";
 
-const REACT_SERVER_REFERENCE = Symbol.for("react.server.reference");
 const DEFAULT_SERVER_ACTION_REGISTRY_LIMIT = 1024;
 
 type ServerActionFn = (...args: unknown[]) => unknown;
@@ -21,15 +17,7 @@ const serverActions = new Map<string, ServerActionFn>();
 let serverActionRegistryLimit = DEFAULT_SERVER_ACTION_REGISTRY_LIMIT;
 
 function annotateServerReference<T extends (...args: any[]) => any>(id: string, fn: T): T {
-  const ref = fn as T & {
-    $$typeof?: symbol;
-    $$id?: string;
-    $$bound?: null;
-  };
-  ref.$$typeof = REACT_SERVER_REFERENCE;
-  ref.$$id = id;
-  ref.$$bound = null;
-  return ref;
+  return annotateRuntimeServerReference(fn, id);
 }
 
 function normalizeHeaders(init?: HeadersInit): Headers {
@@ -41,27 +29,7 @@ function normalizeHeaders(init?: HeadersInit): Headers {
 }
 
 function looksLikeClientManifest(value: unknown): value is ClientManifest {
-  if (typeof value !== "object" || value == null || Array.isArray(value)) {
-    return false;
-  }
-
-  const entries = Object.values(value as Record<string, unknown>);
-  if (entries.length === 0) {
-    return false;
-  }
-
-  return entries.every((entry) => {
-    if (typeof entry !== "object" || entry == null || Array.isArray(entry)) {
-      return false;
-    }
-
-    const manifestEntry = entry as { id?: unknown; chunks?: unknown; name?: unknown };
-    return (
-      typeof manifestEntry.id === "string" &&
-      Array.isArray(manifestEntry.chunks) &&
-      typeof manifestEntry.name === "string"
-    );
-  });
+  return typeof value === "string";
 }
 
 async function renderFlight(

@@ -2,7 +2,7 @@
  * Client-only RSC utilities for main thread
  *
  * This module can be safely imported on the main thread without pulling in
- * react-server-dom-webpack/server which requires the react-server condition.
+ * server-only RSC bindings.
  */
 
 // Client utilities (fetch/consume RSC)
