@@ -31,12 +31,10 @@ const runtime = (() => {
 function App() {
   const [filter, setFilterState] = useState<TodoFilter>(parseFilterFromLocation);
   const [isPending, startTransition] = useTransition();
-  const [refreshCount, setRefreshCount] = useState(0);
 
   const refresh = () => {
     startTransition(() => {
       setFilterState(parseFilterFromLocation());
-      setRefreshCount((count) => count + 1);
     });
   };
 
@@ -114,8 +112,7 @@ function App() {
                 </section>
               }
             >
-              {/* @ts-expect-error - __refreshCount is a workaround to force a refresh of the RSC component */}
-              <TodoViewRSC filter={filter} __refreshCount={refreshCount} />
+              <TodoViewRSC filter={filter} />
             </Suspense>
           </ErrorBoundary>
         </main>

@@ -22,11 +22,18 @@ export function RSCTransportProvider({
   return <RSCTransportContext.Provider value={transport}>{children}</RSCTransportContext.Provider>;
 }
 
+export type RSCLoaderProps<Props = unknown> = Props & {
+  /**
+   * A key that will be used to invalidate the RSC component.
+   */
+  $refreshKey?: any;
+};
+
 export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
   let __cacheKey: string | undefined;
   let __cachePromise: Promise<React.ReactNode> | undefined;
 
-  return function RSCLoader(props: Props) {
+  return function RSCLoader(props: RSCLoaderProps<Props>) {
     const transport = use(RSCTransportContext);
     const key = JSON.stringify(props);
     const [, $$refresh] = useState({});
