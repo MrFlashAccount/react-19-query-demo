@@ -33,8 +33,10 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   return typeof value === "object" && value != null && "then" in value;
 }
 
+const TEXT_ENCODER = new TextEncoder();
+
 function encodeFlightRow(id: number, value: unknown): Uint8Array {
-  return new TextEncoder().encode(`${id}:${JSON.stringify(value)}\n`);
+  return TEXT_ENCODER.encode(`${id}:${JSON.stringify(value)}\n`);
 }
 
 interface EncodeContext {
@@ -43,25 +45,33 @@ interface EncodeContext {
   emitRow: (id: number, value: unknown) => void;
 }
 
-async function encodeServerNode(value: unknown, context: EncodeContext): Promise<unknown> {
+function encodeServerNode(value: unknown, context: EncodeContext): unknown | Promise<unknown> {
   if (isThenable(value)) {
     const rowId = context.allocateRowId();
     context.queueDeferred(
-      (async () => {
-        const resolved = await value;
-        const encoded = await encodeServerNode(resolved, context);
-        context.emitRow(rowId, encoded);
-      })(),
+      Promise.resolve(value).then((resolved) =>
+        Promise.resolve(encodeServerNode(resolved, context)).then((encoded) => {
+          context.emitRow(rowId, encoded);
+        }),
+      ),
     );
     return { $t: "rowRef", id: rowId };
   }
 
   if (Array.isArray(value)) {
-    const encodedItems: unknown[] = [];
-    for (const item of value) {
-      encodedItems.push(await encodeServerNode(item, context));
+    const encodedItems = new Array<unknown>(value.length);
+    let asyncFound = false;
+    for (let i = 0; i < value.length; i += 1) {
+      const encodedItem = encodeServerNode(value[i], context);
+      encodedItems[i] = encodedItem;
+      if (isThenable(encodedItem)) {
+        asyncFound = true;
+      }
     }
-    return encodedItems;
+    if (!asyncFound) {
+      return encodedItems;
+    }
+    return Promise.all(encodedItems.map((item) => Promise.resolve(item)));
   }
 
   if (!isReactElementLike(value)) {
@@ -76,13 +86,36 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
     return encodeServerNode(value.props.children, context);
   }
 
+  const entries = Object.entries(value.props);
   const nextProps: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value.props)) {
-    nextProps[key] = await encodeServerNode(item, context);
+  const pendingProps: Array<[string, Promise<unknown>]> = [];
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const [key, item] = entries[i];
+    const encodedProp = encodeServerNode(item, context);
+    if (isThenable(encodedProp)) {
+      pendingProps.push([key, Promise.resolve(encodedProp)]);
+    } else {
+      nextProps[key] = encodedProp;
+    }
   }
-  return encodeWireValue({
-    ...value,
-    props: nextProps,
+
+  if (pendingProps.length === 0) {
+    return encodeWireValue({
+      ...value,
+      props: nextProps,
+    });
+  }
+
+  return Promise.all(pendingProps.map(([, promise]) => promise)).then((resolvedProps) => {
+    for (let i = 0; i < pendingProps.length; i += 1) {
+      const [key] = pendingProps[i];
+      nextProps[key] = resolvedProps[i];
+    }
+    return encodeWireValue({
+      ...value,
+      props: nextProps,
+    });
   });
 }
 
@@ -109,13 +142,34 @@ export async function renderToReadableStream(
 
       try {
         let nextRowId = 1;
-        const pendingRows = new Set<Promise<void>>();
+        let pendingRows = 0;
+        let pendingRowsDrainPromise: Promise<void> | null = null;
+        let resolvePendingRowsDrain: (() => void) | null = null;
+
         const queueDeferred = (task: Promise<void>): void => {
-          pendingRows.add(task);
+          pendingRows += 1;
           task.finally(() => {
-            pendingRows.delete(task);
+            pendingRows -= 1;
+            if (pendingRows === 0 && resolvePendingRowsDrain != null) {
+              resolvePendingRowsDrain();
+              resolvePendingRowsDrain = null;
+              pendingRowsDrainPromise = null;
+            }
           });
         };
+
+        const waitForPendingRows = async (): Promise<void> => {
+          if (pendingRows === 0) {
+            return;
+          }
+          if (pendingRowsDrainPromise == null) {
+            pendingRowsDrainPromise = new Promise<void>((resolve) => {
+              resolvePendingRowsDrain = resolve;
+            });
+          }
+          await pendingRowsDrainPromise;
+        };
+
         const context: EncodeContext = {
           queueDeferred,
           allocateRowId: () => {
@@ -129,14 +183,12 @@ export async function renderToReadableStream(
           },
         };
 
-        const root = await encodeServerNode(element, context);
+        const root = await Promise.resolve(encodeServerNode(element, context));
         if (settled) return;
         controller.enqueue(encodeFlightRow(0, root));
 
-        while (pendingRows.size > 0) {
-          await Promise.race(pendingRows);
-          if (settled) return;
-        }
+        await waitForPendingRows();
+        if (settled) return;
 
         controller.close();
         settled = true;
