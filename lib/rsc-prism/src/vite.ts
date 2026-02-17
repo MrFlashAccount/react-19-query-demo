@@ -11,7 +11,10 @@ import {
 } from "vite";
 import { build as viteBuild } from "vite";
 import react from "@vitejs/plugin-react";
-import { MAIN_THREAD_MODULES_GLOBAL_KEY, WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY } from "./runtime-globals";
+import {
+  MAIN_THREAD_MODULES_GLOBAL_KEY,
+  WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
+} from "./runtime-globals";
 
 const DEFAULT_DIRECTIVES = ["use main", "use client"] as const;
 const DEFAULT_WORKER_DIRECTIVES = ["use worker"] as const;
@@ -483,7 +486,9 @@ function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleE
   const lines: string[] = [];
   lines.push('const __rscPrismClientReferenceSymbol = Symbol.for("react.client.reference");');
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
-  lines.push("const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id });");
+  lines.push(
+    "const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id });",
+  );
   lines.push("");
   if (exportsInfo.hasDefault) {
     lines.push(
@@ -927,7 +932,7 @@ async function initializeWorkerRuntime() {
     throw error;
   }
 
-  const transport = createWorkerTransport(worker, { timeoutMs: 3000 });
+  const transport = createWorkerTransport(worker);
   let isDisposed = false;
   const runtime = {
     worker,
@@ -1085,8 +1090,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       '[rsc-prism] workerRuntime.entry has been removed. Delete "workerRuntime.entry" and rely on plugin-generated worker runtime from discovered "use worker" modules/actions.',
     );
   }
-  const legacyWorkerRuntimeServePath = (options.workerRuntime as { servePath?: unknown } | undefined)
-    ?.servePath;
+  const legacyWorkerRuntimeServePath = (
+    options.workerRuntime as { servePath?: unknown } | undefined
+  )?.servePath;
   if (options.mode === "main" && legacyWorkerRuntimeServePath != null) {
     throw new Error(
       '[rsc-prism] workerRuntime.servePath is now internal. Delete "workerRuntime.servePath" and rely on plugin-managed worker asset URLs.',
@@ -1205,7 +1211,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   };
 
   const isWorkerRuntimeRelevantModule = (parsed: ParsedDirectiveModule): boolean => {
-    return (parsed.isDirectiveModule && parsed.type === "worker") || parsed.hasWorkerActionExports === true;
+    return (
+      (parsed.isDirectiveModule && parsed.type === "worker") ||
+      parsed.hasWorkerActionExports === true
+    );
   };
 
   const collectWorkerModulesForRuntime = async (): Promise<WorkerRuntimeModuleEntry[]> => {
@@ -1376,9 +1385,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     },
     configEnvironment(name, userConfig, env) {
       if (options.mode === "main" && name !== "worker") {
-        const excludeDeps = dedupeItems([
-          ...toArray(userConfig.optimizeDeps?.exclude),
-        ]);
+        const excludeDeps = dedupeItems([...toArray(userConfig.optimizeDeps?.exclude)]);
 
         return {
           optimizeDeps: {
@@ -1444,8 +1451,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           return undefined;
         }
 
-        const mainVirtualSrc = `/@id/${virtualId}`;
-        const workerBootstrapSrc = `/@id/${workerBootstrapVirtualId}`;
+        const useDevVirtualUrlPrefix = config?.command === "serve";
+        const mainVirtualSrc = useDevVirtualUrlPrefix ? `/@id/${virtualId}` : virtualId;
+        const workerBootstrapSrc = useDevVirtualUrlPrefix
+          ? `/@id/${workerBootstrapVirtualId}`
+          : workerBootstrapVirtualId;
 
         if (
           html.includes(virtualId) ||
@@ -1639,7 +1649,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
             requestPath.startsWith(`${normalizedWorkerServeDir}/`)
           ) {
             const relative = requestPath.slice(normalizedWorkerServeDir.length + 1);
-            targetFile = path.resolve(generatedWorkerOutDir, generatedWorkerServeSourceDir, relative);
+            targetFile = path.resolve(
+              generatedWorkerOutDir,
+              generatedWorkerServeSourceDir,
+              relative,
+            );
           }
         }
 
@@ -1695,7 +1709,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       if (options.mode === "worker" && !hasMainDirectiveLiteral) {
         return null;
       }
-      if (options.mode === "main" && !hasWorkerDirectiveLiteral && !hasWorkerActionDirectiveLiteral) {
+      if (
+        options.mode === "main" &&
+        !hasWorkerDirectiveLiteral &&
+        !hasWorkerActionDirectiveLiteral
+      ) {
         return null;
       }
 
@@ -1703,10 +1721,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       const projectFilePath = toProjectFilePath(absolutePath);
       const ast = parseModule(code, absolutePath);
       const directiveType = resolveDirectiveModuleType(ast, mainDirectives, workerDirectives);
-      if (
-        options.mode === "worker" &&
-        directiveType !== "main"
-      ) {
+      if (options.mode === "worker" && directiveType !== "main") {
         return null;
       }
       if (

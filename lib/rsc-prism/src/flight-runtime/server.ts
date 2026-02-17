@@ -29,39 +29,61 @@ function isReactElementLike(value: unknown): value is {
   return candidate.$$typeof === REACT_ELEMENT_SYMBOL || candidate.$$typeof === LEGACY_REACT_ELEMENT_SYMBOL;
 }
 
-async function evaluateServerNode(value: unknown): Promise<unknown> {
-  const awaited = await value;
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === "object" && value != null && "then" in value;
+}
 
-  if (Array.isArray(awaited)) {
-    return Promise.all(awaited.map((item) => evaluateServerNode(item)));
+function encodeFlightRow(id: number, value: unknown): Uint8Array {
+  return new TextEncoder().encode(`${id}:${JSON.stringify(value)}\n`);
+}
+
+interface EncodeContext {
+  queueDeferred: (task: Promise<void>) => void;
+  allocateRowId: () => number;
+  emitRow: (id: number, value: unknown) => void;
+}
+
+async function encodeServerNode(value: unknown, context: EncodeContext): Promise<unknown> {
+  if (isThenable(value)) {
+    const rowId = context.allocateRowId();
+    context.queueDeferred(
+      (async () => {
+        const resolved = await value;
+        const encoded = await encodeServerNode(resolved, context);
+        context.emitRow(rowId, encoded);
+      })(),
+    );
+    return { $t: "rowRef", id: rowId };
   }
 
-  if (!isReactElementLike(awaited)) {
-    return awaited;
+  if (Array.isArray(value)) {
+    const encodedItems: unknown[] = [];
+    for (const item of value) {
+      encodedItems.push(await encodeServerNode(item, context));
+    }
+    return encodedItems;
   }
 
-  const type = awaited.type;
+  if (!isReactElementLike(value)) {
+    return encodeWireValue(value);
+  }
+
+  const type = value.type;
   if (typeof type === "function" && !isClientReference(type)) {
-    return evaluateServerNode(type(awaited.props));
+    return encodeServerNode(type(value.props), context);
   }
   if (type === REACT_FRAGMENT_SYMBOL) {
-    return evaluateServerNode(awaited.props.children);
+    return encodeServerNode(value.props.children, context);
   }
 
   const nextProps: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(awaited.props)) {
-    nextProps[key] = await evaluateServerNode(item);
+  for (const [key, item] of Object.entries(value.props)) {
+    nextProps[key] = await encodeServerNode(item, context);
   }
-  return {
-    ...awaited,
+  return encodeWireValue({
+    ...value,
     props: nextProps,
-  };
-}
-
-function encodeFlightChunk(value: unknown): Uint8Array {
-  const encoded = encodeWireValue(value);
-  const row = `0:${JSON.stringify(encoded)}\n`;
-  return new TextEncoder().encode(row);
+  });
 }
 
 export async function renderToReadableStream(
@@ -69,16 +91,63 @@ export async function renderToReadableStream(
   _moduleBasePath: unknown,
   options?: FlightServerRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
-  const rendered = await evaluateServerNode(element);
-  const chunk = encodeFlightChunk(rendered);
   return new ReadableStream<Uint8Array>({
-    start(controller) {
-      if (options?.signal?.aborted) {
-        controller.error(options.signal.reason);
+    async start(controller) {
+      const signal = options?.signal;
+      if (signal?.aborted) {
+        controller.error(signal.reason);
         return;
       }
-      controller.enqueue(chunk);
-      controller.close();
+
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        controller.error(signal?.reason);
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+
+      try {
+        let nextRowId = 1;
+        const pendingRows = new Set<Promise<void>>();
+        const queueDeferred = (task: Promise<void>): void => {
+          pendingRows.add(task);
+          task.finally(() => {
+            pendingRows.delete(task);
+          });
+        };
+        const context: EncodeContext = {
+          queueDeferred,
+          allocateRowId: () => {
+            const current = nextRowId;
+            nextRowId += 1;
+            return current;
+          },
+          emitRow: (id, value) => {
+            if (settled) return;
+            controller.enqueue(encodeFlightRow(id, value));
+          },
+        };
+
+        const root = await encodeServerNode(element, context);
+        if (settled) return;
+        controller.enqueue(encodeFlightRow(0, root));
+
+        while (pendingRows.size > 0) {
+          await Promise.race(pendingRows);
+          if (settled) return;
+        }
+
+        controller.close();
+        settled = true;
+      } catch (error) {
+        if (!settled) {
+          settled = true;
+          controller.error(error);
+        }
+      } finally {
+        signal?.removeEventListener("abort", onAbort);
+      }
     },
   });
 }

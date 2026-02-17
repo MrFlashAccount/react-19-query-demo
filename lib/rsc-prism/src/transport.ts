@@ -1,12 +1,4 @@
-import { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
-
-function invalidateRSC(): void {
-  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
-  const invalidate = globalState[INVALIDATE_RSC_GLOBAL_KEY];
-  if (typeof invalidate === "function") {
-    invalidate();
-  }
-}
+import { getInvalidateRSC } from "./runtime-globals";
 
 export interface SendActionInput {
   endpoint: string;
@@ -33,6 +25,8 @@ export interface RSCTransport {
 export function createFetchTransport(): RSCTransport {
   return {
     async sendAction(input): Promise<Response> {
+      const invalidateRSC = getInvalidateRSC();
+
       const headers = new Headers(input.headers);
       headers.set("x-rsc-action", input.actionId);
       if (input.contentType != null) {
@@ -78,6 +72,8 @@ export type FunctionTransportHandler = (request: FunctionTransportRequest) => Pr
 export function createFunctionTransport(handler: FunctionTransportHandler): RSCTransport {
   return {
     async sendAction(input): Promise<Response> {
+      const invalidateRSC = getInvalidateRSC();
+
       const headers = new Headers(input.headers);
       if (input.contentType != null) {
         headers.set("content-type", input.contentType);
@@ -404,6 +400,8 @@ export function createWorkerTransport(
 ): RSCTransport {
   return {
     async sendAction(input): Promise<Response> {
+      const invalidateRSC = getInvalidateRSC();
+
       return sendWorkerRequest(
         endpoint,
         {
@@ -416,7 +414,7 @@ export function createWorkerTransport(
           requestInit: input.requestInit,
         },
         options,
-      ).finally(invalidateRSC);
+      ).finally(() => invalidateRSC());
     },
 
     async fetchRSC(input): Promise<Response> {

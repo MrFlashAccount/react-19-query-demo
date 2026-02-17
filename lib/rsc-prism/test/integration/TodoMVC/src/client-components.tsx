@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useId,
   useState,
   useTransition,
   type FormEvent,
@@ -19,34 +20,32 @@ import {
   toggleTodo,
 } from "./todo-actions";
 
-interface TodoRuntime {
+interface TodoContextValue {
   filter: TodoFilter;
   setFilter: (filter: TodoFilter) => void;
-  refresh: () => void;
 }
 
-const TodoRuntimeContext = createContext<TodoRuntime | null>(null);
+const TodoContext = createContext<TodoContextValue | null>(null);
 
-export function TodoRuntimeProvider({
+export function TodoProvider({
   value,
   children,
 }: {
-  value: TodoRuntime;
+  value: TodoContextValue;
   children: ReactNode;
 }) {
-  return <TodoRuntimeContext.Provider value={value}>{children}</TodoRuntimeContext.Provider>;
+  return <TodoContext.Provider value={value}>{children}</TodoContext.Provider>;
 }
 
-function useTodoRuntime(): TodoRuntime {
-  const runtime = useContext(TodoRuntimeContext);
+function useTodoContext(): TodoContextValue {
+  const runtime = useContext(TodoContext);
   if (runtime == null) {
-    throw new Error("Todo runtime context is missing.");
+    throw new Error("Todo context is missing.");
   }
   return runtime;
 }
 
 function useTodoAction() {
-  const runtime = useTodoRuntime();
   const [isPending, startTransition] = useTransition();
 
   const runAction = (
@@ -54,17 +53,17 @@ function useTodoAction() {
     args: any[] = [],
     options?: { refresh?: boolean; onSuccess?: () => void },
   ) => {
-    startTransition(async () => {
-      try {
-        await callAction(action, args);
-        options?.onSuccess?.();
-        if (options?.refresh ?? true) {
-          runtime.refresh();
+    return new Promise((resolve, reject) => {
+      startTransition(async () => {
+        try {
+          resolve(await callAction(action, args));
+          options?.onSuccess?.();
+        } catch (error) {
+          const actionId = typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
+          console.error(`[todo-action] ${actionId} failed`, error);
+          reject(error);
         }
-      } catch (error) {
-        const actionId = typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
-        console.error(`[todo-action] ${actionId} failed`, error);
-      }
+      });
     });
   };
 
@@ -88,7 +87,7 @@ export function TodoComposer({
       return;
     }
 
-    runAction(addTodo, [nextTitle], {
+    void runAction(addTodo, [nextTitle], {
       onSuccess: () => {
         setTitle("");
       },
@@ -104,12 +103,13 @@ export function TodoComposer({
         aria-label={allCompleted ? "Mark all as active" : "Mark all as completed"}
         onClick={() => runAction(toggleAll)}
       >
-        {allCompleted ? "v" : ">"}
+        {allCompleted ? "✅" : "☑️"}
       </button>
       <form onSubmit={handleSubmit} className="todo-compose-form">
         <input
           className="new-todo"
           value={title}
+          name="New todo"
           onChange={(event) => setTitle(event.target.value)}
           placeholder="What needs to be done?"
           aria-label="New todo"
@@ -124,24 +124,26 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(todo.title);
   const { isPending, runAction } = useTodoAction();
+  const id = useId();
 
   const finishEditing = () => {
     const nextTitle = draft.trim();
     setIsEditing(false);
 
     if (nextTitle.length === 0) {
-      runAction(deleteTodo, [todo.id]);
+      void runAction(deleteTodo, [todo.id]);
       return;
     }
 
     if (nextTitle !== todo.title) {
-      runAction(renameTodo, [todo.id, nextTitle]);
+      void runAction(renameTodo, [todo.id, nextTitle]);
     }
   };
 
   return (
     <>
       <input
+        id={id}
         type="checkbox"
         className="todo-toggle"
         checked={todo.completed}
@@ -149,7 +151,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
         onChange={() => runAction(toggleTodo, [todo.id])}
         aria-label={`Toggle ${todo.title}`}
       />
-      <label className="todo-label" onDoubleClick={() => setIsEditing(true)}>
+      <label htmlFor={id} className="todo-label" onDoubleClick={() => setIsEditing(true)}>
         {todo.title}
       </label>
       <button
@@ -159,7 +161,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
         onClick={() => runAction(deleteTodo, [todo.id])}
         aria-label={`Delete ${todo.title}`}
       >
-        x
+        ❌
       </button>
 
       {isEditing && (
@@ -167,6 +169,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
           autoFocus
           className="todo-edit"
           value={draft}
+          defaultValue={todo.title}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={finishEditing}
           onKeyDown={(event) => {
@@ -201,7 +204,7 @@ export function TodoFooterControls({
   totalCount: number;
   filter: TodoFilter;
 }) {
-  const runtime = useTodoRuntime();
+  const runtime = useTodoContext();
   const { isPending, runAction } = useTodoAction();
   const itemLabel = activeCount === 1 ? "item" : "items";
 
@@ -237,7 +240,7 @@ export function TodoFooterControls({
         disabled={completedCount === 0 || totalCount === 0 || isPending}
         onClick={() => runAction(clearCompleted)}
       >
-        Clear completed
+        🧹
       </button>
     </footer>
   );

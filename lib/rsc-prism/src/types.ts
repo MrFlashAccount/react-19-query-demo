@@ -3,6 +3,7 @@
  */
 
 import type { ReactNode, ComponentType } from "react";
+import type { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
 
 /**
  * ESM module reference identifier used by RSC.
@@ -97,3 +98,12 @@ export type ComponentReference<Props = unknown> = (
 ) =>
   | (React.JSX.Element | null | React.JSX.Element[])
   | Promise<React.JSX.Element | null | React.JSX.Element[]>;
+
+declare global {
+  interface Window {
+    [INVALIDATE_RSC_GLOBAL_KEY]: () => void;
+  }
+  interface WorkerGlobalScope {
+    [INVALIDATE_RSC_GLOBAL_KEY]: () => void;
+  }
+}

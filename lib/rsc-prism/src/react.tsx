@@ -1,7 +1,7 @@
-import { useEffect, useState, useTransition } from "react";
-import { fetchRSC } from "./client";
+import { startTransition, use, useEffect, useState } from "react";
+import { bootstrapWorkerRuntime, fetchRSC } from "./client";
 import type { ComponentReference } from "./types";
-import { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
+import { setInvalidateRSC } from "./runtime-globals";
 
 const $$invalidations = new Set<() => void>();
 export function invalidateRSC() {
@@ -14,7 +14,7 @@ export function invalidateRSC() {
   }
 }
 
-(globalThis as typeof globalThis & Record<string, unknown>)[INVALIDATE_RSC_GLOBAL_KEY] = invalidateRSC;
+setInvalidateRSC(invalidateRSC);
 
 export type RSCLoaderProps<Props = unknown> = Props & {
   /**
@@ -33,43 +33,105 @@ function isPlainObject(value: object): boolean {
   return prototype === Object.prototype || prototype === null;
 }
 
-const valueIdentityMap = new WeakMap<object, number>();
-let valueIdentityCounter = 0;
-
-function getValueIdentity(value: object): number {
-  const existing = valueIdentityMap.get(value);
-  if (existing != null) {
-    return existing;
-  }
-  valueIdentityCounter += 1;
-  valueIdentityMap.set(value, valueIdentityCounter);
-  return valueIdentityCounter;
-}
-
-function createPrimitiveToken(value: unknown): string {
-  if (value == null) return "null";
-
-  switch (typeof value) {
-    case "string":
-      return `s:${value}`;
-    case "number":
-      return `n:${value}`;
-    case "boolean":
-      return `b:${value ? "1" : "0"}`;
-    case "bigint":
-      return `bi:${value}`;
-    case "symbol":
-      return `sym:${String(value.description ?? "")}`;
-    case "undefined":
-      return "u";
-    default:
-      return "";
-  }
-}
-
 interface ValueTokenContext {
   seen: WeakMap<object, number>;
   nextSeenId: number;
+}
+
+function serializeValueToken(value: unknown, context: ValueTokenContext): unknown {
+  if (value == null || typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (Number.isNaN(value)) return { $type: "number", value: "NaN" };
+    if (!Number.isFinite(value)) return { $type: "number", value: String(value) };
+    if (Object.is(value, -0)) return { $type: "number", value: "-0" };
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    return { $type: "bigint", value: String(value) };
+  }
+
+  if (typeof value === "undefined") {
+    return { $type: "undefined" };
+  }
+
+  if (typeof value === "symbol") {
+    return { $type: "symbol", value: String(value.description ?? "") };
+  }
+
+  if (typeof value === "function") {
+    return { $type: "function", value: value.name || "anonymous" };
+  }
+
+  if (typeof value !== "object") {
+    return { $type: "unknown" };
+  }
+
+  const seenRef = context.seen.get(value);
+  if (seenRef != null) {
+    return { $type: "ref", value: seenRef };
+  }
+
+  const seenId = context.nextSeenId;
+  context.nextSeenId += 1;
+  context.seen.set(value, seenId);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => serializeValueToken(item, context));
+  }
+
+  if (value instanceof Date) {
+    return { $type: "date", value: value.toISOString() };
+  }
+
+  if (value instanceof URLSearchParams) {
+    const params = Array.from(value.entries()).sort(
+      ([leftKey, leftValue], [rightKey, rightValue]) => {
+        const keyOrder = leftKey.localeCompare(rightKey);
+        if (keyOrder !== 0) return keyOrder;
+        return leftValue.localeCompare(rightValue);
+      },
+    );
+    return { $type: "urlsearchparams", value: params };
+  }
+
+  if (value instanceof Set) {
+    const items = Array.from(value, (item) => serializeValueToken(item, context)).sort(
+      (left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+    return { $type: "set", value: items };
+  }
+
+  if (value instanceof Map) {
+    const entries = Array.from(
+      value,
+      ([key, item]) =>
+        [serializeValueToken(key, context), serializeValueToken(item, context)] as const,
+    ).sort(([leftKey], [rightKey]) =>
+      JSON.stringify(leftKey).localeCompare(JSON.stringify(rightKey)),
+    );
+    return { $type: "map", value: entries };
+  }
+
+  if (isPlainObject(value)) {
+    const sortedEntries = Object.entries(value)
+      .filter(([key]) => key !== "$refreshKey")
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, serializeValueToken(item, context)] as const);
+    return Object.fromEntries(sortedEntries);
+  }
+
+  const objectEntries = Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, item]) => [key, serializeValueToken(item, context)] as const);
+  return {
+    $type: "object",
+    constructor: value.constructor?.name ?? "Object",
+    value: Object.fromEntries(objectEntries),
+  };
 }
 
 function createValueToken(value: unknown, context?: ValueTokenContext): string {
@@ -77,80 +139,24 @@ function createValueToken(value: unknown, context?: ValueTokenContext): string {
     seen: new WeakMap<object, number>(),
     nextSeenId: 1,
   };
-  const primitiveToken = createPrimitiveToken(value);
-  if (primitiveToken !== "") {
-    return primitiveToken;
-  }
-
-  if (typeof value === "function") {
-    return `fn:${getValueIdentity(value)}`;
-  }
-
-  if (typeof value !== "object" || value == null) {
-    return `x:${String(value)}`;
-  }
-
-  const seenRef = resolvedContext.seen.get(value);
-  if (seenRef != null) {
-    return `ref:${seenRef}`;
-  }
-
-  const seenId = resolvedContext.nextSeenId;
-  resolvedContext.nextSeenId += 1;
-  resolvedContext.seen.set(value, seenId);
-
-  if (Array.isArray(value)) {
-    const items = value.map((item) => createValueToken(item, resolvedContext));
-    return `arr:[${items.join(",")}]`;
-  }
-
-  if (isPlainObject(value)) {
-    const entries = Object.entries(value)
-      .filter(([key]) => key !== "$refreshKey")
-      .sort(([left], [right]) => left.localeCompare(right));
-    const parts = entries.map(([key, item]) => `${key}:${createValueToken(item, resolvedContext)}`);
-    return `obj:{${parts.join(",")}}`;
-  }
-
-  if (value instanceof Date) {
-    return `date:${value.toISOString()}`;
-  }
-
-  if (value instanceof URLSearchParams) {
-    return `urlsearch:${value.toString()}`;
-  }
-
-  return `o:${getValueIdentity(value)}`;
+  return JSON.stringify(serializeValueToken(value, resolvedContext));
 }
 
 function createPropsToken(props: unknown): string {
   return `props:${createValueToken(props)}`;
 }
 
-function createLoaderKey(props: unknown): string {
-  if (typeof props === "object" && props != null && "$refreshKey" in props) {
-    const refreshKey = (props as { $refreshKey?: unknown }).$refreshKey;
-    if (refreshKey !== undefined) {
-      return `refresh:${createValueToken(refreshKey)}`;
-    }
-  }
-
-  return createPropsToken(props);
-}
-
 export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
   const cache = new Map<string, LoaderCacheEntry>();
 
   return function RSCLoader(props: RSCLoaderProps<Props>) {
-    const [, startTransition] = useTransition();
     const [, $$refresh] = useState({});
-
-    const key = createLoaderKey(props);
+    const key = createPropsToken(props);
 
     useEffect(() => {
       const invalidate = () => {
-        cache.clear();
         startTransition(() => {
+          cache.clear();
           $$refresh({});
         });
       };
@@ -169,13 +175,13 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
     const entry = { key, promise } as const;
     cache.set(key, entry);
 
-    void promise.catch(() => {
-      const current = cache.get(key);
-      if (current === entry) {
-        cache.delete(key);
-      }
-    });
-
     return promise;
   };
+}
+
+const runtimePromise = bootstrapWorkerRuntime();
+
+export function RuntimeProvider({ children }: React.PropsWithChildren) {
+  use(runtimePromise);
+  return children;
 }

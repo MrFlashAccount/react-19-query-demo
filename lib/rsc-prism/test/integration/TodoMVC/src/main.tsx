@@ -4,11 +4,10 @@ import { Suspense, useEffect, useState, useTransition } from "react";
 import { createRoot } from "react-dom/client";
 import { ErrorBoundary } from "react-error-boundary";
 
-import { TodoRuntimeProvider } from "./client-components";
+import { TodoProvider } from "./client-components";
 import type { TodoFilter } from "./types";
 import { TodoView } from "./worker-components";
-import { bootstrapWorkerRuntime, type BootstrappedWorkerRuntime } from "@lib/rsc-prism/client-only";
-import { rsc } from "@lib/rsc-prism/react";
+import { rsc, RuntimeProvider } from "@lib/rsc-prism/react";
 
 const TodoViewRSC = rsc(TodoView);
 
@@ -24,16 +23,8 @@ function parseFilterFromLocation(): TodoFilter {
 }
 
 function App() {
-  const [runtime, setRuntime] = useState<BootstrappedWorkerRuntime | null>(null);
-  const [runtimeError, setRuntimeError] = useState<Error | null>(null);
   const [filter, setFilterState] = useState<TodoFilter>(parseFilterFromLocation);
   const [isPending, startTransition] = useTransition();
-
-  const refresh = () => {
-    startTransition(() => {
-      setFilterState(parseFilterFromLocation());
-    });
-  };
 
   const setFilter = (nextFilter: TodoFilter) => {
     if (nextFilter === filter) {
@@ -66,71 +57,8 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    let isUnmounted = false;
-    let mountedRuntime: BootstrappedWorkerRuntime | null = null;
-
-    void bootstrapWorkerRuntime()
-      .then((nextRuntime) => {
-        if (isUnmounted) {
-          nextRuntime.dispose();
-          return;
-        }
-        mountedRuntime = nextRuntime;
-        setRuntime(nextRuntime);
-        setRuntimeError(null);
-      })
-      .catch((error) => {
-        if (isUnmounted) {
-          return;
-        }
-        setRuntimeError(error instanceof Error ? error : new Error(String(error)));
-      });
-
-    return () => {
-      isUnmounted = true;
-      mountedRuntime?.dispose();
-    };
-  }, []);
-
-  if (runtimeError != null) {
-    return (
-      <main className="app-shell">
-        <header className="app-header">
-          <h2>RSC TodoMVC</h2>
-          <p>View rendering and data fetches run through React Server Components in a worker.</p>
-        </header>
-        <section className="todo-shell">
-          <section className="todoapp todoapp--error">
-            <h1 className="todo-title">todos</h1>
-            <p className="todo-error">
-              Failed to initialize worker runtime: {runtimeError.message}
-            </p>
-          </section>
-        </section>
-      </main>
-    );
-  }
-
-  if (runtime == null) {
-    return (
-      <main className="app-shell">
-        <header className="app-header">
-          <h2>RSC TodoMVC</h2>
-          <p>View rendering and data fetches run through React Server Components in a worker.</p>
-        </header>
-        <section className="todo-shell">
-          <section className="todoapp">
-            <h1 className="todo-title">todos</h1>
-            <p className="todo-empty">Loading...</p>
-          </section>
-        </section>
-      </main>
-    );
-  }
-
   return (
-    <TodoRuntimeProvider value={{ filter, setFilter, refresh }}>
+    <TodoProvider value={{ filter, setFilter }}>
       <main className="app-shell">
         <header className="app-header">
           <h2>RSC TodoMVC</h2>
@@ -164,11 +92,13 @@ function App() {
               </section>
             }
           >
-            <TodoViewRSC filter={filter} />
+            <RuntimeProvider>
+              <TodoViewRSC filter={filter} />
+            </RuntimeProvider>
           </Suspense>
         </ErrorBoundary>
       </main>
-    </TodoRuntimeProvider>
+    </TodoProvider>
   );
 }
 

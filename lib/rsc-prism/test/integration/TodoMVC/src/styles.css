@@ -137,10 +137,33 @@ body {
 }
 
 .todo-toggle {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  -ms-appearance: none;
+  -o-appearance: none;
+  appearance: none;
   margin: 0 auto;
   width: 20px;
   height: 20px;
   accent-color: #5ba26b;
+
+  &::before {
+    display: block;
+    aspect-ratio: 1 / 1;
+    content: "☑️";
+    height: 20px;
+    font-size: 1.5rcap;
+    line-height: 20px;
+    text-align: center;
+  }
+
+  &:checked::before {
+    content: "✅";
+  }
+
+  &:disabled::before {
+    opacity: 0.45;
+  }
 }
 
 .todo-label {

@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { callAction, consumeRSCResponse, createCallServer, encodeActionArgs, fetchRSC } from "../src/client";
-import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY } from "../src/runtime-globals";
+import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
 import { createFunctionTransport } from "../src/transport";
 
 function flightValueResponse(value: unknown): Response {
@@ -17,8 +17,104 @@ function clearDefaultWorkerRuntimeGlobals() {
 }
 
 describe("rsc client browser workflows", () => {
+  beforeEach(() => {
+    setInvalidateRSC(() => {});
+  });
+
   it("consumes flight response payloads", async () => {
     await expect(consumeRSCResponse<string>(flightValueResponse("flight-ok"))).resolves.toBe("flight-ok");
+  });
+
+  it("parses split flight stream chunks incrementally", async () => {
+    const payload = `0:${JSON.stringify("stream-✓")}\n`;
+    const bytes = new TextEncoder().encode(payload);
+    const splitAt = Math.max(1, bytes.length - 2);
+
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(bytes.slice(0, splitAt));
+          controller.enqueue(bytes.slice(splitAt));
+          controller.close();
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/x-component" },
+      },
+    );
+
+    await expect(consumeRSCResponse<string>(response)).resolves.toBe("stream-✓");
+  });
+
+  it("resolves before stream close once 0-row arrives", async () => {
+    const payload = `0:${JSON.stringify("early")}\n`;
+    let closeStream: (() => void) | null = null;
+
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        async start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload));
+          await new Promise<void>((resolve) => {
+            closeStream = resolve;
+          });
+          controller.close();
+        },
+        cancel() {
+          if (closeStream != null) {
+            closeStream();
+          }
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/x-component" },
+      },
+    );
+
+    const resultPromise = consumeRSCResponse<string>(response);
+    const raced = await Promise.race([
+      resultPromise.then(() => "resolved"),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
+    ]);
+
+    expect(raced).toBe("resolved");
+    await expect(resultPromise).resolves.toBe("early");
+    closeStream?.();
+  });
+
+  it("resolves root row references once deferred rows arrive", async () => {
+    let releaseClose: (() => void) | null = null;
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        async start(controller) {
+          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify({ $t: "rowRef", id: 1 })}\n`));
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          controller.enqueue(new TextEncoder().encode(`1:${JSON.stringify("deferred")}\n`));
+          await new Promise<void>((resolve) => {
+            releaseClose = resolve;
+          });
+          controller.close();
+        },
+        cancel() {
+          releaseClose?.();
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/x-component" },
+      },
+    );
+
+    const resultPromise = consumeRSCResponse<string>(response);
+    const raced = await Promise.race([
+      resultPromise.then(() => "resolved"),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
+    ]);
+
+    expect(raced).toBe("resolved");
+    await expect(resultPromise).resolves.toBe("deferred");
+    releaseClose?.();
   });
 
   it("encodes action args and supports fetch/call workflows", async () => {
