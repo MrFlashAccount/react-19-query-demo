@@ -500,10 +500,13 @@ function decodeWireValueInternal(
     return value;
   }
   if (Array.isArray(value)) {
-    const decoded: unknown[] = [];
+    const decoded: unknown[] = new Array(value.length);
     for (let i = 0; i < value.length; i += 1) {
-      decoded.push(
-        decodeWireValueInternal(value[i], resolveClientReference, resolveRowReference, visitingRowRefs),
+      decoded[i] = decodeWireValueInternal(
+        value[i],
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
       );
     }
     return decoded;
@@ -518,15 +521,15 @@ function decodeWireValueInternal(
   const tag = tagged.$t;
   if (typeof tag !== "string") {
     const result: Record<string, unknown> = {};
-    for (const key in tagged) {
-      if (Object.prototype.hasOwnProperty.call(tagged, key)) {
-        result[key] = decodeWireValueInternal(
-          tagged[key],
-          resolveClientReference,
-          resolveRowReference,
-          visitingRowRefs,
-        );
-      }
+    const keys = Object.keys(tagged);
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      result[key] = decodeWireValueInternal(
+        tagged[key],
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      );
     }
     return result;
   }
@@ -567,75 +570,42 @@ function decodeWireValueInternal(
     case "map": {
       const entries = (tagged.v as unknown[] | null | undefined) ?? EMPTY_ARRAY;
       if (!Array.isArray(entries)) {
-        return new Map(
-          (entries as unknown[]).map((pair) => {
-            const tuple = (pair as { [index: number]: unknown } | null | undefined) ?? [];
-            return [
-              decodeWireValueInternal(
-                tuple[0],
-                resolveClientReference,
-                resolveRowReference,
-                visitingRowRefs,
-              ),
-              decodeWireValueInternal(
-                tuple[1],
-                resolveClientReference,
-                resolveRowReference,
-                visitingRowRefs,
-              ),
-            ];
-          }),
-        );
+        return new Map();
       }
-      const mapped: Array<[unknown, unknown]> = [];
+      const mapped = new Map<unknown, unknown>();
       for (let i = 0; i < entries.length; i += 1) {
         const tuple = (entries[i] as { [index: number]: unknown } | null | undefined) ?? [];
-        mapped.push([
+        mapped.set(
           decodeWireValueInternal(tuple[0], resolveClientReference, resolveRowReference, visitingRowRefs),
           decodeWireValueInternal(tuple[1], resolveClientReference, resolveRowReference, visitingRowRefs),
-        ]);
+        );
       }
-      return new Map(mapped);
+      return mapped;
     }
     case "set": {
       const items = (tagged.v as unknown[] | null | undefined) ?? EMPTY_ARRAY;
       if (!Array.isArray(items)) {
-        return new Set(
-          (items as unknown[]).map((item) =>
-            decodeWireValueInternal(item, resolveClientReference, resolveRowReference, visitingRowRefs),
-          ),
-        );
+        return new Set();
       }
-      const decoded: unknown[] = [];
+      const decoded = new Set<unknown>();
       for (let i = 0; i < items.length; i += 1) {
-        decoded.push(
-          decodeWireValueInternal(items[i], resolveClientReference, resolveRowReference, visitingRowRefs),
-        );
-      }
-      return new Set(decoded);
-    }
-    case "formdata": {
-      const entries = (tagged.v as unknown[] | null | undefined) ?? EMPTY_ARRAY;
-      if (!Array.isArray(entries)) {
-        const form = new FormData();
-        for (const entry of entries as unknown[]) {
-          const tuple = (entry as { [index: number]: unknown } | null | undefined) ?? [];
-          const key = tuple[0];
-          const item = tuple[1];
-          const decoded = decodeWireValueInternal(
-            item,
+        decoded.add(
+          decodeWireValueInternal(
+            items[i],
             resolveClientReference,
             resolveRowReference,
             visitingRowRefs,
-          );
-          form.append(
-            typeof key === "string" ? key : String(key),
-            typeof decoded === "string" ? decoded : String(decoded),
-          );
-        }
+          ),
+        );
+      }
+      return decoded;
+    }
+    case "formdata": {
+      const entries = (tagged.v as unknown[] | null | undefined) ?? EMPTY_ARRAY;
+      const form = new FormData();
+      if (!Array.isArray(entries)) {
         return form;
       }
-      const form = new FormData();
       for (let i = 0; i < entries.length; i += 1) {
         const tuple = (entries[i] as { [index: number]: unknown } | null | undefined) ?? [];
         const key = tuple[0];

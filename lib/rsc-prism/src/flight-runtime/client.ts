@@ -247,13 +247,16 @@ async function parseFlightPayloadFromStream(
 
     if (hasInitializedRootRefs && pendingRootRefs.delete(parsed.id)) {
       scannedResolvedRows.add(parsed.id);
+      rootScanVisitingRows.clear();
+      rootScanVisitingRows.add(parsed.id);
       collectUnresolvedRowRefs(
         parsed.payload,
         rowsById,
         pendingRootRefs,
         scannedResolvedRows,
-        new Set<string>([parsed.id]),
+        rootScanVisitingRows,
       );
+      rootScanVisitingRows.clear();
       return tryResolveRoot();
     }
 

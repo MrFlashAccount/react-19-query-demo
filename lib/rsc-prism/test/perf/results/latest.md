@@ -6,28 +6,28 @@
 
 ## Baseline (before optimization)
 
-- `synthetic-wire-decode`: `2.68ms`
-- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `7.00ms`
-- `stream-parse+decode chunk=64`: `21.00ms`
-- `stream-parse+decode chunk=256`: `16.36ms`
-- `stream-parse+decode chunk=1024`: `18.11ms`
-- `server-decodeReply`: `28.49ms`
+- `synthetic-wire-decode`: `2.94ms`
+- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `2.14ms`
+- `stream-parse+decode chunk=64`: `20.52ms`
+- `stream-parse+decode chunk=256`: `15.63ms`
+- `stream-parse+decode chunk=1024`: `12.82ms`
+- `server-decodeReply`: `27.22ms`
 
 ## After optimization
 
-- `synthetic-wire-decode`: `3.37ms`
-- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `1.93ms`
-- `stream-parse+decode chunk=64`: `20.98ms`
-- `stream-parse+decode chunk=256`: `16.09ms`
-- `stream-parse+decode chunk=1024`: `13.28ms`
-- `server-decodeReply`: `25.80ms`
+- `synthetic-wire-decode`: `2.60ms`
+- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `2.09ms`
+- `stream-parse+decode chunk=64`: `20.19ms`
+- `stream-parse+decode chunk=256`: `16.11ms`
+- `stream-parse+decode chunk=1024`: `12.71ms`
+- `server-decodeReply`: `23.76ms`
 
 ## Delta (after - before)
 
-- `synthetic-wire-decode`: `+0.69ms` (`+25.75%`)
-- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `-5.07ms` (`-72.43%`)
-- `stream-parse+decode chunk=64`: `-0.02ms` (`-0.10%`)
-- `stream-parse+decode chunk=256`: `-0.27ms` (`-1.65%`)
-- `stream-parse+decode chunk=1024`: `-4.83ms` (`-26.67%`)
-- `server-decodeReply`: `-2.69ms` (`-9.44%`)
+- `synthetic-wire-decode`: `-0.34ms` (`-11.56%`)
+- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `-0.05ms` (`-2.34%`)
+- `stream-parse+decode chunk=64`: `-0.33ms` (`-1.61%`)
+- `stream-parse+decode chunk=256`: `+0.48ms` (`+3.07%`)
+- `stream-parse+decode chunk=1024`: `-0.11ms` (`-0.86%`)
+- `server-decodeReply`: `-3.46ms` (`-12.71%`)
 

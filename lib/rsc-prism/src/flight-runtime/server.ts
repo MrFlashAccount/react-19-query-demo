@@ -74,11 +74,7 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
   }
 
   if (Array.isArray(value)) {
-    const encodedItems: unknown[] = [];
-    for (const item of value) {
-      encodedItems.push(await encodeServerNode(item, context));
-    }
-    return encodedItems;
+    return Promise.all(value.map((item) => encodeServerNode(item, context)));
   }
 
   if (!isReactElementLike(value)) {
@@ -93,9 +89,14 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
     return encodeServerNode(value.props.children, context);
   }
 
+  const propEntries = Object.entries(value.props);
+  const encodedPropEntries = await Promise.all(
+    propEntries.map(async ([key, item]) => [key, await encodeServerNode(item, context)] as const),
+  );
   const nextProps: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value.props)) {
-    nextProps[key] = await encodeServerNode(item, context);
+  for (let i = 0; i < encodedPropEntries.length; i += 1) {
+    const [key, item] = encodedPropEntries[i];
+    nextProps[key] = item;
   }
   return encodeWireValueWithBinaryRows(
     {

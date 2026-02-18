@@ -42,6 +42,7 @@ Performance notes:
 
 - Transport is stream-first (`head -> next* -> done`) and client parsing is incremental.
 - Deferred row resolution is optimized to avoid full root graph re-checks for unrelated rows, but this is still a custom resolver path.
+- Perf harness commands and profiles: [`test/perf/README.md`](./test/perf/README.md).
 
 ## Ultra-Small Use Cases for Auto Testing
 
