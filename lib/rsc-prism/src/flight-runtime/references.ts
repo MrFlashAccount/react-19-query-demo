@@ -44,6 +44,7 @@ export function annotateServerReference<T extends (...args: any[]) => any>(
 }
 
 export function createClientModuleProxy(moduleId: string): Record<string, unknown> {
+  const referencesByExportName = new Map<string, Record<string, unknown>>();
   return new Proxy(
     {},
     {
@@ -54,7 +55,13 @@ export function createClientModuleProxy(moduleId: string): Record<string, unknow
         if (key === "__esModule") {
           return true;
         }
-        return annotateClientReference({} as Record<string, unknown>, `${moduleId}#${key}`);
+        const cached = referencesByExportName.get(key);
+        if (cached != null) {
+          return cached;
+        }
+        const created = annotateClientReference({} as Record<string, unknown>, `${moduleId}#${key}`);
+        referencesByExportName.set(key, created);
+        return created;
       },
     },
   );

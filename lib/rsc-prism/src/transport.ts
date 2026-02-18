@@ -184,6 +184,11 @@ const DEFAULT_REQUEST_TYPE = "rsc.transport.request";
 const DEFAULT_RESPONSE_TYPE = "rsc.transport.response";
 const DEFAULT_ROW_RESPONSE_TYPE = "rsc.transport.response.row";
 const WORKER_STREAM_CHUNK_BATCH_BYTES = 32 * 1024;
+const WORKER_RESPONSE_KIND_UNKNOWN = 0;
+const WORKER_RESPONSE_KIND_HEAD = 1;
+const WORKER_RESPONSE_KIND_NEXT = 2;
+const WORKER_RESPONSE_KIND_DONE = 3;
+const WORKER_RESPONSE_KIND_ERROR = 4;
 
 function responseHeadType(baseType: string): string {
   return `${baseType}.head`;
@@ -199,6 +204,171 @@ function responseDoneType(baseType: string): string {
 
 function responseErrorType(baseType: string): string {
   return `${baseType}.error`;
+}
+
+interface WorkerResponseTypeMap {
+  head: string;
+  next: string;
+  done: string;
+  error: string;
+}
+
+interface NormalizedWorkerResponseMessage {
+  kind:
+    | typeof WORKER_RESPONSE_KIND_UNKNOWN
+    | typeof WORKER_RESPONSE_KIND_HEAD
+    | typeof WORKER_RESPONSE_KIND_NEXT
+    | typeof WORKER_RESPONSE_KIND_DONE
+    | typeof WORKER_RESPONSE_KIND_ERROR;
+  status: number;
+  headers: [string, string][] | undefined;
+  chunk: Uint8Array | null;
+  error: string;
+}
+
+interface NormalizedWorkerRowMessage {
+  matchedType: boolean;
+  row: FlightRowMessage | null;
+}
+
+function createWorkerResponseTypeMap(baseType: string): WorkerResponseTypeMap {
+  return {
+    head: responseHeadType(baseType),
+    next: responseNextType(baseType),
+    done: responseDoneType(baseType),
+    error: responseErrorType(baseType),
+  };
+}
+
+function normalizeWorkerResponseMessage(
+  data: unknown,
+  typeMap: WorkerResponseTypeMap,
+): NormalizedWorkerResponseMessage {
+  const message = data as Record<string, unknown> | null;
+  if (message == null || typeof message.type !== "string") {
+    return {
+      kind: WORKER_RESPONSE_KIND_UNKNOWN,
+      status: 0,
+      headers: undefined,
+      chunk: null,
+      error: "",
+    };
+  }
+
+  if (message.type === typeMap.head) {
+    return {
+      kind: WORKER_RESPONSE_KIND_HEAD,
+      status: typeof message.status === "number" ? message.status : 200,
+      headers: Array.isArray(message.headers)
+        ? (message.headers as [string, string][])
+        : undefined,
+      chunk: null,
+      error: "",
+    };
+  }
+
+  if (message.type === typeMap.next) {
+    return {
+      kind: WORKER_RESPONSE_KIND_NEXT,
+      status: 0,
+      headers: undefined,
+      chunk: message.chunk instanceof Uint8Array ? message.chunk : null,
+      error: "",
+    };
+  }
+
+  if (message.type === typeMap.done) {
+    return {
+      kind: WORKER_RESPONSE_KIND_DONE,
+      status: 0,
+      headers: undefined,
+      chunk: null,
+      error: "",
+    };
+  }
+
+  if (message.type === typeMap.error) {
+    return {
+      kind: WORKER_RESPONSE_KIND_ERROR,
+      status: 0,
+      headers: undefined,
+      chunk: null,
+      error: typeof message.error === "string" ? message.error : "Unknown worker transport error",
+    };
+  }
+
+  return {
+    kind: WORKER_RESPONSE_KIND_UNKNOWN,
+    status: 0,
+    headers: undefined,
+    chunk: null,
+    error: "",
+  };
+}
+
+function normalizeWorkerRowMessage(data: unknown, rowResponseType: string): NormalizedWorkerRowMessage {
+  const message = data as Record<string, unknown> | null;
+  if (message == null || message.type !== rowResponseType) {
+    return {
+      matchedType: false,
+      row: null,
+    };
+  }
+  const row = message.row as FlightRowMessage | null | undefined;
+  return {
+    matchedType: true,
+    row: row ?? null,
+  };
+}
+
+function createWorkerRequestEnvelope(
+  requestType: string,
+  id: string,
+  request: Omit<WorkerTransportRequestMessage, "id" | "type">,
+): WorkerTransportRequestMessage {
+  return {
+    type: requestType,
+    id,
+    operation: request.operation,
+    endpoint: request.endpoint,
+    actionId: request.actionId ?? undefined,
+    contentType: request.contentType ?? undefined,
+    headers: request.headers ?? undefined,
+    body: request.body ?? undefined,
+    requestInit: request.requestInit ?? undefined,
+    componentId: request.componentId ?? undefined,
+    componentProps: request.componentProps,
+  };
+}
+
+function normalizeIncomingWorkerTransportRequest(
+  data: unknown,
+  requestType: string,
+): WorkerTransportRequestMessage | null {
+  const message = data as Record<string, unknown> | null;
+  if (message == null || message.type !== requestType || typeof message.id !== "string") {
+    return null;
+  }
+  const operation = message.operation;
+  if (operation !== "action" && operation !== "fetch") {
+    return null;
+  }
+  if (typeof message.endpoint !== "string") {
+    return null;
+  }
+  return {
+    type: requestType,
+    id: message.id,
+    operation,
+    endpoint: message.endpoint,
+    actionId: typeof message.actionId === "string" ? message.actionId : undefined,
+    contentType: typeof message.contentType === "string" ? message.contentType : undefined,
+    headers: Array.isArray(message.headers) ? (message.headers as [string, string][]) : undefined,
+    body: (message.body as BodyInit | undefined) ?? undefined,
+    requestInit: (message.requestInit as Omit<RequestInit, "method" | "body" | "headers"> | undefined) ?? undefined,
+    componentId: typeof message.componentId === "string" ? message.componentId : undefined,
+    componentProps: message.componentProps,
+  };
 }
 
 let requestCounter = 0;
@@ -232,12 +402,6 @@ function concatUint8Chunks(chunks: Uint8Array[], totalBytes: number): Uint8Array
   }
   return merged;
 }
-
-type WorkerResponseMessage =
-  | WorkerTransportResponseHeadMessage
-  | WorkerTransportResponseNextMessage
-  | WorkerTransportResponseDoneMessage
-  | WorkerTransportResponseErrorMessage;
 
 interface PendingWorkerRequest {
   touchActivity: () => void;
@@ -290,6 +454,7 @@ function sendWorkerRequest(
 ): Promise<Response> {
   const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
   const responseType = options.responseType ?? DEFAULT_RESPONSE_TYPE;
+  const responseTypeMap = createWorkerResponseTypeMap(responseType);
   const timeoutMs = options.timeoutMs ?? 10000;
   const id = nextRequestId();
   const endpointState = getWorkerEndpointState(endpoint);
@@ -378,49 +543,45 @@ function sendWorkerRequest(
     endpointState.pending.set(id, {
       touchActivity,
       handleMessage: (data) => {
-        const message = data as WorkerResponseMessage;
-        if (message.type === responseHeadType(responseType)) {
-          const head = message as WorkerTransportResponseHeadMessage;
-          if (didResolveHead || isSettled) return;
-
-          didResolveHead = true;
-          isSettled = true;
-          resolve(
-            new Response(stream, {
-              status: head.status,
-              headers: head.headers,
-            }),
-          );
-          return;
-        }
-
-        if (message.type === responseNextType(responseType)) {
-          if (!didResolveHead || streamDone) return;
-          const next = message as WorkerTransportResponseNextMessage;
-          if (streamController != null) {
-            streamController.enqueue(next.chunk);
-          } else {
-            pendingChunks.push(next.chunk);
-          }
-          return;
-        }
-
-        if (message.type === responseDoneType(responseType)) {
-          if (!didResolveHead || streamDone) return;
-          cleanup();
-          closeStream();
-          return;
-        }
-
-        if (message.type === responseErrorType(responseType)) {
-          const error = new Error((message as WorkerTransportResponseErrorMessage).error);
-          cleanup();
-          if (!didResolveHead && !isSettled) {
+        const message = normalizeWorkerResponseMessage(data, responseTypeMap);
+        switch (message.kind) {
+          case WORKER_RESPONSE_KIND_HEAD:
+            if (didResolveHead || isSettled) return;
+            didResolveHead = true;
             isSettled = true;
-            reject(error);
-          } else {
-            failStream(error);
+            resolve(
+              new Response(stream, {
+                status: message.status,
+                headers: message.headers,
+              }),
+            );
+            return;
+          case WORKER_RESPONSE_KIND_NEXT:
+            if (!didResolveHead || streamDone || message.chunk == null) return;
+            if (streamController != null) {
+              streamController.enqueue(message.chunk);
+            } else {
+              pendingChunks.push(message.chunk);
+            }
+            return;
+          case WORKER_RESPONSE_KIND_DONE:
+            if (!didResolveHead || streamDone) return;
+            cleanup();
+            closeStream();
+            return;
+          case WORKER_RESPONSE_KIND_ERROR: {
+            const error = new Error(message.error);
+            cleanup();
+            if (!didResolveHead && !isSettled) {
+              isSettled = true;
+              reject(error);
+            } else {
+              failStream(error);
+            }
+            return;
           }
+          default:
+            return;
         }
       },
     });
@@ -429,11 +590,7 @@ function sendWorkerRequest(
       timer = setTimeout(watchTimeout, timeoutMs);
     }
 
-    endpoint.postMessage({
-      ...request,
-      id,
-      type: requestType,
-    } satisfies WorkerTransportRequestMessage);
+    endpoint.postMessage(createWorkerRequestEnvelope(requestType, id, request));
   });
 }
 
@@ -538,8 +695,8 @@ export function createWorkerRowTransport(
       endpointState.pending.set(id, {
         touchActivity,
         handleMessage: (data) => {
-          const message = data as WorkerRowResponseMessage;
-          if (message.type !== rowResponseType || message.row == null) {
+          const message = normalizeWorkerRowMessage(data, rowResponseType);
+          if (!message.matchedType || message.row == null) {
             return;
           }
           emitter.push(message.row);
@@ -568,11 +725,7 @@ export function createWorkerRowTransport(
         timer = setTimeout(watchTimeout, timeoutMs);
       }
 
-      endpoint.postMessage({
-        ...request,
-        id,
-        type: requestType,
-      } satisfies WorkerTransportRequestMessage);
+      endpoint.postMessage(createWorkerRequestEnvelope(requestType, id, request));
     });
   }
 
@@ -668,10 +821,11 @@ export function createWorkerTransportMessageHandler(
 ): MessageEventListener {
   const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
   const responseType = options.responseType ?? DEFAULT_RESPONSE_TYPE;
+  const responseTypeMap = createWorkerResponseTypeMap(responseType);
 
   return async (event: MessageEvent<unknown>) => {
-    const request = event.data as WorkerTransportRequestMessage;
-    if (request == null || request.type !== requestType || request.id == null) return;
+    const request = normalizeIncomingWorkerTransportRequest(event.data, requestType);
+    if (request == null) return;
 
     const replyTarget = resolveReplyTarget(event);
     if (replyTarget == null) return;
@@ -679,7 +833,7 @@ export function createWorkerTransportMessageHandler(
     try {
       const response = await handler(request);
       replyTarget.postMessage({
-        type: responseHeadType(responseType),
+        type: responseTypeMap.head,
         id: request.id,
         status: response.status,
         headers: [...response.headers.entries()],
@@ -698,7 +852,7 @@ export function createWorkerTransportMessageHandler(
             const transfer = transferListForChunk(chunk);
             replyTarget.postMessage(
               {
-                type: responseNextType(responseType),
+                type: responseTypeMap.next,
                 id: request.id,
                 chunk,
               } satisfies WorkerTransportResponseNextMessage,
@@ -726,13 +880,13 @@ export function createWorkerTransportMessageHandler(
       }
 
       replyTarget.postMessage({
-        type: responseDoneType(responseType),
+        type: responseTypeMap.done,
         id: request.id,
       } satisfies WorkerTransportResponseDoneMessage);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       replyTarget.postMessage({
-        type: responseErrorType(responseType),
+        type: responseTypeMap.error,
         id: request.id,
         error: message,
       } satisfies WorkerTransportResponseErrorMessage);
@@ -753,8 +907,8 @@ export function createWorkerRowTransportMessageHandler(
   const rowResponseType = options.responseType ?? DEFAULT_ROW_RESPONSE_TYPE;
 
   return async (event: MessageEvent<unknown>) => {
-    const request = event.data as WorkerTransportRequestMessage;
-    if (request == null || request.type !== requestType || request.id == null) return;
+    const request = normalizeIncomingWorkerTransportRequest(event.data, requestType);
+    if (request == null) return;
 
     const replyTarget = resolveReplyTarget(event);
     if (replyTarget == null) return;

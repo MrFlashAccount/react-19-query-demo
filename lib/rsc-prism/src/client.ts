@@ -73,7 +73,7 @@ function clearDefaultWorkerRuntime(runtime: BootstrappedWorkerRuntime): void {
   if (globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] !== runtime) {
     return;
   }
-  delete globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY];
+  globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] = undefined;
 }
 
 function registerDefaultWorkerRuntime(

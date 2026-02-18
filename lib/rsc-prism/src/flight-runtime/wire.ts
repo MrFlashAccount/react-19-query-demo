@@ -755,156 +755,198 @@ function decodeWireValueInternal(
     return value;
   }
   if (Array.isArray(value)) {
-    const decoded: unknown[] = new Array(value.length);
-    for (let i = 0; i < value.length; i += 1) {
-      decoded[i] = decodeWireValueInternal(
-        value[i],
-        resolveClientReference,
-        resolveRowReference,
-        visitingRowRefs,
-      );
-    }
-    return decoded;
+    return decodeWireArrayValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
   }
 
   const tagged = value as Record<string, unknown>;
   const tag = tagged.$t;
-  if (typeof tag !== "string") {
-    const result: Record<string, unknown> = {};
-    const keys = Object.keys(tagged);
-    for (let i = 0; i < keys.length; i += 1) {
-      const key = keys[i];
-      result[key] = decodeWireValueInternal(
-        tagged[key],
-        resolveClientReference,
-        resolveRowReference,
-        visitingRowRefs,
-      );
-    }
-    return result;
+  if (typeof tag === "string") {
+    return decodeTaggedWireValue(tag, tagged, resolveClientReference, resolveRowReference, visitingRowRefs);
   }
+  return decodeWirePlainObjectValue(tagged, resolveClientReference, resolveRowReference, visitingRowRefs);
+}
 
-  switch (tag) {
-    case "rowRef": {
-      if (resolveRowReference == null) {
-        throw new Error(`Unknown wire tag "${tag}"`);
-      }
-      const rowId = String(tagged.id);
-      if (visitingRowRefs.has(rowId)) {
-        throw new Error(`[rsc-prism] Circular row reference "${rowId}" in Flight payload.`);
-      }
-      visitingRowRefs.add(rowId);
-      try {
-        const rowValue = resolveRowReference(rowId);
-        if (rowValue == null) {
-          throw new Error(`[rsc-prism] Missing row "${rowId}" in Flight payload.`);
-        }
-        if (typeof rowValue !== "object" || rowValue instanceof ArrayBuffer || ArrayBuffer.isView(rowValue)) {
-          return rowValue;
-        }
-        return decodeWireValueInternal(
-          rowValue,
-          resolveClientReference,
-          resolveRowReference,
-          visitingRowRefs,
-        );
-      } finally {
-        visitingRowRefs.delete(rowId);
-      }
+function decodeWireArrayValue(
+  value: unknown[],
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): unknown[] {
+  const decoded: unknown[] = new Array(value.length);
+  for (let i = 0; i < value.length; i += 1) {
+    decoded[i] = decodeWireValueInternal(value[i], resolveClientReference, resolveRowReference, visitingRowRefs);
+  }
+  return decoded;
+}
+
+function decodeWirePlainObjectValue(
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const keys = Object.keys(value);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    result[key] = decodeWireValueInternal(value[key], resolveClientReference, resolveRowReference, visitingRowRefs);
+  }
+  return result;
+}
+
+function decodeWireRowReferenceValue(
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): unknown {
+  if (resolveRowReference == null) {
+    throw new Error("Unknown wire tag \"rowRef\"");
+  }
+  const rowId = String(value.id);
+  if (visitingRowRefs.has(rowId)) {
+    throw new Error(`[rsc-prism] Circular row reference "${rowId}" in Flight payload.`);
+  }
+  visitingRowRefs.add(rowId);
+  try {
+    const rowValue = resolveRowReference(rowId);
+    if (rowValue == null) {
+      throw new Error(`[rsc-prism] Missing row "${rowId}" in Flight payload.`);
     }
+    if (typeof rowValue !== "object" || rowValue instanceof ArrayBuffer || ArrayBuffer.isView(rowValue)) {
+      return rowValue;
+    }
+    return decodeWireValueInternal(rowValue, resolveClientReference, resolveRowReference, visitingRowRefs);
+  } finally {
+    visitingRowRefs.delete(rowId);
+  }
+}
+
+function decodeWireMapValue(
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): Map<unknown, unknown> {
+  const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
+  if (!Array.isArray(entries)) {
+    return new Map();
+  }
+  const mapped = new Map<unknown, unknown>();
+  for (let i = 0; i < entries.length; i += 1) {
+    const tuple = entries[i] as unknown[];
+    mapped.set(
+      decodeWireValueInternal(tuple[0], resolveClientReference, resolveRowReference, visitingRowRefs),
+      decodeWireValueInternal(tuple[1], resolveClientReference, resolveRowReference, visitingRowRefs),
+    );
+  }
+  return mapped;
+}
+
+function decodeWireSetValue(
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): Set<unknown> {
+  const items = (value.v as unknown[]) ?? EMPTY_ARRAY;
+  if (!Array.isArray(items)) {
+    return new Set();
+  }
+  const decoded = new Set<unknown>();
+  for (let i = 0; i < items.length; i += 1) {
+    decoded.add(decodeWireValueInternal(items[i], resolveClientReference, resolveRowReference, visitingRowRefs));
+  }
+  return decoded;
+}
+
+function decodeWireFormDataValue(
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): FormData {
+  const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
+  const form = new FormData();
+  if (!Array.isArray(entries)) {
+    return form;
+  }
+  for (let i = 0; i < entries.length; i += 1) {
+    const tuple = entries[i] as unknown[];
+    const key = tuple[0];
+    const item = tuple[1];
+    const decoded = decodeWireValueInternal(item, resolveClientReference, resolveRowReference, visitingRowRefs);
+    form.append(
+      typeof key === "string" ? key : String(key),
+      typeof decoded === "string" ? decoded : String(decoded),
+    );
+  }
+  return form;
+}
+
+function decodeWireElementValue(
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): {
+  $$typeof: symbol;
+  type: unknown;
+  key: string | null;
+  ref: null;
+  props: Record<string, unknown>;
+} {
+  const type = decodeType(value.ty as JsonObject, resolveClientReference);
+  const props = decodeWireValueInternal(
+    value.props,
+    resolveClientReference,
+    resolveRowReference,
+    visitingRowRefs,
+  ) as Record<string, unknown>;
+  const key = value.key as string | null;
+  return {
+    $$typeof: REACT_ELEMENT_SYMBOL,
+    type,
+    key: key == null ? null : key,
+    ref: null,
+    props,
+  };
+}
+
+function decodeTaggedWireValue(
+  tag: string,
+  value: Record<string, unknown>,
+  resolveClientReference: (id: string) => unknown,
+  resolveRowReference: ((id: string) => unknown) | undefined,
+  visitingRowRefs: Set<string>,
+): unknown {
+  switch (tag) {
+    case "rowRef":
+      return decodeWireRowReferenceValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
     case "undef":
       return undefined;
     case "bigint":
-      return BigInt(tagged.v as string);
+      return BigInt(value.v as string);
     case "date":
-      return new Date(tagged.v as string);
+      return new Date(value.v as string);
     case "search":
-      return new URLSearchParams(tagged.v as string);
-    case "map": {
-      const entries = (tagged.v as unknown[]) ?? EMPTY_ARRAY;
-      if (!Array.isArray(entries)) {
-        return new Map();
-      }
-      const mapped = new Map<unknown, unknown>();
-      for (let i = 0; i < entries.length; i += 1) {
-        const tuple = entries[i] as unknown[];
-        mapped.set(
-          decodeWireValueInternal(tuple[0], resolveClientReference, resolveRowReference, visitingRowRefs),
-          decodeWireValueInternal(tuple[1], resolveClientReference, resolveRowReference, visitingRowRefs),
-        );
-      }
-      return mapped;
-    }
-    case "set": {
-      const items = (tagged.v as unknown[]) ?? EMPTY_ARRAY;
-      if (!Array.isArray(items)) {
-        return new Set();
-      }
-      const decoded = new Set<unknown>();
-      for (let i = 0; i < items.length; i += 1) {
-        decoded.add(
-          decodeWireValueInternal(
-            items[i],
-            resolveClientReference,
-            resolveRowReference,
-            visitingRowRefs,
-          ),
-        );
-      }
-      return decoded;
-    }
-    case "formdata": {
-      const entries = (tagged.v as unknown[]) ?? EMPTY_ARRAY;
-      const form = new FormData();
-      if (!Array.isArray(entries)) {
-        return form;
-      }
-      for (let i = 0; i < entries.length; i += 1) {
-        const tuple = entries[i] as unknown[];
-        const key = tuple[0];
-        const item = tuple[1];
-        const decoded = decodeWireValueInternal(item, resolveClientReference, resolveRowReference, visitingRowRefs);
-        form.append(
-          typeof key === "string" ? key : String(key),
-          typeof decoded === "string" ? decoded : String(decoded),
-        );
-      }
-      return form;
-    }
+      return new URLSearchParams(value.v as string);
+    case "map":
+      return decodeWireMapValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+    case "set":
+      return decodeWireSetValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+    case "formdata":
+      return decodeWireFormDataValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
     case "clientRef":
-      return resolveClientReference(tagged.id as string);
+      return resolveClientReference(value.id as string);
     case "serverRef":
       return {
         $$typeof: SERVER_REFERENCE_SYMBOL,
-        $$id: tagged.id as string,
+        $$id: value.id as string,
         $$bound: null,
       };
-    case "element": {
-      const type = decodeType(tagged.ty as JsonObject, resolveClientReference);
-      const props = decodeWireValueInternal(
-        tagged.props,
-        resolveClientReference,
-        resolveRowReference,
-        visitingRowRefs,
-      ) as Record<string, unknown>;
-      const key = tagged.key as string | null;
-      if (key != null) {
-        return {
-          $$typeof: REACT_ELEMENT_SYMBOL,
-          type,
-          key,
-          ref: null,
-          props,
-        };
-      }
-      return {
-        $$typeof: REACT_ELEMENT_SYMBOL,
-        type,
-        key: null,
-        ref: null,
-        props,
-      };
-    }
+    case "element":
+      return decodeWireElementValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
     default:
       throw new Error(`Unknown wire tag "${tag}"`);
   }

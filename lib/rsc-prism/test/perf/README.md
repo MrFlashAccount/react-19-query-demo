@@ -74,3 +74,22 @@ pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-run
   - exact command
   - machine context if relevant
   - before + after numbers and deltas
+
+## Deopt sampling
+
+Use the opt-in deopt harness to capture V8 optimization/deoptimization traces and produce a markdown summary:
+
+```bash
+pnpm --filter @lib/rsc-prism exec node test/perf/run-deopt-sample.mjs
+```
+
+Outputs:
+
+- Raw trace log: `/tmp/rsc-prism-deopt-sample.latest.log` (override with `RSC_DEOPT_LOG_PATH`)
+- Summary report: `test/perf/results/deopt-sample-latest.md`
+
+Re-parse an existing log without re-running tests:
+
+```bash
+pnpm --filter @lib/rsc-prism exec node test/perf/parse-deopt-log.mjs --input /tmp/rsc-prism-deopt-sample.latest.log --output test/perf/results/deopt-sample-latest.md
+```

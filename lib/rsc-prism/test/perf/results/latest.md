@@ -38,3 +38,10 @@ All numbers are medians of 3 consecutive runs.
 - **wire.ts**: Merged duplicate `encodeWireValue`/`encodeWireValueWithBinaryRows` into single `encodeWireValueImpl`. Removed `decodeTagValue` intermediate function. Replaced `createElement` with direct element construction. Removed defensive string coercions. `decodeBinaryWireRow` now returns final typed values directly (no wrapper objects).
 - **client.ts**: Simplified row ID to numeric-only (removed string fallback). Removed dead binary-tag checks from `collectUnresolvedRowRefs`. Used `Object.keys` + indexed loop instead of `for-in` in scan. Direct binary row storage (no intermediate wrapper).
 - **server.ts**: Added sync fast-path in `encodeServerNode` for arrays and props that avoids `Promise.all` when all children resolve synchronously.
+
+## Deopt Sample (2026-02-18)
+
+- Trace command wrapper: `pnpm --filter @lib/rsc-prism exec node test/perf/run-deopt-sample.mjs`
+- Detailed report: `test/perf/results/deopt-sample-latest.md`
+- Deopt events (all): `10`
+- Deopt events (matched package functions): `0`

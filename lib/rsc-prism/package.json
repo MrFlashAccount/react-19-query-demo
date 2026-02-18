@@ -95,6 +95,8 @@
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
     "perf:decode": "RSC_PERF=1 vitest run --project unit test/perf/flight-runtime.decode-perf.unit.test.ts",
+    "perf:deopt": "node test/perf/run-deopt-sample.mjs",
+    "perf:deopt:parse": "node test/perf/parse-deopt-log.mjs --input /tmp/rsc-prism-deopt-sample.latest.log --output test/perf/results/deopt-sample-latest.md",
     "test:coverage": "vitest run --coverage",
     "check": "pnpm run \"/check:.*/\"",
     "check:type": "tsgo --noEmit",

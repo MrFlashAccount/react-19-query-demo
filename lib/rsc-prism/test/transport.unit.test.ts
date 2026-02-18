@@ -54,6 +54,20 @@ class MockWorkerEndpoint implements WorkerMessageEndpoint {
   }
 }
 
+const CANONICAL_WORKER_REQUEST_KEYS = [
+  "type",
+  "id",
+  "operation",
+  "endpoint",
+  "actionId",
+  "contentType",
+  "headers",
+  "body",
+  "requestInit",
+  "componentId",
+  "componentProps",
+];
+
 describe("transport", () => {
   beforeEach(() => {
     setInvalidateRSC(() => {});
@@ -141,6 +155,90 @@ describe("transport", () => {
     expect(first.value).toEqual(chunkA);
     expect(second.value).toEqual(chunkB);
     expect(third.done).toBe(true);
+  });
+
+  it("worker transport emits canonical request envelope shape for action and fetch", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const seenRequests: WorkerTransportRequestMessage[] = [];
+
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      seenRequests.push(request);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.head",
+        id: request.id,
+        status: 200,
+      });
+      endpoint.emitMessage({
+        type: "rsc.transport.response.done",
+        id: request.id,
+      });
+    };
+
+    const transport = createWorkerTransport(endpoint);
+    await transport.sendAction({
+      endpoint: "/rsc/action",
+      actionId: "save",
+      body: "[]",
+      contentType: "text/plain",
+    });
+    await transport.fetchRSC?.({
+      url: "/rsc/view",
+      componentId: "mod#Comp",
+      componentProps: { id: 1 },
+    });
+
+    expect(seenRequests).toHaveLength(2);
+    expect(Object.keys(seenRequests[0] as object)).toEqual(CANONICAL_WORKER_REQUEST_KEYS);
+    expect(Object.keys(seenRequests[1] as object)).toEqual(CANONICAL_WORKER_REQUEST_KEYS);
+    expect(seenRequests[0]?.operation).toBe("action");
+    expect(seenRequests[1]?.operation).toBe("fetch");
+  });
+
+  it("worker transport ignores interleaved mismatched response variants", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      endpoint.emitMessage({
+        type: "rsc.transport.response.next",
+        id: request.id,
+        chunk: Uint8Array.from([99]),
+      });
+      endpoint.emitMessage({
+        type: "rsc.transport.response.head",
+        id: request.id,
+        status: 200,
+      });
+      endpoint.emitMessage({
+        type: "rsc.transport.response.head",
+        id: request.id,
+        status: 201,
+      });
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightDoneRow(),
+      } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.next",
+        id: request.id,
+        chunk: Uint8Array.from([1, 2]),
+      });
+      endpoint.emitMessage({
+        type: "rsc.transport.response.done",
+        id: request.id,
+      });
+    };
+
+    const transport = createWorkerTransport(endpoint);
+    const response = await transport.sendAction({
+      endpoint: "/rsc",
+      actionId: "do",
+      body: "[]",
+      contentType: "text/plain",
+    });
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(bytes)).toEqual([1, 2]);
   });
 
   it("worker transport reuses a single message listener across requests", async () => {
@@ -349,6 +447,35 @@ describe("transport", () => {
         url: "/rsc",
       }),
     ).resolves.toBe("ok");
+  });
+
+  it("worker row transport emits canonical request envelope shape", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const seenRequests: WorkerTransportRequestMessage[] = [];
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      seenRequests.push(request);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightModelRow(0, "ok"),
+      } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightDoneRow(),
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint);
+    await expect(
+      transport.fetchRSCDirect?.<string>({
+        url: "/rsc",
+      }),
+    ).resolves.toBe("ok");
+
+    expect(seenRequests).toHaveLength(1);
+    expect(Object.keys(seenRequests[0] as object)).toEqual(CANONICAL_WORKER_REQUEST_KEYS);
   });
 
   it("worker row transport handles binary rows", async () => {
