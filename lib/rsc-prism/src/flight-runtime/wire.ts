@@ -59,9 +59,22 @@ function parseHexChunkId(raw: string): number {
   return id;
 }
 
+function toArrayBuffer(
+  buffer: ArrayBufferLike,
+  byteOffset: number = 0,
+  byteLength: number = buffer.byteLength - byteOffset,
+): ArrayBuffer {
+  if (buffer instanceof ArrayBuffer) {
+    return buffer.slice(byteOffset, byteOffset + byteLength);
+  }
+  const copied = new Uint8Array(byteLength);
+  copied.set(new Uint8Array(buffer, byteOffset, byteLength));
+  return copied.buffer;
+}
+
 export function rehydrateTypedArray(kind: string, bytes: Uint8Array): unknown {
   const toCopiedBuffer = (): ArrayBuffer =>
-    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    toArrayBuffer(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const canUseView = (alignment: number): boolean =>
     bytes.byteOffset % alignment === 0 && bytes.byteLength % alignment === 0;
   switch (kind) {
@@ -119,10 +132,14 @@ export function rehydrateTypedArray(kind: string, bytes: Uint8Array): unknown {
 }
 
 export function rehydrateArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+  if (
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+  ) {
     return bytes.buffer;
   }
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  return toArrayBuffer(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
 function isReactElementLike(value: unknown): value is {

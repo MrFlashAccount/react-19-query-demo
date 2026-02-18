@@ -16,7 +16,7 @@ describe("RSC serialization conformance", () => {
       2n,
       new Date("2025-01-01T00:00:00.000Z"),
       [1, { deep: "ok" }],
-      new Map([
+      new Map<string, unknown>([
         ["a", 1],
         ["b", { nested: true }],
       ]),

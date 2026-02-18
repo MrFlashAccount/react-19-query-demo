@@ -314,6 +314,10 @@ export async function fetchRSC<Props, Target extends ComponentReference<Props>>(
   options?: FetchRSCOptionsForTarget<Props>,
 ): Promise<Awaited<ReturnType<Target>>>;
 export async function fetchRSC(
+  target: string,
+  options?: FetchRSCOptions,
+): Promise<unknown>;
+export async function fetchRSC(
   target: ((props: unknown) => unknown) | string,
   options?: FetchRSCOptions,
 ): Promise<unknown> {

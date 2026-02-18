@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
 
 import { encodeReply } from "../src/flight-runtime/client";
 import { decodeReply, renderToReadableStream } from "../src/flight-runtime/server";
 
 describe("flight runtime server stream behavior", () => {
   it("returns stream before server render resolves and emits deferred rows", async () => {
-    let resolveRendered: ((value: unknown) => void) | null = null;
+    const state: { resolveRendered?: () => void } = {};
     const rendered = new Promise<unknown>((resolve) => {
-      resolveRendered = resolve;
+      state.resolveRendered = () => resolve("ready");
     });
 
     const streamPromise = renderToReadableStream(rendered as any, {});
@@ -28,7 +29,9 @@ describe("flight runtime server stream behavior", () => {
     ]);
     expect(pendingState).toBe("pending");
 
-    resolveRendered?.("ready");
+    if (state.resolveRendered != null) {
+      state.resolveRendered();
+    }
     const second = await secondPending;
     const third = await reader.read();
 
@@ -41,7 +44,7 @@ describe("flight runtime server stream behavior", () => {
 
   it("emits binary rows for ArrayBuffer payloads", async () => {
     const bytes = Uint8Array.from([1, 2, 3, 4]);
-    const stream = await renderToReadableStream(bytes.buffer, {});
+    const stream = await renderToReadableStream(bytes.buffer as unknown as ReactNode, {});
     const reader = stream.getReader();
     const rows: Uint8Array[] = [];
     while (true) {

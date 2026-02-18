@@ -13,7 +13,6 @@ import {
   encodeStreamValue,
   escapeStringValue,
   type StreamEncodeContext,
-  encodeWireValueWithBinaryRows,
 } from "./wire";
 import { createClientModuleProxy } from "./references";
 
@@ -185,7 +184,7 @@ async function encodeServerArray(value: unknown[], context: EncodeContext): Prom
 }
 
 async function encodeServerElement(
-  value: { $$typeof: symbol; type: unknown; props: Record<string, unknown> },
+  value: { $$typeof: symbol; type: unknown; key: string | null; props: Record<string, unknown> },
   context: EncodeContext,
 ): Promise<unknown> {
   const propKeys = Object.keys(value.props);

@@ -77,20 +77,20 @@ describe("rsc client browser workflows", () => {
 
   it("resolves before stream close once 0-row arrives", async () => {
     const payload = `0:${JSON.stringify("early")}\n`;
-    let closeStream: (() => void) | null = null;
+    const state: { closeStream?: () => void } = {};
 
     const response = new Response(
       new ReadableStream<Uint8Array>({
         async start(controller) {
           controller.enqueue(new TextEncoder().encode(payload));
           await new Promise<void>((resolve) => {
-            closeStream = resolve;
+            state.closeStream = () => resolve();
           });
           controller.close();
         },
         cancel() {
-          if (closeStream != null) {
-            closeStream();
+          if (state.closeStream != null) {
+            state.closeStream();
           }
         },
       }),
@@ -108,11 +108,13 @@ describe("rsc client browser workflows", () => {
 
     expect(raced).toBe("resolved");
     await expect(resultPromise).resolves.toBe("early");
-    closeStream?.();
+    if (state.closeStream != null) {
+      state.closeStream();
+    }
   });
 
   it("resolves root row references once deferred rows arrive", async () => {
-    let releaseClose: (() => void) | null = null;
+    const state: { releaseClose?: () => void } = {};
     const response = new Response(
       new ReadableStream<Uint8Array>({
         async start(controller) {
@@ -120,12 +122,14 @@ describe("rsc client browser workflows", () => {
           await new Promise((resolve) => setTimeout(resolve, 10));
           controller.enqueue(new TextEncoder().encode(`1:${JSON.stringify("deferred")}\n`));
           await new Promise<void>((resolve) => {
-            releaseClose = resolve;
+            state.releaseClose = () => resolve();
           });
           controller.close();
         },
         cancel() {
-          releaseClose?.();
+          if (state.releaseClose != null) {
+            state.releaseClose();
+          }
         },
       }),
       {
@@ -142,7 +146,9 @@ describe("rsc client browser workflows", () => {
 
     expect(raced).toBe("resolved");
     await expect(resultPromise).resolves.toBe("deferred");
-    releaseClose?.();
+    if (state.releaseClose != null) {
+      state.releaseClose();
+    }
   });
 
   it("decodes binary row payloads without base64 in stream", async () => {
@@ -169,8 +175,10 @@ describe("rsc client browser workflows", () => {
     const encoded = await encodeActionArgs([1, "x"]);
     if (encoded.type === "string") {
       expect(encoded.data.length).toBeGreaterThan(0);
-    } else {
+    } else if (encoded.data instanceof FormData) {
       expect(Array.from(encoded.data.entries()).length).toBeGreaterThan(0);
+    } else {
+      expect(encoded.data.length).toBeGreaterThan(0);
     }
 
     const seenRequests: Array<{ method: string; url: string; accept: string | null; actionId: string | null }> = [];
@@ -194,7 +202,7 @@ describe("rsc client browser workflows", () => {
       $$id: "todo-actions.ts#run",
       $$bound: null,
     };
-    await expect(fetchRSC<string>("/rsc", { transport })).resolves.toBe("fetch-ok");
+    await expect(fetchRSC("/rsc", { transport })).resolves.toBe("fetch-ok");
     await expect(callAction<string>(runActionRef, [1], { transport, parseResponse: true })).resolves.toBe("action-ok");
 
     expect(seenRequests[0]).toEqual({
