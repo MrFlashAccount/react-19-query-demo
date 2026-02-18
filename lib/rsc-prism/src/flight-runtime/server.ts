@@ -99,7 +99,13 @@ function isReactElementLike(value: unknown): value is {
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return typeof value === "object" && value != null && "then" in value;
+  if (
+    (typeof value !== "object" && typeof value !== "function") ||
+    value == null
+  ) {
+    return false;
+  }
+  return "then" in value;
 }
 
 function encodeFlightRow(id: number, value: unknown): Uint8Array {
@@ -164,7 +170,11 @@ function createEncodeContext(
       nextRowId += 1;
       queueDeferred(
         (async () => {
-          const encoded = await encodeServerNode(value, context);
+          const encoded = encodeServerNode(value, context);
+          if (isThenable(encoded)) {
+            context.emitRow(id, await encoded);
+            return;
+          }
           context.emitRow(id, encoded);
         })(),
       );
@@ -192,13 +202,20 @@ function encodeElementType(type: unknown): string {
   throw new Error("Unsupported element type in minimal runtime.");
 }
 
-async function encodeServerNode(value: unknown, context: EncodeContext): Promise<unknown> {
+function encodeServerNode(
+  value: unknown,
+  context: EncodeContext,
+) {
   if (isThenable(value)) {
     const rowId = context.allocateRowId();
     context.queueDeferred(
       (async () => {
         const resolved = await value;
-        const encoded = await encodeServerNode(resolved, context);
+        const encoded = encodeServerNode(resolved, context);
+        if (isThenable(encoded)) {
+          context.emitRow(rowId, await encoded);
+          return;
+        }
         context.emitRow(rowId, encoded);
       })(),
     );
@@ -224,7 +241,10 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
   return encodeServerElement(value, context);
 }
 
-async function encodeServerArray(value: unknown[], context: EncodeContext): Promise<unknown[]> {
+function encodeServerArray(
+  value: unknown[],
+  context: EncodeContext,
+) {
   const results = Array.from({ length: value.length });
   let hasAsync = false;
   for (let i = 0; i < value.length; i += 1) {
@@ -240,36 +260,31 @@ async function encodeServerArray(value: unknown[], context: EncodeContext): Prom
   return Promise.all(results);
 }
 
-async function encodeServerElement(
+function encodeServerElement(
   value: { $$typeof: symbol; type: unknown; key: string | null; props: Record<string, unknown> },
   context: EncodeContext,
-): Promise<unknown> {
+): unknown {
   const propKeys = Object.keys(value.props);
-  const nextProps: Record<string, unknown> = {};
+  const len = propKeys.length;
+  const encoded: unknown[] = Array.from({ length: len });
   let hasAsync = false;
-  const pendingEntries: Array<[string, PromiseLike<unknown>]> = [];
-  for (let i = 0; i < propKeys.length; i += 1) {
-    const key = propKeys[i];
-    const encoded = encodeServerNode(value.props[key], context);
-    if (isThenable(encoded)) {
-      hasAsync = true;
-      pendingEntries.push([key, encoded]);
-    } else {
-      nextProps[key] = encoded;
-    }
+
+  for (let i = 0; i < len; i += 1) {
+    const v = encodeServerNode(value.props[propKeys[i]], context);
+    encoded[i] = v;
+    if (!hasAsync && isThenable(v)) hasAsync = true;
   }
-  if (hasAsync) {
-    const settled = await Promise.all(pendingEntries.map(([, p]) => p));
-    for (let i = 0; i < pendingEntries.length; i += 1) {
-      nextProps[pendingEntries[i][0]] = settled[i];
-    }
-  }
-  return [
-    "$",
-    encodeElementType(value.type),
-    value.key == null ? null : String(value.key),
-    nextProps,
-  ];
+
+  const type = encodeElementType(value.type);
+  const key = value.key == null ? null : String(value.key);
+
+  const buildRow = (vals: unknown[]) => {
+    const props: Record<string, unknown> = {};
+    for (let i = 0; i < len; i += 1) props[propKeys[i]] = vals[i];
+    return ["$", type, key, props];
+  };
+
+  return hasAsync ? Promise.all(encoded).then(buildRow) : buildRow(encoded);
 }
 
 export async function renderToReadableStream(
@@ -330,7 +345,8 @@ export async function renderToReadableStream(
         );
 
         timingBeforeEncodeRoot = timingSink == null ? 0 : nowMs();
-        const root = await encodeServerNode(element, context);
+        const rootEncoded = encodeServerNode(element, context);
+        const root = isThenable(rootEncoded) ? await rootEncoded : rootEncoded;
         timingAfterEncodeRoot = timingSink == null ? 0 : nowMs();
         if (settled) return;
         controller.enqueue(encodeFlightRow(0, root));
@@ -427,7 +443,8 @@ export async function renderToRowEmitter(
     );
 
     timingBeforeEncodeRoot = timingSink == null ? 0 : nowMs();
-    const root = await encodeServerNode(element, context);
+    const rootEncoded = encodeServerNode(element, context);
+    const root = isThenable(rootEncoded) ? await rootEncoded : rootEncoded;
     timingAfterEncodeRoot = timingSink == null ? 0 : nowMs();
     if (settled) return;
     emit(flightModelRow(0, root));
