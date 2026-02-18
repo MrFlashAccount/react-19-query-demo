@@ -3,11 +3,20 @@ import { setInvalidateRSC } from "../src/runtime-globals";
 
 import {
   createFunctionTransport,
+  createWorkerRowTransport,
+  createWorkerRowTransportMessageHandler,
   createWorkerTransport,
   createWorkerTransportMessageHandler,
   type WorkerMessageEndpoint,
+  type WorkerRowResponseMessage,
   type WorkerTransportRequestMessage,
 } from "../src/transport";
+import {
+  flightBinaryRow,
+  flightDoneRow,
+  flightModelRow,
+  ROW_ERROR,
+} from "../src/flight-runtime/wire";
 
 class MockWorkerEndpoint implements WorkerMessageEndpoint {
   private readonly listeners = new Set<(event: MessageEvent<unknown>) => void>();
@@ -315,5 +324,166 @@ describe("transport", () => {
     });
     expect(response?.status).toBe(200);
     await expect(response?.text()).resolves.toBe("RSC:1\n");
+  });
+
+  it("worker row transport resolves rows directly", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      expect(request.operation).toBe("fetch");
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightModelRow(0, "ok"),
+      } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightDoneRow(),
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint);
+    await expect(
+      transport.fetchRSCDirect?.<string>({
+        url: "/rsc",
+      }),
+    ).resolves.toBe("ok");
+  });
+
+  it("worker row transport handles binary rows", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      const bytes = Uint8Array.from([1, 2, 3]);
+      const { row } = flightBinaryRow(1, "Uint8Array", bytes);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightModelRow(0, "$1"),
+      } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row,
+      } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightDoneRow(),
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint);
+    const value = await transport.fetchRSCDirect?.<Uint8Array>({
+      url: "/rsc",
+    });
+    expect(Array.from(value ?? [])).toEqual([1, 2, 3]);
+  });
+
+  it("worker row transport resolves deferred rows", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightModelRow(0, "$1"),
+      } satisfies WorkerRowResponseMessage);
+      setTimeout(() => {
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          row: flightModelRow(1, "ready"),
+        } satisfies WorkerRowResponseMessage);
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          row: flightDoneRow(),
+        } satisfies WorkerRowResponseMessage);
+      }, 0);
+    };
+
+    const transport = createWorkerRowTransport(endpoint);
+    await expect(
+      transport.fetchRSCDirect?.<string>({
+        url: "/rsc",
+      }),
+    ).resolves.toBe("ready");
+  });
+
+  it("worker row transport times out", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const transport = createWorkerRowTransport(endpoint, { timeoutMs: 5 });
+
+    await expect(
+      transport.fetchRSCDirect?.({
+        url: "/rsc",
+      }),
+    ).rejects.toThrow("Worker transport timed out");
+  });
+
+  it("worker row message handler emits row frames", async () => {
+    const postMessage = vi.fn();
+    const onMessage = createWorkerRowTransportMessageHandler(async (request, emit) => {
+      expect(request.operation).toBe("fetch");
+      emit(flightModelRow(0, "$1"));
+      const { row, transfer } = flightBinaryRow(1, "Uint8Array", Uint8Array.from([7, 8]));
+      emit(row, transfer);
+      emit(flightDoneRow());
+    });
+
+    await onMessage({
+      data: {
+        type: "rsc.transport.request",
+        id: "abc",
+        operation: "fetch",
+        endpoint: "/rsc",
+      },
+      currentTarget: { postMessage },
+    } as unknown as MessageEvent<unknown>);
+
+    expect(postMessage.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        type: "rsc.transport.response.row",
+        id: "abc",
+      }),
+    );
+    expect(postMessage.mock.calls[1]?.[1]).toEqual(expect.any(Array));
+    expect(postMessage.mock.calls[2]?.[0]).toEqual(
+      expect.objectContaining({
+        type: "rsc.transport.response.row",
+        id: "abc",
+        row: flightDoneRow(),
+      }),
+    );
+  });
+
+  it("worker row message handler emits error row on failure", async () => {
+    const postMessage = vi.fn();
+    const onMessage = createWorkerRowTransportMessageHandler(async () => {
+      throw new Error("handler failed");
+    });
+
+    await onMessage({
+      data: {
+        type: "rsc.transport.request",
+        id: "abc",
+        operation: "fetch",
+        endpoint: "/rsc",
+      },
+      currentTarget: { postMessage },
+    } as unknown as MessageEvent<unknown>);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "rsc.transport.response.row",
+        id: "abc",
+        row: expect.objectContaining({
+          k: ROW_ERROR,
+          v: "handler failed",
+        }),
+      }),
+    );
   });
 });

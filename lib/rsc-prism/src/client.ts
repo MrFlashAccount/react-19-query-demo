@@ -328,6 +328,18 @@ export async function fetchRSC(
     );
   }
 
+  if (transport.fetchRSCDirect != null) {
+    const manifest = resolveClientManifestOrThrow();
+    return transport.fetchRSCDirect(
+      {
+        url,
+        componentId: workerComponent?.$$id,
+        componentProps: props,
+      },
+      { manifest, callServer },
+    );
+  }
+
   if (transport.fetchRSC == null) {
     throw new Error("[rsc-prism] Active transport does not support fetchRSC().");
   }
@@ -399,6 +411,19 @@ export async function callAction<T = void>(
   const { parseResponse = false } = options;
   const encodedArgs = await encodeActionArgs(args);
   const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
+
+  if (parseResponse && transport.sendActionDirect != null) {
+    const manifest = resolveClientManifestOrThrow();
+    return transport.sendActionDirect<T>(
+      {
+        endpoint,
+        actionId,
+        body: encodedArgs.data,
+        contentType,
+      },
+      { manifest },
+    );
+  }
 
   const response = await transport.sendAction({
     endpoint,

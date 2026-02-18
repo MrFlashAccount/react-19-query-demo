@@ -271,8 +271,8 @@ export function A() { return null; }
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
     expect(loadedCode).toContain("export async function bootstrapWorkerRuntime()");
     expect(loadedCode).toContain('new Worker("/assets/rsc-prism-worker-runtime');
-    expect(loadedCode).toContain('import { createWorkerTransport } from "@lib/rsc-prism/transport";');
-    expect(loadedCode).toContain("createWorkerTransport");
+    expect(loadedCode).toContain('import { createWorkerRowTransport } from "@lib/rsc-prism/transport";');
+    expect(loadedCode).toContain("createWorkerRowTransport");
     expect(loadedCode).toContain("dispose()");
     expect(loadedCode).toContain("let __rscPrismBootstrappedRuntime = null;");
     expect(loadedCode).toContain("let __rscPrismBootstrapPromise = null;");

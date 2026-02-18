@@ -672,6 +672,54 @@ export function isBinaryWireRowTag(tag: number): boolean {
   );
 }
 
+export const ROW_MODEL = 0 as const;
+export const ROW_BINARY = 1 as const;
+export const ROW_DONE = 2 as const;
+export const ROW_ERROR = 3 as const;
+
+export type FlightRowMessage =
+  | { k: typeof ROW_MODEL; id: number; v: string }
+  | { k: typeof ROW_BINARY; id: number; t: string; v: ArrayBuffer }
+  | { k: typeof ROW_DONE }
+  | { k: typeof ROW_ERROR; v: string };
+
+export function flightModelRow(id: number, value: unknown): FlightRowMessage {
+  return { k: ROW_MODEL, id, v: JSON.stringify(value) };
+}
+
+function toTransferableBuffer(bytes: Uint8Array): ArrayBuffer {
+  const start = bytes.byteOffset;
+  const end = bytes.byteOffset + bytes.byteLength;
+  const backing = bytes.buffer;
+  if (backing instanceof ArrayBuffer) {
+    return backing.slice(start, end);
+  }
+  const copied = new Uint8Array(bytes.byteLength);
+  copied.set(bytes);
+  return copied.buffer;
+}
+
+export function flightBinaryRow(
+  id: number,
+  kind: string,
+  bytes: Uint8Array,
+): { row: FlightRowMessage; transfer: Transferable[] } {
+  const tag = binaryWireTagFromKind(kind);
+  const buffer = toTransferableBuffer(bytes);
+  return {
+    row: { k: ROW_BINARY, id, t: tag, v: buffer },
+    transfer: [buffer],
+  };
+}
+
+export function flightDoneRow(): FlightRowMessage {
+  return { k: ROW_DONE };
+}
+
+export function flightErrorRow(message: string): FlightRowMessage {
+  return { k: ROW_ERROR, v: message };
+}
+
 export function decodeWireValue(
   value: unknown,
   resolveClientReference: (id: string) => unknown,

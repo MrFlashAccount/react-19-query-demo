@@ -1,4 +1,12 @@
 import { getInvalidateRSC } from "./runtime-globals";
+import { createFromRowEmitter } from "./flight-runtime/client";
+import type { FlightClientOptions } from "./flight-runtime/types";
+import {
+  flightErrorRow,
+  ROW_DONE,
+  ROW_ERROR,
+  type FlightRowMessage,
+} from "./flight-runtime/wire";
 
 export interface SendActionInput {
   endpoint: string;
@@ -20,6 +28,14 @@ export interface FetchRSCInput {
 export interface RSCTransport {
   sendAction(input: SendActionInput): Promise<Response>;
   fetchRSC?(input: FetchRSCInput): Promise<Response>;
+  fetchRSCDirect?<T>(
+    input: FetchRSCInput,
+    clientOptions?: FlightClientOptions,
+  ): Promise<T>;
+  sendActionDirect?<T>(
+    input: SendActionInput,
+    clientOptions?: FlightClientOptions,
+  ): Promise<T>;
 }
 
 export function createFetchTransport(): RSCTransport {
@@ -152,6 +168,12 @@ export interface WorkerTransportResponseErrorMessage extends WorkerTransportResp
   error: string;
 }
 
+export interface WorkerRowResponseMessage {
+  type: string;
+  id: string;
+  row: FlightRowMessage;
+}
+
 export interface WorkerTransportOptions {
   requestType?: string;
   responseType?: string;
@@ -160,6 +182,7 @@ export interface WorkerTransportOptions {
 
 const DEFAULT_REQUEST_TYPE = "rsc.transport.request";
 const DEFAULT_RESPONSE_TYPE = "rsc.transport.response";
+const DEFAULT_ROW_RESPONSE_TYPE = "rsc.transport.response.row";
 const WORKER_STREAM_CHUNK_BATCH_BYTES = 32 * 1024;
 
 function responseHeadType(baseType: string): string {
@@ -218,7 +241,7 @@ type WorkerResponseMessage =
 
 interface PendingWorkerRequest {
   touchActivity: () => void;
-  handleMessage: (message: WorkerResponseMessage) => void;
+  handleMessage: (message: unknown) => void;
 }
 
 interface WorkerEndpointState {
@@ -238,8 +261,12 @@ function getWorkerEndpointState(endpoint: WorkerMessageEndpoint): WorkerEndpoint
   };
 
   endpoint.addEventListener("message", (event) => {
-    const message = event.data as WorkerResponseMessage | null;
-    if (message == null || typeof message.id !== "string" || typeof message.type !== "string") {
+    const message = event.data as Record<string, unknown> | null;
+    if (
+      message == null ||
+      typeof message.id !== "string" ||
+      typeof message.type !== "string"
+    ) {
       return;
     }
 
@@ -351,8 +378,9 @@ function sendWorkerRequest(
     endpointState.pending.set(id, {
       touchActivity,
       handleMessage: (data) => {
-        if (data.type === responseHeadType(responseType)) {
-          const head = data as WorkerTransportResponseHeadMessage;
+        const message = data as WorkerResponseMessage;
+        if (message.type === responseHeadType(responseType)) {
+          const head = message as WorkerTransportResponseHeadMessage;
           if (didResolveHead || isSettled) return;
 
           didResolveHead = true;
@@ -366,9 +394,9 @@ function sendWorkerRequest(
           return;
         }
 
-        if (data.type === responseNextType(responseType)) {
+        if (message.type === responseNextType(responseType)) {
           if (!didResolveHead || streamDone) return;
-          const next = data as WorkerTransportResponseNextMessage;
+          const next = message as WorkerTransportResponseNextMessage;
           if (streamController != null) {
             streamController.enqueue(next.chunk);
           } else {
@@ -377,15 +405,15 @@ function sendWorkerRequest(
           return;
         }
 
-        if (data.type === responseDoneType(responseType)) {
+        if (message.type === responseDoneType(responseType)) {
           if (!didResolveHead || streamDone) return;
           cleanup();
           closeStream();
           return;
         }
 
-        if (data.type === responseErrorType(responseType)) {
-          const error = new Error((data as WorkerTransportResponseErrorMessage).error);
+        if (message.type === responseErrorType(responseType)) {
+          const error = new Error((message as WorkerTransportResponseErrorMessage).error);
           cleanup();
           if (!didResolveHead && !isSettled) {
             isSettled = true;
@@ -447,6 +475,131 @@ export function createWorkerTransport(
         },
         options,
       );
+    },
+  };
+}
+
+export function createWorkerRowTransport(
+  endpoint: WorkerMessageEndpoint,
+  options: WorkerTransportOptions = {},
+): RSCTransport {
+  const baseTransport = createWorkerTransport(endpoint, options);
+  const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
+  const rowResponseType = options.responseType ?? DEFAULT_ROW_RESPONSE_TYPE;
+  const timeoutMs = options.timeoutMs ?? 10000;
+  const endpointState = getWorkerEndpointState(endpoint);
+
+  function sendRowRequest<T>(
+    request: Omit<WorkerTransportRequestMessage, "id" | "type">,
+    clientOptions?: FlightClientOptions,
+  ): Promise<T> {
+    const id = nextRequestId();
+    const emitter = createFromRowEmitter<T>(clientOptions);
+
+    return new Promise<T>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let lastActivity = Date.now();
+      let settled = false;
+
+      const cleanup = (): void => {
+        endpointState.pending.delete(id);
+        if (timer != null) {
+          clearTimeout(timer);
+        }
+      };
+
+      const settleWith = (fn: () => void): void => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      };
+
+      const fail = (error: Error): void => {
+        if (settled) return;
+        settleWith(() => {
+          emitter.push(flightErrorRow(error.message));
+          reject(error);
+        });
+      };
+
+      const touchActivity = (): void => {
+        lastActivity = Date.now();
+      };
+
+      const watchTimeout = (): void => {
+        if (timeoutMs <= 0) return;
+        const elapsed = Date.now() - lastActivity;
+        const remaining = timeoutMs - elapsed;
+        if (remaining > 0) {
+          timer = setTimeout(watchTimeout, remaining);
+          return;
+        }
+        fail(new Error(`Worker transport timed out after ${timeoutMs}ms`));
+      };
+
+      endpointState.pending.set(id, {
+        touchActivity,
+        handleMessage: (data) => {
+          const message = data as WorkerRowResponseMessage;
+          if (message.type !== rowResponseType || message.row == null) {
+            return;
+          }
+          emitter.push(message.row);
+          if (message.row.k === ROW_DONE || message.row.k === ROW_ERROR) {
+            cleanup();
+          }
+        },
+      });
+
+      emitter.result.then(
+        (value) => settleWith(() => resolve(value)),
+        (error) => settleWith(() => reject(error)),
+      );
+
+      if (timeoutMs > 0) {
+        timer = setTimeout(watchTimeout, timeoutMs);
+      }
+
+      endpoint.postMessage({
+        ...request,
+        id,
+        type: requestType,
+      } satisfies WorkerTransportRequestMessage);
+    });
+  }
+
+  return {
+    ...baseTransport,
+    fetchRSCDirect<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T> {
+      const headers = new Headers(input.headers);
+      headers.set("accept", "text/x-component");
+      return sendRowRequest<T>(
+        {
+          operation: "fetch",
+          endpoint: input.url,
+          headers: toHeaderTuples(headers),
+          requestInit: input.requestInit,
+          componentId: input.componentId,
+          componentProps: input.componentProps,
+        },
+        clientOptions,
+      );
+    },
+    sendActionDirect<T>(input: SendActionInput, clientOptions?: FlightClientOptions): Promise<T> {
+      const invalidateRSC = getInvalidateRSC();
+      return sendRowRequest<T>(
+        {
+          operation: "action",
+          endpoint: input.endpoint,
+          actionId: input.actionId,
+          contentType: input.contentType,
+          headers: toHeaderTuples(input.headers),
+          body: input.body,
+          requestInit: input.requestInit,
+        },
+        clientOptions,
+      ).finally(() => invalidateRSC());
     },
   };
 }
@@ -576,6 +729,43 @@ export function createWorkerTransportMessageHandler(
         id: request.id,
         error: message,
       } satisfies WorkerTransportResponseErrorMessage);
+    }
+  };
+}
+
+export type WorkerRowTransportRequestHandler = (
+  request: WorkerTransportRequestMessage,
+  emit: (row: FlightRowMessage, transfer?: Transferable[]) => void,
+) => Promise<void> | void;
+
+export function createWorkerRowTransportMessageHandler(
+  handler: WorkerRowTransportRequestHandler,
+  options: WorkerTransportOptions = {},
+): MessageEventListener {
+  const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
+  const rowResponseType = options.responseType ?? DEFAULT_ROW_RESPONSE_TYPE;
+
+  return async (event: MessageEvent<unknown>) => {
+    const request = event.data as WorkerTransportRequestMessage;
+    if (request == null || request.type !== requestType || request.id == null) return;
+
+    const replyTarget = resolveReplyTarget(event);
+    if (replyTarget == null) return;
+
+    const emit = (row: FlightRowMessage, transfer?: Transferable[]): void => {
+      const message: WorkerRowResponseMessage = {
+        type: rowResponseType,
+        id: request.id,
+        row,
+      };
+      replyTarget.postMessage(message, transfer);
+    };
+
+    try {
+      await handler(request, emit);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit(flightErrorRow(message));
     }
   };
 }

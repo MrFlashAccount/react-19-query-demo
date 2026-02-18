@@ -8,13 +8,17 @@ import type { ReactNode } from "react";
 import { polyfillReady } from "./polyfill";
 import {
   renderRSC,
+  renderRSCRows,
   handleAction,
+  handleActionRows,
   getActionIdFromRequest,
   createRSCContext,
   registerActions,
   registerActionModule,
 } from "./server";
 import type { ClientManifest, EncodedActionArgs, RSCResponseOptions, RSCContext } from "./types";
+import type { FlightRowEmit } from "./flight-runtime/server";
+import { flightErrorRow } from "./flight-runtime/wire";
 
 /**
  * RSC content type header
@@ -48,6 +52,20 @@ async function createFlightErrorResponse(
     status,
     headers: createRSCHeaders(options?.headers),
   });
+}
+
+async function createFlightErrorRows(
+  ctx: RSCContext,
+  emit: FlightRowEmit,
+  message: string,
+  options?: RSCResponseOptions,
+): Promise<void> {
+  const errorRecord = {
+    __rscPrismError: true,
+    message,
+    status: 500,
+  } as unknown as ReactNode;
+  await renderRSCRows(errorRecord, ctx, emit, { onError: options?.onError });
 }
 
 /**
@@ -187,7 +205,17 @@ export interface CreateRSCHandlerOptions {
 export function createRSCHandler(options: CreateRSCHandlerOptions): {
   ctx: RSCContext;
   render: (element: ReactNode, responseOptions?: RSCResponseOptions) => Promise<Response>;
+  renderRows: (
+    element: ReactNode,
+    emit: FlightRowEmit,
+    responseOptions?: RSCResponseOptions,
+  ) => Promise<void>;
   action: (request: Request, responseOptions?: RSCResponseOptions) => Promise<Response>;
+  actionRows: (
+    request: Request,
+    emit: FlightRowEmit,
+    responseOptions?: RSCResponseOptions,
+  ) => Promise<void>;
   ready: Promise<void>;
 } {
   const ctx = createRSCContext(options.manifest);
@@ -215,12 +243,58 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
       });
     },
 
+    async renderRows(
+      element: ReactNode,
+      emit: FlightRowEmit,
+      _responseOptions?: RSCResponseOptions,
+    ): Promise<void> {
+      await ready;
+      await renderRSCRows(element, ctx, emit, {
+        onError: options.onError,
+      });
+    },
+
     async action(request: Request, responseOptions?: RSCResponseOptions): Promise<Response> {
       await ready;
       return rscAction(request, ctx, {
         onError: options.onError,
         ...responseOptions,
       });
+    },
+
+    async actionRows(
+      request: Request,
+      emit: FlightRowEmit,
+      _responseOptions?: RSCResponseOptions,
+    ): Promise<void> {
+      await ready;
+
+      const actionId = getActionIdFromRequest(request);
+      if (!actionId) {
+        emit(flightErrorRow("Missing action ID"));
+        return;
+      }
+
+      const contentType = request.headers.get("Content-Type") ?? "";
+      const encodedArgs: EncodedActionArgs = contentType.includes("form")
+        ? { type: "formdata", data: await request.formData() }
+        : { type: "string", data: await request.text() };
+
+      try {
+        await handleActionRows(ctx, actionId, encodedArgs, emit, {
+          onError: options.onError,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[rsc-sw-bff] Action error:", err);
+        if (message.length > 0) {
+          emit(flightErrorRow(message));
+          return;
+        }
+        await createFlightErrorRows(ctx, emit, "Action failed", {
+          onError: options.onError,
+        });
+      }
     },
 
     ready,

@@ -3,6 +3,11 @@ import { annotateServerReference } from "./references";
 import type { FlightServerRenderOptions } from "./types";
 import {
   binaryWireTagFromKind,
+  flightBinaryRow,
+  flightDoneRow,
+  flightErrorRow,
+  flightModelRow,
+  type FlightRowMessage,
   decodeBinaryWireRow,
   decodeWireValue,
   encodeStreamValue,
@@ -64,6 +69,58 @@ interface EncodeContext {
   emitBinaryRow: (kind: string, bytes: Uint8Array) => number;
   outlineValue: (value: unknown) => number;
   streamEncodeContext: StreamEncodeContext;
+}
+
+export type FlightRowEmit = (row: FlightRowMessage, transfer?: Transferable[]) => void;
+
+interface RenderSink {
+  readonly settled: boolean;
+  emitModelRow: (id: number, value: unknown) => void;
+  emitBinaryRow: (id: number, kind: string, bytes: Uint8Array) => void;
+}
+
+function createEncodeContext(
+  sink: RenderSink,
+  queueDeferred: (task: Promise<void>) => void,
+): EncodeContext {
+  let nextRowId = 1;
+  const context: EncodeContext = {
+    queueDeferred,
+    allocateRowId: () => {
+      const current = nextRowId;
+      nextRowId += 1;
+      return current;
+    },
+    emitRow: (id, value) => {
+      if (sink.settled) return;
+      sink.emitModelRow(id, value);
+    },
+    emitBinaryRow: (kind, bytes) => {
+      const id = nextRowId;
+      nextRowId += 1;
+      if (!sink.settled) {
+        sink.emitBinaryRow(id, kind, bytes);
+      }
+      return id;
+    },
+    outlineValue: (value) => {
+      const id = nextRowId;
+      nextRowId += 1;
+      queueDeferred(
+        (async () => {
+          const encoded = await encodeServerNode(value, context);
+          context.emitRow(id, encoded);
+        })(),
+      );
+      return id;
+    },
+    streamEncodeContext: {
+      outlineValue: (value) => context.outlineValue(value),
+      emitBinaryRow: (kind, bytes) => context.emitBinaryRow(kind, bytes),
+      seen: new WeakSet<object>(),
+    },
+  };
+  return context;
 }
 
 function encodeElementType(type: unknown): string {
@@ -181,7 +238,6 @@ export async function renderToReadableStream(
       signal?.addEventListener("abort", onAbort, { once: true });
 
       try {
-        let nextRowId = 1;
         const pendingRows = new Set<Promise<void>>();
         const queueDeferred = (task: Promise<void>): void => {
           pendingRows.add(task);
@@ -189,42 +245,20 @@ export async function renderToReadableStream(
             pendingRows.delete(task);
           });
         };
-        const context: EncodeContext = {
-          queueDeferred,
-          allocateRowId: () => {
-            const current = nextRowId;
-            nextRowId += 1;
-            return current;
-          },
-          emitRow: (id, value) => {
-            if (settled) return;
-            controller.enqueue(encodeFlightRow(id, value));
-          },
-          emitBinaryRow: (kind, bytes) => {
-            const id = nextRowId;
-            nextRowId += 1;
-            if (!settled) {
+        const context = createEncodeContext(
+          {
+            get settled() {
+              return settled;
+            },
+            emitModelRow(id, value) {
+              controller.enqueue(encodeFlightRow(id, value));
+            },
+            emitBinaryRow(id, kind, bytes) {
               controller.enqueue(encodeBinaryFlightRow(id, kind, bytes));
-            }
-            return id;
+            },
           },
-          outlineValue: (value) => {
-            const id = nextRowId;
-            nextRowId += 1;
-            queueDeferred(
-              (async () => {
-                const encoded = await encodeServerNode(value, context);
-                context.emitRow(id, encoded);
-              })(),
-            );
-            return id;
-          },
-          streamEncodeContext: {
-            outlineValue: (value) => context.outlineValue(value),
-            emitBinaryRow: (kind, bytes) => context.emitBinaryRow(kind, bytes),
-            seen: new WeakSet<object>(),
-          },
-        };
+          queueDeferred,
+        );
 
         const root = await encodeServerNode(element, context);
         if (settled) return;
@@ -247,6 +281,72 @@ export async function renderToReadableStream(
       }
     },
   });
+}
+
+export async function renderToRowEmitter(
+  element: ReactNode,
+  _moduleBasePath: unknown,
+  emit: FlightRowEmit,
+  options?: FlightServerRenderOptions,
+): Promise<void> {
+  const signal = options?.signal;
+  if (signal?.aborted) {
+    emit(flightErrorRow(String(signal.reason)));
+    return;
+  }
+
+  let settled = false;
+  const onAbort = () => {
+    if (settled) return;
+    settled = true;
+    emit(flightErrorRow(String(signal?.reason)));
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    const pendingRows = new Set<Promise<void>>();
+    const queueDeferred = (task: Promise<void>): void => {
+      pendingRows.add(task);
+      task.finally(() => {
+        pendingRows.delete(task);
+      });
+    };
+    const context = createEncodeContext(
+      {
+        get settled() {
+          return settled;
+        },
+        emitModelRow(id, value) {
+          emit(flightModelRow(id, value));
+        },
+        emitBinaryRow(id, kind, bytes) {
+          const { row, transfer } = flightBinaryRow(id, kind, bytes);
+          emit(row, transfer);
+        },
+      },
+      queueDeferred,
+    );
+
+    const root = await encodeServerNode(element, context);
+    if (settled) return;
+    emit(flightModelRow(0, root));
+
+    while (pendingRows.size > 0) {
+      await Promise.race(pendingRows);
+      if (settled) return;
+    }
+
+    emit(flightDoneRow());
+    settled = true;
+  } catch (error) {
+    if (!settled) {
+      settled = true;
+      const message = error instanceof Error ? error.message : String(error);
+      emit(flightErrorRow(message));
+    }
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
 }
 
 export async function decodeReply(

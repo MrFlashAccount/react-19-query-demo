@@ -12,6 +12,7 @@ import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } 
 import { registerServerReference } from "./flight-runtime/server";
 import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { createClientModuleProxy } from "./flight-runtime/references";
+import type { FlightRowEmit } from "./flight-runtime/server";
 
 
 /**
@@ -125,6 +126,27 @@ export async function renderRSC(
   });
 }
 
+export async function renderRSCRows(
+  element: ReactNode,
+  ctx: RSCContext,
+  emit: FlightRowEmit,
+  options?: RSCRenderOptions,
+): Promise<void> {
+  if (defaultFlightProtocolAdapter.renderRows == null) {
+    throw new Error("[rsc-prism] Active Flight protocol adapter does not support row rendering.");
+  }
+
+  return defaultFlightProtocolAdapter.renderRows(element, ctx.manifest, emit, {
+    onError:
+      options?.onError ??
+      ((err) => {
+        console.error("[rsc-sw-bff] Render error:", err);
+        return "An error occurred during server rendering.";
+      }),
+    signal: options?.signal,
+  });
+}
+
 /**
  * Decode encoded action arguments back to JavaScript values
  */
@@ -161,6 +183,28 @@ export async function handleAction(
   const result = await action.fn(...args);
 
   return defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
+    onError: options?.onError,
+    signal: options?.signal,
+  });
+}
+
+export async function handleActionRows(
+  ctx: RSCContext,
+  actionId: string,
+  encodedArgs: EncodedActionArgs,
+  emit: FlightRowEmit,
+  options?: RSCRenderOptions,
+): Promise<void> {
+  const action = ctx.actions.get(actionId);
+  if (!action) {
+    const available = Array.from(ctx.actions.keys()).join(", ") || "(none)";
+    throw new Error(`Action "${actionId}" not found. Available: ${available}`);
+  }
+
+  const args = await decodeActionArgs(encodedArgs);
+  const result = await action.fn(...args);
+
+  return renderRSCRows(result as ReactNode, ctx, emit, {
     onError: options?.onError,
     signal: options?.signal,
   });

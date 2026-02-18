@@ -974,7 +974,7 @@ function buildWorkerComponentRegistryCode(modules: WorkerRuntimeModuleEntry[]): 
 function buildGeneratedWorkerEntryCode(endpoint: string): string {
   return `
 import { createRSCHandler } from "@lib/rsc-prism/response";
-import { createWorkerTransportMessageHandler } from "@lib/rsc-prism/transport";
+import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport";
 import { resolveWorkerComponent, workerActionModules } from "./worker-component-registry";
 
 const WORKER_ORIGIN = "https://rsc.prism.local";
@@ -999,45 +999,35 @@ function toActionRequest(message, endpoint) {
 
 self.addEventListener(
   "message",
-  createWorkerTransportMessageHandler(async (request) => {
+  createWorkerRowTransportMessageHandler(async (request, emit) => {
     const target = new URL(request.endpoint, WORKER_ORIGIN);
 
     if (request.operation === "fetch") {
       if (target.pathname !== ${JSON.stringify(endpoint)}) {
-        return new Response(JSON.stringify({ error: "Unknown endpoint: " + target.pathname }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
+        throw new Error("Unknown endpoint: " + target.pathname);
       }
 
       const component = resolveWorkerComponent(request.componentId);
       if (component == null) {
-        return new Response(JSON.stringify({ error: "Missing or unknown worker component reference." }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        });
+        throw new Error("Missing or unknown worker component reference.");
       }
 
-      return handler.render(component(request.componentProps ?? {}));
+      await handler.renderRows(component(request.componentProps ?? {}), emit);
+      return;
     }
 
     if (request.operation === "action") {
       if (target.pathname !== ACTION_ENDPOINT) {
-        return new Response(JSON.stringify({ error: "Unknown endpoint: " + target.pathname }), {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        });
+        throw new Error("Unknown endpoint: " + target.pathname);
       }
       const actionRequest = toActionRequest(request, target);
-      return handler.action(actionRequest, {
+      await handler.actionRows(actionRequest, emit, {
         status: 200,
       });
+      return;
     }
 
-    return new Response(JSON.stringify({ error: "Unsupported operation" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw new Error("Unsupported operation");
   }),
 );
 self.postMessage({ type: "rsc.prism.worker.ready" });
@@ -1047,7 +1037,7 @@ export const __rscPrismWorkerRuntimeMarker = true;
 
 function buildWorkerBootstrapCode(servePath: string): string {
   return `
-import { createWorkerTransport } from "@lib/rsc-prism/transport";
+import { createWorkerRowTransport } from "@lib/rsc-prism/transport";
 
 const __RSC_PRISM_BOOTSTRAP_GLOBAL_KEY = ${JSON.stringify(WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY)};
 let __rscPrismBootstrappedRuntime = null;
@@ -1114,7 +1104,7 @@ async function initializeWorkerRuntime() {
     throw error;
   }
 
-  const transport = createWorkerTransport(worker);
+  const transport = createWorkerRowTransport(worker);
   let isDisposed = false;
   const runtime = {
     worker,

@@ -1,9 +1,10 @@
 import { createRSCHandler } from "./response";
 import {
-  createWorkerTransportMessageHandler,
+  createWorkerRowTransportMessageHandler,
   type WorkerTransportRequestMessage,
 } from "./transport";
 import type { ReactNode } from "react";
+import { flightErrorRow } from "./flight-runtime/wire";
 
 interface WorkerRuntimeModuleConfig {
   moduleId: string;
@@ -61,48 +62,38 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
 
   self.addEventListener(
     "message",
-    createWorkerTransportMessageHandler(async (request: WorkerTransportRequestMessage) => {
+    createWorkerRowTransportMessageHandler(async (request: WorkerTransportRequestMessage, emit) => {
       const target = new URL(request.endpoint, workerOrigin);
 
       if (request.operation === "fetch") {
         if (target.pathname !== endpoint) {
-          return new Response(JSON.stringify({ error: `Unknown endpoint: ${target.pathname}` }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          });
+          emit(flightErrorRow(`Unknown endpoint: ${target.pathname}`));
+          return;
         }
 
         const component = componentRegistry.get(request.componentId ?? "");
         if (component == null) {
-          return new Response(
-            JSON.stringify({ error: "Missing or unknown worker component reference." }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
+          emit(flightErrorRow("Missing or unknown worker component reference."));
+          return;
         }
 
-        return handler.render(component(request.componentProps ?? {}) as ReactNode);
+        await handler.renderRows(component(request.componentProps ?? {}) as ReactNode, emit);
+        return;
       }
 
       if (request.operation === "action") {
         if (target.pathname !== actionEndpoint) {
-          return new Response(JSON.stringify({ error: `Unknown endpoint: ${target.pathname}` }), {
-            status: 404,
-            headers: { "Content-Type": "application/json" },
-          });
+          emit(flightErrorRow(`Unknown endpoint: ${target.pathname}`));
+          return;
         }
 
-        return handler.action(toActionRequest(request, target), {
+        await handler.actionRows(toActionRequest(request, target), emit, {
           status: 200,
         });
+        return;
       }
 
-      return new Response(JSON.stringify({ error: "Unsupported operation" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      emit(flightErrorRow("Unsupported operation"));
     }),
   );
 

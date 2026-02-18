@@ -5,8 +5,13 @@ import {
   createLazyChunkWrapper,
   createModelReviver,
   decodeBinaryWireRow,
+  type FlightRowMessage,
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
+  ROW_BINARY,
+  ROW_DONE,
+  ROW_ERROR,
+  ROW_MODEL,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
 
@@ -517,6 +522,87 @@ export async function createFromReadableStream<T>(
     });
     settleRoot();
   });
+}
+
+export function createFromRowEmitter<T>(
+  options?: FlightClientOptions,
+): {
+  push: (row: FlightRowMessage) => void;
+  result: Promise<T>;
+} {
+  const resolveClientReference = createClientReferenceResolver(options);
+  const response = createFlightResponse(resolveClientReference);
+  let hasAnyRow = false;
+  let rootSettled = false;
+
+  let resolveResult!: (value: T) => void;
+  let rejectResult!: (reason: unknown) => void;
+  const result = new Promise<T>((resolve, reject) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+
+  const settleRoot = (): void => {
+    if (rootSettled) {
+      return;
+    }
+    attachRootResolution(
+      response,
+      (value) => {
+        void materializeLazyValue(value)
+          .then((materialized) => {
+            if (rootSettled) return;
+            rootSettled = true;
+            resolveResult(materialized as T);
+          })
+          .catch((error) => {
+            if (rootSettled) return;
+            rootSettled = true;
+            rejectResult(error);
+          });
+      },
+      (reason) => {
+        if (rootSettled) return;
+        rootSettled = true;
+        rejectResult(reason);
+      },
+    );
+  };
+
+  return {
+    push(row) {
+      switch (row.k) {
+        case ROW_MODEL:
+          resolveModelChunk(response, row.id, row.v);
+          hasAnyRow = true;
+          settleRoot();
+          return;
+        case ROW_BINARY: {
+          const payload = decodeBinaryWireRow(row.t, new Uint8Array(row.v));
+          resolveInitializedChunk(response, row.id, payload);
+          hasAnyRow = true;
+          settleRoot();
+          return;
+        }
+        case ROW_DONE:
+          if (!hasAnyRow) {
+            resolveInitializedChunk(response, 0, null);
+          }
+          settleRoot();
+          return;
+        case ROW_ERROR: {
+          const error = new Error(row.v);
+          closeResponseWithError(response, error);
+          if (!rootSettled) {
+            rootSettled = true;
+            rejectResult(error);
+          }
+          return;
+        }
+      }
+    },
+    result,
+  };
 }
 
 export async function encodeReply(value: unknown): Promise<FormData | string> {

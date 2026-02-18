@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { ClientManifest, EncodedActionArgs, RSCRenderOptions } from "../types";
-import { createFromReadableStream, encodeReply } from "./client";
-import { decodeReply, renderToReadableStream } from "./server";
+import { createFromReadableStream, createFromRowEmitter, encodeReply } from "./client";
+import { decodeReply, renderToReadableStream, renderToRowEmitter, type FlightRowEmit } from "./server";
+import type { FlightRowMessage } from "./wire";
 
 export interface FlightProtocolAdapter {
   renderStream(
@@ -14,6 +15,19 @@ export interface FlightProtocolAdapter {
     manifest: ClientManifest,
     callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
   ): Promise<T>;
+  renderRows?(
+    element: ReactNode,
+    manifest: ClientManifest,
+    emit: FlightRowEmit,
+    options?: RSCRenderOptions,
+  ): Promise<void>;
+  consumeRows?<T = unknown>(
+    manifest: ClientManifest,
+    callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
+  ): {
+    push: (row: FlightRowMessage) => void;
+    result: Promise<T>;
+  };
   encodeActionArgs(args: unknown[]): Promise<EncodedActionArgs>;
   decodeActionArgs(encoded: EncodedActionArgs, manifest: ClientManifest): Promise<unknown>;
 }
@@ -25,6 +39,17 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
 
   consumeStream(stream, manifest, callServer) {
     return createFromReadableStream(stream, {
+      manifest,
+      callServer,
+    });
+  },
+
+  renderRows(element, manifest, emit, options) {
+    return renderToRowEmitter(element, manifest, emit, options);
+  },
+
+  consumeRows(manifest, callServer) {
+    return createFromRowEmitter({
       manifest,
       callServer,
     });
