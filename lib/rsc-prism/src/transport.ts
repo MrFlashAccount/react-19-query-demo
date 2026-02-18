@@ -499,7 +499,8 @@ export function createWorkerRowTransport(
     return new Promise<T>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let lastActivity = Date.now();
-      let settled = false;
+      let rootSettled = false;
+      let streamSettled = false;
 
       const cleanup = (): void => {
         endpointState.pending.delete(id);
@@ -508,19 +509,15 @@ export function createWorkerRowTransport(
         }
       };
 
-      const settleWith = (fn: () => void): void => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        fn();
-      };
-
       const fail = (error: Error): void => {
-        if (settled) return;
-        settleWith(() => {
-          emitter.push(flightErrorRow(error.message));
+        if (streamSettled) return;
+        streamSettled = true;
+        cleanup();
+        emitter.push(flightErrorRow(error.message));
+        if (!rootSettled) {
+          rootSettled = true;
           reject(error);
-        });
+        }
       };
 
       const touchActivity = (): void => {
@@ -547,14 +544,24 @@ export function createWorkerRowTransport(
           }
           emitter.push(message.row);
           if (message.row.k === ROW_DONE || message.row.k === ROW_ERROR) {
+            streamSettled = true;
             cleanup();
           }
         },
       });
 
       emitter.result.then(
-        (value) => settleWith(() => resolve(value)),
-        (error) => settleWith(() => reject(error)),
+        (value) => {
+          if (rootSettled) return;
+          rootSettled = true;
+          resolve(value);
+        },
+        (error) => {
+          if (rootSettled) return;
+          rootSettled = true;
+          cleanup();
+          reject(error);
+        },
       );
 
       if (timeoutMs > 0) {

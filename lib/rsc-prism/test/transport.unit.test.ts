@@ -412,6 +412,67 @@ describe("transport", () => {
     ).resolves.toBe("ready");
   });
 
+  it("worker row transport continues hydrating deferred chunks after root resolution", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightModelRow(0, "$1"),
+      } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        row: flightModelRow(1, { first: "$2" }),
+      } satisfies WorkerRowResponseMessage);
+      setTimeout(() => {
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          row: flightModelRow(2, "ready"),
+        } satisfies WorkerRowResponseMessage);
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          row: flightDoneRow(),
+        } satisfies WorkerRowResponseMessage);
+      }, 20);
+    };
+
+    const transport = createWorkerRowTransport(endpoint);
+    const value = await transport.fetchRSCDirect?.<{ first: unknown }>({
+      url: "/rsc",
+    });
+
+    const lazy = value?.first as {
+      $$typeof?: symbol;
+      _payload: unknown;
+      _init: (payload: unknown) => unknown;
+    };
+
+    expect(String(lazy?.$$typeof)).toBe("Symbol(react.lazy)");
+
+    let thrown: unknown;
+    try {
+      lazy._init(lazy._payload);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeDefined();
+    expect(typeof (thrown as { then?: unknown }).then).toBe("function");
+
+    await expect(
+      Promise.race([
+        Promise.resolve(thrown).then(() => "resolved"),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 200)),
+      ]),
+    ).resolves.toBe("resolved");
+
+    expect(lazy._init(lazy._payload)).toBe("ready");
+  });
+
   it("worker row transport times out", async () => {
     const endpoint = new MockWorkerEndpoint();
     const transport = createWorkerRowTransport(endpoint, { timeoutMs: 5 });

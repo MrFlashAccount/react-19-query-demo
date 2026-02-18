@@ -71,6 +71,22 @@ function createPendingChunk<T>(): FlightChunk<T> {
     rejectListeners: null,
     // oxlint-disable-next-line no-then
     then(resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) {
+      if (this.status === CHUNK_INITIALIZED || this.status === CHUNK_RESOLVED_MODEL) {
+        if (resolve != null) {
+          queueMicrotask(() => {
+            resolve(this.value as T);
+          });
+        }
+        return;
+      }
+      if (this.status === CHUNK_ERRORED) {
+        if (reject != null) {
+          queueMicrotask(() => {
+            reject(this.reason);
+          });
+        }
+        return;
+      }
       if (resolve != null) {
         (this.listeners ??= []).push(resolve);
       }

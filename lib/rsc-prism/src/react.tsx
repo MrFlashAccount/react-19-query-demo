@@ -185,10 +185,6 @@ const runtimePromise = bootstrapWorkerRuntime().then((runtime) => ({
 }));
 
 export function RuntimeProvider({ children }: React.PropsWithChildren) {
-  const { dispose } = use(runtimePromise);
-  function effect(dispose: () => void) {
-    return dispose;
-  }
-  useEffect(effect.bind(null, dispose), [dispose]);
+  use(runtimePromise);
   return children;
 }

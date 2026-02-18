@@ -4,6 +4,7 @@ import { callAction, consumeRSCResponse, createCallServer, encodeActionArgs, fet
 import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
 import { createFunctionTransport } from "../src/transport";
 import { setAutoClientManifest } from "../src/runtime/client-manifest";
+import { createFromRowEmitter } from "../src/flight-runtime/client";
 
 function flightValueResponse(value: unknown): Response {
   return new Response(`0:${JSON.stringify(value)}\n`, {
@@ -169,6 +170,31 @@ describe("rsc client browser workflows", () => {
 
     const decoded = await consumeRSCResponse<ArrayBuffer>(response);
     expect(Array.from(new Uint8Array(decoded))).toEqual(Array.from(deferredBytes));
+  });
+
+  it("notifies late then subscribers when deferred row chunks have already settled", async () => {
+    const emitter = createFromRowEmitter<{ first: unknown }>();
+    emitter.push({ k: 0, id: 0, v: JSON.stringify("$1") });
+    emitter.push({ k: 0, id: 1, v: JSON.stringify({ first: "$2" }) });
+    emitter.push({ k: 0, id: 2, v: JSON.stringify("ready") });
+    emitter.push({ k: 2 });
+
+    const value = await emitter.result;
+    const lazy = value.first as {
+      $$typeof?: symbol;
+      _payload: { then: (resolve: () => void, reject?: (reason: unknown) => void) => void };
+      _init: (payload: unknown) => unknown;
+    };
+
+    expect(String(lazy?.$$typeof)).toBe("Symbol(react.lazy)");
+
+    let resolved = false;
+    lazy._payload.then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+    expect(resolved).toBe(true);
+    expect(lazy._init(lazy._payload)).toBe("ready");
   });
 
   it("encodes action args and supports fetch/call workflows", async () => {

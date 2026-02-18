@@ -24,6 +24,7 @@ vi.mock("../src/client", () => ({
 
 vi.mock("react", () => ({
   startTransition: mocks.startTransition,
+  use: (value: unknown) => value,
   useEffect: (effect: () => void | (() => void)) => {
     const loader = mocks.activeLoader;
     if (loader == null) {
