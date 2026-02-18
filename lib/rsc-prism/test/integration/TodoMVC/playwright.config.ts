@@ -9,7 +9,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   webServer: {
-    command: "pnpm --filter @lib/rsc-prism exec vite --config test/integration/TodoMVC/vite.config.ts --port 4212 --strictPort",
+    command:
+      "pnpm --filter @lib/rsc-prism exec vite --config test/integration/TodoMVC/vite.config.ts --port 4212 --strictPort",
     url: "http://127.0.0.1:4212/",
     reuseExistingServer: !process.env.CI,
   },

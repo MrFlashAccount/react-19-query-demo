@@ -219,7 +219,10 @@ async function readActionErrorMessage(response: Response): Promise<string | null
 
   try {
     const manifest = resolveClientManifestOrThrow();
-    const parsed = await defaultFlightProtocolAdapter.consumeStream<unknown>(response.body, manifest);
+    const parsed = await defaultFlightProtocolAdapter.consumeStream<unknown>(
+      response.body,
+      manifest,
+    );
     if (typeof parsed === "string" && parsed.length > 0) {
       return parsed;
     }
@@ -313,10 +316,7 @@ export async function fetchRSC<Props, Target extends ComponentReference<Props>>(
   target: Target,
   options?: FetchRSCOptionsForTarget<Props>,
 ): Promise<Awaited<ReturnType<Target>>>;
-export async function fetchRSC(
-  target: string,
-  options?: FetchRSCOptions,
-): Promise<unknown>;
+export async function fetchRSC(target: string, options?: FetchRSCOptions): Promise<unknown>;
 export async function fetchRSC(
   target: ((props: unknown) => unknown) | string,
   options?: FetchRSCOptions,

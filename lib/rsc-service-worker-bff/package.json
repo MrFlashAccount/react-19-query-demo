@@ -64,11 +64,7 @@
     "check:lint": "oxlint --fix --type-aware",
     "check:format": "oxfmt --write"
   },
-  "dependencies": {
-    "@lib/rsc-prism": "workspace:*",
-    "react-server-dom-webpack": "catalog:",
-    "web-streams-polyfill": "catalog:"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@vitest/browser-playwright": "4.0.9",
     "@vitest/coverage-istanbul": "4.0.9",
@@ -77,10 +73,7 @@
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "playwright": "1.50.1",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "react": "^19.0.0",

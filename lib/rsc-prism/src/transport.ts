@@ -1,12 +1,7 @@
 import { getInvalidateRSC } from "./runtime-globals";
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightClientOptions } from "./flight-runtime/types";
-import {
-  flightErrorRow,
-  ROW_DONE,
-  ROW_ERROR,
-  type FlightRowMessage,
-} from "./flight-runtime/wire";
+import { flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
 
 export interface SendActionInput {
   endpoint: string;
@@ -28,14 +23,8 @@ export interface FetchRSCInput {
 export interface RSCTransport {
   sendAction(input: SendActionInput): Promise<Response>;
   fetchRSC?(input: FetchRSCInput): Promise<Response>;
-  fetchRSCDirect?<T>(
-    input: FetchRSCInput,
-    clientOptions?: FlightClientOptions,
-  ): Promise<T>;
-  sendActionDirect?<T>(
-    input: SendActionInput,
-    clientOptions?: FlightClientOptions,
-  ): Promise<T>;
+  fetchRSCDirect?<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T>;
+  sendActionDirect?<T>(input: SendActionInput, clientOptions?: FlightClientOptions): Promise<T>;
 }
 
 export function createFetchTransport(): RSCTransport {
@@ -259,9 +248,7 @@ function normalizeWorkerResponseMessage(
     return {
       kind: WORKER_RESPONSE_KIND_HEAD,
       status: typeof message.status === "number" ? message.status : 200,
-      headers: Array.isArray(message.headers)
-        ? (message.headers as [string, string][])
-        : undefined,
+      headers: Array.isArray(message.headers) ? (message.headers as [string, string][]) : undefined,
       chunk: null,
       error: "",
     };
@@ -306,7 +293,10 @@ function normalizeWorkerResponseMessage(
   };
 }
 
-function normalizeWorkerRowMessage(data: unknown, rowResponseType: string): NormalizedWorkerRowMessage {
+function normalizeWorkerRowMessage(
+  data: unknown,
+  rowResponseType: string,
+): NormalizedWorkerRowMessage {
   const message = data as Record<string, unknown> | null;
   if (message == null || message.type !== rowResponseType) {
     return {
@@ -365,7 +355,9 @@ function normalizeIncomingWorkerTransportRequest(
     contentType: typeof message.contentType === "string" ? message.contentType : undefined,
     headers: Array.isArray(message.headers) ? (message.headers as [string, string][]) : undefined,
     body: (message.body as BodyInit | undefined) ?? undefined,
-    requestInit: (message.requestInit as Omit<RequestInit, "method" | "body" | "headers"> | undefined) ?? undefined,
+    requestInit:
+      (message.requestInit as Omit<RequestInit, "method" | "body" | "headers"> | undefined) ??
+      undefined,
     componentId: typeof message.componentId === "string" ? message.componentId : undefined,
     componentProps: message.componentProps,
   };
@@ -426,11 +418,7 @@ function getWorkerEndpointState(endpoint: WorkerMessageEndpoint): WorkerEndpoint
 
   endpoint.addEventListener("message", (event) => {
     const message = event.data as Record<string, unknown> | null;
-    if (
-      message == null ||
-      typeof message.id !== "string" ||
-      typeof message.type !== "string"
-    ) {
+    if (message == null || typeof message.id !== "string" || typeof message.type !== "string") {
       return;
     }
 

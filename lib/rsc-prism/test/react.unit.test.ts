@@ -58,7 +58,10 @@ vi.mock("react", () => ({
   useTransition: () => [false, mocks.startTransition],
 }));
 
-async function renderLoader<TProps>(loader: (props: TProps) => Promise<unknown>, props: TProps): Promise<unknown> {
+async function renderLoader<TProps>(
+  loader: (props: TProps) => Promise<unknown>,
+  props: TProps,
+): Promise<unknown> {
   const loaderKey = loader as unknown as object;
   mocks.activeLoader = loaderKey;
   mocks.seenLoaders.add(loaderKey);

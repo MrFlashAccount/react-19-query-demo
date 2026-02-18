@@ -80,17 +80,18 @@ describe("client-only browser workflows", () => {
       dispose,
     };
     const bootstrap = vi.fn(async () => runtime);
-    (globalThis as typeof globalThis & Record<string, unknown>)[WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY] =
-      bootstrap;
+    (globalThis as typeof globalThis & Record<string, unknown>)[
+      WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY
+    ] = bootstrap;
 
     const bootstrapped = await clientOnly.bootstrapWorkerRuntime();
     expect(bootstrapped).toBe(runtime);
     expect(bootstrap).toHaveBeenCalledTimes(1);
 
     await expect(clientOnly.fetchRSC("/rsc" as any)).resolves.toBe("default-fetch-ok");
-    await expect(clientOnly.callAction<string>(runActionRef, [1], { parseResponse: true })).resolves.toBe(
-      "default-action-ok",
-    );
+    await expect(
+      clientOnly.callAction<string>(runActionRef, [1], { parseResponse: true }),
+    ).resolves.toBe("default-action-ok");
     expect(seenRequests).toEqual([
       { method: "GET", actionId: null },
       { method: "POST", actionId: "todo-actions.ts#run" },
@@ -102,7 +103,11 @@ describe("client-only browser workflows", () => {
   });
 
   it("throws when worker runtime bootstrap hook is unavailable", async () => {
-    delete (globalThis as typeof globalThis & Record<string, unknown>)[WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY];
-    await expect(clientOnly.bootstrapWorkerRuntime()).rejects.toThrow("Worker runtime bootstrap is unavailable");
+    delete (globalThis as typeof globalThis & Record<string, unknown>)[
+      WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY
+    ];
+    await expect(clientOnly.bootstrapWorkerRuntime()).rejects.toThrow(
+      "Worker runtime bootstrap is unavailable",
+    );
   });
 });

@@ -26,7 +26,11 @@ function formatMs(ms: number): string {
   return `${ms.toFixed(2)}ms`;
 }
 
-function benchmark<T>(name: string, iterations: number, fn: () => T): { name: string; avgMs: number } {
+function benchmark<T>(
+  name: string,
+  iterations: number,
+  fn: () => T,
+): { name: string; avgMs: number } {
   for (let i = 0; i < 3; i += 1) {
     fn();
   }
@@ -129,7 +133,10 @@ function decodeFlightTextPayload(payloadText: string): unknown {
         return value;
       }
       const candidate = value as { $$typeof?: unknown; _payload?: unknown; _init?: unknown };
-      if (candidate.$$typeof === Symbol.for("react.lazy") && typeof candidate._init === "function") {
+      if (
+        candidate.$$typeof === Symbol.for("react.lazy") &&
+        typeof candidate._init === "function"
+      ) {
         return materialize((candidate._init as (payload: unknown) => unknown)(candidate._payload));
       }
       if (Array.isArray(value)) {
@@ -165,7 +172,11 @@ function decodeFlightTextPayload(payloadText: string): unknown {
   }
 
   if (hasRoot) {
-    return decodeWireValue(rowsById.get("0"), (id) => `client:${id}`, (id) => rowsById.get(id));
+    return decodeWireValue(
+      rowsById.get("0"),
+      (id) => `client:${id}`,
+      (id) => rowsById.get(id),
+    );
   }
   if (!hasFallback) {
     return null;
@@ -196,12 +207,16 @@ function buildSyntheticWirePayload(): unknown {
   });
 }
 
-function buildSyntheticBinaryWirePayload(rowCount: number, bytesPerRow: number): {
+function buildSyntheticBinaryWirePayload(
+  rowCount: number,
+  bytesPerRow: number,
+): {
   encoded: unknown;
   rowsById: Map<string, unknown>;
 } {
   const rowsById = new Map<string, unknown>();
-  const payload: Array<{ idx: number; bytes: Uint8Array; floats: Float64Array; raw: ArrayBuffer }> = [];
+  const payload: Array<{ idx: number; bytes: Uint8Array; floats: Float64Array; raw: ArrayBuffer }> =
+    [];
   for (let i = 0; i < rowCount; i += 1) {
     const bytes = new Uint8Array(bytesPerRow);
     const floats = new Float64Array(Math.max(4, Math.floor(bytesPerRow / 8)));
@@ -269,7 +284,9 @@ describe("flight decode perf harness", () => {
       const absolutePath = resolve(process.cwd(), flightFile);
       const raw = readFileSync(absolutePath, "utf8");
       rows.push(
-        benchmark(`flight-file-parse+decode:${flightFile}`, iterations, () => decodeFlightTextPayload(raw)),
+        benchmark(`flight-file-parse+decode:${flightFile}`, iterations, () =>
+          decodeFlightTextPayload(raw),
+        ),
       );
     }
 

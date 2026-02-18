@@ -59,7 +59,10 @@ export function createClientModuleProxy(moduleId: string): Record<string, unknow
         if (cached != null) {
           return cached;
         }
-        const created = annotateClientReference({} as Record<string, unknown>, `${moduleId}#${key}`);
+        const created = annotateClientReference(
+          {} as Record<string, unknown>,
+          `${moduleId}#${key}`,
+        );
         referencesByExportName.set(key, created);
         return created;
       },

@@ -5,7 +5,6 @@ const STRESS_BREADTH = 5;
 const STRESS_BRANCHES = 1;
 const STRESS_TASKS = 25;
 
-
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runBranchUntraced(depth: number, breadth: number): Promise<void> {

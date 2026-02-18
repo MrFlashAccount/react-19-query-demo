@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import type { ClientManifest, EncodedActionArgs, RSCRenderOptions } from "../types";
 import { createFromReadableStream, createFromRowEmitter, encodeReply } from "./client";
-import { decodeReply, renderToReadableStream, renderToRowEmitter, type FlightRowEmit } from "./server";
+import {
+  decodeReply,
+  renderToReadableStream,
+  renderToRowEmitter,
+  type FlightRowEmit,
+} from "./server";
 import type { FlightRowMessage } from "./wire";
 
 export interface FlightProtocolAdapter {

@@ -7,7 +7,10 @@ import { defineConfig } from "vitest/config";
 const rootDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(rootDir, "../..");
 const reactServerEntry = resolve(repoRoot, "node_modules/react/react.react-server.js");
-const reactServerJsxRuntimeEntry = resolve(repoRoot, "node_modules/react/jsx-runtime.react-server.js");
+const reactServerJsxRuntimeEntry = resolve(
+  repoRoot,
+  "node_modules/react/jsx-runtime.react-server.js",
+);
 const reactServerJsxDevRuntimeEntry = resolve(
   repoRoot,
   "node_modules/react/jsx-dev-runtime.react-server.js",
@@ -32,12 +35,7 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     include: ["web-streams-polyfill"],
-    exclude: [
-      "react",
-      "react/jsx-runtime",
-      "react/jsx-dev-runtime",
-      "react-dom",
-    ],
+    exclude: ["react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom"],
   },
   test: {
     deps: {
@@ -80,11 +78,7 @@ export default defineConfig(({ mode }) => ({
     coverage: {
       provider: "istanbul",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: [
-        "src/**/*.d.ts",
-        "src/**/*.unit.test.{ts,tsx}",
-        "src/**/*.browser.test.{ts,tsx}",
-      ],
+      exclude: ["src/**/*.d.ts", "src/**/*.unit.test.{ts,tsx}", "src/**/*.browser.test.{ts,tsx}"],
       thresholds: {
         lines: 85,
         functions: 85,

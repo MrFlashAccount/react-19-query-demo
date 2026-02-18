@@ -14,7 +14,6 @@ import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { createClientModuleProxy } from "./flight-runtime/references";
 import type { FlightRowEmit } from "./flight-runtime/server";
 
-
 /**
  * Create an RSC context for rendering
  */
@@ -274,7 +273,8 @@ export async function createRSC<TComponents extends Record<string, unknown>>(
 ): Promise<CreateRSCResult<TComponents>> {
   // Build manifest from component names
   const slashIndex = config.moduleId.lastIndexOf("/");
-  const manifest: ClientManifest = slashIndex === -1 ? "/" : config.moduleId.slice(0, slashIndex + 1);
+  const manifest: ClientManifest =
+    slashIndex === -1 ? "/" : config.moduleId.slice(0, slashIndex + 1);
 
   // Create context
   const ctx = createRSCContext(manifest);

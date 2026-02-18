@@ -25,18 +25,14 @@
     "@lib/tracing": "workspace:*",
     "@tanstack/react-query": "5.90.5",
     "@tanstack/react-query-devtools": "5.90.2",
-    "lit-html": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-github-corner": "2.5.0",
-    "react-lag-radar": "1.0.0",
-    "react-server-dom-webpack": "catalog:",
-    "web-streams-polyfill": "catalog:"
+    "react-lag-radar": "1.0.0"
   },
   "devDependencies": {
     "@babel/core": "catalog:",
     "@playwright/test": "catalog:",
-    "@rollup/plugin-babel": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@testing-library/dom": "catalog:",
     "@testing-library/jest-dom": "catalog:",

@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "description": "Environment-agnostic React Server Components core primitives and transport helpers.",
   "keywords": [
+    "flight",
     "react-server-components",
     "rsc",
-    "flight",
     "transport",
     "web"
   ],

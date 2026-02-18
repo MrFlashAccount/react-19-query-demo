@@ -59,7 +59,8 @@ export const Button = () => null;
 `;
 
     const transformed = await callHook(plugin.transform, undefined, source, id);
-    const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
+    const transformedCode =
+      transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('Symbol.for("react.client.reference")');
     expect(transformedCode).toContain('__rscPrismModuleId = "/src/client-components.tsx"');
@@ -80,7 +81,8 @@ export function Counter() { return null; }
 `;
 
     const transformed = await callHook(plugin.transform, undefined, source, id);
-    const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
+    const transformedCode =
+      transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
   });
@@ -113,7 +115,8 @@ export function WorkerPanel() { return null; }
 `;
 
     const transformed = await callHook(plugin.transform, undefined, source, id);
-    const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
+    const transformedCode =
+      transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('Symbol.for("rsc.worker.reference")');
     expect(transformedCode).toContain('__rscPrismCreateWorkerRef("default")');
@@ -133,7 +136,8 @@ export function Counter() { return null; }
 `;
 
     const transformed = await callHook(plugin.transform, undefined, source, id);
-    const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
+    const transformedCode =
+      transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('Symbol.for("react.client.reference")');
     expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
@@ -174,7 +178,9 @@ export function Counter() { return null; }
 export * from "./other";
 `;
 
-    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow('Unsupported "export *"');
+    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow(
+      'Unsupported "export *"',
+    );
   });
 
   it("generates main virtual module with registration imports", async () => {
@@ -271,13 +277,17 @@ export function A() { return null; }
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
     expect(loadedCode).toContain("export async function bootstrapWorkerRuntime()");
     expect(loadedCode).toContain('new Worker("/assets/rsc-prism-worker-runtime');
-    expect(loadedCode).toContain('import { createWorkerRowTransport } from "@lib/rsc-prism/transport";');
+    expect(loadedCode).toContain(
+      'import { createWorkerRowTransport } from "@lib/rsc-prism/transport";',
+    );
     expect(loadedCode).toContain("createWorkerRowTransport");
     expect(loadedCode).toContain("dispose()");
     expect(loadedCode).toContain("let __rscPrismBootstrappedRuntime = null;");
     expect(loadedCode).toContain("let __rscPrismBootstrapPromise = null;");
     expect(loadedCode).toContain("if (__rscPrismBootstrappedRuntime != null)");
-    expect(loadedCode).toContain('globalThis[__RSC_PRISM_BOOTSTRAP_GLOBAL_KEY] = bootstrapWorkerRuntime;');
+    expect(loadedCode).toContain(
+      "globalThis[__RSC_PRISM_BOOTSTRAP_GLOBAL_KEY] = bootstrapWorkerRuntime;",
+    );
   });
 
   it("throws when workerRuntime.entry is provided", () => {
@@ -335,7 +345,9 @@ export function A() { return null; }
   });
 
   it("skips worker runtime rebuild for non-worker source module updates", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-worker-hmr-non-worker-test-"));
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "rsc-prism-vite-worker-hmr-non-worker-test-"),
+    );
     tempRoots.push(root);
     await mkdir(path.join(root, "src"), { recursive: true });
     const nonWorkerFile = path.join(root, "src", "plain.ts");
@@ -366,7 +378,8 @@ export function A() { return null; }
       {},
       { command: "build", mode: "development" },
     );
-    const resolveConfig = configured != null && typeof configured === "object" ? configured.resolve : undefined;
+    const resolveConfig =
+      configured != null && typeof configured === "object" ? configured.resolve : undefined;
 
     expect(resolveConfig).toBeDefined();
     expect(resolveConfig?.conditions).toContain("react-server");
@@ -374,12 +387,7 @@ export function A() { return null; }
     expect(resolveConfig?.conditions).toContain("browser");
     expect(resolveConfig?.alias).toEqual([]);
     expect(configured?.optimizeDeps?.exclude).toEqual(
-      expect.arrayContaining([
-        "react",
-        "react/jsx-runtime",
-        "react/jsx-dev-runtime",
-        "react-dom",
-      ]),
+      expect.arrayContaining(["react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom"]),
     );
   });
 
@@ -489,7 +497,11 @@ export function WorkerView() { return null; }
 `,
       "utf8",
     );
-    await writeFile(importerPath, `import WorkerDefault, { WorkerView } from "./worker-view";`, "utf8");
+    await writeFile(
+      importerPath,
+      `import WorkerDefault, { WorkerView } from "./worker-view";`,
+      "utf8",
+    );
 
     const plugin = rscPrism();
     callHook(plugin.configResolved, undefined, createResolvedConfig(root));
@@ -511,14 +523,16 @@ export function WorkerView() { return null; }
     const loaded = await callHook(plugin.load, undefined, resolved as string);
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
 
-    expect(loadedCode).toContain("Symbol.for(\"rsc.worker.reference\")");
+    expect(loadedCode).toContain('Symbol.for("rsc.worker.reference")');
     expect(loadedCode).toContain('__rscPrismCreateWorkerRef("default")');
     expect(loadedCode).toContain('__rscPrismCreateWorkerRef("WorkerView")');
     expect(loadedCode).toContain("export { __rscPrismWorkerReferenceMap };");
   });
 
   it("redirects root-relative main imports of use worker modules", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-worker-root-relative-test-"));
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "rsc-prism-vite-main-worker-root-relative-test-"),
+    );
     tempRoots.push(root);
     await mkdir(path.join(root, "src"), { recursive: true });
     const workerModulePath = path.join(root, "src", "worker-view.tsx");
@@ -553,7 +567,9 @@ export function WorkerView() { return null; }
   });
 
   it("redirects main imports of function-level use worker actions", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-worker-action-ref-test-"));
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "rsc-prism-vite-main-worker-action-ref-test-"),
+    );
     tempRoots.push(root);
     await mkdir(path.join(root, "src"), { recursive: true });
     const actionModulePath = path.join(root, "src", "todo-actions.ts");
@@ -626,7 +642,9 @@ export function addTodo() {
 export const metadata = { feature: true };
 `;
 
-    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow("must only export actions");
+    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow(
+      "must only export actions",
+    );
   });
 
   it("supports mixed component/action worker directives behind experimental flag", async () => {
@@ -652,7 +670,8 @@ export const metadata = { stable: true };
 `;
 
     const transformed = await callHook(plugin.transform, undefined, source, id);
-    const transformedCode = transformed != null && typeof transformed === "object" ? transformed.code : null;
+    const transformedCode =
+      transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain('Symbol.for("rsc.worker.reference")');
     expect(transformedCode).toContain('Symbol.for("react.server.reference")');
@@ -663,7 +682,9 @@ export const metadata = { stable: true };
   });
 
   it("resolves mixed worker directives to dedicated virtual module when experimental flag is enabled", async () => {
-    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-worker-directive-ref-test-"));
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "rsc-prism-vite-main-worker-directive-ref-test-"),
+    );
     tempRoots.push(root);
     await mkdir(path.join(root, "src"), { recursive: true });
     const directiveModulePath = path.join(root, "src", "worker-directives.tsx");
@@ -684,7 +705,11 @@ export const metadata = { stable: true };
 `,
       "utf8",
     );
-    await writeFile(importerPath, `import { WorkerPanel, addTodo } from "./worker-directives";`, "utf8");
+    await writeFile(
+      importerPath,
+      `import { WorkerPanel, addTodo } from "./worker-directives";`,
+      "utf8",
+    );
 
     const plugin = rscPrism({
       experimental: {
@@ -714,5 +739,4 @@ export const metadata = { stable: true };
     expect(loadedCode).toContain("metadata");
     expect(loadedCode).toContain("rsc-prism-original");
   });
-
 });

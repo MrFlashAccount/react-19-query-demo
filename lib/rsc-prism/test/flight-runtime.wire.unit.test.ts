@@ -113,22 +113,19 @@ describe("flight wire decode correctness", () => {
     const int16View = new Int16Array(backing, 4, 2);
     const dataView = new DataView(backing, 8, 4);
     const binaryRows = new Map<string, unknown>();
-    const encoded = encodeWireValueWithBinaryRows(
-      { int16View, dataView },
-      (kind, bytes) => {
-        const id = String(binaryRows.size + 1);
-        const tag =
-          kind === "Int16Array"
-            ? "S"
-            : kind === "DataView"
-              ? "V"
-              : (() => {
-                  throw new Error(`Unexpected kind ${kind}`);
-                })();
-        binaryRows.set(id, decodeBinaryWireRow(tag, bytes));
-        return id;
-      },
-    );
+    const encoded = encodeWireValueWithBinaryRows({ int16View, dataView }, (kind, bytes) => {
+      const id = String(binaryRows.size + 1);
+      const tag =
+        kind === "Int16Array"
+          ? "S"
+          : kind === "DataView"
+            ? "V"
+            : (() => {
+                throw new Error(`Unexpected kind ${kind}`);
+              })();
+      binaryRows.set(id, decodeBinaryWireRow(tag, bytes));
+      return id;
+    });
     const decoded = decodeWireValue(
       encoded,
       (id) => `client:${id}`,
@@ -159,7 +156,11 @@ describe("flight wire decode correctness", () => {
     expect(rows[0].kind).toBe("Uint8Array");
     expect(Array.from(rows[0].bytes)).toEqual([5, 6, 7]);
     const rowPayload = decodeBinaryWireRow("o", rows[0].bytes);
-    const decoded = decodeWireValue(encoded, (id) => `client:${id}`, (id) => (id === "1" ? rowPayload : null)) as {
+    const decoded = decodeWireValue(
+      encoded,
+      (id) => `client:${id}`,
+      (id) => (id === "1" ? rowPayload : null),
+    ) as {
       bytes: Uint8Array;
     };
     expect(Array.from(decoded.bytes)).toEqual([5, 6, 7]);
