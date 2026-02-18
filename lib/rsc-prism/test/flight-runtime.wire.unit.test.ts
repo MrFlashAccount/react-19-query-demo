@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeBinaryWireRow, decodeWireValue, encodeWireValue, encodeWireValueWithBinaryRows } from "../src/flight-runtime/wire";
+import {
+  createLazyChunkWrapper,
+  createModelReviver,
+  decodeBinaryWireRow,
+  decodeWireValue,
+  encodeStreamValue,
+  encodeWireValue,
+  encodeWireValueWithBinaryRows,
+  parseModelString,
+} from "../src/flight-runtime/wire";
 
 function decodeWithResolver(value: unknown): unknown {
   return decodeWireValue(value, (id) => `client:${id}`);
@@ -154,6 +163,99 @@ describe("flight wire decode correctness", () => {
       bytes: Uint8Array;
     };
     expect(Array.from(decoded.bytes)).toEqual([5, 6, 7]);
+  });
+});
+
+describe("flight wire compact stream format", () => {
+  it("encodes compact stream tags for primitive wrappers", () => {
+    const outlinedRows: unknown[] = [];
+    const encoded = encodeStreamValue(
+      {
+        undef: undefined,
+        bigint: 42n,
+        date: new Date("2025-01-01T00:00:00.000Z"),
+        search: new URLSearchParams("a=1&b=2"),
+        escaped: "$root",
+        map: new Map([["a", 1]]),
+      },
+      {
+        seen: new WeakSet<object>(),
+        emitBinaryRow: () => 9,
+        outlineValue: (value) => {
+          outlinedRows.push(value);
+          return outlinedRows.length;
+        },
+      },
+    ) as Record<string, unknown>;
+
+    expect(encoded.undef).toBe("$undefined");
+    expect(encoded.bigint).toBe("$n42");
+    expect(encoded.date).toBe("$D2025-01-01T00:00:00.000Z");
+    expect(encoded.search).toBe("$Pa=1&b=2");
+    expect(encoded.escaped).toBe("$$root");
+    expect(encoded.map).toBe("$Q1");
+    expect(outlinedRows).toHaveLength(1);
+  });
+
+  it("parses compact stream strings and creates lazy wrappers for unresolved chunks", () => {
+    const pendingChunk = {
+      status: 0,
+      value: null,
+      reason: null,
+      listeners: null,
+      rejectListeners: null,
+      then() {},
+    };
+    const initializedChunk = {
+      status: 2,
+      value: [["k", 1]],
+      reason: null,
+      listeners: null,
+      rejectListeners: null,
+      then() {},
+    };
+    const chunks = new Map<number, unknown>([
+      [1, pendingChunk],
+      [2, initializedChunk],
+    ]);
+    const context = {
+      getChunk: (id: number) => chunks.get(id),
+      readChunk: (chunk: unknown) => (chunk as { value: unknown }).value,
+      createLazyChunkWrapper: (chunk: unknown) =>
+        createLazyChunkWrapper(chunk, (payload) => (payload as { value: unknown }).value),
+      resolveClientReference: (id: string) => `client:${id}`,
+    };
+
+    expect(parseModelString(context, "$$x")).toBe("$x");
+    expect(parseModelString(context, "$n9")).toBe(9n);
+    expect(parseModelString(context, "$Cmod#default")).toBe("client:mod#default");
+
+    const map = parseModelString(context, "$Q2") as Map<string, number>;
+    expect(Array.from(map.entries())).toEqual([["k", 1]]);
+
+    const lazy = parseModelString(context, "$1") as { $$typeof: symbol };
+    expect(lazy.$$typeof).toBe(Symbol.for("react.lazy"));
+  });
+
+  it("reviver converts element tuples to React elements", () => {
+    const reviver = createModelReviver({
+      getChunk: (_id: number) => null,
+      readChunk: () => null,
+      createLazyChunkWrapper: () => null,
+      resolveClientReference: (id: string) => id,
+    });
+
+    const parsed = JSON.parse(`["$","div",null,{"children":"ok"}]`, reviver) as {
+      $$typeof: symbol;
+      type: string;
+      key: string | null;
+      props: { children: string };
+    };
+
+    expect(parsed.$$typeof).toBe(Symbol.for("react.transitional.element"));
+    expect(parsed.type).toBe("div");
+    expect(parsed.key).toBeNull();
+    expect(parsed.props.children).toBe("ok");
   });
 });
 

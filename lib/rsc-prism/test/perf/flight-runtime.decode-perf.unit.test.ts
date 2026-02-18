@@ -5,6 +5,8 @@ import { describe, it } from "vitest";
 
 import {
   binaryWireTagFromKind,
+  createLazyChunkWrapper,
+  createModelReviver,
   decodeBinaryWireRow,
   decodeWireValue,
   encodeWireValue,
@@ -53,9 +55,10 @@ function parseFlightRow(row: string): { id: string | null; payload: unknown } {
 
 function decodeFlightTextPayload(payloadText: string): unknown {
   const rowsById = new Map<string, unknown>();
+  const rawRowsById = new Map<number, string>();
   let fallback: unknown = null;
   let hasFallback = false;
-  let root: unknown = null;
+  let hasRoot = false;
 
   const lines = payloadText.split("\n");
   for (let i = 0; i < lines.length; i += 1) {
@@ -72,17 +75,97 @@ function decodeFlightTextPayload(payloadText: string): unknown {
       return decodeWireValue(parsed.payload, (id) => `client:${id}`);
     }
     rowsById.set(parsed.id, parsed.payload);
+    rawRowsById.set(Number.parseInt(parsed.id, 16), trimmed.slice(trimmed.indexOf(":") + 1));
     if (parsed.id === "0") {
-      root = parsed.payload;
+      hasRoot = true;
     }
   }
 
-  if (root != null) {
-    return decodeWireValue(
-      root,
-      (id) => `client:${id}`,
-      (id) => rowsById.get(id),
-    );
+  if (hasRoot && typeof rowsById.get("0") === "string") {
+    type PerfChunk = {
+      status: "pending" | "resolved" | "initialized";
+      value: unknown;
+      then: (resolve?: (value: unknown) => void) => void;
+    };
+    const chunks = new Map<number, PerfChunk>();
+    const getChunk = (id: number): PerfChunk => {
+      const cached = chunks.get(id);
+      if (cached != null) {
+        return cached;
+      }
+      const pending: PerfChunk = {
+        status: rawRowsById.has(id) ? "resolved" : "pending",
+        value: rawRowsById.get(id) ?? null,
+        then(resolve) {
+          if (this.status === "initialized" && resolve != null) {
+            resolve(this.value);
+          }
+        },
+      };
+      chunks.set(id, pending);
+      return pending;
+    };
+    const readChunk = (chunk: PerfChunk): unknown => {
+      if (chunk.status === "initialized") {
+        return chunk.value;
+      }
+      if (chunk.status === "pending") {
+        throw chunk;
+      }
+      chunk.value = JSON.parse(chunk.value as string, reviver);
+      chunk.status = "initialized";
+      return chunk.value;
+    };
+    const reviver = createModelReviver({
+      getChunk,
+      readChunk,
+      createLazyChunkWrapper: (chunk) =>
+        createLazyChunkWrapper(chunk, (payload) => readChunk(payload as PerfChunk)),
+      resolveClientReference: (id: string) => `client:${id}`,
+    });
+
+    const materialize = (value: unknown): unknown => {
+      if (typeof value !== "object" || value == null) {
+        return value;
+      }
+      const candidate = value as { $$typeof?: unknown; _payload?: unknown; _init?: unknown };
+      if (candidate.$$typeof === Symbol.for("react.lazy") && typeof candidate._init === "function") {
+        return materialize((candidate._init as (payload: unknown) => unknown)(candidate._payload));
+      }
+      if (Array.isArray(value)) {
+        for (let idx = 0; idx < value.length; idx += 1) {
+          value[idx] = materialize(value[idx]);
+        }
+        return value;
+      }
+      if (value instanceof Map) {
+        const next = new Map<unknown, unknown>();
+        for (const [entryKey, entryValue] of value.entries()) {
+          next.set(materialize(entryKey), materialize(entryValue));
+        }
+        return next;
+      }
+      if (value instanceof Set) {
+        const next = new Set<unknown>();
+        for (const item of value.values()) {
+          next.add(materialize(item));
+        }
+        return next;
+      }
+      const objectValue = value as Record<string, unknown>;
+      const keys = Object.keys(objectValue);
+      for (let idx = 0; idx < keys.length; idx += 1) {
+        const key = keys[idx];
+        objectValue[key] = materialize(objectValue[key]);
+      }
+      return objectValue;
+    };
+
+    return materialize(readChunk(getChunk(0)));
+  }
+
+  if (hasRoot) {
+    return decodeWireValue(rowsById.get("0"), (id) => `client:${id}`, (id) => rowsById.get(id));
   }
   if (!hasFallback) {
     return null;

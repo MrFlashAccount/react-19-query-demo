@@ -116,7 +116,7 @@ describe("rsc client browser workflows", () => {
     const response = new Response(
       new ReadableStream<Uint8Array>({
         async start(controller) {
-          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify({ $t: "rowRef", id: 1 })}\n`));
+          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify("$1")}\n`));
           await new Promise((resolve) => setTimeout(resolve, 10));
           controller.enqueue(new TextEncoder().encode(`1:${JSON.stringify("deferred")}\n`));
           await new Promise<void>((resolve) => {
@@ -150,7 +150,7 @@ describe("rsc client browser workflows", () => {
     const response = new Response(
       new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify({ $t: "rowRef", id: 1 })}\n`));
+          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify("$1")}\n`));
           controller.enqueue(binaryRow(1, "A", deferredBytes));
           controller.close();
         },
@@ -279,10 +279,7 @@ describe("rsc client browser workflows", () => {
       },
     });
 
-    const payload = {
-      $t: "clientRef",
-      id: "/alias/view#default",
-    };
+    const payload = "$C/alias/view#default";
     const response = new Response(`0:${JSON.stringify(payload)}\n`, {
       status: 200,
       headers: { "content-type": "text/x-component" },

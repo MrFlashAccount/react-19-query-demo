@@ -46,11 +46,11 @@ function createStats(): FlightPerfStats {
 function buildFlightPayload(rowCount: number): string {
   const refs = new Array(rowCount);
   for (let i = 0; i < rowCount; i += 1) {
-    refs[i] = { $t: "rowRef", id: i + 1 };
+    refs[i] = `$${(i + 1).toString(16)}`;
   }
   let text = `0:${JSON.stringify(refs)}\n`;
   for (let i = 0; i < rowCount; i += 1) {
-    text += `${i + 1}:${JSON.stringify({ i, text: `v${i}` })}\n`;
+    text += `${(i + 1).toString(16)}:${JSON.stringify({ i, text: `v${i}` })}\n`;
   }
   return text;
 }

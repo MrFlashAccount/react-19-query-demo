@@ -34,7 +34,7 @@ describe("flight runtime server stream behavior", () => {
 
     const row0 = new TextDecoder().decode(first.value);
     const row1 = new TextDecoder().decode(second.value);
-    expect(row0).toBe(`0:${JSON.stringify({ $t: "rowRef", id: 1 })}\n`);
+    expect(row0).toBe(`0:${JSON.stringify("$1")}\n`);
     expect(row1).toBe(`1:${JSON.stringify("ready")}\n`);
     expect(third.done).toBe(true);
   });
@@ -52,7 +52,7 @@ describe("flight runtime server stream behavior", () => {
       rows.push(next.value);
     }
 
-    const rootRowText = `0:${JSON.stringify({ $t: "rowRef", id: 1 })}\n`;
+    const rootRowText = `0:${JSON.stringify("$1")}\n`;
     const expectedBinary = new Uint8Array([49, 58, 65, 52, 44, 1, 2, 3, 4, 10]); // "1:A4," + bytes + "\n"
     expect(rows.some((row) => new TextDecoder().decode(row) === rootRowText)).toBe(true);
     expect(rows.some((row) => row.length === expectedBinary.length && row.every((b, i) => b === expectedBinary[i]))).toBe(

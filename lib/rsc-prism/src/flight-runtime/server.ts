@@ -5,6 +5,9 @@ import {
   binaryWireTagFromKind,
   decodeBinaryWireRow,
   decodeWireValue,
+  encodeStreamValue,
+  escapeStringValue,
+  type StreamEncodeContext,
   encodeWireValueWithBinaryRows,
 } from "./wire";
 import { createClientModuleProxy } from "./references";
@@ -26,6 +29,7 @@ function isClientReference(value: unknown): value is { $$typeof: symbol; $$id: s
 function isReactElementLike(value: unknown): value is {
   $$typeof: symbol;
   type: unknown;
+  key: string | null;
   props: Record<string, unknown>;
 } {
   if (typeof value !== "object" || value == null) {
@@ -40,12 +44,12 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 }
 
 function encodeFlightRow(id: number, value: unknown): Uint8Array {
-  return FLIGHT_ROW_ENCODER.encode(`${id}:${JSON.stringify(value)}\n`);
+  return FLIGHT_ROW_ENCODER.encode(`${id.toString(16)}:${JSON.stringify(value)}\n`);
 }
 
 function encodeBinaryFlightRow(id: number, kind: string, bytes: Uint8Array): Uint8Array {
   const tag = binaryWireTagFromKind(kind);
-  const prefix = FLIGHT_ROW_ENCODER.encode(`${id}:${tag}${bytes.byteLength.toString(16)},`);
+  const prefix = FLIGHT_ROW_ENCODER.encode(`${id.toString(16)}:${tag}${bytes.byteLength.toString(16)},`);
   const output = new Uint8Array(prefix.byteLength + bytes.byteLength + 1);
   output.set(prefix, 0);
   output.set(bytes, prefix.byteLength);
@@ -58,6 +62,21 @@ interface EncodeContext {
   allocateRowId: () => number;
   emitRow: (id: number, value: unknown) => void;
   emitBinaryRow: (kind: string, bytes: Uint8Array) => number;
+  outlineValue: (value: unknown) => number;
+  streamEncodeContext: StreamEncodeContext;
+}
+
+function encodeElementType(type: unknown): string {
+  if (typeof type === "string") {
+    return escapeStringValue(type);
+  }
+  if (type === REACT_FRAGMENT_SYMBOL) {
+    return "$Sreact.fragment";
+  }
+  if (isClientReference(type)) {
+    return `$C${type.$$id}`;
+  }
+  throw new Error("Unsupported element type in minimal runtime.");
 }
 
 async function encodeServerNode(value: unknown, context: EncodeContext): Promise<unknown> {
@@ -70,15 +89,15 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
         context.emitRow(rowId, encoded);
       })(),
     );
-    return { $t: "rowRef", id: rowId };
+    return `$${rowId.toString(16)}`;
   }
 
   if (Array.isArray(value)) {
-    return Promise.all(value.map((item) => encodeServerNode(item, context)));
+    return encodeServerArray(value, context);
   }
 
   if (!isReactElementLike(value)) {
-    return encodeWireValueWithBinaryRows(value, (kind, bytes) => context.emitBinaryRow(kind, bytes));
+    return encodeStreamValue(value, context.streamEncodeContext);
   }
 
   const type = value.type;
@@ -89,22 +108,55 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
     return encodeServerNode(value.props.children, context);
   }
 
-  const propEntries = Object.entries(value.props);
-  const encodedPropEntries = await Promise.all(
-    propEntries.map(async ([key, item]) => [key, await encodeServerNode(item, context)] as const),
-  );
-  const nextProps: Record<string, unknown> = {};
-  for (let i = 0; i < encodedPropEntries.length; i += 1) {
-    const [key, item] = encodedPropEntries[i];
-    nextProps[key] = item;
+  return encodeServerElement(value, context);
+}
+
+async function encodeServerArray(value: unknown[], context: EncodeContext): Promise<unknown[]> {
+  const results = new Array(value.length);
+  let hasAsync = false;
+  for (let i = 0; i < value.length; i += 1) {
+    const encoded = encodeServerNode(value[i], context);
+    results[i] = encoded;
+    if (!hasAsync && isThenable(encoded)) {
+      hasAsync = true;
+    }
   }
-  return encodeWireValueWithBinaryRows(
-    {
-    ...value,
-    props: nextProps,
-    },
-    (kind, bytes) => context.emitBinaryRow(kind, bytes),
-  );
+  if (!hasAsync) {
+    return results;
+  }
+  return Promise.all(results);
+}
+
+async function encodeServerElement(
+  value: { $$typeof: symbol; type: unknown; props: Record<string, unknown> },
+  context: EncodeContext,
+): Promise<unknown> {
+  const propKeys = Object.keys(value.props);
+  const nextProps: Record<string, unknown> = {};
+  let hasAsync = false;
+  const pendingEntries: Array<[string, PromiseLike<unknown>]> = [];
+  for (let i = 0; i < propKeys.length; i += 1) {
+    const key = propKeys[i];
+    const encoded = encodeServerNode(value.props[key], context);
+    if (isThenable(encoded)) {
+      hasAsync = true;
+      pendingEntries.push([key, encoded]);
+    } else {
+      nextProps[key] = encoded;
+    }
+  }
+  if (hasAsync) {
+    const settled = await Promise.all(pendingEntries.map(([, p]) => p));
+    for (let i = 0; i < pendingEntries.length; i += 1) {
+      nextProps[pendingEntries[i][0]] = settled[i];
+    }
+  }
+  return [
+    "$",
+    encodeElementType(value.type),
+    value.key == null ? null : String(value.key),
+    nextProps,
+  ];
 }
 
 export async function renderToReadableStream(
@@ -155,6 +207,22 @@ export async function renderToReadableStream(
               controller.enqueue(encodeBinaryFlightRow(id, kind, bytes));
             }
             return id;
+          },
+          outlineValue: (value) => {
+            const id = nextRowId;
+            nextRowId += 1;
+            queueDeferred(
+              (async () => {
+                const encoded = await encodeServerNode(value, context);
+                context.emitRow(id, encoded);
+              })(),
+            );
+            return id;
+          },
+          streamEncodeContext: {
+            outlineValue: (value) => context.outlineValue(value),
+            emitBinaryRow: (kind, bytes) => context.emitBinaryRow(kind, bytes),
+            seen: new WeakSet<object>(),
           },
         };
 

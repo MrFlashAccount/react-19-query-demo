@@ -2,29 +2,200 @@ import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
 import {
   binaryWireTagFromKind,
+  createLazyChunkWrapper,
+  createModelReviver,
   decodeBinaryWireRow,
-  decodeWireValue,
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
 
-const FLIGHT_PERF_GLOBAL_KEY = "__rscPrismFlightPerf";
+const CHUNK_PENDING = 0;
+const CHUNK_RESOLVED_MODEL = 1;
+const CHUNK_INITIALIZED = 2;
+const CHUNK_ERRORED = 3;
 
-type FlightPerfStats = {
-  rootScanCount: number;
-  rootScanTimeMs: number;
-  decodeCount: number;
-  decodeTimeMs: number;
-};
+type ChunkStatus =
+  | typeof CHUNK_PENDING
+  | typeof CHUNK_RESOLVED_MODEL
+  | typeof CHUNK_INITIALIZED
+  | typeof CHUNK_ERRORED;
 
-function getFlightPerfStats(): FlightPerfStats | null {
-  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
-  const candidate = globalState[FLIGHT_PERF_GLOBAL_KEY];
-  if (typeof candidate !== "object" || candidate == null) {
-    return null;
+type ChunkResolveListener<T> = (value: T) => void;
+type ChunkRejectListener = (reason: unknown) => void;
+
+interface FlightChunk<T = unknown> {
+  status: ChunkStatus;
+  value: T | string | null;
+  reason: unknown;
+  listeners: ChunkResolveListener<T>[] | null;
+  rejectListeners: ChunkRejectListener[] | null;
+  then: (resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) => void;
+}
+
+interface FlightResponse {
+  chunks: Map<number, FlightChunk<any>>;
+  resolveClientReference: (id: string) => unknown;
+  fromJSON: (this: unknown, key: string, value: unknown) => unknown;
+  closed: boolean;
+  closedReason: unknown;
+}
+
+const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === "object" && value != null && "then" in value;
+}
+
+function isLazyWrapper(
+  value: unknown,
+): value is { $$typeof: symbol; _payload: unknown; _init: (payload: unknown) => unknown } {
+  if (typeof value !== "object" || value == null) {
+    return false;
   }
-  return candidate as FlightPerfStats;
+  const candidate = value as { $$typeof?: unknown; _payload?: unknown; _init?: unknown };
+  return candidate.$$typeof === REACT_LAZY_SYMBOL && typeof candidate._init === "function";
+}
+
+function createPendingChunk<T>(): FlightChunk<T> {
+  return {
+    status: CHUNK_PENDING,
+    value: null,
+    reason: null,
+    listeners: null,
+    rejectListeners: null,
+    // oxlint-disable-next-line no-then
+    then(resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) {
+      if (resolve != null) {
+        (this.listeners ??= []).push(resolve);
+      }
+      if (reject != null) {
+        (this.rejectListeners ??= []).push(reject);
+      }
+    },
+  };
+}
+
+function getChunk<T = unknown>(response: FlightResponse, id: number): FlightChunk<T> {
+  const existing = response.chunks.get(id);
+  if (existing != null) {
+    return existing as FlightChunk<T>;
+  }
+  if (response.closed) {
+    const errored = createPendingChunk<T>();
+    errored.status = CHUNK_ERRORED;
+    errored.reason = response.closedReason;
+    response.chunks.set(id, errored);
+    return errored;
+  }
+  const pending = createPendingChunk<T>();
+  response.chunks.set(id, pending);
+  return pending;
+}
+
+function wakeInitializedChunk<T>(chunk: FlightChunk<T>, value: T): void {
+  const listeners = chunk.listeners;
+  chunk.listeners = null;
+  chunk.rejectListeners = null;
+  if (listeners != null) {
+    for (let i = 0; i < listeners.length; i += 1) {
+      listeners[i](value);
+    }
+  }
+}
+
+function wakeErroredChunk<T>(chunk: FlightChunk<T>, reason: unknown): void {
+  const rejectListeners = chunk.rejectListeners;
+  chunk.listeners = null;
+  chunk.rejectListeners = null;
+  if (rejectListeners != null) {
+    for (let i = 0; i < rejectListeners.length; i += 1) {
+      rejectListeners[i](reason);
+    }
+  }
+}
+
+function errorChunk<T>(chunk: FlightChunk<T>, reason: unknown): void {
+  chunk.status = CHUNK_ERRORED;
+  chunk.value = null;
+  chunk.reason = reason;
+  wakeErroredChunk(chunk, reason);
+}
+
+function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>): void {
+  if (chunk.status !== CHUNK_RESOLVED_MODEL) {
+    return;
+  }
+  const model = chunk.value as string;
+  try {
+    const parsed = JSON.parse(model, response.fromJSON) as T;
+    chunk.status = CHUNK_INITIALIZED;
+    chunk.value = parsed;
+    chunk.reason = null;
+    wakeInitializedChunk(chunk, parsed);
+  } catch (error) {
+    if (isThenable(error)) {
+      error.then(
+        () => {
+          initializeModelChunk(response, chunk);
+        },
+        (reason) => {
+          errorChunk(chunk, reason);
+        },
+      );
+      return;
+    }
+    errorChunk(chunk, error);
+  }
+}
+
+function readChunk<T>(response: FlightResponse, chunk: FlightChunk<T>): T {
+  if (chunk.status === CHUNK_RESOLVED_MODEL) {
+    initializeModelChunk(response, chunk);
+  }
+  switch (chunk.status) {
+    case CHUNK_INITIALIZED:
+      return chunk.value as T;
+    case CHUNK_PENDING:
+    case CHUNK_RESOLVED_MODEL:
+      throw chunk;
+    case CHUNK_ERRORED:
+      throw chunk.reason;
+    default:
+      throw new Error("[rsc-prism] Unexpected chunk state.");
+  }
+}
+
+function resolveModelChunk(response: FlightResponse, id: number, model: string): void {
+  const chunk = getChunk(response, id);
+  chunk.status = CHUNK_RESOLVED_MODEL;
+  chunk.value = model;
+  chunk.reason = response;
+  if (chunk.listeners != null || chunk.rejectListeners != null) {
+    initializeModelChunk(response, chunk);
+  }
+}
+
+function resolveInitializedChunk(response: FlightResponse, id: number, value: unknown): void {
+  const chunk = getChunk(response, id);
+  chunk.status = CHUNK_INITIALIZED;
+  chunk.value = value;
+  chunk.reason = null;
+  wakeInitializedChunk(chunk, value);
+}
+
+function closeResponseWithError(response: FlightResponse, reason: unknown): void {
+  if (response.closed) {
+    return;
+  }
+  response.closed = true;
+  response.closedReason = reason;
+  const chunks = response.chunks.values();
+  for (const chunk of chunks) {
+    if (chunk.status === CHUNK_PENDING || chunk.status === CHUNK_RESOLVED_MODEL) {
+      errorChunk(chunk, reason);
+    }
+  }
 }
 
 function getMainThreadModules(): Record<string, Record<string, unknown>> {
@@ -70,18 +241,6 @@ function createClientReferenceResolver(options?: FlightClientOptions): (id: stri
   return (id: string) => resolveClientReferenceById(id, manifest);
 }
 
-interface ParsedFlightRow {
-  id: string | null;
-  payload: unknown;
-}
-
-function parseJsonFlightRow(id: string, rowBytes: Uint8Array, decoder: TextDecoder): ParsedFlightRow {
-  return {
-    id,
-    payload: JSON.parse(decoder.decode(rowBytes)),
-  };
-}
-
 function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
   if (chunks.length === 1) {
     return chunks[0];
@@ -95,77 +254,72 @@ function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
   return output;
 }
 
-function collectUnresolvedRowRefs(
-  value: unknown,
-  rowsById: Map<string, unknown>,
-  unresolved: Set<string>,
-  scannedRows: Set<string>,
-  visitingRows: Set<string>,
+function createFlightResponse(
+  resolveClientReference: (id: string) => unknown,
+): FlightResponse {
+  const response: FlightResponse = {
+    chunks: new Map<number, FlightChunk>(),
+    resolveClientReference,
+    fromJSON: (_key, value) => value,
+    closed: false,
+    closedReason: null,
+  };
+  response.fromJSON = createModelReviver({
+    getChunk: (id) => getChunk(response, id),
+    readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
+    createLazyChunkWrapper: (chunk) =>
+      createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
+    resolveClientReference: (id) => response.resolveClientReference(id),
+  });
+  return response;
+}
+
+function attachRootResolution(
+  response: FlightResponse,
+  resolve: (value: unknown) => void,
+  reject: (reason: unknown) => void,
 ): void {
-  if (typeof value !== "object" || value == null) {
-    return;
-  }
-  if (value instanceof Uint8Array || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectUnresolvedRowRefs(item, rowsById, unresolved, scannedRows, visitingRows);
-    }
-    return;
-  }
-
-  const tagged = value as Record<string, unknown>;
-  if (tagged.$t === "arrayBufferBinary" || tagged.$t === "typedBinary") {
-    return;
-  }
-  if (tagged.$t === "rowRef") {
-    const rowId = String(tagged.id);
-    if (visitingRows.has(rowId) || scannedRows.has(rowId)) {
+  const rootChunk = getChunk(response, 0);
+  try {
+    resolve(readChunk(response, rootChunk));
+  } catch (error) {
+    if (isThenable(error)) {
+      error.then(
+        () => attachRootResolution(response, resolve, reject),
+        (reason) => reject(reason),
+      );
       return;
     }
-    const rowValue = rowsById.get(rowId);
-    if (rowValue == null) {
-      unresolved.add(rowId);
-      return;
-    }
-    scannedRows.add(rowId);
-    visitingRows.add(rowId);
-    collectUnresolvedRowRefs(rowValue, rowsById, unresolved, scannedRows, visitingRows);
-    visitingRows.delete(rowId);
-    return;
-  }
-
-  for (const key in tagged) {
-    if (Object.prototype.hasOwnProperty.call(tagged, key)) {
-      collectUnresolvedRowRefs(tagged[key], rowsById, unresolved, scannedRows, visitingRows);
-    }
+    reject(error);
   }
 }
 
-async function parseFlightPayloadFromStream(
+async function materializeLazyValue(value: unknown): Promise<unknown> {
+  while (isLazyWrapper(value)) {
+    try {
+      value = value._init(value._payload);
+    } catch (error) {
+      if (isThenable(error)) {
+        await error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  return value;
+}
+
+async function consumeFlightStream(
   stream: ReadableStream<Uint8Array>,
-  resolveClientReference: (id: string) => unknown,
-): Promise<unknown> {
+  response: FlightResponse,
+  onRootMaybeReady: () => void,
+): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder("utf-8", { fatal: true });
-  const perfStats = getFlightPerfStats();
-  let fallbackPayload: unknown = null;
-  let hasFallbackPayload = false;
-  const rowsById = new Map<string, unknown>();
-  let rootPayload: unknown = null;
-  let hasRootPayload = false;
-  let hasInitializedRootRefs = false;
-  const pendingRootRefs = new Set<string>();
-  const scannedResolvedRows = new Set<string>();
-  const rootScanVisitingRows = new Set<string>();
-  let shouldCancelReader = false;
-  const resolveRowReference = (rowId: string): unknown => rowsById.get(rowId);
-  let rowIdBuffer = "";
-  let rowIdIsNumeric = true;
-  let rowIdNumber = 0;
+  let rowId = 0;
+  let hasRowId = false;
   let parsingRowTag = false;
+  let hasAnyRow = false;
   let binaryTag: string | null = null;
   let hasParsedBinaryLength = false;
   let binaryExpectedLength = 0;
@@ -174,119 +328,35 @@ async function parseFlightPayloadFromStream(
   let jsonParts: Uint8Array[] = [];
   let jsonByteLength = 0;
 
-  const resetRowId = (): void => {
-    rowIdBuffer = "";
-    rowIdIsNumeric = true;
-    rowIdNumber = 0;
-  };
-
-  const readCurrentRowId = (): string => (rowIdIsNumeric ? String(rowIdNumber) : rowIdBuffer);
-
-  const tryResolveRoot = (): unknown => {
-    if (!hasRootPayload || rootPayload == null) {
-      return undefined;
-    }
-    if (!hasInitializedRootRefs) {
-      const scanStart = perfStats == null ? 0 : performance.now();
-      pendingRootRefs.clear();
-      scannedResolvedRows.clear();
-      rootScanVisitingRows.clear();
-      collectUnresolvedRowRefs(
-        rootPayload,
-        rowsById,
-        pendingRootRefs,
-        scannedResolvedRows,
-        rootScanVisitingRows,
-      );
-      hasInitializedRootRefs = true;
-      if (perfStats != null) {
-        perfStats.rootScanCount += 1;
-        perfStats.rootScanTimeMs += performance.now() - scanStart;
-      }
-    }
-    if (pendingRootRefs.size === 0) {
-      const decodeStart = perfStats == null ? 0 : performance.now();
-      const decoded = decodeWireValue(rootPayload, resolveClientReference, resolveRowReference);
-      if (perfStats != null) {
-        perfStats.decodeCount += 1;
-        perfStats.decodeTimeMs += performance.now() - decodeStart;
-      }
-      return decoded;
-    }
-    return undefined;
-  };
-
-  const consumeParsedRow = (parsed: ParsedFlightRow): unknown => {
-    if (parsed.id == null && parsed.payload == null) {
-      return undefined;
-    }
-    if (!hasFallbackPayload) {
-      fallbackPayload = parsed.payload;
-      hasFallbackPayload = true;
-    }
-
-    if (parsed.id == null) {
-      const decodeStart = perfStats == null ? 0 : performance.now();
-      const decoded = decodeWireValue(parsed.payload, resolveClientReference, resolveRowReference);
-      if (perfStats != null) {
-        perfStats.decodeCount += 1;
-        perfStats.decodeTimeMs += performance.now() - decodeStart;
-      }
-      return decoded;
-    }
-
-    rowsById.set(parsed.id, parsed.payload);
-    if (parsed.id === "0") {
-      rootPayload = parsed.payload;
-      hasRootPayload = true;
-      hasInitializedRootRefs = false;
-      pendingRootRefs.clear();
-      scannedResolvedRows.clear();
-      return tryResolveRoot();
-    }
-
-    if (hasInitializedRootRefs && pendingRootRefs.delete(parsed.id)) {
-      scannedResolvedRows.add(parsed.id);
-      rootScanVisitingRows.clear();
-      rootScanVisitingRows.add(parsed.id);
-      collectUnresolvedRowRefs(
-        parsed.payload,
-        rowsById,
-        pendingRootRefs,
-        scannedResolvedRows,
-        rootScanVisitingRows,
-      );
-      rootScanVisitingRows.clear();
-      return tryResolveRoot();
-    }
-
-    return undefined;
-  };
-
-  const finalizeJsonRow = (): unknown => {
+  const finalizeJsonRow = (): void => {
     const rowBytes = joinByteChunks(jsonParts, jsonByteLength);
     jsonParts = [];
     jsonByteLength = 0;
-    const parsed = parseJsonFlightRow(readCurrentRowId(), rowBytes, decoder);
-    resetRowId();
+    const currentId = rowId;
+    rowId = 0;
+    hasRowId = false;
     parsingRowTag = false;
-    return consumeParsedRow(parsed);
+    const model = decoder.decode(rowBytes);
+    resolveModelChunk(response, currentId, model);
+    hasAnyRow = true;
+    onRootMaybeReady();
   };
 
-  const finalizeBinaryRow = (): unknown => {
+  const finalizeBinaryRow = (): void => {
     const rowBytes = joinByteChunks(binaryParts, binaryExpectedLength);
-    const parsed: ParsedFlightRow = {
-      id: readCurrentRowId(),
-      payload: decodeBinaryWireRow(binaryTag as string, rowBytes),
-    };
-    resetRowId();
+    const currentId = rowId;
+    const payload = decodeBinaryWireRow(binaryTag as string, rowBytes);
+    rowId = 0;
+    hasRowId = false;
     parsingRowTag = false;
     binaryTag = null;
     hasParsedBinaryLength = false;
     binaryExpectedLength = 0;
     binaryReceivedLength = 0;
     binaryParts = [];
-    return consumeParsedRow(parsed);
+    resolveInitializedChunk(response, currentId, payload);
+    hasAnyRow = true;
+    onRootMaybeReady();
   };
 
   try {
@@ -339,11 +409,7 @@ async function parseFlightPayloadFromStream(
             throw new Error("[rsc-prism] Invalid binary row terminator.");
           }
           offset += 1;
-          const parsed = finalizeBinaryRow();
-          if (parsed !== undefined) {
-            shouldCancelReader = true;
-            return parsed;
-          }
+          finalizeBinaryRow();
           continue;
         }
 
@@ -351,26 +417,27 @@ async function parseFlightPayloadFromStream(
         if (!parsingRowTag) {
           offset += 1;
           if (byte === 58) {
+            if (!hasRowId) {
+              throw new Error("[rsc-prism] Missing row id in Flight payload.");
+            }
             parsingRowTag = true;
             continue;
           }
           if (byte === 10) {
-            resetRowId();
+            rowId = 0;
+            hasRowId = false;
             continue;
           }
-          if (rowIdIsNumeric && byte >= 48 && byte <= 57) {
-            rowIdNumber = rowIdNumber * 10 + (byte - 48);
-          } else {
-            if (rowIdIsNumeric) {
-              rowIdBuffer = rowIdNumber === 0 ? "" : String(rowIdNumber);
-              rowIdIsNumeric = false;
-            }
-            rowIdBuffer += String.fromCharCode(byte);
+          const digit = byte <= 57 ? byte - 48 : (byte | 32) - 87;
+          if (digit >= 0 && digit <= 15) {
+            rowId = rowId * 16 + digit;
+            hasRowId = true;
+            continue;
           }
-          continue;
+          throw new Error(`[rsc-prism] Invalid row id byte "${String.fromCharCode(byte)}".`);
         }
 
-        if (jsonParts.length === 0 && jsonByteLength === 0 && binaryTag == null && isBinaryWireRowTag(byte)) {
+        if (jsonByteLength === 0 && jsonParts.length === 0 && binaryTag == null && isBinaryWireRowTag(byte)) {
           binaryTag = String.fromCharCode(byte);
           offset += 1;
           continue;
@@ -392,48 +459,19 @@ async function parseFlightPayloadFromStream(
           jsonByteLength += part.byteLength;
         }
         offset = lineBreakIndex + 1;
-        const parsed = finalizeJsonRow();
-        if (parsed !== undefined) {
-          shouldCancelReader = true;
-          return parsed;
-        }
+        finalizeJsonRow();
       }
     }
   } finally {
-    if (shouldCancelReader) {
-      try {
-        await reader.cancel();
-      } catch {
-        // Some stream implementations may reject cancellation after completion.
-      }
-    }
     reader.releaseLock();
   }
 
-  if (
-    binaryTag != null ||
-    rowIdBuffer.length > 0 ||
-    (rowIdIsNumeric && rowIdNumber !== 0) ||
-    jsonByteLength > 0
-  ) {
+  if (binaryTag != null || jsonByteLength > 0 || parsingRowTag || hasRowId) {
     throw new Error("[rsc-prism] Incomplete Flight stream row.");
   }
-
-  const resolvedRoot = tryResolveRoot();
-  if (resolvedRoot !== undefined) {
-    return resolvedRoot;
+  if (!hasAnyRow) {
+    resolveInitializedChunk(response, 0, null);
   }
-
-  if (!hasFallbackPayload) {
-    return null;
-  }
-  const decodeStart = perfStats == null ? 0 : performance.now();
-  const decoded = decodeWireValue(fallbackPayload, resolveClientReference, resolveRowReference);
-  if (perfStats != null) {
-    perfStats.decodeCount += 1;
-    perfStats.decodeTimeMs += performance.now() - decodeStart;
-  }
-  return decoded;
 }
 
 export async function createFromReadableStream<T>(
@@ -441,8 +479,44 @@ export async function createFromReadableStream<T>(
   options?: FlightClientOptions,
 ): Promise<T> {
   const resolveClientReference = createClientReferenceResolver(options);
-  const parsed = await parseFlightPayloadFromStream(stream, resolveClientReference);
-  return parsed as T;
+  const response = createFlightResponse(resolveClientReference);
+  return await new Promise<T>((resolve, reject) => {
+    let rootSettled = false;
+    const settleRoot = (): void => {
+      if (rootSettled) {
+        return;
+      }
+      attachRootResolution(
+        response,
+        (value) => {
+          void materializeLazyValue(value)
+            .then((materialized) => {
+              if (rootSettled) return;
+              rootSettled = true;
+              resolve(materialized as T);
+            })
+            .catch((error) => {
+              if (rootSettled) return;
+              rootSettled = true;
+              reject(error);
+            });
+        },
+        (reason) => {
+          if (rootSettled) return;
+          rootSettled = true;
+          reject(reason);
+        },
+      );
+    };
+    void consumeFlightStream(stream, response, settleRoot).catch((error) => {
+      closeResponseWithError(response, error);
+      if (!rootSettled) {
+        rootSettled = true;
+        reject(error);
+      }
+    });
+    settleRoot();
+  });
 }
 
 export async function encodeReply(value: unknown): Promise<FormData | string> {

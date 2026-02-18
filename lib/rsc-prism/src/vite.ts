@@ -146,7 +146,9 @@ function toAbsolutePath(id: string): string {
 }
 
 function withBypassQuery(id: string): string {
-  return id.includes("?") ? `${id}&${ORIGINAL_MODULE_BYPASS_QUERY}` : `${id}?${ORIGINAL_MODULE_BYPASS_QUERY}`;
+  return id.includes("?")
+    ? `${id}&${ORIGINAL_MODULE_BYPASS_QUERY}`
+    : `${id}?${ORIGINAL_MODULE_BYPASS_QUERY}`;
 }
 
 function dedupeItems<T>(items: T[]): T[] {
@@ -416,7 +418,8 @@ function collectRuntimeExports(
   id: string,
   options: { experimentalComponentLevelDirectives?: boolean } = {},
 ): ParsedModuleExports {
-  const experimentalComponentLevelDirectives = options.experimentalComponentLevelDirectives === true;
+  const experimentalComponentLevelDirectives =
+    options.experimentalComponentLevelDirectives === true;
   const named = new Set<string>();
   const actionExports = new Set<string>();
   const componentExports = new Set<string>();
@@ -779,12 +782,16 @@ function buildMainWorkerDirectiveReferenceModuleCode(
   let exportIndex = 0;
   for (const name of exportsInfo.named) {
     if (!actionExports.has(name) && !componentExports.has(name)) {
-      lines.push(`const __rscPrismPassthroughExport${exportIndex++} = __rscPrismSourceModule.${name};`);
+      lines.push(
+        `const __rscPrismPassthroughExport${exportIndex++} = __rscPrismSourceModule.${name};`,
+      );
       lines.push(`export { __rscPrismPassthroughExport${exportIndex - 1} as ${name} };`);
       continue;
     }
     const localName = `__rscPrismWorkerDirectiveExport${exportIndex++}`;
-    const refFactory = actionExports.has(name) ? "__rscPrismCreateActionRef" : "__rscPrismCreateWorkerRef";
+    const refFactory = actionExports.has(name)
+      ? "__rscPrismCreateActionRef"
+      : "__rscPrismCreateWorkerRef";
     lines.push(`const ${localName} = ${refFactory}(${JSON.stringify(name)});`);
     if (actionExports.has(name)) {
       lines.push(`__rscPrismActionReferenceMap[${JSON.stringify(name)}] = ${localName};`);
@@ -1433,7 +1440,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         const includeAsWorkerModule = parsed.isDirectiveModule && parsed.type === "worker";
         const includeAsActionModule = parsed.hasWorkerActionExports === true;
         const includeAsComponentDirectiveModule = parsed.hasWorkerComponentExports === true;
-        if (!includeAsWorkerModule && !includeAsActionModule && !includeAsComponentDirectiveModule) {
+        if (
+          !includeAsWorkerModule &&
+          !includeAsActionModule &&
+          !includeAsComponentDirectiveModule
+        ) {
           continue;
         }
 
@@ -1793,10 +1804,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       if (options.mode === "main" && id.startsWith(MAIN_WORKER_DIRECTIVE_REF_VIRTUAL_ID_PREFIX)) {
         const absolutePath = id.slice(MAIN_WORKER_DIRECTIVE_REF_VIRTUAL_ID_PREFIX.length);
         const directiveModule = await parseDirectiveModule(absolutePath);
-        if (
-          directiveModule.exportsInfo == null ||
-          !directiveModule.hasWorkerComponentExports
-        ) {
+        if (directiveModule.exportsInfo == null || !directiveModule.hasWorkerComponentExports) {
           throw new Error(
             `[rsc-prism] Main worker directive reference requested for non-component module "${absolutePath}".`,
           );
@@ -1969,11 +1977,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         transformedCode = buildMainWorkerReferenceModuleCode(moduleId, exportsInfo);
       }
 
-      if (
-        options.mode === "main" &&
-        directiveType == null &&
-        hasWorkerComponentExports
-      ) {
+      if (options.mode === "main" && directiveType == null && hasWorkerComponentExports) {
         transformedCode = buildMainWorkerDirectiveReferenceModuleCode(
           moduleId,
           exportsInfo,

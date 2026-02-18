@@ -31,14 +31,23 @@ export function setAutoClientManifest(manifest: ClientManifest): void {
   getManifestStore()[CLIENT_MANIFEST_GLOBAL_KEY] = manifest;
 }
 
-function ensureManifestMap(): Record<string, { id: string; name: string; chunks: string[]; async?: boolean }> {
+function ensureManifestMap(): Record<
+  string,
+  { id: string; name: string; chunks: string[]; async?: boolean }
+> {
   const store = getManifestStore();
   const current = store[CLIENT_MANIFEST_GLOBAL_KEY];
   if (typeof current === "object" && current != null) {
-    return current as Record<string, { id: string; name: string; chunks: string[]; async?: boolean }>;
+    return current as Record<
+      string,
+      { id: string; name: string; chunks: string[]; async?: boolean }
+    >;
   }
 
-  const manifestMap: Record<string, { id: string; name: string; chunks: string[]; async?: boolean }> = {};
+  const manifestMap: Record<
+    string,
+    { id: string; name: string; chunks: string[]; async?: boolean }
+  > = {};
   store[CLIENT_MANIFEST_GLOBAL_KEY] = manifestMap;
   return manifestMap;
 }

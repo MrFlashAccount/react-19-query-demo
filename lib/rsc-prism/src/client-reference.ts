@@ -120,7 +120,8 @@ export function createClientModule<M extends ComponentModule>(
   const hashIndex = moduleId.lastIndexOf("#");
   const normalizedModuleId = hashIndex === -1 ? moduleId : moduleId.slice(0, hashIndex);
   const slashIndex = normalizedModuleId.lastIndexOf("/");
-  const manifest: ClientManifest = slashIndex === -1 ? "/" : normalizedModuleId.slice(0, slashIndex + 1);
+  const manifest: ClientManifest =
+    slashIndex === -1 ? "/" : normalizedModuleId.slice(0, slashIndex + 1);
 
   const refs = createClientRefs<M>(moduleId, exportNames);
 
