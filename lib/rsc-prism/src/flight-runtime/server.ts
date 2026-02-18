@@ -21,58 +21,6 @@ const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
 const LEGACY_REACT_ELEMENT_SYMBOL = Symbol.for("react.element");
 const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");
 const FLIGHT_ROW_ENCODER = new TextEncoder();
-const FLIGHT_TIMING_DEBUG_GLOBAL_KEY = "__RSC_PRISM_FLIGHT_TIMING__";
-
-interface FlightTimingDebugSink {
-  report: (event: {
-    mode: "stream" | "row-emitter";
-    encodeRootMs: number;
-    emitRootMs: number;
-    drainDeferredMs: number;
-    totalMs: number;
-    queuedDeferredRows: number;
-    emittedModelRows: number;
-    emittedBinaryRows: number;
-  }) => void;
-}
-
-function getFlightTimingDebugSink(): FlightTimingDebugSink | null {
-  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
-  const value = globalState[FLIGHT_TIMING_DEBUG_GLOBAL_KEY];
-  if (typeof value !== "object" || value == null || !("report" in value)) {
-    const enabled = true;
-    if (!enabled) {
-      return null;
-    }
-    return {
-      report: (event) => {
-        const payload = {
-          mode: event.mode,
-          encodeRootMs: Number(event.encodeRootMs.toFixed(2)),
-          emitRootMs: Number(event.emitRootMs.toFixed(2)),
-          drainDeferredMs: Number(event.drainDeferredMs.toFixed(2)),
-          totalMs: Number(event.totalMs.toFixed(2)),
-          queuedDeferredRows: event.queuedDeferredRows,
-          emittedModelRows: event.emittedModelRows,
-          emittedBinaryRows: event.emittedBinaryRows,
-        };
-        console.info("[rsc-prism flight timing]", payload);
-      },
-    };
-  }
-  const candidate = value as { report?: unknown };
-  if (typeof candidate.report !== "function") {
-    return null;
-  }
-  return candidate as FlightTimingDebugSink;
-}
-
-function nowMs(): number {
-  if (typeof performance !== "undefined" && typeof performance.now === "function") {
-    return performance.now();
-  }
-  return Date.now();
-}
 
 function isClientReference(value: unknown): value is { $$typeof: symbol; $$id: string } {
   if (typeof value !== "function" && (typeof value !== "object" || value == null)) {
@@ -99,10 +47,7 @@ function isReactElementLike(value: unknown): value is {
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  if (
-    (typeof value !== "object" && typeof value !== "function") ||
-    value == null
-  ) {
+  if ((typeof value !== "object" && typeof value !== "function") || value == null) {
     return false;
   }
   return "then" in value;
@@ -202,10 +147,7 @@ function encodeElementType(type: unknown): string {
   throw new Error("Unsupported element type in minimal runtime.");
 }
 
-function encodeServerNode(
-  value: unknown,
-  context: EncodeContext,
-) {
+function encodeServerNode(value: unknown, context: EncodeContext) {
   if (isThenable(value)) {
     const rowId = context.allocateRowId();
     context.queueDeferred(
@@ -241,10 +183,7 @@ function encodeServerNode(
   return encodeServerElement(value, context);
 }
 
-function encodeServerArray(
-  value: unknown[],
-  context: EncodeContext,
-) {
+function encodeServerArray(value: unknown[], context: EncodeContext) {
   const results = Array.from({ length: value.length });
   let hasAsync = false;
   for (let i = 0; i < value.length; i += 1) {
@@ -309,12 +248,6 @@ export async function renderToReadableStream(
       signal?.addEventListener("abort", onAbort, { once: true });
 
       try {
-        const timingSink = getFlightTimingDebugSink();
-        const timingStart = timingSink == null ? 0 : nowMs();
-        let timingBeforeEncodeRoot = timingStart;
-        let timingAfterEncodeRoot = timingStart;
-        let timingAfterRootEmit = timingStart;
-        let timingAfterDeferredDrain = timingStart;
         let queuedDeferredRows = 0;
         let emittedModelRows = 0;
         let emittedBinaryRows = 0;
@@ -344,35 +277,19 @@ export async function renderToReadableStream(
           queueDeferred,
         );
 
-        timingBeforeEncodeRoot = timingSink == null ? 0 : nowMs();
         const rootEncoded = encodeServerNode(element, context);
         const root = isThenable(rootEncoded) ? await rootEncoded : rootEncoded;
-        timingAfterEncodeRoot = timingSink == null ? 0 : nowMs();
         if (settled) return;
         controller.enqueue(encodeFlightRow(0, root));
         emittedModelRows += 1;
-        timingAfterRootEmit = timingSink == null ? 0 : nowMs();
 
         while (pendingRows.size > 0) {
           await Promise.race(pendingRows);
           if (settled) return;
         }
-        timingAfterDeferredDrain = timingSink == null ? 0 : nowMs();
 
         controller.close();
         settled = true;
-        if (timingSink != null) {
-          timingSink.report({
-            mode: "stream",
-            encodeRootMs: timingAfterEncodeRoot - timingBeforeEncodeRoot,
-            emitRootMs: timingAfterRootEmit - timingAfterEncodeRoot,
-            drainDeferredMs: timingAfterDeferredDrain - timingAfterRootEmit,
-            totalMs: timingAfterDeferredDrain - timingStart,
-            queuedDeferredRows,
-            emittedModelRows,
-            emittedBinaryRows,
-          });
-        }
       } catch (error) {
         if (!settled) {
           settled = true;
@@ -406,12 +323,6 @@ export async function renderToRowEmitter(
   signal?.addEventListener("abort", onAbort, { once: true });
 
   try {
-    const timingSink = getFlightTimingDebugSink();
-    const timingStart = timingSink == null ? 0 : nowMs();
-    let timingBeforeEncodeRoot = timingStart;
-    let timingAfterEncodeRoot = timingStart;
-    let timingAfterRootEmit = timingStart;
-    let timingAfterDeferredDrain = timingStart;
     let queuedDeferredRows = 0;
     let emittedModelRows = 0;
     let emittedBinaryRows = 0;
@@ -442,35 +353,19 @@ export async function renderToRowEmitter(
       queueDeferred,
     );
 
-    timingBeforeEncodeRoot = timingSink == null ? 0 : nowMs();
     const rootEncoded = encodeServerNode(element, context);
     const root = isThenable(rootEncoded) ? await rootEncoded : rootEncoded;
-    timingAfterEncodeRoot = timingSink == null ? 0 : nowMs();
     if (settled) return;
     emit(flightModelRow(0, root));
     emittedModelRows += 1;
-    timingAfterRootEmit = timingSink == null ? 0 : nowMs();
 
     while (pendingRows.size > 0) {
       await Promise.race(pendingRows);
       if (settled) return;
     }
-    timingAfterDeferredDrain = timingSink == null ? 0 : nowMs();
 
     emit(flightDoneRow());
     settled = true;
-    if (timingSink != null) {
-      timingSink.report({
-        mode: "row-emitter",
-        encodeRootMs: timingAfterEncodeRoot - timingBeforeEncodeRoot,
-        emitRootMs: timingAfterRootEmit - timingAfterEncodeRoot,
-        drainDeferredMs: timingAfterDeferredDrain - timingAfterRootEmit,
-        totalMs: timingAfterDeferredDrain - timingStart,
-        queuedDeferredRows,
-        emittedModelRows,
-        emittedBinaryRows,
-      });
-    }
   } catch (error) {
     if (!settled) {
       settled = true;
