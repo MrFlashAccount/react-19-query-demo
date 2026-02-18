@@ -190,6 +190,7 @@ export async function decodeReply(
   if (typeof body === "string") {
     source = body;
   } else {
+    const pendingRows: Array<Promise<void>> = [];
     for (const [key, value] of body.entries()) {
       if (key === "0") {
         source = value.toString();
@@ -204,9 +205,15 @@ export async function decodeReply(
         (typeof File !== "undefined" && value instanceof File) ||
         (typeof Blob !== "undefined" && value instanceof Blob)
       ) {
-        const bytes = new Uint8Array(await value.arrayBuffer());
-        rowsById.set(key, decodeBinaryWireRow(rowTag, bytes));
+        pendingRows.push(
+          value.arrayBuffer().then((arrayBuffer) => {
+            rowsById.set(key, decodeBinaryWireRow(rowTag, new Uint8Array(arrayBuffer)));
+          }),
+        );
       }
+    }
+    if (pendingRows.length > 0) {
+      await Promise.all(pendingRows);
     }
   }
   const parsed = JSON.parse(source);

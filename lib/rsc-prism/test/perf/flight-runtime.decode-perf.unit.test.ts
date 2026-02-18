@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 
 import { describe, it } from "vitest";
 
-import { decodeWireValue, encodeWireValue } from "../../src/flight-runtime/wire";
+import {
+  binaryWireTagFromKind,
+  decodeBinaryWireRow,
+  decodeWireValue,
+  encodeWireValue,
+  encodeWireValueWithBinaryRows,
+} from "../../src/flight-runtime/wire";
 
 function readEnvNumber(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -107,6 +113,32 @@ function buildSyntheticWirePayload(): unknown {
   });
 }
 
+function buildSyntheticBinaryWirePayload(rowCount: number, bytesPerRow: number): {
+  encoded: unknown;
+  rowsById: Map<string, unknown>;
+} {
+  const rowsById = new Map<string, unknown>();
+  const payload: Array<{ idx: number; bytes: Uint8Array; floats: Float64Array; raw: ArrayBuffer }> = [];
+  for (let i = 0; i < rowCount; i += 1) {
+    const bytes = new Uint8Array(bytesPerRow);
+    const floats = new Float64Array(Math.max(4, Math.floor(bytesPerRow / 8)));
+    for (let j = 0; j < bytes.length; j += 1) {
+      bytes[j] = (i + j) & 255;
+    }
+    for (let j = 0; j < floats.length; j += 1) {
+      floats[j] = i * 0.5 + j * 1.25;
+    }
+    payload.push({ idx: i, bytes, floats, raw: bytes.buffer.slice(0) });
+  }
+  const encoded = encodeWireValueWithBinaryRows(payload, (kind, bytes) => {
+    const id = String(rowsById.size + 1);
+    const tag = binaryWireTagFromKind(kind);
+    rowsById.set(id, decodeBinaryWireRow(tag, bytes));
+    return id;
+  });
+  return { encoded, rowsById };
+}
+
 const perfIt = process.env.RSC_PERF === "1" ? it : it.skip;
 
 describe("flight decode perf harness", () => {
@@ -132,6 +164,22 @@ describe("flight decode perf harness", () => {
         ),
       );
     }
+
+    const binaryRowCount = readEnvNumber("RSC_PERF_BINARY_ROW_COUNT", 3000);
+    const binaryBytesPerRow = readEnvNumber("RSC_PERF_BINARY_ROW_BYTES", 256);
+    const binaryWire = buildSyntheticBinaryWirePayload(binaryRowCount, binaryBytesPerRow);
+    rows.push(
+      benchmark(
+        `synthetic-binary-wire-decode:rows=${binaryRowCount}:bytes=${binaryBytesPerRow}`,
+        iterations,
+        () =>
+          decodeWireValue(
+            binaryWire.encoded,
+            (id) => `client:${id}`,
+            (id) => binaryWire.rowsById.get(id),
+          ),
+      ),
+    );
 
     const flightFile = process.env.RSC_FLIGHT_FILE;
     if (flightFile != null && flightFile.length > 0) {

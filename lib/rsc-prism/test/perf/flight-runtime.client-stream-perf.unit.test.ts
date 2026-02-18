@@ -18,6 +18,18 @@ function readEnvNumber(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function readChunkSizes(name: string, fallback: number[]): number[] {
+  const raw = process.env[name];
+  if (raw == null || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = raw
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item > 0);
+  return parsed.length === 0 ? fallback : parsed;
+}
+
 function formatMs(ms: number): string {
   return `${ms.toFixed(2)}ms`;
 }
@@ -104,16 +116,19 @@ const perfIt = process.env.RSC_PERF === "1" ? it : it.skip;
 describe("flight runtime stream decode perf", () => {
   perfIt("prints stream decode and root-scan timing", async () => {
     const iterations = readEnvNumber("RSC_PERF_ITERATIONS", 10);
-    const rowCount = readEnvNumber("RSC_PERF_ROW_COUNT", 2000);
-    const chunkSize = readEnvNumber("RSC_PERF_CHUNK_SIZE", 256);
+    const rowCount = readEnvNumber("RSC_PERF_ROW_COUNT", 8000);
+    const chunkSizes = readChunkSizes("RSC_PERF_CHUNK_SIZES", [64, 256, 1024]);
     const payload = buildFlightPayload(rowCount);
 
-    const stats = await benchmark(iterations, payload, chunkSize);
-
-    console.log(`\n[rsc-prism perf] iterations=${iterations} rows=${rowCount} chunk=${chunkSize}`);
-    console.log(`[rsc-prism perf] stream-parse+decode avg=${formatMs(stats.avgTotalMs)}`);
-    console.log(`[rsc-prism perf] root-scan count=${stats.avgRootScanCount.toFixed(2)}`);
-    console.log(`[rsc-prism perf] root-scan avg=${formatMs(stats.avgRootScanMs)}`);
-    console.log(`[rsc-prism perf] decode avg=${formatMs(stats.avgDecodeMs)}`);
+    console.log(`\n[rsc-prism perf] iterations=${iterations} rows=${rowCount}`);
+    for (let i = 0; i < chunkSizes.length; i += 1) {
+      const chunkSize = chunkSizes[i];
+      const stats = await benchmark(iterations, payload, chunkSize);
+      console.log(`[rsc-prism perf] chunk=${chunkSize}`);
+      console.log(`[rsc-prism perf] stream-parse+decode avg=${formatMs(stats.avgTotalMs)}`);
+      console.log(`[rsc-prism perf] root-scan count=${stats.avgRootScanCount.toFixed(2)}`);
+      console.log(`[rsc-prism perf] root-scan avg=${formatMs(stats.avgRootScanMs)}`);
+      console.log(`[rsc-prism perf] decode avg=${formatMs(stats.avgDecodeMs)}`);
+    }
   });
 });

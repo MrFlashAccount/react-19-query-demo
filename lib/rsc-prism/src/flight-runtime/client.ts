@@ -137,8 +137,10 @@ function collectUnresolvedRowRefs(
     return;
   }
 
-  for (const item of Object.values(tagged)) {
-    collectUnresolvedRowRefs(item, rowsById, unresolved, scannedRows, visitingRows);
+  for (const key in tagged) {
+    if (Object.prototype.hasOwnProperty.call(tagged, key)) {
+      collectUnresolvedRowRefs(tagged[key], rowsById, unresolved, scannedRows, visitingRows);
+    }
   }
 }
 
@@ -157,17 +159,28 @@ async function parseFlightPayloadFromStream(
   let hasInitializedRootRefs = false;
   const pendingRootRefs = new Set<string>();
   const scannedResolvedRows = new Set<string>();
+  const rootScanVisitingRows = new Set<string>();
   let shouldCancelReader = false;
   const resolveRowReference = (rowId: string): unknown => rowsById.get(rowId);
   let rowIdBuffer = "";
+  let rowIdIsNumeric = true;
+  let rowIdNumber = 0;
   let parsingRowTag = false;
   let binaryTag: string | null = null;
-  let binaryLengthText = "";
+  let hasParsedBinaryLength = false;
   let binaryExpectedLength = 0;
   let binaryReceivedLength = 0;
   let binaryParts: Uint8Array[] = [];
   let jsonParts: Uint8Array[] = [];
   let jsonByteLength = 0;
+
+  const resetRowId = (): void => {
+    rowIdBuffer = "";
+    rowIdIsNumeric = true;
+    rowIdNumber = 0;
+  };
+
+  const readCurrentRowId = (): string => (rowIdIsNumeric ? String(rowIdNumber) : rowIdBuffer);
 
   const tryResolveRoot = (): unknown => {
     if (!hasRootPayload || rootPayload == null) {
@@ -177,12 +190,13 @@ async function parseFlightPayloadFromStream(
       const scanStart = perfStats == null ? 0 : performance.now();
       pendingRootRefs.clear();
       scannedResolvedRows.clear();
+      rootScanVisitingRows.clear();
       collectUnresolvedRowRefs(
         rootPayload,
         rowsById,
         pendingRootRefs,
         scannedResolvedRows,
-        new Set<string>(),
+        rootScanVisitingRows,
       );
       hasInitializedRootRefs = true;
       if (perfStats != null) {
@@ -250,8 +264,8 @@ async function parseFlightPayloadFromStream(
     const rowBytes = joinByteChunks(jsonParts, jsonByteLength);
     jsonParts = [];
     jsonByteLength = 0;
-    const parsed = parseJsonFlightRow(rowIdBuffer, rowBytes, decoder);
-    rowIdBuffer = "";
+    const parsed = parseJsonFlightRow(readCurrentRowId(), rowBytes, decoder);
+    resetRowId();
     parsingRowTag = false;
     return consumeParsedRow(parsed);
   };
@@ -259,13 +273,13 @@ async function parseFlightPayloadFromStream(
   const finalizeBinaryRow = (): unknown => {
     const rowBytes = joinByteChunks(binaryParts, binaryExpectedLength);
     const parsed: ParsedFlightRow = {
-      id: rowIdBuffer,
+      id: readCurrentRowId(),
       payload: decodeBinaryWireRow(binaryTag as string, rowBytes),
     };
-    rowIdBuffer = "";
+    resetRowId();
     parsingRowTag = false;
     binaryTag = null;
-    binaryLengthText = "";
+    hasParsedBinaryLength = false;
     binaryExpectedLength = 0;
     binaryReceivedLength = 0;
     binaryParts = [];
@@ -279,21 +293,22 @@ async function parseFlightPayloadFromStream(
       let offset = 0;
       while (offset < value.length) {
         if (binaryTag != null) {
-          if (binaryExpectedLength === 0) {
+          if (!hasParsedBinaryLength) {
+            binaryExpectedLength = 0;
             let foundComma = false;
             while (offset < value.length) {
               const byte = value[offset];
               offset += 1;
               if (byte === 44) {
-                binaryExpectedLength = Number.parseInt(binaryLengthText, 16);
-                if (!Number.isFinite(binaryExpectedLength) || binaryExpectedLength < 0) {
-                  throw new Error(`[rsc-prism] Invalid binary row length "${binaryLengthText}".`);
-                }
-                binaryLengthText = "";
+                hasParsedBinaryLength = true;
                 foundComma = true;
                 break;
               }
-              binaryLengthText += String.fromCharCode(byte);
+              const hexDigit = byte <= 57 ? byte - 48 : (byte | 32) - 87;
+              if (hexDigit < 0 || hexDigit > 15) {
+                throw new Error(`[rsc-prism] Invalid binary row length byte "${String.fromCharCode(byte)}".`);
+              }
+              binaryExpectedLength = binaryExpectedLength * 16 + hexDigit;
             }
             if (!foundComma) {
               continue;
@@ -337,10 +352,18 @@ async function parseFlightPayloadFromStream(
             continue;
           }
           if (byte === 10) {
-            rowIdBuffer = "";
+            resetRowId();
             continue;
           }
-          rowIdBuffer += String.fromCharCode(byte);
+          if (rowIdIsNumeric && byte >= 48 && byte <= 57) {
+            rowIdNumber = rowIdNumber * 10 + (byte - 48);
+          } else {
+            if (rowIdIsNumeric) {
+              rowIdBuffer = rowIdNumber === 0 ? "" : String(rowIdNumber);
+              rowIdIsNumeric = false;
+            }
+            rowIdBuffer += String.fromCharCode(byte);
+          }
           continue;
         }
 
@@ -384,7 +407,12 @@ async function parseFlightPayloadFromStream(
     reader.releaseLock();
   }
 
-  if (binaryTag != null || rowIdBuffer.length > 0 || jsonByteLength > 0) {
+  if (
+    binaryTag != null ||
+    rowIdBuffer.length > 0 ||
+    (rowIdIsNumeric && rowIdNumber !== 0) ||
+    jsonByteLength > 0
+  ) {
     throw new Error("[rsc-prism] Incomplete Flight stream row.");
   }
 

@@ -52,32 +52,59 @@ function normalizeTypedArray(value: unknown): { kind: string; bytes: Uint8Array 
 }
 
 function rehydrateTypedArray(kind: string, bytes: Uint8Array): unknown {
-  const copied = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const toCopiedBuffer = (): ArrayBuffer =>
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const canUseView = (alignment: number): boolean =>
+    bytes.byteOffset % alignment === 0 && bytes.byteLength % alignment === 0;
   switch (kind) {
     case "Uint8Array":
       return bytes;
     case "Int8Array":
-      return new Int8Array(copied);
+      return new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     case "Uint8ClampedArray":
-      return new Uint8ClampedArray(copied);
+      return new Uint8ClampedArray(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     case "Int16Array":
-      return new Int16Array(copied);
+      if (canUseView(2)) {
+        return new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+      }
+      return new Int16Array(toCopiedBuffer());
     case "Uint16Array":
-      return new Uint16Array(copied);
+      if (canUseView(2)) {
+        return new Uint16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+      }
+      return new Uint16Array(toCopiedBuffer());
     case "Int32Array":
-      return new Int32Array(copied);
+      if (canUseView(4)) {
+        return new Int32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+      }
+      return new Int32Array(toCopiedBuffer());
     case "Uint32Array":
-      return new Uint32Array(copied);
+      if (canUseView(4)) {
+        return new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+      }
+      return new Uint32Array(toCopiedBuffer());
     case "Float32Array":
-      return new Float32Array(copied);
+      if (canUseView(4)) {
+        return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+      }
+      return new Float32Array(toCopiedBuffer());
     case "Float64Array":
-      return new Float64Array(copied);
+      if (canUseView(8)) {
+        return new Float64Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 8);
+      }
+      return new Float64Array(toCopiedBuffer());
     case "BigInt64Array":
-      return new BigInt64Array(copied);
+      if (canUseView(8)) {
+        return new BigInt64Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 8);
+      }
+      return new BigInt64Array(toCopiedBuffer());
     case "BigUint64Array":
-      return new BigUint64Array(copied);
+      if (canUseView(8)) {
+        return new BigUint64Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 8);
+      }
+      return new BigUint64Array(toCopiedBuffer());
     case "DataView":
-      return new DataView(copied);
+      return new DataView(toCopiedBuffer());
     default:
       throw new Error(`Unsupported typed array kind "${kind}"`);
   }
@@ -438,6 +465,9 @@ function decodeTagValue(tagged: Record<string, unknown>): unknown {
     const bytes = tagged.v;
     if (!(bytes instanceof Uint8Array)) {
       throw new Error("Invalid binary arrayBuffer payload.");
+    }
+    if (bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength) {
+      return bytes.buffer;
     }
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   }
