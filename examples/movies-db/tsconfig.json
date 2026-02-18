@@ -6,9 +6,6 @@
     "lib": ["esnext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
-    "composite": true,
-    "tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo",
-    "incremental": true,
 
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
