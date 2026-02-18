@@ -33,6 +33,36 @@ All numbers are medians of 3 consecutive runs.
 - `stream-parse+decode chunk=1024`: `+0.05ms` (`+0.4%`, within noise)
 - `server-decodeReply`: `-0.98ms` (`-4.0%`)
 
+## After latest encodeServerNode maybe-async change (2026-02-18)
+
+Command:
+
+`RSC_PERF=1 RSC_PERF_ITERATIONS=8 RSC_PERF_ROW_COUNT=12000 RSC_PERF_CHUNK_SIZES=64,256,1024 RSC_PERF_BINARY_ROW_COUNT=4000 RSC_PERF_BINARY_ROW_BYTES=384 RSC_PERF_SERVER_ITEM_COUNT=1800 RSC_PERF_SERVER_ITEM_BYTES=384 pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.client-stream-perf.unit.test.ts test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts`
+
+Raw runs:
+
+- run1: `2.11ms`, `1.49ms`, `16.26ms`, `8.85ms`, `9.39ms`, `25.33ms`
+- run2: `2.29ms`, `1.50ms`, `16.33ms`, `10.03ms`, `9.60ms`, `25.03ms`
+- run3: `2.56ms`, `1.63ms`, `15.23ms`, `10.33ms`, `8.58ms`, `27.48ms`
+
+Median of 3:
+
+- `synthetic-wire-decode`: `2.29ms`
+- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `1.50ms`
+- `stream-parse+decode chunk=64`: `16.26ms`
+- `stream-parse+decode chunk=256`: `10.03ms`
+- `stream-parse+decode chunk=1024`: `9.39ms`
+- `server-decodeReply`: `25.33ms`
+
+## Delta (latest - previous after optimization)
+
+- `synthetic-wire-decode`: `+0.25ms` (`+12.3%`)
+- `synthetic-binary-wire-decode:rows=4000:bytes=384`: `-0.11ms` (`-6.8%`)
+- `stream-parse+decode chunk=64`: `-3.39ms` (`-17.3%`)
+- `stream-parse+decode chunk=256`: `-4.53ms` (`-31.1%`)
+- `stream-parse+decode chunk=1024`: `-3.24ms` (`-25.7%`)
+- `server-decodeReply`: `+2.02ms` (`+8.7%`)
+
 ## Changes
 
 - **wire.ts**: Merged duplicate `encodeWireValue`/`encodeWireValueWithBinaryRows` into single `encodeWireValueImpl`. Removed `decodeTagValue` intermediate function. Replaced `createElement` with direct element construction. Removed defensive string coercions. `decodeBinaryWireRow` now returns final typed values directly (no wrapper objects).
