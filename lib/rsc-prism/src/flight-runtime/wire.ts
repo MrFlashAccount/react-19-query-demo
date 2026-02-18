@@ -8,6 +8,10 @@ const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");
 
 type JsonObject = Record<string, unknown>;
 const EMPTY_ARRAY: unknown[] = [];
+const BINARY_ARRAY_BUFFER_TAG = "arrayBufferBinary";
+const BINARY_TYPED_TAG = "typedBinary";
+
+type EmitBinaryRow = (kind: string, bytes: Uint8Array) => string | number;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== "object" || value == null) {
@@ -17,73 +21,63 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function encodeBytes(value: Uint8Array): string {
-  let binary = "";
-  for (const byte of value) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-function decodeBytes(value: string): Uint8Array {
-  const uint8ArrayConstructor = Uint8Array as typeof Uint8Array & {
-    fromBase64?: (encoded: string) => Uint8Array;
-  };
-  if (typeof uint8ArrayConstructor.fromBase64 === "function") {
-    return uint8ArrayConstructor.fromBase64(value);
-  }
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
 function normalizeTypedArray(value: unknown): { kind: string; bytes: Uint8Array } | null {
+  const toBytes = (buffer: ArrayBufferLike, byteOffset: number, byteLength: number): Uint8Array =>
+    new Uint8Array(buffer, byteOffset, byteLength);
+
   if (value instanceof Uint8Array) return { kind: "Uint8Array", bytes: value };
-  if (value instanceof Int8Array) return { kind: "Int8Array", bytes: new Uint8Array(value.buffer) };
+  if (value instanceof Int8Array)
+    return { kind: "Int8Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   if (value instanceof Uint8ClampedArray)
-    return { kind: "Uint8ClampedArray", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof Int16Array) return { kind: "Int16Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof Uint16Array) return { kind: "Uint16Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof Int32Array) return { kind: "Int32Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof Uint32Array) return { kind: "Uint32Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof Float32Array) return { kind: "Float32Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof Float64Array) return { kind: "Float64Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof BigInt64Array) return { kind: "BigInt64Array", bytes: new Uint8Array(value.buffer) };
+    return { kind: "Uint8ClampedArray", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof Int16Array)
+    return { kind: "Int16Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof Uint16Array)
+    return { kind: "Uint16Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof Int32Array)
+    return { kind: "Int32Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof Uint32Array)
+    return { kind: "Uint32Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof Float32Array)
+    return { kind: "Float32Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof Float64Array)
+    return { kind: "Float64Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof BigInt64Array)
+    return { kind: "BigInt64Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   if (value instanceof BigUint64Array)
-    return { kind: "BigUint64Array", bytes: new Uint8Array(value.buffer) };
-  if (value instanceof DataView) return { kind: "DataView", bytes: new Uint8Array(value.buffer) };
+    return { kind: "BigUint64Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+  if (value instanceof DataView)
+    return { kind: "DataView", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   return null;
 }
 
 function rehydrateTypedArray(kind: string, bytes: Uint8Array): unknown {
+  const copied = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   switch (kind) {
     case "Uint8Array":
       return bytes;
     case "Int8Array":
-      return new Int8Array(bytes.buffer.slice(0));
+      return new Int8Array(copied);
     case "Uint8ClampedArray":
-      return new Uint8ClampedArray(bytes.buffer.slice(0));
+      return new Uint8ClampedArray(copied);
     case "Int16Array":
-      return new Int16Array(bytes.buffer.slice(0));
+      return new Int16Array(copied);
     case "Uint16Array":
-      return new Uint16Array(bytes.buffer.slice(0));
+      return new Uint16Array(copied);
     case "Int32Array":
-      return new Int32Array(bytes.buffer.slice(0));
+      return new Int32Array(copied);
     case "Uint32Array":
-      return new Uint32Array(bytes.buffer.slice(0));
+      return new Uint32Array(copied);
     case "Float32Array":
-      return new Float32Array(bytes.buffer.slice(0));
+      return new Float32Array(copied);
     case "Float64Array":
-      return new Float64Array(bytes.buffer.slice(0));
+      return new Float64Array(copied);
     case "BigInt64Array":
-      return new BigInt64Array(bytes.buffer.slice(0));
+      return new BigInt64Array(copied);
     case "BigUint64Array":
-      return new BigUint64Array(bytes.buffer.slice(0));
+      return new BigUint64Array(copied);
     case "DataView":
-      return new DataView(bytes.buffer.slice(0));
+      return new DataView(copied);
     default:
       throw new Error(`Unsupported typed array kind "${kind}"`);
   }
@@ -212,11 +206,15 @@ export function encodeWireValue(value: unknown, seen: WeakSet<object> = new Weak
     };
   }
   if (value instanceof ArrayBuffer) {
-    return { $t: "arrayBuffer", v: encodeBytes(new Uint8Array(value)) };
+    throw new Error(
+      "Binary values are not supported in JSON wire mode. Use encodeWireValueWithBinaryRows/encodeReply.",
+    );
   }
   const typed = normalizeTypedArray(value);
   if (typed != null) {
-    return { $t: "typed", k: typed.kind, v: encodeBytes(typed.bytes) };
+    throw new Error(
+      "Binary values are not supported in JSON wire mode. Use encodeWireValueWithBinaryRows/encodeReply.",
+    );
   }
   if (Array.isArray(value)) {
     return value.map((item) => encodeWireValue(item, seen));
@@ -244,6 +242,214 @@ export function encodeWireValue(value: unknown, seen: WeakSet<object> = new Weak
     result[key] = encodeWireValue(item, seen);
   }
   return result;
+}
+
+export function encodeWireValueWithBinaryRows(
+  value: unknown,
+  emitBinaryRow: EmitBinaryRow,
+  seen: WeakSet<object> = new WeakSet(),
+): unknown {
+  if (value === undefined) {
+    return { $t: "undef" };
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value == null) {
+    return value;
+  }
+  if (typeof value === "bigint") {
+    return { $t: "bigint", v: value.toString() };
+  }
+  if (typeof value === "symbol") {
+    throw new Error("Symbols are not supported by the minimal Flight runtime.");
+  }
+  if (typeof value === "function") {
+    if (isClientReference(value)) {
+      return { $t: "clientRef", id: value.$$id };
+    }
+    if (isServerReference(value)) {
+      return { $t: "serverRef", id: value.$$id };
+    }
+    throw new Error("Functions are not supported by the minimal Flight runtime.");
+  }
+
+  if (seen.has(value as object)) {
+    throw new Error("Circular structures are not supported by the minimal Flight runtime.");
+  }
+  seen.add(value as object);
+
+  if (value instanceof Date) {
+    return { $t: "date", v: value.toISOString() };
+  }
+  if (value instanceof URLSearchParams) {
+    return { $t: "search", v: value.toString() };
+  }
+  if (value instanceof FormData) {
+    const entries: Array<[string, unknown]> = [];
+    for (const [key, item] of value.entries()) {
+      if (
+        (typeof File !== "undefined" && item instanceof File) ||
+        (typeof Blob !== "undefined" && item instanceof Blob)
+      ) {
+        throw new Error("File and Blob FormData values are not supported by the minimal Flight runtime.");
+      }
+      entries.push([key, encodeWireValueWithBinaryRows(item, emitBinaryRow, seen)]);
+    }
+    return { $t: "formdata", v: entries };
+  }
+  if (value instanceof Map) {
+    return {
+      $t: "map",
+      v: Array.from(value.entries()).map(([key, item]) => [
+        encodeWireValueWithBinaryRows(key, emitBinaryRow, seen),
+        encodeWireValueWithBinaryRows(item, emitBinaryRow, seen),
+      ]),
+    };
+  }
+  if (value instanceof Set) {
+    return {
+      $t: "set",
+      v: Array.from(value.values()).map((item) => encodeWireValueWithBinaryRows(item, emitBinaryRow, seen)),
+    };
+  }
+  if (value instanceof ArrayBuffer) {
+    return { $t: "rowRef", id: emitBinaryRow("ArrayBuffer", new Uint8Array(value)) };
+  }
+  const typed = normalizeTypedArray(value);
+  if (typed != null) {
+    return { $t: "rowRef", id: emitBinaryRow(typed.kind, typed.bytes) };
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => encodeWireValueWithBinaryRows(item, emitBinaryRow, seen));
+  }
+  if (isReactElementLike(value)) {
+    return {
+      $t: "element",
+      ty: encodeType(value.type),
+      props: encodeWireValueWithBinaryRows(value.props, emitBinaryRow, seen),
+      key: value.key,
+    };
+  }
+  if (isClientReference(value)) {
+    return { $t: "clientRef", id: value.$$id };
+  }
+  if (isServerReference(value)) {
+    return { $t: "serverRef", id: value.$$id };
+  }
+  if (!isPlainObject(value)) {
+    throw new Error("Only plain objects are serializable by the minimal Flight runtime.");
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    result[key] = encodeWireValueWithBinaryRows(item, emitBinaryRow, seen);
+  }
+  return result;
+}
+
+export function decodeBinaryWireRow(tag: string, bytes: Uint8Array): unknown {
+  switch (tag) {
+    case "A":
+      return { $t: BINARY_ARRAY_BUFFER_TAG, v: bytes };
+    case "o":
+      return { $t: BINARY_TYPED_TAG, k: "Uint8Array", v: bytes };
+    case "O":
+      return { $t: BINARY_TYPED_TAG, k: "Int8Array", v: bytes };
+    case "U":
+      return { $t: BINARY_TYPED_TAG, k: "Uint8ClampedArray", v: bytes };
+    case "S":
+      return { $t: BINARY_TYPED_TAG, k: "Int16Array", v: bytes };
+    case "s":
+      return { $t: BINARY_TYPED_TAG, k: "Uint16Array", v: bytes };
+    case "L":
+      return { $t: BINARY_TYPED_TAG, k: "Int32Array", v: bytes };
+    case "l":
+      return { $t: BINARY_TYPED_TAG, k: "Uint32Array", v: bytes };
+    case "G":
+      return { $t: BINARY_TYPED_TAG, k: "Float32Array", v: bytes };
+    case "g":
+      return { $t: BINARY_TYPED_TAG, k: "Float64Array", v: bytes };
+    case "M":
+      return { $t: BINARY_TYPED_TAG, k: "BigInt64Array", v: bytes };
+    case "m":
+      return { $t: BINARY_TYPED_TAG, k: "BigUint64Array", v: bytes };
+    case "V":
+      return { $t: BINARY_TYPED_TAG, k: "DataView", v: bytes };
+    default:
+      throw new Error(`Unknown binary row tag "${tag}"`);
+  }
+}
+
+export function binaryWireTagFromKind(kind: string): string {
+  switch (kind) {
+    case "ArrayBuffer":
+      return "A";
+    case "Uint8Array":
+      return "o";
+    case "Int8Array":
+      return "O";
+    case "Uint8ClampedArray":
+      return "U";
+    case "Int16Array":
+      return "S";
+    case "Uint16Array":
+      return "s";
+    case "Int32Array":
+      return "L";
+    case "Uint32Array":
+      return "l";
+    case "Float32Array":
+      return "G";
+    case "Float64Array":
+      return "g";
+    case "BigInt64Array":
+      return "M";
+    case "BigUint64Array":
+      return "m";
+    case "DataView":
+      return "V";
+    default:
+      throw new Error(`Unsupported binary kind "${kind}"`);
+  }
+}
+
+export function isBinaryWireRowTag(tag: number): boolean {
+  return (
+    tag === 65 || // A
+    tag === 79 || // O
+    tag === 111 || // o
+    tag === 85 || // U
+    tag === 83 || // S
+    tag === 115 || // s
+    tag === 76 || // L
+    tag === 108 || // l
+    tag === 71 || // G
+    tag === 103 || // g
+    tag === 77 || // M
+    tag === 109 || // m
+    tag === 86 // V
+  );
+}
+
+function decodeTagValue(tagged: Record<string, unknown>): unknown {
+  const tag = tagged.$t;
+  if (typeof tag !== "string") {
+    return null;
+  }
+  if (tag === BINARY_ARRAY_BUFFER_TAG) {
+    const bytes = tagged.v;
+    if (!(bytes instanceof Uint8Array)) {
+      throw new Error("Invalid binary arrayBuffer payload.");
+    }
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+  if (tag === BINARY_TYPED_TAG) {
+    const kind = typeof tagged.k === "string" ? tagged.k : String(tagged.k);
+    const bytes = tagged.v;
+    if (!(bytes instanceof Uint8Array)) {
+      throw new Error("Invalid binary typed payload.");
+    }
+    return rehydrateTypedArray(kind, bytes);
+  }
+  return null;
 }
 
 export function decodeWireValue(
@@ -274,6 +480,11 @@ function decodeWireValueInternal(
   }
 
   const tagged = value as Record<string, unknown>;
+  const decodedBinary = decodeTagValue(tagged);
+  if (decodedBinary != null) {
+    return decodedBinary;
+  }
+
   const tag = tagged.$t;
   if (typeof tag !== "string") {
     const result: Record<string, unknown> = {};
@@ -323,13 +534,6 @@ function decodeWireValueInternal(
       return new Date(typeof tagged.v === "string" ? tagged.v : String(tagged.v));
     case "search":
       return new URLSearchParams(typeof tagged.v === "string" ? tagged.v : String(tagged.v));
-    case "arrayBuffer":
-      return decodeBytes(typeof tagged.v === "string" ? tagged.v : String(tagged.v)).buffer;
-    case "typed": {
-      const kind = typeof tagged.k === "string" ? tagged.k : String(tagged.k);
-      const bytes = decodeBytes(typeof tagged.v === "string" ? tagged.v : String(tagged.v));
-      return rehydrateTypedArray(kind, bytes);
-    }
     case "map": {
       const entries = (tagged.v as unknown[] | null | undefined) ?? EMPTY_ARRAY;
       if (!Array.isArray(entries)) {

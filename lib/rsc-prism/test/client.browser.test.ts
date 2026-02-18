@@ -12,6 +12,25 @@ function flightValueResponse(value: unknown): Response {
   });
 }
 
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (let i = 0; i < parts.length; i += 1) {
+    total += parts[i].byteLength;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (let i = 0; i < parts.length; i += 1) {
+    out.set(parts[i], offset);
+    offset += parts[i].byteLength;
+  }
+  return out;
+}
+
+function binaryRow(id: number, tag: string, bytes: Uint8Array): Uint8Array {
+  const encoder = new TextEncoder();
+  return concatBytes([encoder.encode(`${id}:${tag}${bytes.byteLength.toString(16)},`), bytes, encoder.encode("\n")]);
+}
+
 function flightErrorResponse(message: string, status = 500): Response {
   return new Response(`0:${JSON.stringify({ __rscPrismError: true, message, status })}\n`, {
     status,
@@ -124,6 +143,26 @@ describe("rsc client browser workflows", () => {
     expect(raced).toBe("resolved");
     await expect(resultPromise).resolves.toBe("deferred");
     releaseClose?.();
+  });
+
+  it("decodes binary row payloads without base64 in stream", async () => {
+    const deferredBytes = Uint8Array.from([7, 8, 9, 10]);
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify({ $t: "rowRef", id: 1 })}\n`));
+          controller.enqueue(binaryRow(1, "A", deferredBytes));
+          controller.close();
+        },
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "text/x-component" },
+      },
+    );
+
+    const decoded = await consumeRSCResponse<ArrayBuffer>(response);
+    expect(Array.from(new Uint8Array(decoded))).toEqual(Array.from(deferredBytes));
   });
 
   it("encodes action args and supports fetch/call workflows", async () => {

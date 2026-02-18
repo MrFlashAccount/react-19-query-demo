@@ -104,7 +104,6 @@ function buildSyntheticWirePayload(): unknown {
     set,
     form,
     nested,
-    bytes: new Uint8Array(32 * 1024),
   });
 }
 

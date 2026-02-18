@@ -1,7 +1,31 @@
 import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
-import { decodeWireValue, encodeWireValue } from "./wire";
+import {
+  binaryWireTagFromKind,
+  decodeBinaryWireRow,
+  decodeWireValue,
+  encodeWireValueWithBinaryRows,
+  isBinaryWireRowTag,
+} from "./wire";
 import type { ClientManifestMap } from "../types";
+
+const FLIGHT_PERF_GLOBAL_KEY = "__rscPrismFlightPerf";
+
+type FlightPerfStats = {
+  rootScanCount: number;
+  rootScanTimeMs: number;
+  decodeCount: number;
+  decodeTimeMs: number;
+};
+
+function getFlightPerfStats(): FlightPerfStats | null {
+  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+  const candidate = globalState[FLIGHT_PERF_GLOBAL_KEY];
+  if (typeof candidate !== "object" || candidate == null) {
+    return null;
+  }
+  return candidate as FlightPerfStats;
+}
 
 function getMainThreadModules(): Record<string, Record<string, unknown>> {
   const globalState = globalThis as typeof globalThis & Record<string, unknown>;
@@ -51,57 +75,70 @@ interface ParsedFlightRow {
   payload: unknown;
 }
 
-function parseFlightRow(row: string): ParsedFlightRow {
-  const separatorIndex = row.indexOf(":");
-  if (separatorIndex === -1) {
-    return {
-      id: null,
-      payload: JSON.parse(row),
-    };
-  }
-
+function parseJsonFlightRow(id: string, rowBytes: Uint8Array, decoder: TextDecoder): ParsedFlightRow {
   return {
-    id: row.slice(0, separatorIndex).trim(),
-    payload: JSON.parse(row.slice(separatorIndex + 1)),
+    id,
+    payload: JSON.parse(decoder.decode(rowBytes)),
   };
 }
 
-function collectMissingRowRefs(
+function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
+  if (chunks.length === 1) {
+    return chunks[0];
+  }
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+  for (let i = 0; i < chunks.length; i += 1) {
+    output.set(chunks[i], offset);
+    offset += chunks[i].byteLength;
+  }
+  return output;
+}
+
+function collectUnresolvedRowRefs(
   value: unknown,
   rowsById: Map<string, unknown>,
-  missing: Set<string>,
-  visiting: Set<string>,
+  unresolved: Set<string>,
+  scannedRows: Set<string>,
+  visitingRows: Set<string>,
 ): void {
   if (typeof value !== "object" || value == null) {
+    return;
+  }
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
     return;
   }
 
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectMissingRowRefs(item, rowsById, missing, visiting);
+      collectUnresolvedRowRefs(item, rowsById, unresolved, scannedRows, visitingRows);
     }
     return;
   }
 
   const tagged = value as Record<string, unknown>;
+  if (tagged.$t === "arrayBufferBinary" || tagged.$t === "typedBinary") {
+    return;
+  }
   if (tagged.$t === "rowRef") {
     const rowId = String(tagged.id);
+    if (visitingRows.has(rowId) || scannedRows.has(rowId)) {
+      return;
+    }
     const rowValue = rowsById.get(rowId);
     if (rowValue == null) {
-      missing.add(rowId);
+      unresolved.add(rowId);
       return;
     }
-    if (visiting.has(rowId)) {
-      return;
-    }
-    visiting.add(rowId);
-    collectMissingRowRefs(rowValue, rowsById, missing, visiting);
-    visiting.delete(rowId);
+    scannedRows.add(rowId);
+    visitingRows.add(rowId);
+    collectUnresolvedRowRefs(rowValue, rowsById, unresolved, scannedRows, visitingRows);
+    visitingRows.delete(rowId);
     return;
   }
 
   for (const item of Object.values(tagged)) {
-    collectMissingRowRefs(item, rowsById, missing, visiting);
+    collectUnresolvedRowRefs(item, rowsById, unresolved, scannedRows, visitingRows);
   }
 }
 
@@ -110,94 +147,230 @@ async function parseFlightPayloadFromStream(
   resolveClientReference: (id: string) => unknown,
 ): Promise<unknown> {
   const reader = stream.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  let carry = "";
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const perfStats = getFlightPerfStats();
   let fallbackPayload: unknown = null;
   let hasFallbackPayload = false;
   const rowsById = new Map<string, unknown>();
   let rootPayload: unknown = null;
   let hasRootPayload = false;
-  let pendingRootRefs: Set<string> | null = null;
+  let hasInitializedRootRefs = false;
+  const pendingRootRefs = new Set<string>();
+  const scannedResolvedRows = new Set<string>();
   let shouldCancelReader = false;
   const resolveRowReference = (rowId: string): unknown => rowsById.get(rowId);
+  let rowIdBuffer = "";
+  let parsingRowTag = false;
+  let binaryTag: string | null = null;
+  let binaryLengthText = "";
+  let binaryExpectedLength = 0;
+  let binaryReceivedLength = 0;
+  let binaryParts: Uint8Array[] = [];
+  let jsonParts: Uint8Array[] = [];
+  let jsonByteLength = 0;
 
   const tryResolveRoot = (): unknown => {
     if (!hasRootPayload || rootPayload == null) {
       return undefined;
     }
-    if (pendingRootRefs == null) {
-      const missing = new Set<string>();
-      collectMissingRowRefs(rootPayload, rowsById, missing, new Set<string>());
-      pendingRootRefs = missing;
+    if (!hasInitializedRootRefs) {
+      const scanStart = perfStats == null ? 0 : performance.now();
+      pendingRootRefs.clear();
+      scannedResolvedRows.clear();
+      collectUnresolvedRowRefs(
+        rootPayload,
+        rowsById,
+        pendingRootRefs,
+        scannedResolvedRows,
+        new Set<string>(),
+      );
+      hasInitializedRootRefs = true;
+      if (perfStats != null) {
+        perfStats.rootScanCount += 1;
+        perfStats.rootScanTimeMs += performance.now() - scanStart;
+      }
     }
     if (pendingRootRefs.size === 0) {
-      return decodeWireValue(rootPayload, resolveClientReference, resolveRowReference);
+      const decodeStart = perfStats == null ? 0 : performance.now();
+      const decoded = decodeWireValue(rootPayload, resolveClientReference, resolveRowReference);
+      if (perfStats != null) {
+        perfStats.decodeCount += 1;
+        perfStats.decodeTimeMs += performance.now() - decodeStart;
+      }
+      return decoded;
     }
     return undefined;
   };
 
-  const consumeLine = (line: string): unknown => {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
+  const consumeParsedRow = (parsed: ParsedFlightRow): unknown => {
+    if (parsed.id == null && parsed.payload == null) {
       return undefined;
     }
-
-    const parsed = parseFlightRow(trimmed);
     if (!hasFallbackPayload) {
       fallbackPayload = parsed.payload;
       hasFallbackPayload = true;
     }
 
     if (parsed.id == null) {
-      return decodeWireValue(parsed.payload, resolveClientReference, resolveRowReference);
+      const decodeStart = perfStats == null ? 0 : performance.now();
+      const decoded = decodeWireValue(parsed.payload, resolveClientReference, resolveRowReference);
+      if (perfStats != null) {
+        perfStats.decodeCount += 1;
+        perfStats.decodeTimeMs += performance.now() - decodeStart;
+      }
+      return decoded;
     }
 
     rowsById.set(parsed.id, parsed.payload);
     if (parsed.id === "0") {
       rootPayload = parsed.payload;
       hasRootPayload = true;
-      pendingRootRefs = null;
+      hasInitializedRootRefs = false;
+      pendingRootRefs.clear();
+      scannedResolvedRows.clear();
       return tryResolveRoot();
     }
 
-    if (pendingRootRefs != null && pendingRootRefs.has(parsed.id)) {
-      pendingRootRefs = null;
+    if (hasInitializedRootRefs && pendingRootRefs.delete(parsed.id)) {
+      scannedResolvedRows.add(parsed.id);
+      collectUnresolvedRowRefs(
+        parsed.payload,
+        rowsById,
+        pendingRootRefs,
+        scannedResolvedRows,
+        new Set<string>([parsed.id]),
+      );
       return tryResolveRoot();
     }
 
     return undefined;
   };
 
+  const finalizeJsonRow = (): unknown => {
+    const rowBytes = joinByteChunks(jsonParts, jsonByteLength);
+    jsonParts = [];
+    jsonByteLength = 0;
+    const parsed = parseJsonFlightRow(rowIdBuffer, rowBytes, decoder);
+    rowIdBuffer = "";
+    parsingRowTag = false;
+    return consumeParsedRow(parsed);
+  };
+
+  const finalizeBinaryRow = (): unknown => {
+    const rowBytes = joinByteChunks(binaryParts, binaryExpectedLength);
+    const parsed: ParsedFlightRow = {
+      id: rowIdBuffer,
+      payload: decodeBinaryWireRow(binaryTag as string, rowBytes),
+    };
+    rowIdBuffer = "";
+    parsingRowTag = false;
+    binaryTag = null;
+    binaryLengthText = "";
+    binaryExpectedLength = 0;
+    binaryReceivedLength = 0;
+    binaryParts = [];
+    return consumeParsedRow(parsed);
+  };
+
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      let buffered = carry.length === 0 ? chunk : `${carry}${chunk}`;
-      carry = "";
+      let offset = 0;
+      while (offset < value.length) {
+        if (binaryTag != null) {
+          if (binaryExpectedLength === 0) {
+            let foundComma = false;
+            while (offset < value.length) {
+              const byte = value[offset];
+              offset += 1;
+              if (byte === 44) {
+                binaryExpectedLength = Number.parseInt(binaryLengthText, 16);
+                if (!Number.isFinite(binaryExpectedLength) || binaryExpectedLength < 0) {
+                  throw new Error(`[rsc-prism] Invalid binary row length "${binaryLengthText}".`);
+                }
+                binaryLengthText = "";
+                foundComma = true;
+                break;
+              }
+              binaryLengthText += String.fromCharCode(byte);
+            }
+            if (!foundComma) {
+              continue;
+            }
+          }
 
-      while (true) {
-        const lineBreakIndex = buffered.indexOf("\n");
+          if (binaryReceivedLength < binaryExpectedLength) {
+            const remaining = binaryExpectedLength - binaryReceivedLength;
+            const available = value.length - offset;
+            const take = remaining < available ? remaining : available;
+            if (take > 0) {
+              binaryParts.push(value.subarray(offset, offset + take));
+              binaryReceivedLength += take;
+              offset += take;
+            }
+            if (binaryReceivedLength < binaryExpectedLength) {
+              continue;
+            }
+          }
+
+          if (offset >= value.length) {
+            continue;
+          }
+          if (value[offset] !== 10) {
+            throw new Error("[rsc-prism] Invalid binary row terminator.");
+          }
+          offset += 1;
+          const parsed = finalizeBinaryRow();
+          if (parsed !== undefined) {
+            shouldCancelReader = true;
+            return parsed;
+          }
+          continue;
+        }
+
+        const byte = value[offset];
+        if (!parsingRowTag) {
+          offset += 1;
+          if (byte === 58) {
+            parsingRowTag = true;
+            continue;
+          }
+          if (byte === 10) {
+            rowIdBuffer = "";
+            continue;
+          }
+          rowIdBuffer += String.fromCharCode(byte);
+          continue;
+        }
+
+        if (jsonParts.length === 0 && jsonByteLength === 0 && binaryTag == null && isBinaryWireRowTag(byte)) {
+          binaryTag = String.fromCharCode(byte);
+          offset += 1;
+          continue;
+        }
+
+        const lineBreakIndex = value.indexOf(10, offset);
         if (lineBreakIndex === -1) {
+          const part = value.subarray(offset);
+          if (part.byteLength > 0) {
+            jsonParts.push(part);
+            jsonByteLength += part.byteLength;
+          }
           break;
         }
-        const parsed = consumeLine(buffered.slice(0, lineBreakIndex));
-        buffered = buffered.slice(lineBreakIndex + 1);
+
+        if (lineBreakIndex > offset) {
+          const part = value.subarray(offset, lineBreakIndex);
+          jsonParts.push(part);
+          jsonByteLength += part.byteLength;
+        }
+        offset = lineBreakIndex + 1;
+        const parsed = finalizeJsonRow();
         if (parsed !== undefined) {
           shouldCancelReader = true;
           return parsed;
         }
-      }
-      carry = buffered;
-    }
-
-    const trailing = decoder.decode();
-    const buffered = carry.length === 0 ? trailing : `${carry}${trailing}`;
-    if (buffered.length > 0) {
-      const parsed = consumeLine(buffered);
-      if (parsed !== undefined) {
-        shouldCancelReader = true;
-        return parsed;
       }
     }
   } finally {
@@ -211,6 +384,10 @@ async function parseFlightPayloadFromStream(
     reader.releaseLock();
   }
 
+  if (binaryTag != null || rowIdBuffer.length > 0 || jsonByteLength > 0) {
+    throw new Error("[rsc-prism] Incomplete Flight stream row.");
+  }
+
   const resolvedRoot = tryResolveRoot();
   if (resolvedRoot !== undefined) {
     return resolvedRoot;
@@ -219,7 +396,13 @@ async function parseFlightPayloadFromStream(
   if (!hasFallbackPayload) {
     return null;
   }
-  return decodeWireValue(fallbackPayload, resolveClientReference, resolveRowReference);
+  const decodeStart = perfStats == null ? 0 : performance.now();
+  const decoded = decodeWireValue(fallbackPayload, resolveClientReference, resolveRowReference);
+  if (perfStats != null) {
+    perfStats.decodeCount += 1;
+    perfStats.decodeTimeMs += performance.now() - decodeStart;
+  }
+  return decoded;
 }
 
 export async function createFromReadableStream<T>(
@@ -232,5 +415,24 @@ export async function createFromReadableStream<T>(
 }
 
 export async function encodeReply(value: unknown): Promise<FormData | string> {
-  return JSON.stringify(encodeWireValue(value));
+  let nextBinaryPartId = 1;
+  let formData: FormData | null = null;
+  const encoded = encodeWireValueWithBinaryRows(value, (kind, bytes) => {
+    const id = nextBinaryPartId;
+    nextBinaryPartId += 1;
+    const tag = binaryWireTagFromKind(kind);
+    if (formData == null) {
+      formData = new FormData();
+    }
+    const binaryPart = new Uint8Array(bytes.byteLength);
+    binaryPart.set(bytes);
+    formData.append(`${id}:${tag}`, new Blob([binaryPart]));
+    return `${id}:${tag}`;
+  });
+
+  if (formData == null) {
+    return JSON.stringify(encoded);
+  }
+  (formData as FormData).append("0", JSON.stringify(encoded));
+  return formData as FormData;
 }

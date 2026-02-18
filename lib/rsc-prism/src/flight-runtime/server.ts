@@ -1,13 +1,19 @@
 import type { ReactNode } from "react";
 import { annotateServerReference } from "./references";
 import type { FlightServerRenderOptions } from "./types";
-import { encodeWireValue, decodeWireValue } from "./wire";
+import {
+  binaryWireTagFromKind,
+  decodeBinaryWireRow,
+  decodeWireValue,
+  encodeWireValueWithBinaryRows,
+} from "./wire";
 import { createClientModuleProxy } from "./references";
 
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
 const LEGACY_REACT_ELEMENT_SYMBOL = Symbol.for("react.element");
 const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");
+const FLIGHT_ROW_ENCODER = new TextEncoder();
 
 function isClientReference(value: unknown): value is { $$typeof: symbol; $$id: string } {
   if (typeof value !== "function" && (typeof value !== "object" || value == null)) {
@@ -34,13 +40,24 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
 }
 
 function encodeFlightRow(id: number, value: unknown): Uint8Array {
-  return new TextEncoder().encode(`${id}:${JSON.stringify(value)}\n`);
+  return FLIGHT_ROW_ENCODER.encode(`${id}:${JSON.stringify(value)}\n`);
+}
+
+function encodeBinaryFlightRow(id: number, kind: string, bytes: Uint8Array): Uint8Array {
+  const tag = binaryWireTagFromKind(kind);
+  const prefix = FLIGHT_ROW_ENCODER.encode(`${id}:${tag}${bytes.byteLength.toString(16)},`);
+  const output = new Uint8Array(prefix.byteLength + bytes.byteLength + 1);
+  output.set(prefix, 0);
+  output.set(bytes, prefix.byteLength);
+  output[output.length - 1] = 10;
+  return output;
 }
 
 interface EncodeContext {
   queueDeferred: (task: Promise<void>) => void;
   allocateRowId: () => number;
   emitRow: (id: number, value: unknown) => void;
+  emitBinaryRow: (kind: string, bytes: Uint8Array) => number;
 }
 
 async function encodeServerNode(value: unknown, context: EncodeContext): Promise<unknown> {
@@ -65,7 +82,7 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
   }
 
   if (!isReactElementLike(value)) {
-    return encodeWireValue(value);
+    return encodeWireValueWithBinaryRows(value, (kind, bytes) => context.emitBinaryRow(kind, bytes));
   }
 
   const type = value.type;
@@ -80,10 +97,13 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
   for (const [key, item] of Object.entries(value.props)) {
     nextProps[key] = await encodeServerNode(item, context);
   }
-  return encodeWireValue({
+  return encodeWireValueWithBinaryRows(
+    {
     ...value,
     props: nextProps,
-  });
+    },
+    (kind, bytes) => context.emitBinaryRow(kind, bytes),
+  );
 }
 
 export async function renderToReadableStream(
@@ -127,6 +147,14 @@ export async function renderToReadableStream(
             if (settled) return;
             controller.enqueue(encodeFlightRow(id, value));
           },
+          emitBinaryRow: (kind, bytes) => {
+            const id = nextRowId;
+            nextRowId += 1;
+            if (!settled) {
+              controller.enqueue(encodeBinaryFlightRow(id, kind, bytes));
+            }
+            return id;
+          },
         };
 
         const root = await encodeServerNode(element, context);
@@ -157,14 +185,32 @@ export async function decodeReply(
   _moduleBasePath: unknown,
   _options?: Record<string, unknown>,
 ): Promise<unknown> {
-  let source: string;
+  let source = "null";
+  const rowsById = new Map<string, unknown>();
   if (typeof body === "string") {
     source = body;
   } else {
-    source = body.get("0")?.toString() ?? "null";
+    for (const [key, value] of body.entries()) {
+      if (key === "0") {
+        source = value.toString();
+        continue;
+      }
+      const separatorIndex = key.lastIndexOf(":");
+      if (separatorIndex === -1) {
+        continue;
+      }
+      const rowTag = key.slice(separatorIndex + 1);
+      if (
+        (typeof File !== "undefined" && value instanceof File) ||
+        (typeof Blob !== "undefined" && value instanceof Blob)
+      ) {
+        const bytes = new Uint8Array(await value.arrayBuffer());
+        rowsById.set(key, decodeBinaryWireRow(rowTag, bytes));
+      }
+    }
   }
   const parsed = JSON.parse(source);
-  return decodeWireValue(parsed, (id) => createClientModuleProxy(id));
+  return decodeWireValue(parsed, (id) => createClientModuleProxy(id), (id) => rowsById.get(id));
 }
 
 export function registerServerReference<T extends (...args: any[]) => any>(

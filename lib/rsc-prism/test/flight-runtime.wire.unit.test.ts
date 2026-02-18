@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeWireValue, encodeWireValue } from "../src/flight-runtime/wire";
+import { decodeBinaryWireRow, decodeWireValue, encodeWireValue, encodeWireValueWithBinaryRows } from "../src/flight-runtime/wire";
 
 function decodeWithResolver(value: unknown): unknown {
   return decodeWireValue(value, (id) => `client:${id}`);
@@ -29,13 +29,17 @@ describe("flight wire decode correctness", () => {
       props: { title: "demo", nested: { $t: "undef" } },
       key: "k1",
     };
+    const binaryRows = new Map<string, unknown>([
+      ["1", decodeBinaryWireRow("A", Uint8Array.from([1, 2, 3]))],
+      ["2", decodeBinaryWireRow("s", new Uint8Array(new Uint16Array([4, 5, 6]).buffer))],
+    ]);
     const payload = {
       undef: { $t: "undef" },
       bigint: { $t: "bigint", v: "9" },
       date: { $t: "date", v: "2025-01-01T00:00:00.000Z" },
       search: { $t: "search", v: "a=1&b=2" },
-      arrayBuffer: encodeWireValue(Uint8Array.from([1, 2, 3]).buffer),
-      typed: encodeWireValue(new Uint16Array([4, 5, 6])),
+      arrayBuffer: { $t: "rowRef", id: 1 },
+      typed: { $t: "rowRef", id: 2 },
       map: encodeWireValue(
         new Map([
           ["x", 1],
@@ -49,7 +53,11 @@ describe("flight wire decode correctness", () => {
       element: encodedElement,
     };
 
-    const decoded = decodeWithResolver(payload) as Record<string, unknown>;
+    const decoded = decodeWireValue(
+      payload,
+      (id) => `client:${id}`,
+      (id) => binaryRows.get(id),
+    ) as Record<string, unknown>;
 
     expect(decoded.undef).toBeUndefined();
     expect(decoded.bigint).toBe(9n);
@@ -84,6 +92,68 @@ describe("flight wire decode correctness", () => {
     expect(element.props.title).toBe("demo");
     expect(element.props.nested).toBeUndefined();
     expect(element.key).toBe("k1");
+  });
+
+  it("encodes typed-array and DataView byte ranges without full-buffer expansion", () => {
+    const backing = new ArrayBuffer(16);
+    const allBytes = new Uint8Array(backing);
+    for (let i = 0; i < allBytes.length; i += 1) {
+      allBytes[i] = i;
+    }
+
+    const int16View = new Int16Array(backing, 4, 2);
+    const dataView = new DataView(backing, 8, 4);
+    const binaryRows = new Map<string, unknown>();
+    const encoded = encodeWireValueWithBinaryRows(
+      { int16View, dataView },
+      (kind, bytes) => {
+        const id = String(binaryRows.size + 1);
+        const tag =
+          kind === "Int16Array"
+            ? "S"
+            : kind === "DataView"
+              ? "V"
+              : (() => {
+                  throw new Error(`Unexpected kind ${kind}`);
+                })();
+        binaryRows.set(id, decodeBinaryWireRow(tag, bytes));
+        return id;
+      },
+    );
+    const decoded = decodeWireValue(
+      encoded,
+      (id) => `client:${id}`,
+      (id) => binaryRows.get(id),
+    ) as {
+      int16View: Int16Array;
+      dataView: DataView;
+    };
+
+    expect(Array.from(decoded.int16View)).toEqual(Array.from(int16View));
+    expect(decoded.dataView.byteLength).toBe(4);
+    expect(Array.from(new Uint8Array(decoded.dataView.buffer))).toEqual([8, 9, 10, 11]);
+  });
+
+  it("encodes binary values as row refs when binary row emitter is provided", () => {
+    const rows: Array<{ kind: string; bytes: Uint8Array }> = [];
+    const encoded = encodeWireValueWithBinaryRows(
+      {
+        bytes: new Uint8Array([5, 6, 7]),
+      },
+      (kind, bytes) => {
+        rows.push({ kind, bytes });
+        return rows.length;
+      },
+    ) as Record<string, unknown>;
+
+    expect(encoded.bytes).toEqual({ $t: "rowRef", id: 1 });
+    expect(rows[0].kind).toBe("Uint8Array");
+    expect(Array.from(rows[0].bytes)).toEqual([5, 6, 7]);
+    const rowPayload = decodeBinaryWireRow("o", rows[0].bytes);
+    const decoded = decodeWireValue(encoded, (id) => `client:${id}`, (id) => (id === "1" ? rowPayload : null)) as {
+      bytes: Uint8Array;
+    };
+    expect(Array.from(decoded.bytes)).toEqual([5, 6, 7]);
   });
 });
 
@@ -124,12 +194,24 @@ describe("flight wire decode perf baselines", () => {
     for (let i = 0; i < bytes.length; i += 1) {
       bytes[i] = i % 251;
     }
-    const payload = encodeWireValue({
-      typed: new Uint8Array(bytes),
-      arrayBuffer: bytes.buffer,
-    });
+    const payload = {
+      typed: { $t: "rowRef", id: 1 },
+      arrayBuffer: { $t: "rowRef", id: 2 },
+    };
+    const binaryRows = new Map<string, unknown>([
+      ["1", decodeBinaryWireRow("o", bytes)],
+      ["2", decodeBinaryWireRow("A", bytes)],
+    ]);
 
-    const elapsed = measureDecodeMs(payload, 4);
+    const start = performance.now();
+    for (let i = 0; i < 4; i += 1) {
+      decodeWireValue(
+        payload,
+        (id) => `client:${id}`,
+        (id) => binaryRows.get(id),
+      );
+    }
+    const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(4000);
   });
 });
