@@ -29,23 +29,44 @@ function normalizeTypedArray(value: unknown): { kind: string; bytes: Uint8Array 
   if (value instanceof Int8Array)
     return { kind: "Int8Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   if (value instanceof Uint8ClampedArray)
-    return { kind: "Uint8ClampedArray", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "Uint8ClampedArray",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof Int16Array)
     return { kind: "Int16Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   if (value instanceof Uint16Array)
-    return { kind: "Uint16Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "Uint16Array",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof Int32Array)
     return { kind: "Int32Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   if (value instanceof Uint32Array)
-    return { kind: "Uint32Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "Uint32Array",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof Float32Array)
-    return { kind: "Float32Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "Float32Array",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof Float64Array)
-    return { kind: "Float64Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "Float64Array",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof BigInt64Array)
-    return { kind: "BigInt64Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "BigInt64Array",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof BigUint64Array)
-    return { kind: "BigUint64Array", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
+    return {
+      kind: "BigUint64Array",
+      bytes: toBytes(value.buffer, value.byteOffset, value.byteLength),
+    };
   if (value instanceof DataView)
     return { kind: "DataView", bytes: toBytes(value.buffer, value.byteOffset, value.byteLength) };
   return null;
@@ -153,7 +174,8 @@ function isReactElementLike(value: unknown): value is {
   }
   const candidate = value as { $$typeof?: unknown };
   return (
-    candidate.$$typeof === REACT_ELEMENT_SYMBOL || candidate.$$typeof === LEGACY_REACT_ELEMENT_SYMBOL
+    candidate.$$typeof === REACT_ELEMENT_SYMBOL ||
+    candidate.$$typeof === LEGACY_REACT_ELEMENT_SYMBOL
   );
 }
 
@@ -186,9 +208,7 @@ function encodeType(value: unknown): JsonObject {
   throw new Error("Unsupported element type in minimal runtime.");
 }
 
-function encodeStreamType(
-  value: unknown,
-): string {
+function encodeStreamType(value: unknown): string {
   if (typeof value === "string") {
     return escapeStringValue(value);
   }
@@ -201,10 +221,7 @@ function encodeStreamType(
   throw new Error("Unsupported element type in minimal runtime.");
 }
 
-function decodeType(
-  value: JsonObject,
-  resolveClientReference: (id: string) => unknown,
-): unknown {
+function decodeType(value: JsonObject, resolveClientReference: (id: string) => unknown): unknown {
   switch (value.$t) {
     case "host":
       return value.v as string;
@@ -227,10 +244,7 @@ export function escapeStringValue(str: string): string {
   return str.length > 0 && str.charCodeAt(0) === 36 ? `$${str}` : str;
 }
 
-function encodeStreamValueInternal(
-  value: unknown,
-  context: StreamEncodeContext,
-): unknown {
+function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext): unknown {
   if (value === undefined) {
     return "$undefined";
   }
@@ -285,7 +299,9 @@ function encodeStreamValueInternal(
         (typeof File !== "undefined" && item instanceof File) ||
         (typeof Blob !== "undefined" && item instanceof Blob)
       ) {
-        throw new Error("File and Blob FormData values are not supported by the minimal Flight runtime.");
+        throw new Error(
+          "File and Blob FormData values are not supported by the minimal Flight runtime.",
+        );
       }
       entries.push([key, item]);
     }
@@ -371,7 +387,10 @@ function decodeFormDataFromChunk<Chunk>(
     const tuple = entries[i] as unknown[];
     const key = tuple?.[0];
     const value = tuple?.[1];
-    form.append(typeof key === "string" ? key : String(key), typeof value === "string" ? value : String(value));
+    form.append(
+      typeof key === "string" ? key : String(key),
+      typeof value === "string" ? value : String(value),
+    );
   }
   return form;
 }
@@ -474,6 +493,40 @@ export function createModelReviver<Chunk>(
   };
 }
 
+function reviveModelValueTreeInternal<Chunk>(
+  context: StreamDecodeContext<Chunk>,
+  value: unknown,
+): unknown {
+  if (typeof value === "string") {
+    return parseModelString(context, value);
+  }
+  if (Array.isArray(value)) {
+    const revivedArray = new Array<unknown>(value.length);
+    for (let i = 0; i < value.length; i += 1) {
+      revivedArray[i] = reviveModelValueTreeInternal(context, value[i]);
+    }
+    return maybeDecodeElementTuple(revivedArray);
+  }
+  if (typeof value !== "object" || value == null) {
+    return value;
+  }
+  const source = value as Record<string, unknown>;
+  const revived: Record<string, unknown> = {};
+  const keys = Object.keys(source);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    revived[key] = reviveModelValueTreeInternal(context, source[key]);
+  }
+  return revived;
+}
+
+export function reviveModelValueTree<Chunk>(
+  context: StreamDecodeContext<Chunk>,
+  parsedValue: unknown,
+): unknown {
+  return reviveModelValueTreeInternal(context, parsedValue);
+}
+
 export function createLazyChunkWrapper<Chunk>(
   chunk: Chunk,
   readChunk: (chunk: Chunk) => unknown,
@@ -493,7 +546,12 @@ function encodeWireValueImpl(
   if (value === undefined) {
     return { $t: "undef" };
   }
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value == null) {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value == null
+  ) {
     return value;
   }
   if (typeof value === "bigint") {
@@ -530,7 +588,9 @@ function encodeWireValueImpl(
         (typeof File !== "undefined" && item instanceof File) ||
         (typeof Blob !== "undefined" && item instanceof Blob)
       ) {
-        throw new Error("File and Blob FormData values are not supported by the minimal Flight runtime.");
+        throw new Error(
+          "File and Blob FormData values are not supported by the minimal Flight runtime.",
+        );
       }
       entries.push([key, encodeWireValueImpl(item, emitBinaryRow, seen)]);
     }
@@ -615,7 +675,9 @@ export function decodeBinaryWireRow(tag: string, bytes: Uint8Array): unknown {
     case "o":
       return bytes;
     case "V":
-      return new DataView(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      return new DataView(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      );
     default:
       return rehydrateTypedArray(binaryWireTagToKind(tag), bytes);
   }
@@ -623,16 +685,26 @@ export function decodeBinaryWireRow(tag: string, bytes: Uint8Array): unknown {
 
 function binaryWireTagToKind(tag: string): string {
   switch (tag) {
-    case "O": return "Int8Array";
-    case "U": return "Uint8ClampedArray";
-    case "S": return "Int16Array";
-    case "s": return "Uint16Array";
-    case "L": return "Int32Array";
-    case "l": return "Uint32Array";
-    case "G": return "Float32Array";
-    case "g": return "Float64Array";
-    case "M": return "BigInt64Array";
-    case "m": return "BigUint64Array";
+    case "O":
+      return "Int8Array";
+    case "U":
+      return "Uint8ClampedArray";
+    case "S":
+      return "Int16Array";
+    case "s":
+      return "Uint16Array";
+    case "L":
+      return "Int32Array";
+    case "l":
+      return "Uint32Array";
+    case "G":
+      return "Float32Array";
+    case "g":
+      return "Float64Array";
+    case "M":
+      return "BigInt64Array";
+    case "m":
+      return "BigUint64Array";
     default:
       throw new Error(`Unknown binary row tag "${tag}"`);
   }
@@ -742,7 +814,12 @@ export function decodeWireValue(
   resolveClientReference: (id: string) => unknown,
   resolveRowReference?: (id: string) => unknown,
 ): unknown {
-  return decodeWireValueInternal(value, resolveClientReference, resolveRowReference, new Set<string>());
+  return decodeWireValueInternal(
+    value,
+    resolveClientReference,
+    resolveRowReference,
+    new Set<string>(),
+  );
 }
 
 function decodeWireValueInternal(
@@ -755,15 +832,31 @@ function decodeWireValueInternal(
     return value;
   }
   if (Array.isArray(value)) {
-    return decodeWireArrayValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+    return decodeWireArrayValue(
+      value,
+      resolveClientReference,
+      resolveRowReference,
+      visitingRowRefs,
+    );
   }
 
   const tagged = value as Record<string, unknown>;
   const tag = tagged.$t;
   if (typeof tag === "string") {
-    return decodeTaggedWireValue(tag, tagged, resolveClientReference, resolveRowReference, visitingRowRefs);
+    return decodeTaggedWireValue(
+      tag,
+      tagged,
+      resolveClientReference,
+      resolveRowReference,
+      visitingRowRefs,
+    );
   }
-  return decodeWirePlainObjectValue(tagged, resolveClientReference, resolveRowReference, visitingRowRefs);
+  return decodeWirePlainObjectValue(
+    tagged,
+    resolveClientReference,
+    resolveRowReference,
+    visitingRowRefs,
+  );
 }
 
 function decodeWireArrayValue(
@@ -774,7 +867,12 @@ function decodeWireArrayValue(
 ): unknown[] {
   const decoded: unknown[] = new Array(value.length);
   for (let i = 0; i < value.length; i += 1) {
-    decoded[i] = decodeWireValueInternal(value[i], resolveClientReference, resolveRowReference, visitingRowRefs);
+    decoded[i] = decodeWireValueInternal(
+      value[i],
+      resolveClientReference,
+      resolveRowReference,
+      visitingRowRefs,
+    );
   }
   return decoded;
 }
@@ -789,7 +887,12 @@ function decodeWirePlainObjectValue(
   const keys = Object.keys(value);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    result[key] = decodeWireValueInternal(value[key], resolveClientReference, resolveRowReference, visitingRowRefs);
+    result[key] = decodeWireValueInternal(
+      value[key],
+      resolveClientReference,
+      resolveRowReference,
+      visitingRowRefs,
+    );
   }
   return result;
 }
@@ -801,7 +904,7 @@ function decodeWireRowReferenceValue(
   visitingRowRefs: Set<string>,
 ): unknown {
   if (resolveRowReference == null) {
-    throw new Error("Unknown wire tag \"rowRef\"");
+    throw new Error('Unknown wire tag "rowRef"');
   }
   const rowId = String(value.id);
   if (visitingRowRefs.has(rowId)) {
@@ -813,10 +916,19 @@ function decodeWireRowReferenceValue(
     if (rowValue == null) {
       throw new Error(`[rsc-prism] Missing row "${rowId}" in Flight payload.`);
     }
-    if (typeof rowValue !== "object" || rowValue instanceof ArrayBuffer || ArrayBuffer.isView(rowValue)) {
+    if (
+      typeof rowValue !== "object" ||
+      rowValue instanceof ArrayBuffer ||
+      ArrayBuffer.isView(rowValue)
+    ) {
       return rowValue;
     }
-    return decodeWireValueInternal(rowValue, resolveClientReference, resolveRowReference, visitingRowRefs);
+    return decodeWireValueInternal(
+      rowValue,
+      resolveClientReference,
+      resolveRowReference,
+      visitingRowRefs,
+    );
   } finally {
     visitingRowRefs.delete(rowId);
   }
@@ -836,8 +948,18 @@ function decodeWireMapValue(
   for (let i = 0; i < entries.length; i += 1) {
     const tuple = entries[i] as unknown[];
     mapped.set(
-      decodeWireValueInternal(tuple[0], resolveClientReference, resolveRowReference, visitingRowRefs),
-      decodeWireValueInternal(tuple[1], resolveClientReference, resolveRowReference, visitingRowRefs),
+      decodeWireValueInternal(
+        tuple[0],
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      ),
+      decodeWireValueInternal(
+        tuple[1],
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      ),
     );
   }
   return mapped;
@@ -855,7 +977,14 @@ function decodeWireSetValue(
   }
   const decoded = new Set<unknown>();
   for (let i = 0; i < items.length; i += 1) {
-    decoded.add(decodeWireValueInternal(items[i], resolveClientReference, resolveRowReference, visitingRowRefs));
+    decoded.add(
+      decodeWireValueInternal(
+        items[i],
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      ),
+    );
   }
   return decoded;
 }
@@ -875,7 +1004,12 @@ function decodeWireFormDataValue(
     const tuple = entries[i] as unknown[];
     const key = tuple[0];
     const item = tuple[1];
-    const decoded = decodeWireValueInternal(item, resolveClientReference, resolveRowReference, visitingRowRefs);
+    const decoded = decodeWireValueInternal(
+      item,
+      resolveClientReference,
+      resolveRowReference,
+      visitingRowRefs,
+    );
     form.append(
       typeof key === "string" ? key : String(key),
       typeof decoded === "string" ? decoded : String(decoded),
@@ -922,7 +1056,12 @@ function decodeTaggedWireValue(
 ): unknown {
   switch (tag) {
     case "rowRef":
-      return decodeWireRowReferenceValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+      return decodeWireRowReferenceValue(
+        value,
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      );
     case "undef":
       return undefined;
     case "bigint":
@@ -932,11 +1071,26 @@ function decodeTaggedWireValue(
     case "search":
       return new URLSearchParams(value.v as string);
     case "map":
-      return decodeWireMapValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+      return decodeWireMapValue(
+        value,
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      );
     case "set":
-      return decodeWireSetValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+      return decodeWireSetValue(
+        value,
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      );
     case "formdata":
-      return decodeWireFormDataValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+      return decodeWireFormDataValue(
+        value,
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      );
     case "clientRef":
       return resolveClientReference(value.id as string);
     case "serverRef":
@@ -946,7 +1100,12 @@ function decodeTaggedWireValue(
         $$bound: null,
       };
     case "element":
-      return decodeWireElementValue(value, resolveClientReference, resolveRowReference, visitingRowRefs);
+      return decodeWireElementValue(
+        value,
+        resolveClientReference,
+        resolveRowReference,
+        visitingRowRefs,
+      );
     default:
       throw new Error(`Unknown wire tag "${tag}"`);
   }

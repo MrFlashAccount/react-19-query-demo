@@ -171,7 +171,7 @@ export interface WorkerTransportResponseErrorMessage extends WorkerTransportResp
 export interface WorkerRowResponseMessage {
   type: string;
   id: string;
-  row: FlightRowMessage;
+  rows: FlightRowMessage[];
 }
 
 export interface WorkerTransportOptions {
@@ -228,7 +228,7 @@ interface NormalizedWorkerResponseMessage {
 
 interface NormalizedWorkerRowMessage {
   matchedType: boolean;
-  row: FlightRowMessage | null;
+  rows: FlightRowMessage[];
 }
 
 function createWorkerResponseTypeMap(baseType: string): WorkerResponseTypeMap {
@@ -311,13 +311,13 @@ function normalizeWorkerRowMessage(data: unknown, rowResponseType: string): Norm
   if (message == null || message.type !== rowResponseType) {
     return {
       matchedType: false,
-      row: null,
+      rows: [],
     };
   }
-  const row = message.row as FlightRowMessage | null | undefined;
+  const rows = Array.isArray(message.rows) ? (message.rows as FlightRowMessage[]) : [];
   return {
     matchedType: true,
-    row: row ?? null,
+    rows,
   };
 }
 
@@ -696,13 +696,17 @@ export function createWorkerRowTransport(
         touchActivity,
         handleMessage: (data) => {
           const message = normalizeWorkerRowMessage(data, rowResponseType);
-          if (!message.matchedType || message.row == null) {
+          if (!message.matchedType || message.rows.length === 0) {
             return;
           }
-          emitter.push(message.row);
-          if (message.row.k === ROW_DONE || message.row.k === ROW_ERROR) {
-            streamSettled = true;
-            cleanup();
+          for (let i = 0; i < message.rows.length; i += 1) {
+            const row = message.rows[i];
+            emitter.push(row);
+            if (row.k === ROW_DONE || row.k === ROW_ERROR) {
+              streamSettled = true;
+              cleanup();
+              break;
+            }
           }
         },
       });
@@ -913,13 +917,47 @@ export function createWorkerRowTransportMessageHandler(
     const replyTarget = resolveReplyTarget(event);
     if (replyTarget == null) return;
 
-    const emit = (row: FlightRowMessage, transfer?: Transferable[]): void => {
+    const pendingRows: FlightRowMessage[] = [];
+    const pendingTransfer: Transferable[] = [];
+    let flushScheduled = false;
+    let closed = false;
+    const flush = (): void => {
+      flushScheduled = false;
+      if (pendingRows.length === 0) {
+        return;
+      }
       const message: WorkerRowResponseMessage = {
         type: rowResponseType,
         id: request.id,
-        row,
+        rows: pendingRows.splice(0, pendingRows.length),
       };
+      const transfer =
+        pendingTransfer.length === 0
+          ? undefined
+          : pendingTransfer.splice(0, pendingTransfer.length);
       replyTarget.postMessage(message, transfer);
+    };
+    const scheduleFlush = (): void => {
+      if (flushScheduled) {
+        return;
+      }
+      flushScheduled = true;
+      queueMicrotask(flush);
+    };
+    const emit = (row: FlightRowMessage, transfer?: Transferable[]): void => {
+      if (closed) {
+        return;
+      }
+      pendingRows.push(row);
+      if (transfer != null && transfer.length > 0) {
+        pendingTransfer.push(...transfer);
+      }
+      if (row.k === ROW_DONE || row.k === ROW_ERROR) {
+        closed = true;
+        flush();
+        return;
+      }
+      scheduleFlush();
     };
 
     try {

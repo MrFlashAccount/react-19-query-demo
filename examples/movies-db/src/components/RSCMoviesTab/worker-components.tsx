@@ -11,7 +11,7 @@ export interface MoviesRSCViewProps {
   limit: number;
 }
 
-async function MovieCard({ movie }: { movie: Movie }) {
+function MovieCard({ movie }: { movie: Movie }) {
   const rating = movie.rating;
   const currentStars = Math.ceil((rating ?? 0) / 2);
   const director = movie.directors.join(", ") || "Unknown";

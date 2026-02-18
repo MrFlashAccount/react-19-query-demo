@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { callAction, consumeRSCResponse, createCallServer, encodeActionArgs, fetchRSC } from "../src/client";
+import {
+  callAction,
+  consumeRSCResponse,
+  createCallServer,
+  encodeActionArgs,
+  fetchRSC,
+} from "../src/client";
 import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
 import { createFunctionTransport } from "../src/transport";
 import { setAutoClientManifest } from "../src/runtime/client-manifest";
@@ -29,7 +35,11 @@ function concatBytes(parts: Uint8Array[]): Uint8Array {
 
 function binaryRow(id: number, tag: string, bytes: Uint8Array): Uint8Array {
   const encoder = new TextEncoder();
-  return concatBytes([encoder.encode(`${id}:${tag}${bytes.byteLength.toString(16)},`), bytes, encoder.encode("\n")]);
+  return concatBytes([
+    encoder.encode(`${id}:${tag}${bytes.byteLength.toString(16)},`),
+    bytes,
+    encoder.encode("\n"),
+  ]);
 }
 
 function flightErrorResponse(message: string, status = 500): Response {
@@ -51,7 +61,9 @@ describe("rsc client browser workflows", () => {
   });
 
   it("consumes flight response payloads", async () => {
-    await expect(consumeRSCResponse<string>(flightValueResponse("flight-ok"))).resolves.toBe("flight-ok");
+    await expect(consumeRSCResponse<string>(flightValueResponse("flight-ok"))).resolves.toBe(
+      "flight-ok",
+    );
   });
 
   it("parses split flight stream chunks incrementally", async () => {
@@ -207,7 +219,12 @@ describe("rsc client browser workflows", () => {
       expect(encoded.data.length).toBeGreaterThan(0);
     }
 
-    const seenRequests: Array<{ method: string; url: string; accept: string | null; actionId: string | null }> = [];
+    const seenRequests: Array<{
+      method: string;
+      url: string;
+      accept: string | null;
+      actionId: string | null;
+    }> = [];
     const transport = createFunctionTransport(async (request) => {
       seenRequests.push({
         method: request.method,
@@ -229,7 +246,9 @@ describe("rsc client browser workflows", () => {
       $$bound: null,
     };
     await expect(fetchRSC("/rsc", { transport })).resolves.toBe("fetch-ok");
-    await expect(callAction<string>(runActionRef, [1], { transport, parseResponse: true })).resolves.toBe("action-ok");
+    await expect(
+      callAction<string>(runActionRef, [1], { transport, parseResponse: true }),
+    ).resolves.toBe("action-ok");
 
     expect(seenRequests[0]).toEqual({
       method: "GET",
@@ -246,9 +265,9 @@ describe("rsc client browser workflows", () => {
   });
 
   it("rejects non-reference action calls", async () => {
-    await expect(callAction("not-a-ref" as unknown as (...args: never[]) => unknown, [])).rejects.toThrow(
-      "expects a \"use worker\" action reference",
-    );
+    await expect(
+      callAction("not-a-ref" as unknown as (...args: never[]) => unknown, []),
+    ).rejects.toThrow('expects a "use worker" action reference');
   });
 
   it("throws when fetchRSC has no explicit or bootstrapped transport", async () => {

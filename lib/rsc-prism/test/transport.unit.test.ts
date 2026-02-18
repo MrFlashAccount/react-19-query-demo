@@ -217,7 +217,7 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightDoneRow(),
+        rows: [flightDoneRow()],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.next",
@@ -432,12 +432,12 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightModelRow(0, "ok"),
+        rows: [flightModelRow(0, "ok")],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightDoneRow(),
+        rows: [flightDoneRow()],
       } satisfies WorkerRowResponseMessage);
     };
 
@@ -458,12 +458,12 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightModelRow(0, "ok"),
+        rows: [flightModelRow(0, "ok")],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightDoneRow(),
+        rows: [flightDoneRow()],
       } satisfies WorkerRowResponseMessage);
     };
 
@@ -487,17 +487,17 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightModelRow(0, "$1"),
+        rows: [flightModelRow(0, "$1")],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row,
+        rows: [row],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightDoneRow(),
+        rows: [flightDoneRow()],
       } satisfies WorkerRowResponseMessage);
     };
 
@@ -515,18 +515,18 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightModelRow(0, "$1"),
+        rows: [flightModelRow(0, "$1")],
       } satisfies WorkerRowResponseMessage);
       setTimeout(() => {
         endpoint.emitMessage({
           type: "rsc.transport.response.row",
           id: request.id,
-          row: flightModelRow(1, "ready"),
+          rows: [flightModelRow(1, "ready")],
         } satisfies WorkerRowResponseMessage);
         endpoint.emitMessage({
           type: "rsc.transport.response.row",
           id: request.id,
-          row: flightDoneRow(),
+          rows: [flightDoneRow()],
         } satisfies WorkerRowResponseMessage);
       }, 0);
     };
@@ -546,23 +546,23 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightModelRow(0, "$1"),
+        rows: [flightModelRow(0, "$1")],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        row: flightModelRow(1, { first: "$2" }),
+        rows: [flightModelRow(1, { first: "$2" })],
       } satisfies WorkerRowResponseMessage);
       setTimeout(() => {
         endpoint.emitMessage({
           type: "rsc.transport.response.row",
           id: request.id,
-          row: flightModelRow(2, "ready"),
+          rows: [flightModelRow(2, "ready")],
         } satisfies WorkerRowResponseMessage);
         endpoint.emitMessage({
           type: "rsc.transport.response.row",
           id: request.id,
-          row: flightDoneRow(),
+          rows: [flightDoneRow()],
         } satisfies WorkerRowResponseMessage);
       }, 20);
     };
@@ -611,7 +611,7 @@ describe("transport", () => {
     ).rejects.toThrow("Worker transport timed out");
   });
 
-  it("worker row message handler emits row frames", async () => {
+  it("worker row message handler batches row frames", async () => {
     const postMessage = vi.fn();
     const onMessage = createWorkerRowTransportMessageHandler(async (request, emit) => {
       expect(request.operation).toBe("fetch");
@@ -631,20 +631,15 @@ describe("transport", () => {
       currentTarget: { postMessage },
     } as unknown as MessageEvent<unknown>);
 
+    expect(postMessage.mock.calls).toHaveLength(1);
     expect(postMessage.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         type: "rsc.transport.response.row",
         id: "abc",
+        rows: [flightModelRow(0, "$1"), expect.objectContaining({ k: 1 }), flightDoneRow()],
       }),
     );
-    expect(postMessage.mock.calls[1]?.[1]).toEqual(expect.any(Array));
-    expect(postMessage.mock.calls[2]?.[0]).toEqual(
-      expect.objectContaining({
-        type: "rsc.transport.response.row",
-        id: "abc",
-        row: flightDoneRow(),
-      }),
-    );
+    expect(postMessage.mock.calls[0]?.[1]).toEqual(expect.any(Array));
   });
 
   it("worker row message handler emits error row on failure", async () => {
@@ -667,10 +662,7 @@ describe("transport", () => {
       expect.objectContaining({
         type: "rsc.transport.response.row",
         id: "abc",
-        row: expect.objectContaining({
-          k: ROW_ERROR,
-          v: "handler failed",
-        }),
+        rows: [expect.objectContaining({ k: ROW_ERROR, v: "handler failed" })],
       }),
     );
   });

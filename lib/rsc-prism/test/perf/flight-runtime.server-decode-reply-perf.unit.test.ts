@@ -15,7 +15,13 @@ function formatMs(ms: number): string {
 }
 
 function buildLargeBinaryReplyPayload(itemCount: number, itemBytes: number): unknown {
-  const rows: Array<{ id: number; bytes: Uint8Array; int32: Int32Array; f64: Float64Array; raw: ArrayBuffer }> = [];
+  const rows: Array<{
+    id: number;
+    bytes: Uint8Array;
+    int32: Int32Array;
+    f64: Float64Array;
+    raw: ArrayBuffer;
+  }> = [];
   for (let i = 0; i < itemCount; i += 1) {
     const bytes = new Uint8Array(itemBytes);
     for (let j = 0; j < bytes.length; j += 1) {
@@ -77,7 +83,9 @@ describe("flight runtime server decodeReply perf", () => {
       throw new Error("Expected FormData body for binary decodeReply perf harness.");
     }
     const stats = await benchmarkDecodeReply(iterations, body);
-    console.log(`\n[rsc-prism perf] iterations=${iterations} items=${itemCount} itemBytes=${itemBytes}`);
+    console.log(
+      `\n[rsc-prism perf] iterations=${iterations} items=${itemCount} itemBytes=${itemBytes}`,
+    );
     console.log(`[rsc-prism perf] server-decodeReply avg=${formatMs(stats.avgMs)}`);
   });
 });

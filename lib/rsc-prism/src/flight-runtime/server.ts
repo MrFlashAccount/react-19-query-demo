@@ -21,6 +21,58 @@ const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
 const LEGACY_REACT_ELEMENT_SYMBOL = Symbol.for("react.element");
 const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");
 const FLIGHT_ROW_ENCODER = new TextEncoder();
+const FLIGHT_TIMING_DEBUG_GLOBAL_KEY = "__RSC_PRISM_FLIGHT_TIMING__";
+
+interface FlightTimingDebugSink {
+  report: (event: {
+    mode: "stream" | "row-emitter";
+    encodeRootMs: number;
+    emitRootMs: number;
+    drainDeferredMs: number;
+    totalMs: number;
+    queuedDeferredRows: number;
+    emittedModelRows: number;
+    emittedBinaryRows: number;
+  }) => void;
+}
+
+function getFlightTimingDebugSink(): FlightTimingDebugSink | null {
+  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+  const value = globalState[FLIGHT_TIMING_DEBUG_GLOBAL_KEY];
+  if (typeof value !== "object" || value == null || !("report" in value)) {
+    const enabled = true;
+    if (!enabled) {
+      return null;
+    }
+    return {
+      report: (event) => {
+        const payload = {
+          mode: event.mode,
+          encodeRootMs: Number(event.encodeRootMs.toFixed(2)),
+          emitRootMs: Number(event.emitRootMs.toFixed(2)),
+          drainDeferredMs: Number(event.drainDeferredMs.toFixed(2)),
+          totalMs: Number(event.totalMs.toFixed(2)),
+          queuedDeferredRows: event.queuedDeferredRows,
+          emittedModelRows: event.emittedModelRows,
+          emittedBinaryRows: event.emittedBinaryRows,
+        };
+        console.info("[rsc-prism flight timing]", payload);
+      },
+    };
+  }
+  const candidate = value as { report?: unknown };
+  if (typeof candidate.report !== "function") {
+    return null;
+  }
+  return candidate as FlightTimingDebugSink;
+}
+
+function nowMs(): number {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
 
 function isClientReference(value: unknown): value is { $$typeof: symbol; $$id: string } {
   if (typeof value !== "function" && (typeof value !== "object" || value == null)) {
@@ -40,7 +92,10 @@ function isReactElementLike(value: unknown): value is {
     return false;
   }
   const candidate = value as { $$typeof?: unknown };
-  return candidate.$$typeof === REACT_ELEMENT_SYMBOL || candidate.$$typeof === LEGACY_REACT_ELEMENT_SYMBOL;
+  return (
+    candidate.$$typeof === REACT_ELEMENT_SYMBOL ||
+    candidate.$$typeof === LEGACY_REACT_ELEMENT_SYMBOL
+  );
 }
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
@@ -53,7 +108,9 @@ function encodeFlightRow(id: number, value: unknown): Uint8Array {
 
 function encodeBinaryFlightRow(id: number, kind: string, bytes: Uint8Array): Uint8Array {
   const tag = binaryWireTagFromKind(kind);
-  const prefix = FLIGHT_ROW_ENCODER.encode(`${id.toString(16)}:${tag}${bytes.byteLength.toString(16)},`);
+  const prefix = FLIGHT_ROW_ENCODER.encode(
+    `${id.toString(16)}:${tag}${bytes.byteLength.toString(16)},`,
+  );
   const output = new Uint8Array(prefix.byteLength + bytes.byteLength + 1);
   output.set(prefix, 0);
   output.set(bytes, prefix.byteLength);
@@ -168,7 +225,7 @@ async function encodeServerNode(value: unknown, context: EncodeContext): Promise
 }
 
 async function encodeServerArray(value: unknown[], context: EncodeContext): Promise<unknown[]> {
-  const results = new Array(value.length);
+  const results = Array.from({ length: value.length });
   let hasAsync = false;
   for (let i = 0; i < value.length; i += 1) {
     const encoded = encodeServerNode(value[i], context);
@@ -237,10 +294,21 @@ export async function renderToReadableStream(
       signal?.addEventListener("abort", onAbort, { once: true });
 
       try {
+        const timingSink = getFlightTimingDebugSink();
+        const timingStart = timingSink == null ? 0 : nowMs();
+        let timingBeforeEncodeRoot = timingStart;
+        let timingAfterEncodeRoot = timingStart;
+        let timingAfterRootEmit = timingStart;
+        let timingAfterDeferredDrain = timingStart;
+        let queuedDeferredRows = 0;
+        let emittedModelRows = 0;
+        let emittedBinaryRows = 0;
+
         const pendingRows = new Set<Promise<void>>();
         const queueDeferred = (task: Promise<void>): void => {
+          queuedDeferredRows += 1;
           pendingRows.add(task);
-          task.finally(() => {
+          void task.finally(() => {
             pendingRows.delete(task);
           });
         };
@@ -250,26 +318,45 @@ export async function renderToReadableStream(
               return settled;
             },
             emitModelRow(id, value) {
+              emittedModelRows += 1;
               controller.enqueue(encodeFlightRow(id, value));
             },
             emitBinaryRow(id, kind, bytes) {
+              emittedBinaryRows += 1;
               controller.enqueue(encodeBinaryFlightRow(id, kind, bytes));
             },
           },
           queueDeferred,
         );
 
+        timingBeforeEncodeRoot = timingSink == null ? 0 : nowMs();
         const root = await encodeServerNode(element, context);
+        timingAfterEncodeRoot = timingSink == null ? 0 : nowMs();
         if (settled) return;
         controller.enqueue(encodeFlightRow(0, root));
+        emittedModelRows += 1;
+        timingAfterRootEmit = timingSink == null ? 0 : nowMs();
 
         while (pendingRows.size > 0) {
           await Promise.race(pendingRows);
           if (settled) return;
         }
+        timingAfterDeferredDrain = timingSink == null ? 0 : nowMs();
 
         controller.close();
         settled = true;
+        if (timingSink != null) {
+          timingSink.report({
+            mode: "stream",
+            encodeRootMs: timingAfterEncodeRoot - timingBeforeEncodeRoot,
+            emitRootMs: timingAfterRootEmit - timingAfterEncodeRoot,
+            drainDeferredMs: timingAfterDeferredDrain - timingAfterRootEmit,
+            totalMs: timingAfterDeferredDrain - timingStart,
+            queuedDeferredRows,
+            emittedModelRows,
+            emittedBinaryRows,
+          });
+        }
       } catch (error) {
         if (!settled) {
           settled = true;
@@ -303,10 +390,21 @@ export async function renderToRowEmitter(
   signal?.addEventListener("abort", onAbort, { once: true });
 
   try {
+    const timingSink = getFlightTimingDebugSink();
+    const timingStart = timingSink == null ? 0 : nowMs();
+    let timingBeforeEncodeRoot = timingStart;
+    let timingAfterEncodeRoot = timingStart;
+    let timingAfterRootEmit = timingStart;
+    let timingAfterDeferredDrain = timingStart;
+    let queuedDeferredRows = 0;
+    let emittedModelRows = 0;
+    let emittedBinaryRows = 0;
+
     const pendingRows = new Set<Promise<void>>();
     const queueDeferred = (task: Promise<void>): void => {
+      queuedDeferredRows += 1;
       pendingRows.add(task);
-      task.finally(() => {
+      void task.finally(() => {
         pendingRows.delete(task);
       });
     };
@@ -316,9 +414,11 @@ export async function renderToRowEmitter(
           return settled;
         },
         emitModelRow(id, value) {
+          emittedModelRows += 1;
           emit(flightModelRow(id, value));
         },
         emitBinaryRow(id, kind, bytes) {
+          emittedBinaryRows += 1;
           const { row, transfer } = flightBinaryRow(id, kind, bytes);
           emit(row, transfer);
         },
@@ -326,17 +426,34 @@ export async function renderToRowEmitter(
       queueDeferred,
     );
 
+    timingBeforeEncodeRoot = timingSink == null ? 0 : nowMs();
     const root = await encodeServerNode(element, context);
+    timingAfterEncodeRoot = timingSink == null ? 0 : nowMs();
     if (settled) return;
     emit(flightModelRow(0, root));
+    emittedModelRows += 1;
+    timingAfterRootEmit = timingSink == null ? 0 : nowMs();
 
     while (pendingRows.size > 0) {
       await Promise.race(pendingRows);
       if (settled) return;
     }
+    timingAfterDeferredDrain = timingSink == null ? 0 : nowMs();
 
     emit(flightDoneRow());
     settled = true;
+    if (timingSink != null) {
+      timingSink.report({
+        mode: "row-emitter",
+        encodeRootMs: timingAfterEncodeRoot - timingBeforeEncodeRoot,
+        emitRootMs: timingAfterRootEmit - timingAfterEncodeRoot,
+        drainDeferredMs: timingAfterDeferredDrain - timingAfterRootEmit,
+        totalMs: timingAfterDeferredDrain - timingStart,
+        queuedDeferredRows,
+        emittedModelRows,
+        emittedBinaryRows,
+      });
+    }
   } catch (error) {
     if (!settled) {
       settled = true;
@@ -361,7 +478,7 @@ export async function decodeReply(
     const pendingRows: Array<Promise<void>> = [];
     for (const [key, value] of body.entries()) {
       if (key === "0") {
-        source = value.toString();
+        source = typeof value === "string" ? value : "";
         continue;
       }
       const separatorIndex = key.lastIndexOf(":");
@@ -385,7 +502,11 @@ export async function decodeReply(
     }
   }
   const parsed = JSON.parse(source);
-  return decodeWireValue(parsed, (id) => createClientModuleProxy(id), (id) => rowsById.get(id));
+  return decodeWireValue(
+    parsed,
+    (id) => createClientModuleProxy(id),
+    (id) => rowsById.get(id),
+  );
 }
 
 export function registerServerReference<T extends (...args: any[]) => any>(

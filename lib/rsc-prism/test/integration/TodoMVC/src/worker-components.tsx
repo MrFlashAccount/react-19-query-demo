@@ -47,14 +47,6 @@ export async function TodoView({ filter }: TodoViewProps) {
 }
 
 async function TodoItemRow({ todo }: { todo: TodoRecord }) {
-  const now = performance.now();
-
-  while (performance.now() - now < 50) {
-    // Do nothing
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 5));
-
   return (
     <li className={`todo-row ${todo.completed ? "todo-row--completed" : ""}`}>
       <div className="todo-view">

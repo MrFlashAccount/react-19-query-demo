@@ -58,9 +58,12 @@ describe("flight runtime server stream behavior", () => {
     const rootRowText = `0:${JSON.stringify("$1")}\n`;
     const expectedBinary = new Uint8Array([49, 58, 65, 52, 44, 1, 2, 3, 4, 10]); // "1:A4," + bytes + "\n"
     expect(rows.some((row) => new TextDecoder().decode(row) === rootRowText)).toBe(true);
-    expect(rows.some((row) => row.length === expectedBinary.length && row.every((b, i) => b === expectedBinary[i]))).toBe(
-      true,
-    );
+    expect(
+      rows.some(
+        (row) =>
+          row.length === expectedBinary.length && row.every((b, i) => b === expectedBinary[i]),
+      ),
+    ).toBe(true);
   });
 
   it("round-trips action/reply binary payloads without base64", async () => {

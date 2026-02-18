@@ -92,7 +92,9 @@ async function benchmark(
     const stats = createStats();
     globalState[PERF_KEY] = stats;
     const start = performance.now();
-    const result = (await createFromReadableStream(toChunkedStream(payload, chunkSize))) as unknown[];
+    const result = (await createFromReadableStream(
+      toChunkedStream(payload, chunkSize),
+    )) as unknown[];
     totalMs += performance.now() - start;
     totalRootScanCount += stats.rootScanCount;
     totalRootScanMs += stats.rootScanTimeMs;

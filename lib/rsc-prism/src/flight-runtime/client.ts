@@ -8,6 +8,7 @@ import {
   type FlightRowMessage,
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
+  reviveModelValueTree,
   ROW_BINARY,
   ROW_DONE,
   ROW_ERROR,
@@ -149,7 +150,16 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
   }
   const model = chunk.value as string;
   try {
-    const parsed = JSON.parse(model, response.fromJSON) as T;
+    const parsed = reviveModelValueTree(
+      {
+        getChunk: (id) => getChunk(response, id),
+        readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
+        createLazyChunkWrapper: (chunk) =>
+          createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
+        resolveClientReference: (id) => response.resolveClientReference(id),
+      },
+      JSON.parse(model),
+    ) as T;
     chunk.status = CHUNK_INITIALIZED;
     chunk.value = parsed;
     chunk.reason = null;
@@ -275,9 +285,7 @@ function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
   return output;
 }
 
-function createFlightResponse(
-  resolveClientReference: (id: string) => unknown,
-): FlightResponse {
+function createFlightResponse(resolveClientReference: (id: string) => unknown): FlightResponse {
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
     resolveClientReference,
@@ -400,7 +408,9 @@ async function consumeFlightStream(
               }
               const hexDigit = byte <= 57 ? byte - 48 : (byte | 32) - 87;
               if (hexDigit < 0 || hexDigit > 15) {
-                throw new Error(`[rsc-prism] Invalid binary row length byte "${String.fromCharCode(byte)}".`);
+                throw new Error(
+                  `[rsc-prism] Invalid binary row length byte "${String.fromCharCode(byte)}".`,
+                );
               }
               binaryExpectedLength = binaryExpectedLength * 16 + hexDigit;
             }
@@ -458,7 +468,12 @@ async function consumeFlightStream(
           throw new Error(`[rsc-prism] Invalid row id byte "${String.fromCharCode(byte)}".`);
         }
 
-        if (jsonByteLength === 0 && jsonParts.length === 0 && binaryTag == null && isBinaryWireRowTag(byte)) {
+        if (
+          jsonByteLength === 0 &&
+          jsonParts.length === 0 &&
+          binaryTag == null &&
+          isBinaryWireRowTag(byte)
+        ) {
           binaryTag = String.fromCharCode(byte);
           offset += 1;
           continue;
@@ -540,9 +555,7 @@ export async function createFromReadableStream<T>(
   });
 }
 
-export function createFromRowEmitter<T>(
-  options?: FlightClientOptions,
-): {
+export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   push: (row: FlightRowMessage) => void;
   result: Promise<T>;
 } {

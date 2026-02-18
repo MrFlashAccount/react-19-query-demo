@@ -367,7 +367,7 @@ export async function fetchRSC(
 export interface CallActionOptions extends Omit<RequestInit, "method" | "body"> {
   /**
    * If true, the response will be parsed as RSC and returned
-   * If false (default), only success/failure is checked
+   * If false, only success/failure is checked
    */
   parseResponse?: boolean;
   transport?: RSCTransport;
@@ -412,7 +412,7 @@ export async function callAction<T = void>(
   const actionId = action.$$id;
   const transport = resolveTransport(options?.transport);
   const endpoint = DEFAULT_ACTION_ENDPOINT;
-  const { parseResponse = false } = options;
+  const { parseResponse = true } = options;
   const encodedArgs = await encodeActionArgs(args);
   const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
 
