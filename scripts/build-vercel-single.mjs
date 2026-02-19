@@ -30,6 +30,8 @@ function copyDirectoryContents(sourceDir, destinationDir) {
 
 rmSync(outputDir, { recursive: true, force: true });
 
+run("pnpm run build:lib");
+
 run("pnpm --filter @examples/landing build");
 copyDirectoryContents(path.resolve(repoRoot, "examples/landing/dist"), outputDir);
 
