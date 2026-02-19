@@ -18,21 +18,54 @@
       ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "handle": "filesystem"
+      "source": "/movies-db/api/:path*",
+      "destination": "/movies-db/api/:path*"
     },
     {
-      "src": "^/movies-db(?:/.*)?$",
-      "dest": "/movies-db/index.html"
+      "source": "/movies-db/rsc/:path*",
+      "destination": "/movies-db/rsc/:path*"
     },
     {
-      "src": "^/monitoring-dashboard(?:/.*)?$",
-      "dest": "/monitoring-dashboard/index.html"
+      "source": "/movies-db",
+      "destination": "/movies-db/index.html"
     },
     {
-      "src": "^/(.*)$",
-      "dest": "/index.html"
+      "source": "/movies-db/",
+      "destination": "/movies-db/index.html"
+    },
+    {
+      "source": "/movies-db/:path((?!.*\\.).*)",
+      "destination": "/movies-db/index.html"
+    },
+    {
+      "source": "/monitoring-dashboard/api/:path*",
+      "destination": "/monitoring-dashboard/api/:path*"
+    },
+    {
+      "source": "/monitoring-dashboard/rsc/:path*",
+      "destination": "/monitoring-dashboard/rsc/:path*"
+    },
+    {
+      "source": "/monitoring-dashboard",
+      "destination": "/monitoring-dashboard/index.html"
+    },
+    {
+      "source": "/monitoring-dashboard/",
+      "destination": "/monitoring-dashboard/index.html"
+    },
+    {
+      "source": "/monitoring-dashboard/:path((?!.*\\.).*)",
+      "destination": "/monitoring-dashboard/index.html"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/:path((?!.*\\.).*)",
+      "destination": "/index.html"
     }
   ]
 }
