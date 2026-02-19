@@ -32,5 +32,4 @@ export default defineConfig({
     "fs/promises",
     /^@lib\//,
   ],
-  copy: [],
 });
