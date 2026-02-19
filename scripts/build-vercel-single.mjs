@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { cpSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 const repoRoot = process.cwd();
@@ -28,6 +28,29 @@ function copyDirectoryContents(sourceDir, destinationDir) {
   }
 }
 
+function flattenNestedBaseOutput(appDistDir, appBase) {
+  const normalizedBase = appBase.replace(/^\/+|\/+$/g, "");
+  if (normalizedBase.length === 0) {
+    return;
+  }
+
+  const nestedDir = path.resolve(appDistDir, normalizedBase);
+  if (!statSyncSafe(nestedDir)?.isDirectory()) {
+    return;
+  }
+
+  copyDirectoryContents(nestedDir, appDistDir);
+  rmSync(nestedDir, { recursive: true, force: true });
+}
+
+function statSyncSafe(targetPath) {
+  try {
+    return statSync(targetPath);
+  } catch {
+    return null;
+  }
+}
+
 rmSync(outputDir, { recursive: true, force: true });
 
 run("pnpm run build:lib");
@@ -35,15 +58,22 @@ run("pnpm run build:lib");
 run("pnpm --filter @examples/landing build");
 copyDirectoryContents(path.resolve(repoRoot, "examples/landing/dist"), outputDir);
 
-run("pnpm --filter movies-db build", { VITE_APP_BASE: "/movies-db/" });
+const moviesBase = "/movies-db/";
+run("pnpm --filter movies-db build", { VITE_APP_BASE: moviesBase });
+flattenNestedBaseOutput(path.resolve(repoRoot, "examples/movies-db/dist"), moviesBase);
 copyDirectoryContents(
   path.resolve(repoRoot, "examples/movies-db/dist"),
   path.resolve(outputDir, "movies-db"),
 );
 
+const monitoringBase = "/monitoring-dashboard/";
 run("pnpm --filter @examples/monitoring-dashboard build", {
-  VITE_APP_BASE: "/monitoring-dashboard/",
+  VITE_APP_BASE: monitoringBase,
 });
+flattenNestedBaseOutput(
+  path.resolve(repoRoot, "examples/monitoring-dashboard/dist"),
+  monitoringBase,
+);
 copyDirectoryContents(
   path.resolve(repoRoot, "examples/monitoring-dashboard/dist"),
   path.resolve(outputDir, "monitoring-dashboard"),
