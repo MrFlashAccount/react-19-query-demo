@@ -1,6 +1,4 @@
 import type { Movie } from "./types";
-import { callAction } from "@lib/rsc-prism/client-only";
-import { updateRating } from "../components/RSCMoviesTab/worker-actions";
 
 const DEFAULT_LIMIT = 500;
 const decoder = new TextDecoder();
@@ -115,8 +113,4 @@ export async function getMovieById(movieId: string): Promise<Movie> {
  */
 export async function updateMovieRating(movieId: string, newRating: number): Promise<Movie> {
   return sendWorkerMessage<Movie>("updateMovieRating", { movieId, newRating });
-}
-
-export async function updateMovieRatingRSC(movieId: string, newRating: number) {
-  await callAction(updateRating, [movieId, newRating]);
 }

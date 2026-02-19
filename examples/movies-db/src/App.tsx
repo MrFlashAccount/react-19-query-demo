@@ -2,12 +2,7 @@ import type { MovieApi } from "./api/types";
 import type { TabId } from "./components/shared/TabSelector";
 import { useState, lazy, useTransition, useEffect, useRef } from "react";
 
-import {
-  searchMovies,
-  getMovieById,
-  updateMovieRating,
-  updateMovieRatingRSC,
-} from "./api/movieApi";
+import { searchMovies, getMovieById, updateMovieRating } from "./api/movieApi";
 import { TabSelector } from "./components/shared";
 
 const LazyTanStackQueryTab = lazy(() => import("./components/TanStackQueryTab"));
@@ -132,7 +127,6 @@ export default function App() {
     getMovieById,
     searchMovies,
     updateMovieRating,
-    updateMovieRatingRSC,
   };
 
   return (

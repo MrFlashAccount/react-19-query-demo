@@ -179,12 +179,22 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
   };
 }
 
-const runtimePromise = bootstrapWorkerRuntime().then((runtime) => ({
-  runtime,
-  dispose: runtime.dispose.bind(runtime),
-}));
+let runtimePromise: Promise<{
+  runtime: Awaited<ReturnType<typeof bootstrapWorkerRuntime>>;
+  dispose: () => void;
+}> | null = null;
+
+function getRuntimePromise() {
+  if (runtimePromise == null) {
+    runtimePromise = bootstrapWorkerRuntime().then((runtime) => ({
+      runtime,
+      dispose: runtime.dispose.bind(runtime),
+    }));
+  }
+  return runtimePromise;
+}
 
 export function RuntimeProvider({ children }: React.PropsWithChildren) {
-  use(runtimePromise);
+  use(getRuntimePromise());
   return children;
 }

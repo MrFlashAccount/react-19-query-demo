@@ -3,11 +3,13 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "outputs": ["dist/**"],
+      "outputLogs": "new-only"
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "test:ui": {
       "cache": false
@@ -20,17 +22,21 @@
     },
     "check": {
       "dependsOn": ["check:type", "check:lint", "check:format"],
-      "outputs": []
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "check:type": {
       "dependsOn": ["^check:type"],
-      "outputs": []
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "check:lint": {
-      "outputs": []
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "check:format": {
-      "outputs": []
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "dev": {
       "cache": false,

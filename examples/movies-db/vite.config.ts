@@ -3,7 +3,7 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { rscPrism } from "../../lib/rsc-prism/src/vite";
+import { rscPrism } from "@lib/rsc-prism/vite";
 
 const rootDir = import.meta.dirname;
 const repoRoot = path.resolve(rootDir, "../..");

@@ -222,6 +222,44 @@ export function A() { return null; }
     expect(loadedCode).toContain('"/src/client-a.tsx#*"');
   });
 
+  it("includes worker bootstrap import in main virtual module when runtime is enabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-bootstrap-test-"));
+    tempRoots.push(root);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "client-a.tsx"), '"use main"; export const A = 1;', "utf8");
+
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+    });
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:main-thread-modules");
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+
+    expect(loadedCode).toContain('import "virtual:rsc-prism/worker-bootstrap";');
+  });
+
+  it("omits worker bootstrap import in main virtual module when runtime is disabled", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-no-bootstrap-test-"));
+    tempRoots.push(root);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "client-a.tsx"), '"use main"; export const A = 1;', "utf8");
+
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: false,
+      },
+    });
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:main-thread-modules");
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+
+    expect(loadedCode).not.toContain('import "virtual:rsc-prism/worker-bootstrap";');
+  });
+
   it("auto-injects main virtual module into html", () => {
     const plugin = rscPrism();
     const transformed = callHook(

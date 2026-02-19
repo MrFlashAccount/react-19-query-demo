@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   fetchRSC: vi.fn(async () => null),
+  bootstrapWorkerRuntime: vi.fn(async () => ({
+    worker: {} as Worker,
+    transport: { sendAction: vi.fn() },
+    dispose: vi.fn(),
+  })),
   stateSetter: vi.fn(),
   startTransition: vi.fn((callback: () => void) => {
     callback();
@@ -15,11 +20,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../src/client", () => ({
   fetchRSC: mocks.fetchRSC,
-  bootstrapWorkerRuntime: vi.fn(async () => ({
-    worker: {} as Worker,
-    transport: { sendAction: vi.fn() },
-    dispose: vi.fn(),
-  })),
+  bootstrapWorkerRuntime: mocks.bootstrapWorkerRuntime,
 }));
 
 vi.mock("react", () => ({
@@ -86,6 +87,12 @@ describe("react rsc invalidation", () => {
   beforeEach(() => {
     mocks.fetchRSC.mockReset();
     mocks.fetchRSC.mockResolvedValue(null);
+    mocks.bootstrapWorkerRuntime.mockReset();
+    mocks.bootstrapWorkerRuntime.mockResolvedValue({
+      worker: {} as Worker,
+      transport: { sendAction: vi.fn() },
+      dispose: vi.fn(),
+    });
     mocks.stateSetter.mockReset();
     mocks.startTransition.mockClear();
     mocks.activeLoader = null;
@@ -125,6 +132,17 @@ describe("react rsc invalidation", () => {
     expect(mocks.stateSetter).toHaveBeenCalledTimes(2);
     await renderLoader(RSCLoader, { filter: "all" });
     expect(mocks.fetchRSC).toHaveBeenCalledTimes(3);
+  });
+
+  it("defers bootstrap until RuntimeProvider render and only bootstraps once", async () => {
+    const module = await import("../src/react");
+    expect(mocks.bootstrapWorkerRuntime).not.toHaveBeenCalled();
+
+    module.RuntimeProvider({ children: null });
+    expect(mocks.bootstrapWorkerRuntime).toHaveBeenCalledTimes(1);
+
+    module.RuntimeProvider({ children: null });
+    expect(mocks.bootstrapWorkerRuntime).toHaveBeenCalledTimes(1);
   });
 
   it("stops invalidating after loader cleanup", async () => {

@@ -3,15 +3,13 @@
  *
  * Renders movie list via React Server Components from dedicated worker runtime.
  */
-import type { Movie } from "../../api/types";
-import { RatingStars } from "./client-components";
 import { searchMovies, updateMovieRating } from "./worker-actions";
 import { Suspense } from "react";
-import { RuntimeProvider, rsc } from "@lib/rsc-prism/react";
+import { rsc, RuntimeProvider } from "@lib/rsc-prism/react";
 import type { TabProps } from "../shared/types";
 import { SearchBox } from "../shared";
-
-const MoviesListRSC = rsc(MovieList);
+import type { Movie } from "../../api/types";
+import { RatingStars } from "./components";
 
 export default function RSCMoviesTab({ formState, onFormStateChange, api, devtools }: TabProps) {
   return (
@@ -43,7 +41,7 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
           }
         >
           <RuntimeProvider>
-            <MoviesListRSC searchQuery={searchQuery} limit={limit} />
+            <MovieList searchQuery={searchQuery} limit={limit} />
           </RuntimeProvider>
         </Suspense>
       </div>
@@ -53,10 +51,40 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
 
 const MOVIE_CARD_SIZE = "140px";
 
-export interface MoviesRSCViewProps {
+export interface MovieListProps {
   searchQuery: string;
   limit: number;
 }
+
+const MovieList = rsc(async ({ searchQuery, limit }: MovieListProps) => {
+  "use worker";
+  const movies = await searchMovies(searchQuery, limit);
+
+  if (movies.length === 0) {
+    return (
+      <div className="text-center py-12 md:py-20">
+        <div className="text-4xl md:text-6xl mb-4">🎬</div>
+        <p className="text-lg md:text-xl text-gray-600 mb-2">No movies found</p>
+        <p className="text-xs md:text-sm text-gray-400">Try a different search term</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-4 md:mb-6 text-center">
+        <p className="text-xs md:text-sm text-gray-500">
+          Found {movies.length} {movies.length === 1 ? "movie" : "movies"}
+        </p>
+      </div>
+      <div className="flex flex-col gap-3 md:gap-4">
+        {movies.map((movie) => (
+          <MovieCard key={movie.id} movie={movie} />
+        ))}
+      </div>
+    </div>
+  );
+});
 
 function MovieCard({ movie }: { movie: Movie }) {
   const rating = movie.rating;
@@ -104,36 +132,6 @@ function MovieCard({ movie }: { movie: Movie }) {
         </div>
 
         {movie.plot && <div className="text-xs text-gray-600 line-clamp-2">{movie.plot}</div>}
-      </div>
-    </div>
-  );
-}
-
-export async function MovieList({ searchQuery, limit }: { searchQuery: string; limit: number }) {
-  "use worker";
-  const movies = await searchMovies(searchQuery, limit);
-
-  if (movies.length === 0) {
-    return (
-      <div className="text-center py-12 md:py-20">
-        <div className="text-4xl md:text-6xl mb-4">🎬</div>
-        <p className="text-lg md:text-xl text-gray-600 mb-2">No movies found</p>
-        <p className="text-xs md:text-sm text-gray-400">Try a different search term</p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-4 md:mb-6 text-center">
-        <p className="text-xs md:text-sm text-gray-500">
-          Found {movies.length} {movies.length === 1 ? "movie" : "movies"}
-        </p>
-      </div>
-      <div className="flex flex-col gap-3 md:gap-4">
-        {movies.map((movie) => (
-          <MovieCard key={movie.id} movie={movie} />
-        ))}
       </div>
     </div>
   );

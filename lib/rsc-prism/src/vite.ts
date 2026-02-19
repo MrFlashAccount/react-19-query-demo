@@ -1403,8 +1403,15 @@ async function collectMainThreadModules(
   return [...deduped.values()].sort((left, right) => left.moduleId.localeCompare(right.moduleId));
 }
 
-function buildMainVirtualModuleCode(modules: MainThreadModuleEntry[]): string {
+function buildMainVirtualModuleCode(
+  modules: MainThreadModuleEntry[],
+  options: { includeWorkerBootstrapImport?: boolean } = {},
+): string {
   const lines: string[] = [];
+  if (options.includeWorkerBootstrapImport) {
+    lines.push(`import ${JSON.stringify(DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID)};`);
+    lines.push("");
+  }
 
   lines.push("const __rscPrismGlobalState = globalThis;");
   lines.push(
@@ -1787,11 +1794,29 @@ async function pickWorkerServeFile(outDir: string): Promise<string> {
     );
   }
 
+  const sortByRelativeDepthThenName = (left: string, right: string): number => {
+    const leftRelative = normalizePath(path.relative(outDir, left));
+    const rightRelative = normalizePath(path.relative(outDir, right));
+    const leftDepth = leftRelative.split("/").length;
+    const rightDepth = rightRelative.split("/").length;
+    if (leftDepth !== rightDepth) {
+      return leftDepth - rightDepth;
+    }
+    return leftRelative.localeCompare(rightRelative);
+  };
+
+  const exactEntryCandidates = jsFiles.filter(
+    (filePath) => path.basename(filePath) === `${INTERNAL_WORKER_RUNTIME_ASSET_NAME}.js`,
+  );
+  if (exactEntryCandidates.length > 0) {
+    return exactEntryCandidates.sort(sortByRelativeDepthThenName)[0]!;
+  }
+
   const entryCandidates = jsFiles.filter((filePath) =>
     path.basename(filePath).startsWith(`${INTERNAL_WORKER_RUNTIME_ASSET_NAME}-`),
   );
   if (entryCandidates.length > 0) {
-    return entryCandidates.sort((left, right) => left.localeCompare(right))[0]!;
+    return entryCandidates.sort(sortByRelativeDepthThenName)[0]!;
   }
 
   const withSize = await Promise.all(
@@ -2656,11 +2681,13 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         : path.resolve(config.root, ".vite", "rsc-prism-worker-runtime");
     const entryPath = (await ensureGeneratedWorkerSources()).entryPath;
     generatedWorkerOutDir = outDir;
+    const useStableAssetNames = config.command === "serve";
 
     await viteBuild({
       configFile: false,
       mode,
       root: config.root,
+      publicDir: false,
       build: {
         write: true,
         outDir,
@@ -2671,8 +2698,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           treeshake: true,
           output: {
             format: "es",
-            entryFileNames: `assets/${INTERNAL_WORKER_RUNTIME_ASSET_NAME}-[hash].js`,
-            chunkFileNames: "assets/[name]-[hash].js",
+            entryFileNames: useStableAssetNames
+              ? `assets/${INTERNAL_WORKER_RUNTIME_ASSET_NAME}.js`
+              : `assets/${INTERNAL_WORKER_RUNTIME_ASSET_NAME}-[hash].js`,
+            chunkFileNames: useStableAssetNames ? "assets/[name].js" : "assets/[name]-[hash].js",
           },
         },
       },
@@ -2977,7 +3006,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         mapModuleId,
         inferredClientModulePaths,
       );
-      return buildMainVirtualModuleCode(modules);
+      return buildMainVirtualModuleCode(modules, {
+        includeWorkerBootstrapImport: workerRuntimeEnabled,
+      });
     },
     configureServer(server) {
       if (!workerRuntimeEnabled) {
