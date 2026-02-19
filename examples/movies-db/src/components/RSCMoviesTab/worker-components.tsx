@@ -2,7 +2,7 @@
 
 import type { Movie } from "../../api/types";
 import { RatingStars } from "./client-components";
-import { searchMovies } from "./worker-data";
+import { searchMovies, updateMovieRating } from "./worker-actions";
 
 const MOVIE_CARD_SIZE = "140px";
 
@@ -49,7 +49,11 @@ function MovieCard({ movie }: { movie: Movie }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <RatingStars movieId={movie.id} currentStars={currentStars} />
+          <RatingStars
+            movieId={movie.id}
+            currentStars={currentStars}
+            onUpdateRating={updateMovieRating}
+          />
         </div>
 
         {movie.plot && <div className="text-xs text-gray-600 line-clamp-2">{movie.plot}</div>}

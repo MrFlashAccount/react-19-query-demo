@@ -7,26 +7,28 @@
 "use main";
 
 import { useState, useTransition } from "react";
-import { callAction } from "@lib/rsc-prism/client-only";
-import { updateRating } from "./worker-actions";
 import { StarIcon } from "../shared";
+import type { Movie } from "../../api/types";
+
+const STARS = [1, 2, 3, 4, 5];
 
 export interface RatingStarsProps {
   movieId: string;
   currentStars: number;
+  onUpdateRating: (movieId: string, rating: number) => Promise<Movie>;
 }
 
 /**
  * Interactive star rating component
  * Calls server action to update rating
  */
-export function RatingStars({ movieId, currentStars }: RatingStarsProps) {
+export function RatingStars({ movieId, currentStars, onUpdateRating }: RatingStarsProps) {
   const [hoveredStar, setHoveredStar] = useState<number | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const updateRatingCallback = (rating: number) => {
+  const handleUpdateRating = (rating: number) => {
     startTransition(async () => {
-      await callAction(updateRating, [movieId, rating]);
+      await onUpdateRating(movieId, rating);
     });
   };
 
@@ -36,13 +38,13 @@ export function RatingStars({ movieId, currentStars }: RatingStarsProps) {
         className={`flex gap-0.5 ${isPending ? "opacity-75 cursor-not-allowed" : ""}`}
         onMouseLeave={() => setHoveredStar(null)}
       >
-        {[1, 2, 3, 4, 5].map((star) => {
+        {STARS.map((star) => {
           const showFilled = hoveredStar != null ? star <= hoveredStar : star <= currentStars;
 
           return (
             <button
               key={star}
-              onClick={() => updateRatingCallback(star * 2)}
+              onClick={() => handleUpdateRating(star * 2)}
               onMouseEnter={() => setHoveredStar(star)}
               disabled={isPending}
               className={`transition-all duration-150 ${

@@ -90,6 +90,7 @@ export function MovieCard({
   );
 }
 
+const STARS = [1, 2, 3, 4, 5];
 function RatingStars({
   onUpdateRating,
   isPending,
@@ -111,7 +112,7 @@ function RatingStars({
         className={`flex gap-0.5 ${isPending ? "opacity-75 cursor-not-allowed" : ""}`}
         onMouseLeave={() => setHoveredStar(null)}
       >
-        {[1, 2, 3, 4, 5].map((star) => {
+        {STARS.map((star) => {
           const displayStar = hoveredStar != null ? star <= hoveredStar : star <= currentStars;
 
           return (
