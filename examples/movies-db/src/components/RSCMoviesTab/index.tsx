@@ -59,7 +59,6 @@ export interface MoviesRSCViewProps {
 }
 
 function MovieCard({ movie }: { movie: Movie }) {
-  "use worker";
   const rating = movie.rating;
   const currentStars = Math.ceil((rating ?? 0) / 2);
   const director = movie.directors.join(", ") || "Unknown";

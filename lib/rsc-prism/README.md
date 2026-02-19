@@ -164,4 +164,12 @@ export default defineConfig({
 });
 ```
 
-When enabled, exported functions with leading `"use worker"` inside non-`"use worker"` modules are proxied as worker references (component-like exports) or action references (action-like exports). The generated virtual module exports only directive-marked exports; unmarked exports are intentionally omitted.
+When enabled, any top-level function component whose first statement is `"use worker"` is transformed to a worker component reference, including non-exported declarations in mixed modules.
+
+Rules and limits:
+
+1. `"use worker"` must be the first statement in the function body.
+2. Only top-level declarations are supported (`function` declarations and top-level function-valued `const` bindings).
+3. Nested/local-inner declarations are not supported.
+4. Direct main-thread JSX render of worker components (for example `<WorkerComponent />`) is invalid; pass the symbol to `rsc(...)`/`fetchRSC(...)`.
+5. Non-exported worker components use deterministic synthetic ids (`<moduleId>#@local:<name>`).

@@ -277,17 +277,33 @@ export function createCallServer(
   options?: Omit<RequestInit, "method" | "body"> & RSCRequestOptions,
 ): (actionId: string, args: unknown[]) => Promise<unknown> {
   const transport = options?.transport ?? defaultFetchTransport;
+  const { transport: _transport, ...requestInit } = options ?? {};
   const callServer = async (actionId: string, args: unknown[]): Promise<unknown> => {
     const encodedArgs = await encodeActionArgs(args);
     const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
+
+    if (transport.sendActionDirect != null) {
+      const manifest = resolveClientManifestOrThrow();
+      return transport.sendActionDirect(
+        {
+          endpoint: actionEndpoint,
+          actionId,
+          body: encodedArgs.data,
+          contentType,
+          headers: requestInit.headers,
+          requestInit,
+        },
+        { manifest, callServer },
+      );
+    }
 
     const response = await transport.sendAction({
       endpoint: actionEndpoint,
       actionId,
       body: encodedArgs.data,
       contentType,
-      headers: options?.headers,
-      requestInit: options,
+      headers: requestInit.headers,
+      requestInit,
     });
 
     if (!response.ok) {
@@ -323,6 +339,8 @@ export async function fetchRSC(
 ): Promise<unknown> {
   const transport = resolveTransport(options?.transport);
   const { callServer, props, transport: _transport } = options ?? {};
+  const resolvedCallServer =
+    callServer ?? createCallServer(DEFAULT_ACTION_ENDPOINT, { transport });
   const workerComponent = typeof target === "string" ? null : target;
   const url = "/rsc/view";
 
@@ -340,7 +358,7 @@ export async function fetchRSC(
         componentId: workerComponent?.$$id,
         componentProps: props,
       },
-      { manifest, callServer },
+      { manifest, callServer: resolvedCallServer },
     );
   }
 
@@ -358,7 +376,7 @@ export async function fetchRSC(
     throw new Error(`RSC fetch failed: ${response.status}`);
   }
 
-  return consumeRSC(response.body!, { callServer });
+  return consumeRSC(response.body!, { callServer: resolvedCallServer });
 }
 
 /**

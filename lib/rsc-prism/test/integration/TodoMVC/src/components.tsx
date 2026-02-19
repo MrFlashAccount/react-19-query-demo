@@ -1,6 +1,6 @@
 import {
   createContext,
-  useContext,
+  use,
   useId,
   useState,
   useTransition,
@@ -28,7 +28,7 @@ export function TodoProvider({
 }
 
 function useTodoContext(): TodoContextValue {
-  const runtime = useContext(TodoContext);
+  const runtime = use(TodoContext);
   if (runtime == null) {
     throw new Error("Todo context is missing.");
   }

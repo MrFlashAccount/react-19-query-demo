@@ -42,6 +42,7 @@ interface FlightChunk<T = unknown> {
 interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
   resolveClientReference: (id: string) => unknown;
+  callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
   closed: boolean;
   closedReason: unknown;
@@ -70,7 +71,7 @@ function createPendingChunk<T>(): FlightChunk<T> {
     reason: null,
     listeners: null,
     rejectListeners: null,
-    // oxlint-disable-next-line no-then
+    // oxlint-disable-next-line unicorn/no-thenable
     then(resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) {
       if (this.status === CHUNK_INITIALIZED || this.status === CHUNK_RESOLVED_MODEL) {
         if (resolve != null) {
@@ -157,6 +158,7 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
         createLazyChunkWrapper: (chunk) =>
           createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
         resolveClientReference: (id) => response.resolveClientReference(id),
+        callServer: response.callServer,
       },
       JSON.parse(model),
     ) as T;
@@ -285,10 +287,14 @@ function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
   return output;
 }
 
-function createFlightResponse(resolveClientReference: (id: string) => unknown): FlightResponse {
+function createFlightResponse(
+  resolveClientReference: (id: string) => unknown,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
+): FlightResponse {
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
     resolveClientReference,
+    callServer,
     fromJSON: (_key, value) => value,
     closed: false,
     closedReason: null,
@@ -299,6 +305,7 @@ function createFlightResponse(resolveClientReference: (id: string) => unknown): 
     createLazyChunkWrapper: (chunk) =>
       createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
     resolveClientReference: (id) => response.resolveClientReference(id),
+    callServer,
   });
   return response;
 }
@@ -515,7 +522,7 @@ export async function createFromReadableStream<T>(
   options?: FlightClientOptions,
 ): Promise<T> {
   const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference);
+  const response = createFlightResponse(resolveClientReference, options?.callServer);
   return await new Promise<T>((resolve, reject) => {
     let rootSettled = false;
     const settleRoot = (): void => {
@@ -560,7 +567,7 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   result: Promise<T>;
 } {
   const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference);
+  const response = createFlightResponse(resolveClientReference, options?.callServer);
   let hasAnyRow = false;
   let rootSettled = false;
 

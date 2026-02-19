@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   createLazyChunkWrapper,
@@ -86,11 +86,15 @@ describe("flight wire decode correctness", () => {
     expect(decodedForm.get("count")).toBe("2");
 
     expect(decoded.clientRef).toBe("client:mod#default");
-    expect(decoded.serverRef).toMatchObject({
-      $$typeof: Symbol.for("react.server.reference"),
-      $$id: "actions#run",
-      $$bound: null,
-    });
+    expect(typeof decoded.serverRef).toBe("function");
+    const serverRef = decoded.serverRef as {
+      $$typeof: symbol;
+      $$id: string;
+      $$bound: null;
+    };
+    expect(serverRef.$$typeof).toBe(Symbol.for("react.server.reference"));
+    expect(serverRef.$$id).toBe("actions#run");
+    expect(serverRef.$$bound).toBeNull();
 
     const element = decoded.element as {
       type: string;
@@ -236,6 +240,38 @@ describe("flight wire compact stream format", () => {
 
     const lazy = parseModelString(context, "$1") as { $$typeof: symbol };
     expect(lazy.$$typeof).toBe(Symbol.for("react.lazy"));
+  });
+
+  it("creates callable server references that delegate to callServer", async () => {
+    const callServer = vi.fn(async (actionId: string, args: unknown[]) => ({ actionId, args }));
+    const serverRefChunk = {
+      status: 2,
+      value: { id: "actions#save" },
+      reason: null,
+      listeners: null,
+      rejectListeners: null,
+      then() {},
+    };
+    const chunks = new Map<number, unknown>([[1, serverRefChunk]]);
+    const context = {
+      getChunk: (id: number) => chunks.get(id),
+      readChunk: (chunk: unknown) => (chunk as { value: unknown }).value,
+      createLazyChunkWrapper: () => null,
+      resolveClientReference: (id: string) => id,
+      callServer,
+    };
+
+    const action = parseModelString(context, "$F1") as ((...args: unknown[]) => Promise<unknown>) & {
+      $$typeof: symbol;
+      $$id: string;
+      $$bound: null;
+    };
+
+    await expect(action("a", 2)).resolves.toEqual({ actionId: "actions#save", args: ["a", 2] });
+    expect(callServer).toHaveBeenCalledWith("actions#save", ["a", 2]);
+    expect(action.$$typeof).toBe(Symbol.for("react.server.reference"));
+    expect(action.$$id).toBe("actions#save");
+    expect(action.$$bound).toBeNull();
   });
 
   it("reviver converts element tuples to React elements", () => {

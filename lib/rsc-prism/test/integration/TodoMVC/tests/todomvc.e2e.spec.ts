@@ -6,11 +6,39 @@ async function gotoTodoApp(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "todos" })).toBeVisible();
   await expect(page.getByText("Read worker transport docs")).toBeVisible();
   await expect(page.getByText("Loading from worker...")).toHaveCount(0);
+  await expect(page.locator(".todo-error")).toHaveCount(0);
 }
+
+const workerRuntimeErrorPatterns = [
+  /expects a "use worker" component reference/,
+  /expects a "use worker" action reference/,
+  /Missing or unknown worker component reference/,
+  /Worker component references cannot render on the main thread/,
+];
+
+const pageErrors = new WeakMap<Page, string[]>();
 
 test.describe("TodoMVC integration", () => {
   test.beforeEach(async ({ page }) => {
+    const errors: string[] = [];
+    pageErrors.set(page, errors);
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        errors.push(message.text());
+      }
+    });
+    page.on("pageerror", (error) => {
+      errors.push(error.message);
+    });
     await gotoTodoApp(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    const errors = pageErrors.get(page) ?? [];
+    const workerErrors = errors.filter((error) =>
+      workerRuntimeErrorPatterns.some((pattern) => pattern.test(error)),
+    );
+    expect(workerErrors).toEqual([]);
   });
 
   test("adds a todo", async ({ page }) => {

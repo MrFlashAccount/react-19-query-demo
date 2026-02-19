@@ -1,6 +1,6 @@
 import "./styles.css";
 
-import { Suspense, useEffect, useState, useTransition } from "react";
+import { StrictMode, Suspense, useEffect, useState, useTransition } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { TodoComposer, TodoItemRow as TodoItemRowClient, TodoFooterControls } from "./components";
 import { buildTodoWorkerViewData } from "./todo-model";
@@ -69,34 +69,7 @@ function App() {
           {isPending ? "Refreshing RSC view..." : ""}
         </p>
 
-        <ErrorBoundary
-          fallbackRender={({ error }) => {
-            const message = error instanceof Error ? error.message : String(error);
-            return (
-              <section className="todo-shell">
-                <section className="todoapp todoapp--error">
-                  <h1 className="todo-title">todos</h1>
-                  <p className="todo-error">Failed to load RSC payload: {message}</p>
-                </section>
-              </section>
-            );
-          }}
-        >
-          <Suspense
-            fallback={
-              <section className="todo-shell">
-                <section className="todoapp">
-                  <h1 className="todo-title">todos</h1>
-                  <p className="todo-empty">Loading...</p>
-                </section>
-              </section>
-            }
-          >
-            <RuntimeProvider>
-              <TodoViewRSC filter={filter} />
-            </RuntimeProvider>
-          </Suspense>
-        </ErrorBoundary>
+        <TodoViewRSC filter={filter} />
       </main>
     </TodoProvider>
   );
@@ -165,4 +138,35 @@ if (rootElement == null) {
   throw new Error("Missing #root element");
 }
 
-createRoot(rootElement).render(<App />);
+createRoot(rootElement).render(
+  <StrictMode>
+    <ErrorBoundary
+      fallbackRender={({ error }) => {
+        const message = error instanceof Error ? error.message : String(error);
+        return (
+          <section className="todo-shell">
+            <section className="todoapp todoapp--error">
+              <h1 className="todo-title">todos</h1>
+              <p className="todo-error">Failed to load RSC payload: {message}</p>
+            </section>
+          </section>
+        );
+      }}
+    >
+      <Suspense
+        fallback={
+          <section className="todo-shell">
+            <div className="todoapp">
+              <h1 className="todo-title">todos</h1>
+              <p className="todo-empty">Loading...</p>
+            </div>
+          </section>
+        }
+      >
+        <RuntimeProvider>
+          <App />
+        </RuntimeProvider>
+      </Suspense>
+    </ErrorBoundary>
+  </StrictMode>,
+);

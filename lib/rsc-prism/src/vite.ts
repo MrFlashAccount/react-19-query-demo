@@ -86,6 +86,24 @@ interface ParsedModuleExports {
   componentExports: string[];
 }
 
+interface DiscoveredWorkerComponent {
+  localName: string;
+  exportName: string | null;
+  componentId: string;
+  declarationType: "function-declaration" | "variable-function" | "rsc-call";
+  sourceStart: number;
+  sourceEnd: number;
+  replacementKind: "declaration" | "initializer" | "rsc-arg";
+  replacementStart: number;
+  replacementEnd: number;
+}
+
+interface WorkerRuntimeComponentBinding {
+  componentId: string;
+  importPath: string;
+  exportName: string;
+}
+
 interface MainThreadModuleEntry {
   moduleId: string;
   importPath: string;
@@ -190,6 +208,168 @@ function parseModule(code: string, id: string): ParsedFile {
     sourceFilename: id,
     plugins: PARSER_PLUGINS,
   }) as unknown as ParsedFile;
+}
+
+function getNodeRange(node: unknown): { start: number; end: number } | null {
+  if (typeof node !== "object" || node == null) {
+    return null;
+  }
+  const start = (node as { start?: unknown }).start;
+  const end = (node as { end?: unknown }).end;
+  if (typeof start !== "number" || typeof end !== "number") {
+    return null;
+  }
+  return { start, end };
+}
+
+function walkNode(
+  node: unknown,
+  visit: (current: ParsedNode, parent: ParsedNode | null) => void,
+  parent: ParsedNode | null = null,
+): void {
+  if (typeof node !== "object" || node == null) {
+    return;
+  }
+
+  const parsed = node as ParsedNode;
+  if (typeof parsed.type === "string") {
+    visit(parsed, parent);
+  }
+
+  for (const value of Object.values(parsed)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        walkNode(item, visit, parsed);
+      }
+      continue;
+    }
+    walkNode(value, visit, parsed);
+  }
+}
+
+function isPascalCaseName(name: string | null): boolean {
+  return name != null && /^[A-Z]/.test(name);
+}
+
+function isFunctionLikeNode(node: unknown): boolean {
+  if (typeof node !== "object" || node == null) {
+    return false;
+  }
+  const type = (node as { type?: string }).type;
+  return (
+    type === "FunctionDeclaration" ||
+    type === "FunctionExpression" ||
+    type === "ArrowFunctionExpression"
+  );
+}
+
+function functionContainsJSXOrCreateElement(node: unknown): boolean {
+  if (!isFunctionLikeNode(node)) {
+    return false;
+  }
+
+  const functionNode = node as ParsedNode;
+  if (functionNode.type === "ArrowFunctionExpression") {
+    const body = (functionNode as { body?: unknown }).body;
+    const bodyType = (body as { type?: string } | null | undefined)?.type;
+    if (bodyType === "JSXElement" || bodyType === "JSXFragment") {
+      return true;
+    }
+  }
+
+  let hasComponentReturn = false;
+  walkNode(node, (current, parent) => {
+    if (hasComponentReturn) {
+      return;
+    }
+
+    if (current.type === "JSXElement" || current.type === "JSXFragment") {
+      hasComponentReturn = true;
+      return;
+    }
+
+    if (current.type !== "CallExpression") {
+      return;
+    }
+
+    const callee = (current as { callee?: unknown }).callee;
+    if (typeof callee !== "object" || callee == null) {
+      return;
+    }
+
+    const member = callee as {
+      type?: string;
+      object?: { type?: string; name?: string };
+      property?: { type?: string; name?: string };
+    };
+    if (
+      member.type === "MemberExpression" &&
+      member.object?.type === "Identifier" &&
+      member.object.name === "React" &&
+      member.property?.type === "Identifier" &&
+      member.property.name === "createElement"
+    ) {
+      hasComponentReturn = true;
+      return;
+    }
+
+    if (
+      parent?.type === "ReturnStatement" &&
+      (callee as { type?: string }).type === "Identifier" &&
+      (callee as { name?: string }).name === "createElement"
+    ) {
+      hasComponentReturn = true;
+    }
+  });
+
+  return hasComponentReturn;
+}
+
+function isTopLevelWorkerComponentFunction(
+  node: unknown,
+  localName: string | null,
+  experimentalComponentLevelDirectives: boolean,
+): boolean {
+  if (!isFunctionLikeNode(node) || !hasWorkerActionFunctionDirective(node)) {
+    return false;
+  }
+  if (!experimentalComponentLevelDirectives) {
+    return false;
+  }
+
+  if (isPascalCaseName(localName)) {
+    return true;
+  }
+  return functionContainsJSXOrCreateElement(node);
+}
+
+function isRscCallExpression(node: unknown): boolean {
+  if (typeof node !== "object" || node == null) {
+    return false;
+  }
+  const call = node as { type?: string; callee?: unknown };
+  if (call.type !== "CallExpression") {
+    return false;
+  }
+  const callee = call.callee as { type?: string; name?: string } | null | undefined;
+  return callee?.type === "Identifier" && callee.name === "rsc";
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function applyTextReplacements(code: string, replacements: TextReplacement[]): string {
+  if (replacements.length === 0) {
+    return code;
+  }
+  const sorted = [...replacements].sort((left, right) => right.start - left.start);
+  let output = code;
+  for (const replacement of sorted) {
+    output =
+      output.slice(0, replacement.start) + replacement.text + output.slice(replacement.end);
+  }
+  return output;
 }
 
 function hasDirective(ast: ParsedFile, directives: Set<string>): boolean {
@@ -346,73 +526,6 @@ function hasWorkerActionFunctionDirective(node: unknown): boolean {
   return literal.type === "StringLiteral" && literal.value === "use worker";
 }
 
-function isLikelyComponentExportName(name: string): boolean {
-  return /^[A-Z]/.test(name);
-}
-
-function classifyWorkerDirectiveExport(
-  exportName: string,
-  localName: string | null,
-  experimentalComponentLevelDirectives: boolean,
-): "action" | "component" {
-  if (!experimentalComponentLevelDirectives) {
-    return "action";
-  }
-  const candidateName = exportName === "default" ? localName : exportName;
-  if (candidateName != null && isLikelyComponentExportName(candidateName)) {
-    return "component";
-  }
-  return "action";
-}
-
-function addWorkerDirectiveExport(
-  actionExports: Set<string>,
-  componentExports: Set<string>,
-  exportName: string,
-  localName: string | null,
-  experimentalComponentLevelDirectives: boolean,
-): void {
-  if (
-    classifyWorkerDirectiveExport(exportName, localName, experimentalComponentLevelDirectives) ===
-    "component"
-  ) {
-    componentExports.add(exportName);
-    return;
-  }
-  actionExports.add(exportName);
-}
-
-function collectLocalWorkerDirectiveBindings(ast: ParsedFile): Set<string> {
-  const directiveBindings = new Set<string>();
-  for (const statement of ast.program.body) {
-    if (statement.type === "FunctionDeclaration") {
-      const functionName = readExportedName((statement as { id?: unknown }).id);
-      if (functionName != null && hasWorkerActionFunctionDirective(statement)) {
-        directiveBindings.add(functionName);
-      }
-      continue;
-    }
-
-    if (statement.type !== "VariableDeclaration") {
-      continue;
-    }
-
-    const declarations =
-      (statement as { declarations?: Array<{ id?: unknown; init?: unknown }> }).declarations ?? [];
-    for (const declarator of declarations) {
-      if (!hasWorkerActionFunctionDirective(declarator.init)) {
-        continue;
-      }
-      const names = new Set<string>();
-      pushBindingNames(names, declarator.id);
-      for (const name of names) {
-        directiveBindings.add(name);
-      }
-    }
-  }
-  return directiveBindings;
-}
-
 function collectRuntimeExports(
   ast: ParsedFile,
   id: string,
@@ -423,7 +536,9 @@ function collectRuntimeExports(
   const named = new Set<string>();
   const actionExports = new Set<string>();
   const componentExports = new Set<string>();
-  const localWorkerDirectiveBindings = collectLocalWorkerDirectiveBindings(ast);
+  const workerDirectiveInfo = collectTopLevelWorkerDirectiveInfo(ast, {
+    experimentalComponentLevelDirectives,
+  });
   let hasDefault = false;
 
   for (const statement of ast.program.body) {
@@ -442,13 +557,11 @@ function collectRuntimeExports(
         hasDefault = true;
         if (hasWorkerActionFunctionDirective(statement.declaration)) {
           const localName = readExportedName((declaration as { id?: unknown }).id);
-          addWorkerDirectiveExport(
-            actionExports,
-            componentExports,
-            "default",
-            localName,
-            experimentalComponentLevelDirectives,
-          );
+          if (localName != null && workerDirectiveInfo.componentBindings.has(localName)) {
+            componentExports.add("default");
+          } else {
+            actionExports.add("default");
+          }
         }
       }
       continue;
@@ -486,13 +599,11 @@ function collectRuntimeExports(
               declaration.type === "FunctionDeclaration" &&
               hasWorkerActionFunctionDirective(declaration)
             ) {
-              addWorkerDirectiveExport(
-                actionExports,
-                componentExports,
-                declarationName,
-                declarationName,
-                experimentalComponentLevelDirectives,
-              );
+              if (workerDirectiveInfo.componentBindings.has(declarationName)) {
+                componentExports.add(declarationName);
+              } else {
+                actionExports.add(declarationName);
+              }
             }
           }
           break;
@@ -506,14 +617,12 @@ function collectRuntimeExports(
             for (const name of names) {
               assertNamedExportIdentifier(name, id);
               named.add(name);
-              if (localWorkerDirectiveBindings.has(name)) {
-                addWorkerDirectiveExport(
-                  actionExports,
-                  componentExports,
-                  name,
-                  name,
-                  experimentalComponentLevelDirectives,
-                );
+              if (workerDirectiveInfo.allBindings.has(name)) {
+                if (workerDirectiveInfo.componentBindings.has(name)) {
+                  componentExports.add(name);
+                } else {
+                  actionExports.add(name);
+                }
               }
             }
           }
@@ -537,14 +646,12 @@ function collectRuntimeExports(
       if (exported === "default") {
         hasDefault = true;
         const localName = readExportedName((specifier as { local?: unknown }).local);
-        if (localName != null && localWorkerDirectiveBindings.has(localName)) {
-          addWorkerDirectiveExport(
-            actionExports,
-            componentExports,
-            "default",
-            localName,
-            experimentalComponentLevelDirectives,
-          );
+        if (localName != null && workerDirectiveInfo.allBindings.has(localName)) {
+          if (workerDirectiveInfo.componentBindings.has(localName)) {
+            componentExports.add("default");
+          } else {
+            actionExports.add("default");
+          }
         }
         continue;
       }
@@ -552,14 +659,12 @@ function collectRuntimeExports(
       assertNamedExportIdentifier(exported, id);
       named.add(exported);
       const localName = readExportedName((specifier as { local?: unknown }).local);
-      if (localName != null && localWorkerDirectiveBindings.has(localName)) {
-        addWorkerDirectiveExport(
-          actionExports,
-          componentExports,
-          exported,
-          localName,
-          experimentalComponentLevelDirectives,
-        );
+      if (localName != null && workerDirectiveInfo.allBindings.has(localName)) {
+        if (workerDirectiveInfo.componentBindings.has(localName)) {
+          componentExports.add(exported);
+        } else {
+          actionExports.add(exported);
+        }
       }
     }
   }
@@ -570,6 +675,334 @@ function collectRuntimeExports(
     actionExports: [...actionExports],
     componentExports: [...componentExports],
   };
+}
+
+function collectTopLevelWorkerDirectiveInfo(
+  ast: ParsedFile,
+  options: { experimentalComponentLevelDirectives?: boolean } = {},
+): { allBindings: Set<string>; componentBindings: Set<string> } {
+  const experimentalComponentLevelDirectives =
+    options.experimentalComponentLevelDirectives === true;
+  const allBindings = new Set<string>();
+  const componentBindings = new Set<string>();
+
+  for (const statement of ast.program.body) {
+    const maybeFunctionDeclaration =
+      statement.type === "ExportNamedDeclaration"
+        ? (statement as { declaration?: ParsedNode }).declaration
+        : statement;
+
+    if (maybeFunctionDeclaration?.type === "FunctionDeclaration") {
+      const localName = readExportedName((maybeFunctionDeclaration as { id?: unknown }).id);
+      if (localName == null || !hasWorkerActionFunctionDirective(maybeFunctionDeclaration)) {
+        continue;
+      }
+      allBindings.add(localName);
+      if (
+        isTopLevelWorkerComponentFunction(
+          maybeFunctionDeclaration,
+          localName,
+          experimentalComponentLevelDirectives,
+        )
+      ) {
+        componentBindings.add(localName);
+      }
+      continue;
+    }
+
+    const maybeVariableDeclaration =
+      statement.type === "ExportNamedDeclaration"
+        ? (statement as { declaration?: ParsedNode }).declaration
+        : statement;
+    if (maybeVariableDeclaration?.type !== "VariableDeclaration") {
+      continue;
+    }
+
+    const declarations =
+      (maybeVariableDeclaration as { declarations?: Array<{ id?: unknown; init?: unknown }> })
+        .declarations ?? [];
+
+    for (const declarator of declarations) {
+      if (!hasWorkerActionFunctionDirective(declarator.init)) {
+        continue;
+      }
+      const names = new Set<string>();
+      pushBindingNames(names, declarator.id);
+      for (const name of names) {
+        allBindings.add(name);
+        if (
+          isTopLevelWorkerComponentFunction(
+            declarator.init,
+            name,
+            experimentalComponentLevelDirectives,
+          )
+        ) {
+          componentBindings.add(name);
+        }
+      }
+    }
+  }
+
+  return { allBindings, componentBindings };
+}
+
+function discoverWorkerComponents(
+  ast: ParsedFile,
+  source: string,
+  moduleId: string,
+  options: { experimentalComponentLevelDirectives?: boolean } = {},
+): DiscoveredWorkerComponent[] {
+  const experimentalComponentLevelDirectives =
+    options.experimentalComponentLevelDirectives === true;
+  if (!experimentalComponentLevelDirectives) {
+    return [];
+  }
+
+  const discovered: DiscoveredWorkerComponent[] = [];
+  const localToExportNames = new Map<string, string>();
+
+  const pushDiscovered = (entry: Omit<DiscoveredWorkerComponent, "componentId" | "exportName">) => {
+    discovered.push({
+      ...entry,
+      exportName: null,
+      componentId: "",
+    });
+  };
+
+  for (const statement of ast.program.body) {
+    if (statement.type === "ExportNamedDeclaration") {
+      const exportDeclaration = statement as {
+        declaration?: ParsedNode;
+        specifiers?: Array<{ local?: unknown; exported?: unknown; exportKind?: string }>;
+      };
+
+      if (exportDeclaration.declaration != null) {
+        const declaration = exportDeclaration.declaration;
+        if (declaration.type === "FunctionDeclaration") {
+          const localName = readExportedName((declaration as { id?: unknown }).id);
+          if (
+            localName != null &&
+            isTopLevelWorkerComponentFunction(
+              declaration,
+              localName,
+              experimentalComponentLevelDirectives,
+            )
+          ) {
+            const declarationRange = getNodeRange(statement);
+            const functionRange = getNodeRange(declaration);
+            if (declarationRange != null && functionRange != null) {
+              pushDiscovered({
+                localName,
+                declarationType: "function-declaration",
+                sourceStart: functionRange.start,
+                sourceEnd: functionRange.end,
+                replacementKind: "declaration",
+                replacementStart: declarationRange.start,
+                replacementEnd: declarationRange.end,
+              });
+              localToExportNames.set(localName, localName);
+            }
+          }
+        } else if (declaration.type === "VariableDeclaration") {
+          const declarations =
+            (declaration as { declarations?: Array<{ id?: unknown; init?: unknown }> })
+              .declarations ?? [];
+          for (const declarator of declarations) {
+            const localName = readExportedName(declarator.id);
+            if (localName == null) {
+              continue;
+            }
+
+            if (
+              isTopLevelWorkerComponentFunction(
+                declarator.init,
+                localName,
+                experimentalComponentLevelDirectives,
+              )
+            ) {
+              const initRange = getNodeRange(declarator.init);
+              if (initRange != null) {
+                pushDiscovered({
+                  localName,
+                  declarationType: "variable-function",
+                  sourceStart: initRange.start,
+                  sourceEnd: initRange.end,
+                  replacementKind: "initializer",
+                  replacementStart: initRange.start,
+                  replacementEnd: initRange.end,
+                });
+                localToExportNames.set(localName, localName);
+              }
+              continue;
+            }
+
+            if (isRscCallExpression(declarator.init)) {
+              const args = (declarator.init as { arguments?: unknown[] }).arguments ?? [];
+              const firstArg = args[0];
+              if (
+                isTopLevelWorkerComponentFunction(
+                  firstArg,
+                  localName,
+                  experimentalComponentLevelDirectives,
+                )
+              ) {
+                const argRange = getNodeRange(firstArg);
+                if (argRange != null) {
+                  pushDiscovered({
+                    localName,
+                    declarationType: "rsc-call",
+                    sourceStart: argRange.start,
+                    sourceEnd: argRange.end,
+                    replacementKind: "rsc-arg",
+                    replacementStart: argRange.start,
+                    replacementEnd: argRange.end,
+                  });
+                  localToExportNames.set(localName, localName);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      for (const specifier of exportDeclaration.specifiers ?? []) {
+        if (specifier.exportKind === "type") {
+          continue;
+        }
+        const localName = readExportedName(specifier.local);
+        const exportedName = readExportedName(specifier.exported);
+        if (localName == null || exportedName == null) {
+          continue;
+        }
+        localToExportNames.set(localName, exportedName);
+      }
+      continue;
+    }
+
+    if (statement.type === "ExportDefaultDeclaration") {
+      const declaration = (statement as { declaration?: ParsedNode }).declaration;
+      if (
+        declaration != null &&
+        isTopLevelWorkerComponentFunction(
+          declaration,
+          readExportedName((declaration as { id?: unknown }).id) ?? "default",
+          experimentalComponentLevelDirectives,
+        )
+      ) {
+        const declarationRange = getNodeRange(statement);
+        const functionRange = getNodeRange(declaration);
+        if (declarationRange != null && functionRange != null) {
+          const localName =
+            readExportedName((declaration as { id?: unknown }).id) ?? "__rscPrismDefaultWorker";
+          pushDiscovered({
+            localName,
+            declarationType: "function-declaration",
+            sourceStart: functionRange.start,
+            sourceEnd: functionRange.end,
+            replacementKind: "declaration",
+            replacementStart: declarationRange.start,
+            replacementEnd: declarationRange.end,
+          });
+          localToExportNames.set(localName, "default");
+        }
+      }
+      continue;
+    }
+
+    if (statement.type === "FunctionDeclaration") {
+      const localName = readExportedName((statement as { id?: unknown }).id);
+      if (
+        localName != null &&
+        isTopLevelWorkerComponentFunction(
+          statement,
+          localName,
+          experimentalComponentLevelDirectives,
+        )
+      ) {
+        const declarationRange = getNodeRange(statement);
+        if (declarationRange != null) {
+          pushDiscovered({
+            localName,
+            declarationType: "function-declaration",
+            sourceStart: declarationRange.start,
+            sourceEnd: declarationRange.end,
+            replacementKind: "declaration",
+            replacementStart: declarationRange.start,
+            replacementEnd: declarationRange.end,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (statement.type !== "VariableDeclaration") {
+      continue;
+    }
+
+    const declarations =
+      (statement as { declarations?: Array<{ id?: unknown; init?: unknown }> }).declarations ?? [];
+    for (const declarator of declarations) {
+      const localName = readExportedName(declarator.id);
+      if (localName == null) {
+        continue;
+      }
+
+      if (
+        isTopLevelWorkerComponentFunction(
+          declarator.init,
+          localName,
+          experimentalComponentLevelDirectives,
+        )
+      ) {
+        const initRange = getNodeRange(declarator.init);
+        if (initRange != null) {
+          pushDiscovered({
+            localName,
+            declarationType: "variable-function",
+            sourceStart: initRange.start,
+            sourceEnd: initRange.end,
+            replacementKind: "initializer",
+            replacementStart: initRange.start,
+            replacementEnd: initRange.end,
+          });
+        }
+        continue;
+      }
+
+      if (isRscCallExpression(declarator.init)) {
+        const args = (declarator.init as { arguments?: unknown[] }).arguments ?? [];
+        const firstArg = args[0];
+        if (
+          isTopLevelWorkerComponentFunction(
+            firstArg,
+            localName,
+            experimentalComponentLevelDirectives,
+          )
+        ) {
+          const argRange = getNodeRange(firstArg);
+          if (argRange != null) {
+            pushDiscovered({
+              localName,
+              declarationType: "rsc-call",
+              sourceStart: argRange.start,
+              sourceEnd: argRange.end,
+              replacementKind: "rsc-arg",
+              replacementStart: argRange.start,
+              replacementEnd: argRange.end,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  for (const entry of discovered) {
+    entry.exportName = localToExportNames.get(entry.localName) ?? null;
+    const exportSuffix = entry.exportName ?? `@local:${entry.localName}`;
+    entry.componentId = `${moduleId}#${exportSuffix}`;
+  }
+
+  return discovered.filter((entry) => entry.sourceEnd > entry.sourceStart);
 }
 
 function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleExports): string {
@@ -606,6 +1039,14 @@ interface ParsedDirectiveModule {
   exportsInfo?: ParsedModuleExports;
   hasWorkerActionExports?: boolean;
   hasWorkerComponentExports?: boolean;
+  hasLocalWorkerComponents?: boolean;
+  workerComponents?: DiscoveredWorkerComponent[];
+}
+
+interface TextReplacement {
+  start: number;
+  end: number;
+  text: string;
 }
 
 function resolveDirectiveModuleType(
@@ -639,6 +1080,8 @@ function buildMainWorkerReferenceModuleCode(
 ): string {
   const lines: string[] = [];
   const actionExports = new Set(exportsInfo.actionExports);
+  lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
+  lines.push("");
   lines.push('const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");');
   lines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
@@ -648,7 +1091,7 @@ function buildMainWorkerReferenceModuleCode(
     'const __rscPrismCreateWorkerRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...)."); }; ref.$$typeof = __rscPrismWorkerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$moduleId = __rscPrismModuleId; ref.$$name = name; return ref; };',
   );
   lines.push(
-    'const __rscPrismCreateActionRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker action references cannot execute on the main thread directly. Use callAction(actionRef, args)."); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };',
+    'const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };',
   );
   lines.push("");
 
@@ -708,10 +1151,12 @@ function buildMainWorkerActionReferenceModuleCode(
       `[rsc-prism] Modules that export function-level "use worker" actions for main-thread imports must only export actions. Non-action exports in "${moduleId}": ${nonActionExports.join(", ")}.`,
     );
   }
+  lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
+  lines.push("");
   lines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push(
-    'const __rscPrismCreateActionRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker action references cannot execute on the main thread directly. Use callAction(actionRef, args)."); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };',
+    'const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };',
   );
   lines.push("");
 
@@ -746,6 +1191,7 @@ function buildMainWorkerDirectiveReferenceModuleCode(
   const lines: string[] = [];
   const actionExports = new Set(exportsInfo.actionExports);
   const componentExports = new Set(exportsInfo.componentExports);
+  lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
   lines.push(`import * as __rscPrismSourceModule from ${JSON.stringify(sourceImportPath)};`);
   lines.push("");
   lines.push('const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");');
@@ -757,7 +1203,7 @@ function buildMainWorkerDirectiveReferenceModuleCode(
     'const __rscPrismCreateWorkerRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...)."); }; ref.$$typeof = __rscPrismWorkerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$moduleId = __rscPrismModuleId; ref.$$name = name; return ref; };',
   );
   lines.push(
-    'const __rscPrismCreateActionRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker action references cannot execute on the main thread directly. Use callAction(actionRef, args)."); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };',
+    'const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };',
   );
   lines.push("");
 
@@ -819,6 +1265,7 @@ async function collectMainThreadModules(
   filter: (id: string) => boolean,
   directives: Set<string>,
   mapModuleId: (absolutePath: string) => string,
+  additionalModulePaths: Set<string> = new Set<string>(),
 ): Promise<MainThreadModuleEntry[]> {
   const collected: MainThreadModuleEntry[] = [];
 
@@ -840,11 +1287,11 @@ async function collectMainThreadModules(
       }
 
       const code = await readFile(absolutePath, "utf8");
-      if (!sourceContainsAnyDirectiveLiteral(code, directives)) {
-        continue;
-      }
       const ast = parseModule(code, absolutePath);
-      if (!hasDirective(ast, directives)) {
+      const shouldIncludeByDirective =
+        sourceContainsAnyDirectiveLiteral(code, directives) && hasDirective(ast, directives);
+      const shouldIncludeByInference = additionalModulePaths.has(normalizePath(absolutePath));
+      if (!shouldIncludeByDirective && !shouldIncludeByInference) {
         continue;
       }
 
@@ -907,7 +1354,10 @@ function buildMainVirtualModuleCode(modules: MainThreadModuleEntry[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-function buildWorkerComponentRegistryCode(modules: WorkerRuntimeModuleEntry[]): string {
+function buildWorkerComponentRegistryCode(
+  modules: WorkerRuntimeModuleEntry[],
+  componentBindings: WorkerRuntimeComponentBinding[],
+): string {
   const lines: string[] = [];
   lines.push("const componentRegistry = new Map();");
   lines.push("const actionRegistry = new Map();");
@@ -945,6 +1395,16 @@ function buildWorkerComponentRegistryCode(modules: WorkerRuntimeModuleEntry[]): 
         );
       }
     }
+  });
+  lines.push("");
+  componentBindings.forEach((binding, index) => {
+    const importName = `__rscPrismInlineComponent${index}`;
+    lines.push(`import * as ${importName} from ${JSON.stringify(binding.importPath)};`);
+    const accessExpression =
+      binding.exportName === "default"
+        ? `${importName}.default`
+        : `${importName}.${binding.exportName}`;
+    lines.push(`componentRegistry.set(${JSON.stringify(binding.componentId)}, ${accessExpression});`);
   });
   lines.push("");
   lines.push("export function resolveWorkerComponent(componentId) {");
@@ -1254,6 +1714,38 @@ async function pickWorkerServeFile(outDir: string): Promise<string> {
   return withSize[0]!.filePath;
 }
 
+function createDeterministicHash(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash +=
+      (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function toValidIdentifier(value: string): string {
+  const sanitized = value.replace(/[^a-zA-Z0-9_$]/g, "_");
+  if (IDENTIFIER_PATTERN.test(sanitized)) {
+    return sanitized;
+  }
+  return `_${sanitized}`;
+}
+
+function findIdentifierUsage(source: string, identifier: string): {
+  used: boolean;
+  called: boolean;
+  usedInJSX: boolean;
+} {
+  const escaped = escapeRegExp(identifier);
+  const used = new RegExp(`\\b${escaped}\\b`).test(source);
+  const called = new RegExp(`\\b${escaped}\\s*\\(`).test(source);
+  const usedInJSX =
+    new RegExp(`<\\s*${escaped}(\\s|/|>)`).test(source) ||
+    new RegExp(`</\\s*${escaped}\\s*>`).test(source);
+  return { used, called, usedInJSX };
+}
+
 function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   const legacyWorkerRuntimeEntry = (options.workerRuntime as { entry?: unknown } | undefined)
     ?.entry;
@@ -1297,6 +1789,8 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   let generatedWorkerServeSourceDir: string | null = null;
   let generatedWorkerEntryPath: string | null = null;
   let generatedWorkerRegistryPath: string | null = null;
+  let generatedWorkerInlineComponentsDir: string | null = null;
+  let inferredClientModulePaths = new Set<string>();
   const workerActionDirectives = new Set([...workerDirectives, WORKER_ACTION_DIRECTIVE]);
 
   const mapModuleId = (absolutePath: string): string => {
@@ -1342,6 +1836,134 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     return path.join(config.root, absolutePath.slice(1));
   };
 
+  const pathExists = async (absolutePath: string): Promise<boolean> => {
+    try {
+      await access(absolutePath);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const resolveImportAbsolutePath = async (
+    importerAbsolutePath: string,
+    sourceSpecifier: string,
+  ): Promise<string | null> => {
+    if (config == null) {
+      return null;
+    }
+
+    const resolveFromBase = async (basePath: string): Promise<string | null> => {
+      const candidates: string[] = [basePath];
+      for (const extension of SUPPORTED_EXTENSIONS) {
+        candidates.push(`${basePath}${extension}`);
+      }
+      for (const extension of SUPPORTED_EXTENSIONS) {
+        candidates.push(path.join(basePath, `index${extension}`));
+      }
+
+      for (const candidate of candidates) {
+        if (await pathExists(candidate)) {
+          return normalizePath(candidate);
+        }
+      }
+      return null;
+    };
+
+    if (sourceSpecifier.startsWith(".")) {
+      const basePath = path.resolve(path.dirname(importerAbsolutePath), sourceSpecifier);
+      return resolveFromBase(basePath);
+    }
+
+    if (sourceSpecifier.startsWith("/")) {
+      const basePath = path.resolve(config.root, sourceSpecifier.slice(1));
+      return resolveFromBase(basePath);
+    }
+
+    return null;
+  };
+
+  const createMainWorkerReferenceExpression = (
+    componentId: string,
+    moduleId: string,
+    localName: string,
+  ): string => {
+    return `__rscPrismCreateLocalWorkerRef(${JSON.stringify(componentId)}, ${JSON.stringify(moduleId)}, ${JSON.stringify(localName)})`;
+  };
+
+  const buildLocalWorkerComponentTransform = (
+    code: string,
+    moduleId: string,
+    workerComponents: DiscoveredWorkerComponent[],
+  ): string | null => {
+    if (workerComponents.length === 0) {
+      return null;
+    }
+
+    const replacements: TextReplacement[] = [];
+
+    for (const component of workerComponents) {
+      const refExpression = createMainWorkerReferenceExpression(
+        component.componentId,
+        moduleId,
+        component.localName,
+      );
+
+      if (component.declarationType === "rsc-call") {
+        replacements.push({
+          start: component.replacementStart,
+          end: component.replacementEnd,
+          text: refExpression,
+        });
+        continue;
+      }
+
+      if (component.replacementKind === "initializer") {
+        replacements.push({
+          start: component.replacementStart,
+          end: component.replacementEnd,
+          text: refExpression,
+        });
+        continue;
+      }
+
+      const declarationCode =
+        component.exportName === "default"
+          ? `const __rscPrismDefaultWorkerRef = ${refExpression};\nexport default __rscPrismDefaultWorkerRef;`
+          : component.exportName != null
+            ? `export const ${component.localName} = ${refExpression};`
+            : `const ${component.localName} = ${refExpression};`;
+
+      replacements.push({
+        start: component.replacementStart,
+        end: component.replacementEnd,
+        text: declarationCode,
+      });
+    }
+
+    if (replacements.length === 0) {
+      return null;
+    }
+
+    const transformed = applyTextReplacements(code, replacements);
+    const helper = [
+      'const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");',
+      'const __rscPrismCreateLocalWorkerRef = (componentId, moduleId, name) => {',
+      '  const ref = function() {',
+      '    throw new Error("[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...).");',
+      "  };",
+      "  ref.$$typeof = __rscPrismWorkerReferenceSymbol;",
+      "  ref.$$id = componentId;",
+      "  ref.$$moduleId = moduleId;",
+      "  ref.$$name = name;",
+      "  return ref;",
+      "};",
+      "",
+    ].join("\n");
+
+    return `${helper}${transformed}`;
+  };
+
   const parseDirectiveModule = async (absolutePath: string): Promise<ParsedDirectiveModule> => {
     const cached = parsedDirectiveModules.get(absolutePath);
     if (cached != null) {
@@ -1363,17 +1985,26 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     }
     const ast = parseModule(source, absolutePath);
     const directiveType = resolveDirectiveModuleType(ast, mainDirectives, workerDirectives);
+    const moduleId = mapModuleId(absolutePath);
+    const workerComponents = discoverWorkerComponents(ast, source, moduleId, {
+      experimentalComponentLevelDirectives,
+    });
     const exportsInfo = collectRuntimeExports(ast, absolutePath, {
       experimentalComponentLevelDirectives,
     });
     const hasWorkerActionExports = exportsInfo.actionExports.length > 0;
     const hasWorkerComponentExports = exportsInfo.componentExports.length > 0;
+    const hasLocalWorkerComponents =
+      workerComponents.filter((component) => component.exportName == null).length > 0 ||
+      workerComponents.some((component) => component.declarationType === "rsc-call");
     if (directiveType == null) {
       const result: ParsedDirectiveModule = {
         isDirectiveModule: false,
         exportsInfo,
         hasWorkerActionExports,
         hasWorkerComponentExports,
+        hasLocalWorkerComponents,
+        workerComponents,
       };
       parsedDirectiveModules.set(absolutePath, result);
       return result;
@@ -1385,26 +2016,333 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       exportsInfo,
       hasWorkerActionExports,
       hasWorkerComponentExports,
+      hasLocalWorkerComponents,
+      workerComponents,
     };
     parsedDirectiveModules.set(absolutePath, result);
     return result;
+  };
+
+  interface InlineWorkerComponentSource {
+    componentId: string;
+    fileName: string;
+    sourceCode: string;
+  }
+
+  interface WorkerRuntimeCollectionResult {
+    modules: WorkerRuntimeModuleEntry[];
+    componentBindings: WorkerRuntimeComponentBinding[];
+    inlineSources: InlineWorkerComponentSource[];
+    inferredClientModules: Set<string>;
+  }
+
+  interface ImportBindingInfo {
+    localName: string;
+    importedName: string;
+    sourceSpecifier: string;
+    kind: "default" | "named" | "namespace";
+    isTypeOnly: boolean;
+    resolvedAbsolutePath: string | null;
+  }
+
+  const buildInlineWorkerComponentSource = async (
+    absolutePath: string,
+    source: string,
+    ast: ParsedFile,
+    rootComponent: DiscoveredWorkerComponent,
+    allComponents: DiscoveredWorkerComponent[],
+  ): Promise<{ sourceCode: string; inferredClientModules: Set<string> }> => {
+    const sourceByComponentName = new Map<string, DiscoveredWorkerComponent>();
+    for (const component of allComponents) {
+      if (component.localName === rootComponent.localName) {
+        continue;
+      }
+      sourceByComponentName.set(component.localName, component);
+    }
+
+    const includedComponents = new Map<string, DiscoveredWorkerComponent>();
+    const componentQueue: string[] = [rootComponent.localName];
+    const componentSourceLookup = (component: DiscoveredWorkerComponent): string =>
+      source.slice(component.sourceStart, component.sourceEnd);
+
+    while (componentQueue.length > 0) {
+      const currentName = componentQueue.shift()!;
+      const currentComponent =
+        currentName === rootComponent.localName ? rootComponent : sourceByComponentName.get(currentName);
+      if (currentComponent == null) {
+        continue;
+      }
+      const currentSource = componentSourceLookup(currentComponent);
+      for (const dependency of allComponents) {
+        if (dependency.localName === currentName) {
+          continue;
+        }
+        const usage = findIdentifierUsage(currentSource, dependency.localName);
+        if (!usage.used) {
+          continue;
+        }
+        if (!includedComponents.has(dependency.localName)) {
+          includedComponents.set(dependency.localName, dependency);
+          componentQueue.push(dependency.localName);
+        }
+      }
+    }
+
+    const localComponentSources: string[] = [];
+    const sortedDependencies = [...includedComponents.values()].sort(
+      (left, right) => left.sourceStart - right.sourceStart,
+    );
+    for (const dependency of sortedDependencies) {
+      if (dependency.declarationType === "function-declaration") {
+        localComponentSources.push(source.slice(dependency.sourceStart, dependency.sourceEnd));
+      } else {
+        localComponentSources.push(
+          `const ${dependency.localName} = ${source.slice(dependency.sourceStart, dependency.sourceEnd)};`,
+        );
+      }
+    }
+
+    let rootDeclarationSource = "";
+    if (rootComponent.declarationType === "function-declaration") {
+      rootDeclarationSource = source.slice(rootComponent.sourceStart, rootComponent.sourceEnd);
+    } else if (rootComponent.declarationType === "variable-function") {
+      rootDeclarationSource = `const ${rootComponent.localName} = ${source.slice(
+        rootComponent.sourceStart,
+        rootComponent.sourceEnd,
+      )};`;
+    } else {
+      rootDeclarationSource = `const ${rootComponent.localName} = ${source.slice(
+        rootComponent.sourceStart,
+        rootComponent.sourceEnd,
+      )};`;
+    }
+
+    const aggregateComponentSource = `${localComponentSources.join("\n")}\n${rootDeclarationSource}`;
+    const importBindings: ImportBindingInfo[] = [];
+    for (const statement of ast.program.body) {
+      if (statement.type !== "ImportDeclaration") {
+        continue;
+      }
+      const importDeclaration = statement as {
+        source?: { value?: string };
+        importKind?: string;
+        specifiers?: Array<{
+          type?: string;
+          local?: unknown;
+          imported?: unknown;
+          importKind?: string;
+        }>;
+      };
+      const sourceSpecifier = importDeclaration.source?.value;
+      if (typeof sourceSpecifier !== "string") {
+        continue;
+      }
+
+      const declarationTypeOnly = importDeclaration.importKind === "type";
+      const resolvedAbsolutePath = await resolveImportAbsolutePath(absolutePath, sourceSpecifier);
+      for (const specifier of importDeclaration.specifiers ?? []) {
+        const localName = readExportedName(specifier.local);
+        if (localName == null) {
+          continue;
+        }
+        if (specifier.type === "ImportSpecifier") {
+          const importedName = readExportedName(specifier.imported) ?? localName;
+          importBindings.push({
+            localName,
+            importedName,
+            sourceSpecifier,
+            kind: "named",
+            isTypeOnly: declarationTypeOnly || specifier.importKind === "type",
+            resolvedAbsolutePath,
+          });
+        } else if (specifier.type === "ImportDefaultSpecifier") {
+          importBindings.push({
+            localName,
+            importedName: "default",
+            sourceSpecifier,
+            kind: "default",
+            isTypeOnly: declarationTypeOnly,
+            resolvedAbsolutePath,
+          });
+        } else if (specifier.type === "ImportNamespaceSpecifier") {
+          importBindings.push({
+            localName,
+            importedName: "*",
+            sourceSpecifier,
+            kind: "namespace",
+            isTypeOnly: declarationTypeOnly,
+            resolvedAbsolutePath,
+          });
+        }
+      }
+    }
+
+    const inferredClientModules = new Set<string>();
+    const realImportsBySource = new Map<string, string[]>();
+    const clientRefLines: string[] = [];
+    const actionRefLines: string[] = [];
+
+    for (const importBinding of importBindings) {
+      if (importBinding.isTypeOnly) {
+        continue;
+      }
+      const usage = findIdentifierUsage(aggregateComponentSource, importBinding.localName);
+      if (!usage.used) {
+        continue;
+      }
+
+      let isWorkerActionImport = false;
+      if (
+        importBinding.resolvedAbsolutePath != null &&
+        importBinding.importedName !== "*" &&
+        !usage.called
+      ) {
+        try {
+          const importedDirectiveModule = await parseDirectiveModule(importBinding.resolvedAbsolutePath);
+          if (
+            importedDirectiveModule.exportsInfo != null &&
+            importedDirectiveModule.exportsInfo.actionExports.includes(importBinding.importedName)
+          ) {
+            isWorkerActionImport = true;
+          }
+        } catch {
+          // fall back to non-action import classification
+        }
+      }
+
+      if (usage.usedInJSX && importBinding.importedName !== "*") {
+        const importedModuleId =
+          importBinding.resolvedAbsolutePath != null
+            ? mapModuleId(importBinding.resolvedAbsolutePath)
+            : importBinding.sourceSpecifier;
+        if (importBinding.resolvedAbsolutePath != null) {
+          inferredClientModules.add(normalizePath(importBinding.resolvedAbsolutePath));
+        }
+        clientRefLines.push(
+          `const ${importBinding.localName} = __rscPrismCreateClientRef(${JSON.stringify(
+            `${importedModuleId}#${importBinding.importedName}`,
+          )});`,
+        );
+        continue;
+      }
+
+      if (isWorkerActionImport && importBinding.importedName !== "*") {
+        const importedModuleId =
+          importBinding.resolvedAbsolutePath != null
+            ? mapModuleId(importBinding.resolvedAbsolutePath)
+            : importBinding.sourceSpecifier;
+        actionRefLines.push(
+          `const ${importBinding.localName} = __rscPrismCreateActionRef(${JSON.stringify(
+            `${importedModuleId}#${importBinding.importedName}`,
+          )});`,
+        );
+        continue;
+      }
+
+      const importSource =
+        importBinding.resolvedAbsolutePath ?? importBinding.sourceSpecifier;
+      const importFragments = realImportsBySource.get(importSource) ?? [];
+      if (importBinding.kind === "default") {
+        importFragments.push(importBinding.localName);
+      } else if (importBinding.kind === "named") {
+        const importedName = importBinding.importedName;
+        if (importedName === importBinding.localName) {
+          importFragments.push(`{ ${importedName} }`);
+        } else {
+          importFragments.push(`{ ${importedName} as ${importBinding.localName} }`);
+        }
+      } else {
+        importFragments.push(`* as ${importBinding.localName}`);
+      }
+      realImportsBySource.set(importSource, importFragments);
+    }
+
+    const importLines: string[] = [];
+    for (const [sourceSpecifier, fragments] of realImportsBySource) {
+      const defaultImport = fragments.find(
+        (fragment) => !fragment.startsWith("{") && !fragment.startsWith("* as "),
+      );
+      const namespaceImport = fragments.find((fragment) => fragment.startsWith("* as "));
+      const namedImports = fragments
+        .filter((fragment) => fragment.startsWith("{"))
+        .map((fragment) => fragment.slice(1, -1).trim())
+        .filter((fragment) => fragment.length > 0);
+
+      const segments: string[] = [];
+      if (defaultImport != null) {
+        segments.push(defaultImport);
+      }
+      if (namespaceImport != null) {
+        segments.push(namespaceImport);
+      }
+      if (namedImports.length > 0) {
+        segments.push(`{ ${dedupeItems(namedImports).join(", ")} }`);
+      }
+      if (segments.length > 0) {
+        importLines.push(`import ${segments.join(", ")} from ${JSON.stringify(sourceSpecifier)};`);
+      }
+    }
+
+    const helperLines: string[] = [];
+    if (clientRefLines.length > 0) {
+      helperLines.push('const __rscPrismClientReferenceSymbol = Symbol.for("react.client.reference");');
+      helperLines.push(
+        "const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id });",
+      );
+      helperLines.push("");
+    }
+    if (actionRefLines.length > 0) {
+      helperLines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
+      helperLines.push(
+        'const __rscPrismCreateActionRef = (id) => { const ref = function() { throw new Error("[rsc-prism] Worker action references cannot execute within worker component extraction directly."); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = id; ref.$$bound = null; return ref; };',
+      );
+      helperLines.push("");
+    }
+
+    const lines: string[] = [];
+    lines.push(...importLines);
+    if (importLines.length > 0) {
+      lines.push("");
+    }
+    lines.push(...helperLines);
+    lines.push(...clientRefLines);
+    lines.push(...actionRefLines);
+    if (clientRefLines.length > 0 || actionRefLines.length > 0) {
+      lines.push("");
+    }
+    lines.push(...localComponentSources);
+    if (localComponentSources.length > 0) {
+      lines.push("");
+    }
+    lines.push(rootDeclarationSource);
+    lines.push(`export { ${rootComponent.localName} as __rscPrismComponent };`);
+    lines.push("");
+
+    return {
+      sourceCode: `${lines.join("\n")}\n`,
+      inferredClientModules,
+    };
   };
 
   const isWorkerRuntimeRelevantModule = (parsed: ParsedDirectiveModule): boolean => {
     return (
       (parsed.isDirectiveModule && parsed.type === "worker") ||
       parsed.hasWorkerActionExports === true ||
-      parsed.hasWorkerComponentExports === true
+      parsed.hasWorkerComponentExports === true ||
+      parsed.hasLocalWorkerComponents === true
     );
   };
 
-  const collectWorkerModulesForRuntime = async (): Promise<WorkerRuntimeModuleEntry[]> => {
+  const collectWorkerModulesForRuntime = async (): Promise<WorkerRuntimeCollectionResult> => {
     if (config == null) {
       throw new Error("[rsc-prism] Vite config is not resolved yet.");
     }
     const root = config.root;
 
     const collected: WorkerRuntimeModuleEntry[] = [];
+    const componentBindings: WorkerRuntimeComponentBinding[] = [];
+    const inlineSources: InlineWorkerComponentSource[] = [];
+    const inferredClientModules = new Set<string>();
 
     async function visit(directory: string): Promise<void> {
       const entries = await readdir(directory, { withFileTypes: true });
@@ -1423,27 +2361,67 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           continue;
         }
 
+        const source = await readFile(absolutePath, "utf8");
         const parsed = await parseDirectiveModule(absolutePath);
         if (parsed.exportsInfo == null) {
           continue;
         }
         const includeAsWorkerModule = parsed.isDirectiveModule && parsed.type === "worker";
         const includeAsActionModule = parsed.hasWorkerActionExports === true;
-        const includeAsComponentDirectiveModule = parsed.hasWorkerComponentExports === true;
+        const includeAsComponentDirectiveModule =
+          parsed.hasWorkerComponentExports === true && parsed.isDirectiveModule && parsed.type === "worker";
         if (
           !includeAsWorkerModule &&
           !includeAsActionModule &&
-          !includeAsComponentDirectiveModule
+          !includeAsComponentDirectiveModule &&
+          !parsed.hasLocalWorkerComponents
         ) {
           continue;
         }
 
-        collected.push({
-          moduleId: mapModuleId(absolutePath),
-          importPath: normalizePath(absolutePath),
-          exportsInfo: parsed.exportsInfo,
-          isWorkerDirectiveModule: includeAsWorkerModule,
-        });
+        if (includeAsWorkerModule || includeAsActionModule || includeAsComponentDirectiveModule) {
+          collected.push({
+            moduleId: mapModuleId(absolutePath),
+            importPath: normalizePath(absolutePath),
+            exportsInfo: parsed.exportsInfo,
+            isWorkerDirectiveModule: includeAsWorkerModule,
+          });
+        }
+
+        const shouldExtractWorkerComponents =
+          !(parsed.isDirectiveModule && parsed.type === "worker");
+        const localWorkerComponents = shouldExtractWorkerComponents
+          ? parsed.workerComponents ?? []
+          : [];
+        if (localWorkerComponents.length === 0) {
+          continue;
+        }
+
+        const ast = parseModule(source, absolutePath);
+        for (const localComponent of localWorkerComponents) {
+          const inlineSource = await buildInlineWorkerComponentSource(
+            absolutePath,
+            source,
+            ast,
+            localComponent,
+            parsed.workerComponents ?? [],
+          );
+          const fileHash = createDeterministicHash(`${absolutePath}:${localComponent.componentId}`);
+          const fileName = `${toValidIdentifier(localComponent.localName)}-${fileHash}.tsx`;
+          inlineSources.push({
+            componentId: localComponent.componentId,
+            fileName,
+            sourceCode: inlineSource.sourceCode,
+          });
+          for (const inferredModule of inlineSource.inferredClientModules) {
+            inferredClientModules.add(inferredModule);
+          }
+          componentBindings.push({
+            componentId: localComponent.componentId,
+            importPath: normalizePath(path.resolve(root, ".vite", "rsc-prism-worker-runtime-src", "inline-components", fileName)),
+            exportName: "__rscPrismComponent",
+          });
+        }
       }
     }
 
@@ -1456,7 +2434,12 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       }
     }
 
-    return [...deduped.values()].sort((left, right) => left.moduleId.localeCompare(right.moduleId));
+    return {
+      modules: [...deduped.values()].sort((left, right) => left.moduleId.localeCompare(right.moduleId)),
+      componentBindings,
+      inlineSources,
+      inferredClientModules,
+    };
   };
 
   const ensureGeneratedWorkerSources = async (): Promise<{
@@ -1475,15 +2458,30 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     const sourceDir = path.resolve(config.root, ".vite", "rsc-prism-worker-runtime-src");
     const entryPath = path.resolve(sourceDir, "generated.worker.ts");
     const registryPath = path.resolve(sourceDir, "worker-component-registry.ts");
+    const inlineComponentsDir = path.resolve(sourceDir, "inline-components");
     await mkdir(sourceDir, { recursive: true });
+    await mkdir(inlineComponentsDir, { recursive: true });
 
-    const workerModules = await collectWorkerModulesForRuntime();
-    await writeFile(registryPath, buildWorkerComponentRegistryCode(workerModules), "utf8");
+    const workerRuntimeCollection = await collectWorkerModulesForRuntime();
+    for (const inlineSource of workerRuntimeCollection.inlineSources) {
+      const inlinePath = path.resolve(inlineComponentsDir, inlineSource.fileName);
+      await writeFile(inlinePath, inlineSource.sourceCode, "utf8");
+    }
+    await writeFile(
+      registryPath,
+      buildWorkerComponentRegistryCode(
+        workerRuntimeCollection.modules,
+        workerRuntimeCollection.componentBindings,
+      ),
+      "utf8",
+    );
     await writeFile(entryPath, buildGeneratedWorkerEntryCode(workerEndpoint), "utf8");
 
     generatedWorkerOutDir = outDir;
     generatedWorkerEntryPath = entryPath;
     generatedWorkerRegistryPath = registryPath;
+    generatedWorkerInlineComponentsDir = inlineComponentsDir;
+    inferredClientModulePaths = workerRuntimeCollection.inferredClientModules;
 
     return { entryPath, registryPath, outDir };
   };
@@ -1668,6 +2666,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
 
         if (
           workerRuntimeEnabled &&
+          config != null &&
           !html.includes(workerBootstrapVirtualId) &&
           !html.includes(workerBootstrapSrc)
         ) {
@@ -1826,11 +2825,20 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         throw new Error("[rsc-prism] Vite config is not resolved yet.");
       }
 
+      if (workerRuntimeEnabled && inferredClientModulePaths.size === 0) {
+        try {
+          await ensureGeneratedWorkerSources();
+        } catch {
+          // Fall through and generate the default manifest surface.
+        }
+      }
+
       const modules = await collectMainThreadModules(
         config.root,
         includeFilter,
         mainDirectives,
         mapModuleId,
+        inferredClientModulePaths,
       );
       return buildMainVirtualModuleCode(modules);
     },
@@ -1938,13 +2946,22 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       const projectFilePath = toProjectFilePath(absolutePath);
       const ast = parseModule(code, absolutePath);
       const directiveType = resolveDirectiveModuleType(ast, mainDirectives, workerDirectives);
+      const moduleId = mapModuleId(projectFilePath);
+      const workerComponents = discoverWorkerComponents(ast, code, moduleId, {
+        experimentalComponentLevelDirectives,
+      });
+      const hasLocalOnlyWorkerComponents = workerComponents.some(
+        (component) =>
+          component.exportName == null || component.declarationType === "rsc-call",
+      );
       if (options.mode === "worker" && directiveType !== "main") {
         return null;
       }
       if (
         options.mode === "main" &&
         directiveType !== "worker" &&
-        !hasWorkerActionDirectiveLiteral
+        !hasWorkerActionDirectiveLiteral &&
+        !hasLocalOnlyWorkerComponents
       ) {
         return null;
       }
@@ -1953,10 +2970,14 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       });
       const hasWorkerActionExports = exportsInfo.actionExports.length > 0;
       const hasWorkerComponentExports = exportsInfo.componentExports.length > 0;
-      if (directiveType == null && !hasWorkerActionExports && !hasWorkerComponentExports) {
+      if (
+        directiveType == null &&
+        !hasWorkerActionExports &&
+        !hasWorkerComponentExports &&
+        !hasLocalOnlyWorkerComponents
+      ) {
         return null;
       }
-      const moduleId = mapModuleId(projectFilePath);
       let transformedCode: string | null = null;
 
       if (options.mode === "worker" && directiveType === "main") {
@@ -1967,7 +2988,13 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         transformedCode = buildMainWorkerReferenceModuleCode(moduleId, exportsInfo);
       }
 
-      if (options.mode === "main" && directiveType == null && hasWorkerComponentExports) {
+      if (
+        options.mode === "main" &&
+        directiveType == null &&
+        hasLocalOnlyWorkerComponents
+      ) {
+        transformedCode = buildLocalWorkerComponentTransform(code, moduleId, workerComponents);
+      } else if (options.mode === "main" && directiveType == null && hasWorkerComponentExports) {
         transformedCode = buildMainWorkerDirectiveReferenceModuleCode(
           moduleId,
           exportsInfo,
@@ -2007,6 +3034,12 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       ) {
         return;
       }
+      if (
+        generatedWorkerInlineComponentsDir != null &&
+        normalizedFile.startsWith(normalizePath(generatedWorkerInlineComponentsDir))
+      ) {
+        return;
+      }
       if (!shouldProcessFile(normalizedFile)) {
         return;
       }
@@ -2034,6 +3067,7 @@ export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
     ...options,
     mode: "main",
     workerRuntime: {
+      ...(options.workerRuntime ?? {}),
       enabled: options.workerRuntime?.enabled ?? true,
       endpoint: options.workerRuntime?.endpoint ?? "/rsc/view",
       outDir: options.workerRuntime?.outDir ?? ".vite/rsc-prism-worker-runtime",
@@ -2042,7 +3076,9 @@ export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
   });
 }
 
-function rscPrismWorker(options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {}): Plugin {
+export function rscPrismWorker(
+  options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {},
+): Plugin {
   return createRscPrismPlugin({
     ...options,
     mode: "worker",

@@ -365,6 +365,7 @@ export interface StreamDecodeContext<Chunk = unknown> {
   readChunk: (chunk: Chunk) => unknown;
   createLazyChunkWrapper: (chunk: Chunk) => unknown;
   resolveClientReference: (id: string) => unknown;
+  callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
 }
 
 function decodeFromOutlinedEntries<Chunk>(
@@ -398,16 +399,45 @@ function decodeFormDataFromChunk<Chunk>(
 function decodeServerReferenceFromChunk<Chunk>(
   context: StreamDecodeContext<Chunk>,
   raw: string,
-): { $$typeof: symbol; $$id: string; $$bound: null } {
+): {
+  (...args: unknown[]): Promise<unknown>;
+  $$typeof: symbol;
+  $$id: string;
+  $$bound: null;
+} {
   const id = parseHexChunkId(raw.slice(2));
   const chunk = context.getChunk(id);
   const value = context.readChunk(chunk) as { id?: unknown } | null;
   const referenceId = value != null && typeof value.id === "string" ? value.id : "";
-  return {
-    $$typeof: SERVER_REFERENCE_SYMBOL,
-    $$id: referenceId,
-    $$bound: null,
+  return createServerReference(referenceId, context.callServer);
+}
+
+function createServerReference(
+  id: string,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
+): {
+  (...args: unknown[]): Promise<unknown>;
+  $$typeof: symbol;
+  $$id: string;
+  $$bound: null;
+} {
+  const reference = async (...args: unknown[]) => {
+    if (callServer == null) {
+      throw new Error(
+        `[rsc-prism] Missing callServer implementation for server action "${id}".`,
+      );
+    }
+    return callServer(id, args);
   };
+  const taggedReference = reference as typeof reference & {
+    $$typeof: symbol;
+    $$id: string;
+    $$bound: null;
+  };
+  taggedReference.$$typeof = SERVER_REFERENCE_SYMBOL;
+  taggedReference.$$id = id;
+  taggedReference.$$bound = null;
+  return taggedReference;
 }
 
 export function parseModelString<Chunk>(
@@ -813,11 +843,13 @@ export function decodeWireValue(
   value: unknown,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference?: (id: string) => unknown,
+  callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
 ): unknown {
   return decodeWireValueInternal(
     value,
     resolveClientReference,
     resolveRowReference,
+    callServer,
     new Set<string>(),
   );
 }
@@ -826,6 +858,7 @@ function decodeWireValueInternal(
   value: unknown,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): unknown {
   if (typeof value !== "object" || value == null) {
@@ -836,6 +869,7 @@ function decodeWireValueInternal(
       value,
       resolveClientReference,
       resolveRowReference,
+      callServer,
       visitingRowRefs,
     );
   }
@@ -848,6 +882,7 @@ function decodeWireValueInternal(
       tagged,
       resolveClientReference,
       resolveRowReference,
+      callServer,
       visitingRowRefs,
     );
   }
@@ -855,6 +890,7 @@ function decodeWireValueInternal(
     tagged,
     resolveClientReference,
     resolveRowReference,
+    callServer,
     visitingRowRefs,
   );
 }
@@ -863,6 +899,7 @@ function decodeWireArrayValue(
   value: unknown[],
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): unknown[] {
   const decoded: unknown[] = new Array(value.length);
@@ -871,6 +908,7 @@ function decodeWireArrayValue(
       value[i],
       resolveClientReference,
       resolveRowReference,
+      callServer,
       visitingRowRefs,
     );
   }
@@ -881,6 +919,7 @@ function decodeWirePlainObjectValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -891,6 +930,7 @@ function decodeWirePlainObjectValue(
       value[key],
       resolveClientReference,
       resolveRowReference,
+      callServer,
       visitingRowRefs,
     );
   }
@@ -901,6 +941,7 @@ function decodeWireRowReferenceValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): unknown {
   if (resolveRowReference == null) {
@@ -927,6 +968,7 @@ function decodeWireRowReferenceValue(
       rowValue,
       resolveClientReference,
       resolveRowReference,
+      callServer,
       visitingRowRefs,
     );
   } finally {
@@ -938,6 +980,7 @@ function decodeWireMapValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): Map<unknown, unknown> {
   const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
@@ -952,12 +995,14 @@ function decodeWireMapValue(
         tuple[0],
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       ),
       decodeWireValueInternal(
         tuple[1],
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       ),
     );
@@ -969,6 +1014,7 @@ function decodeWireSetValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): Set<unknown> {
   const items = (value.v as unknown[]) ?? EMPTY_ARRAY;
@@ -982,6 +1028,7 @@ function decodeWireSetValue(
         items[i],
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       ),
     );
@@ -993,6 +1040,7 @@ function decodeWireFormDataValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): FormData {
   const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
@@ -1008,6 +1056,7 @@ function decodeWireFormDataValue(
       item,
       resolveClientReference,
       resolveRowReference,
+      callServer,
       visitingRowRefs,
     );
     form.append(
@@ -1022,6 +1071,7 @@ function decodeWireElementValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): {
   $$typeof: symbol;
@@ -1035,6 +1085,7 @@ function decodeWireElementValue(
     value.props,
     resolveClientReference,
     resolveRowReference,
+    callServer,
     visitingRowRefs,
   ) as Record<string, unknown>;
   const key = value.key as string | null;
@@ -1052,6 +1103,7 @@ function decodeTaggedWireValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
+  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): unknown {
   switch (tag) {
@@ -1060,6 +1112,7 @@ function decodeTaggedWireValue(
         value,
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       );
     case "undef":
@@ -1075,6 +1128,7 @@ function decodeTaggedWireValue(
         value,
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       );
     case "set":
@@ -1082,6 +1136,7 @@ function decodeTaggedWireValue(
         value,
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       );
     case "formdata":
@@ -1089,21 +1144,19 @@ function decodeTaggedWireValue(
         value,
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       );
     case "clientRef":
       return resolveClientReference(value.id as string);
     case "serverRef":
-      return {
-        $$typeof: SERVER_REFERENCE_SYMBOL,
-        $$id: value.id as string,
-        $$bound: null,
-      };
+      return createServerReference(value.id as string, callServer);
     case "element":
       return decodeWireElementValue(
         value,
         resolveClientReference,
         resolveRowReference,
+        callServer,
         visitingRowRefs,
       );
     default:
