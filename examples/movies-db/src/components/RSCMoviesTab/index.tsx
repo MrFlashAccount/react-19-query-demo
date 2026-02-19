@@ -50,8 +50,6 @@ function RSCMoviesTabContent({ formState, onFormStateChange }: TabProps) {
   );
 }
 
-const MOVIE_CARD_SIZE = "140px";
-
 export interface MovieListProps {
   searchQuery: string;
   limit: number;
@@ -93,6 +91,7 @@ function MovieCard({ movie }: { movie: Movie }) {
   const currentStars = Math.ceil((rating ?? 0) / 2);
   const director = movie.directors.join(", ") || "Unknown";
   const genres = movie.genres.join(", ") || "Unknown";
+  const MOVIE_CARD_SIZE = "140px";
 
   return (
     <div
