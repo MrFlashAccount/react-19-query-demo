@@ -1,5 +1,3 @@
-"use main";
-
 import {
   createContext,
   useContext,
@@ -9,16 +7,8 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { callAction } from "@lib/rsc-prism/client-only";
 import type { TodoFilter, TodoRecord } from "./types";
-import {
-  addTodo,
-  clearCompleted,
-  deleteTodo,
-  renameTodo,
-  toggleAll,
-  toggleTodo,
-} from "./todo-actions";
+import { renameTodo, toggleAll } from "./todo-actions";
 
 interface TodoContextValue {
   filter: TodoFilter;
@@ -45,40 +35,18 @@ function useTodoContext(): TodoContextValue {
   return runtime;
 }
 
-function useTodoAction() {
-  const [isPending, startTransition] = useTransition();
-
-  const runAction = (
-    action: ((...args: any[]) => unknown) & { $$id?: string },
-    args: any[] = [],
-    options?: { refresh?: boolean; onSuccess?: () => void },
-  ) => {
-    return new Promise((resolve, reject) => {
-      startTransition(async () => {
-        try {
-          resolve(await callAction(action, args));
-          options?.onSuccess?.();
-        } catch (error) {
-          const actionId = typeof action.$$id === "string" ? action.$$id : action.name || "unknown";
-          console.error(`[todo-action] ${actionId} failed`, error);
-          reject(error);
-        }
-      });
-    });
-  };
-
-  return { isPending, runAction };
-}
-
 export function TodoComposer({
   totalCount,
   allCompleted,
+  addTodo,
 }: {
   totalCount: number;
   allCompleted: boolean;
+  addTodo: (title: string) => Promise<void>;
+  toggleAll: () => Promise<void>;
 }) {
   const [title, setTitle] = useState("");
-  const { isPending, runAction } = useTodoAction();
+  const [isPending, startTransition] = useTransition();
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -87,10 +55,14 @@ export function TodoComposer({
       return;
     }
 
-    void runAction(addTodo, [nextTitle], {
-      onSuccess: () => {
-        setTitle("");
-      },
+    startTransition(async () => {
+      await addTodo(nextTitle);
+      setTitle("");
+    });
+  };
+  const handleToggleAll = () => {
+    startTransition(async () => {
+      await toggleAll();
     });
   };
 
@@ -101,7 +73,7 @@ export function TodoComposer({
         className="toggle-all"
         disabled={totalCount === 0 || isPending}
         aria-label={allCompleted ? "Mark all as active" : "Mark all as completed"}
-        onClick={() => runAction(toggleAll)}
+        onClick={handleToggleAll}
       >
         {allCompleted ? "✅" : "☑️"}
       </button>
@@ -120,24 +92,48 @@ export function TodoComposer({
   );
 }
 
-export function TodoItemRow({ todo }: { todo: TodoRecord }) {
+export function TodoItemRow({
+  todo,
+  toggleTodo,
+  deleteTodo,
+}: {
+  todo: TodoRecord;
+  toggleTodo: (id: string) => Promise<void>;
+  deleteTodo: (id: string) => Promise<void>;
+}) {
+  const id = useId();
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(todo.title);
-  const { isPending, runAction } = useTodoAction();
-  const id = useId();
+  const [isPending, startTransition] = useTransition();
 
   const finishEditing = () => {
     const nextTitle = draft.trim();
     setIsEditing(false);
 
     if (nextTitle.length === 0) {
-      void runAction(deleteTodo, [todo.id]);
+      startTransition(async () => {
+        await deleteTodo(todo.id);
+      });
       return;
     }
 
     if (nextTitle !== todo.title) {
-      void runAction(renameTodo, [todo.id, nextTitle]);
+      startTransition(async () => {
+        await renameTodo(todo.id, nextTitle);
+      });
     }
+  };
+
+  const handleToggleTodo = () => {
+    startTransition(async () => {
+      await toggleTodo(todo.id);
+    });
+  };
+
+  const handleDeleteTodo = () => {
+    startTransition(async () => {
+      await deleteTodo(todo.id);
+    });
   };
 
   return (
@@ -148,7 +144,7 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
         className="todo-toggle"
         checked={todo.completed}
         disabled={isPending}
-        onChange={() => runAction(toggleTodo, [todo.id])}
+        onChange={handleToggleTodo}
         aria-label={`Toggle ${todo.title}`}
       />
       <label htmlFor={id} className="todo-label" onDoubleClick={() => setIsEditing(true)}>
@@ -158,10 +154,31 @@ export function TodoItemRow({ todo }: { todo: TodoRecord }) {
         type="button"
         className="todo-destroy"
         disabled={isPending}
-        onClick={() => runAction(deleteTodo, [todo.id])}
+        onClick={handleDeleteTodo}
         aria-label={`Delete ${todo.title}`}
       >
-        ❌
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M12 4L4 12"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4 4L12 12"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
 
       {isEditing && (
@@ -198,15 +215,23 @@ export function TodoFooterControls({
   completedCount,
   totalCount,
   filter,
+  clearCompleted,
 }: {
   activeCount: number;
   completedCount: number;
   totalCount: number;
   filter: TodoFilter;
+  clearCompleted: () => Promise<void>;
 }) {
   const runtime = useTodoContext();
-  const { isPending, runAction } = useTodoAction();
+  const [isPending, startTransition] = useTransition();
   const itemLabel = activeCount === 1 ? "item" : "items";
+
+  const handleClearCompleted = () => {
+    startTransition(async () => {
+      await clearCompleted();
+    });
+  };
 
   const filters = FILTER_LABELS.map((entry) => {
     const isSelected = entry.filter === filter;
@@ -238,7 +263,7 @@ export function TodoFooterControls({
         type="button"
         className="clear-completed"
         disabled={completedCount === 0 || totalCount === 0 || isPending}
-        onClick={() => runAction(clearCompleted)}
+        onClick={handleClearCompleted}
       >
         🧹
       </button>
