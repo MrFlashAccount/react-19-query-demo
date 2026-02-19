@@ -122,8 +122,6 @@ const TodoViewRSC = rsc(async function TodoViewRSC({ filter }: TodoViewProps) {
 });
 
 function TodoItemRow({ todo }: { todo: TodoRecord }) {
-  "use worker";
-
   return (
     <li className={`todo-row ${todo.completed ? "todo-row--completed" : ""}`}>
       <div className="todo-view">

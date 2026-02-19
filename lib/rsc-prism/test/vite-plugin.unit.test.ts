@@ -255,6 +255,26 @@ export function A() { return null; }
     expect(transformed).toBeUndefined();
   });
 
+  it("injects worker bootstrap before main virtual module when runtime is enabled", () => {
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+    });
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const transformed = callHook(
+      plugin.transformIndexHtml as any,
+      undefined,
+      "<!doctype html><html><head></head><body><div id='root'></div></body></html>",
+    );
+
+    const tags = (transformed as { tags?: Array<{ attrs?: { src?: string } }> } | undefined)?.tags;
+    expect(tags?.[0]?.attrs?.src).toBe("virtual:rsc-prism/worker-bootstrap");
+    expect(tags?.[1]?.attrs?.src).toBe("virtual:rsc-prism/main-thread-modules");
+  });
+
   it("resolves and loads worker bootstrap virtual module when runtime is enabled", async () => {
     const plugin = rscPrism({
       workerRuntime: {
@@ -679,6 +699,39 @@ export const metadata = { stable: true };
     expect(transformedCode).toContain('__rscPrismCreateActionRef("addTodo")');
     expect(transformedCode).toContain("metadata");
     expect(transformedCode).toContain("rsc-prism-original");
+  });
+
+  it("adds synthetic exports for local main components referenced by local worker components", async () => {
+    const plugin = rscPrism({
+      experimental: {
+        componentLevelDirectives: true,
+      },
+    });
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const id = `${root}/src/main.tsx`;
+    const source = `
+import { rsc } from "@lib/rsc-prism/react";
+
+const TodoViewRSC = rsc(async function TodoViewRSC() {
+  "use worker";
+  return <TodoItemRow />;
+});
+
+function TodoItemRow() {
+  return null;
+}
+`;
+
+    const transformed = await callHook(plugin.transform, undefined, source, id);
+    const transformedCode =
+      transformed != null && typeof transformed === "object" ? transformed.code : null;
+
+    expect(transformedCode).toContain('__rscPrismCreateLocalWorkerRef("/src/main.tsx#@local:TodoViewRSC"');
+    expect(transformedCode).toContain(
+      "export { TodoItemRow as __rscPrismLocalClient_TodoItemRow };",
+    );
   });
 
   it("resolves mixed worker directives to dedicated virtual module when experimental flag is enabled", async () => {

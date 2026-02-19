@@ -326,11 +326,9 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return `$${id.toString(16)}`;
   }
   if (Array.isArray(value)) {
-    const next: unknown[] = new Array(value.length);
-    for (let i = 0; i < value.length; i += 1) {
-      next[i] = encodeStreamValueInternal(value[i], context);
-    }
-    return next;
+    return Array.from({ length: value.length }, (_, i) =>
+      encodeStreamValueInternal(value[i], context),
+    );
   }
   if (isReactElementLike(value)) {
     const type = encodeStreamType(value.type);
@@ -423,9 +421,7 @@ function createServerReference(
 } {
   const reference = async (...args: unknown[]) => {
     if (callServer == null) {
-      throw new Error(
-        `[rsc-prism] Missing callServer implementation for server action "${id}".`,
-      );
+      throw new Error(`[rsc-prism] Missing callServer implementation for server action "${id}".`);
     }
     return callServer(id, args);
   };
@@ -531,11 +527,11 @@ function reviveModelValueTreeInternal<Chunk>(
     return parseModelString(context, value);
   }
   if (Array.isArray(value)) {
-    const revivedArray = new Array<unknown>(value.length);
-    for (let i = 0; i < value.length; i += 1) {
-      revivedArray[i] = reviveModelValueTreeInternal(context, value[i]);
-    }
-    return maybeDecodeElementTuple(revivedArray);
+    return maybeDecodeElementTuple(
+      Array.from({ length: value.length }, (_, i) =>
+        reviveModelValueTreeInternal(context, value[i]),
+      ),
+    );
   }
   if (typeof value !== "object" || value == null) {
     return value;
@@ -902,17 +898,15 @@ function decodeWireArrayValue(
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
 ): unknown[] {
-  const decoded: unknown[] = new Array(value.length);
-  for (let i = 0; i < value.length; i += 1) {
-    decoded[i] = decodeWireValueInternal(
+  return Array.from({ length: value.length }, (_, i) =>
+    decodeWireValueInternal(
       value[i],
       resolveClientReference,
       resolveRowReference,
       callServer,
       visitingRowRefs,
-    );
-  }
-  return decoded;
+    ),
+  );
 }
 
 function decodeWirePlainObjectValue(
