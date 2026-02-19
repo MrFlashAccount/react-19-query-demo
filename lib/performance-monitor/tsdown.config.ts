@@ -6,6 +6,7 @@ export default defineConfig({
   format: "esm",
   platform: "browser",
   clean: true,
+  inlineOnly: false,
   // Bundle node_modules (including lit-html) into dist.
   skipNodeModulesBundle: false,
   dts: false,
