@@ -2033,12 +2033,16 @@ export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
   return createRscPrismPlugin({
     ...options,
     mode: "main",
+    workerRuntime: {
+      enabled: options.workerRuntime?.enabled ?? true,
+      endpoint: options.workerRuntime?.endpoint ?? "/rsc/view",
+      outDir: options.workerRuntime?.outDir ?? ".vite/rsc-prism-worker-runtime",
+      aliases: options.workerRuntime?.aliases ?? [],
+    },
   });
 }
 
-export function rscPrismWorker(
-  options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {},
-): Plugin {
+function rscPrismWorker(options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {}): Plugin {
   return createRscPrismPlugin({
     ...options,
     mode: "worker",
