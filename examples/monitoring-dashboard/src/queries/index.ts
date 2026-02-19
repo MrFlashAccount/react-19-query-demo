@@ -1,5 +1,5 @@
 import { query, mutation, DependencyGraph } from "@lib/goat-query";
-import { fetchRSC } from "@lib/rsc-service-worker-bff/rsc";
+import { fetchRSC } from "@lib/rsc-prism/client-only";
 import type {
   Server,
   Metric,
@@ -14,13 +14,21 @@ import type {
   LogQuery,
 } from "@/db/schema";
 
+const basePath = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+
+function withBase(path: string): string {
+  return `${basePath}${path}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Dashboard Stats (defined first as it's used by mutations)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const statsQuery = query<void, DashboardStats>({
   queryFn: async () => {
-    const res = await fetch("/api/stats");
+    const res = await fetch(withBase("/api/stats"));
     if (!res.ok) throw new Error("Failed to fetch stats");
     return res.json();
   },
@@ -39,7 +47,7 @@ interface ServerRSCParams {
   offset: number;
 }
 
-export const serverRSCQuery = query<ServerRSCParams, React.ReactElement>({
+export const serverRSCQuery = query<ServerRSCParams, React.ReactNode>({
   queryFn: async ({ serverId, range, limit = 300, offset }) => {
     const params = new URLSearchParams({
       range,
@@ -50,8 +58,8 @@ export const serverRSCQuery = query<ServerRSCParams, React.ReactElement>({
       params.set("serverId", serverId);
     }
 
-    const rscUrl = `/rsc/server?${params}`;
-    return fetchRSC<React.ReactElement>(rscUrl);
+    const rscUrl = withBase(`/rsc/server?${params}`);
+    return (await fetchRSC(rscUrl)) as React.ReactNode;
   },
   staleTime: 1000,
   gcTime: 5_000,
@@ -63,7 +71,7 @@ export const serverRSCQuery = query<ServerRSCParams, React.ReactElement>({
 
 export const serversQuery = query<void, Server[]>({
   queryFn: async () => {
-    const res = await fetch("/api/servers");
+    const res = await fetch(withBase("/api/servers"));
     if (!res.ok) throw new Error("Failed to fetch servers");
     return res.json();
   },
@@ -73,7 +81,7 @@ export const serversQuery = query<void, Server[]>({
 
 export const serverQuery = query<string, Server>({
   queryFn: async (id) => {
-    const res = await fetch(`/api/servers/${id}`);
+    const res = await fetch(withBase(`/api/servers/${id}`));
     if (!res.ok) throw new Error("Failed to fetch server");
     return res.json();
   },
@@ -82,7 +90,7 @@ export const serverQuery = query<string, Server>({
 
 export const createServerMutation = mutation({
   mutationFn: async (data: CreateServer): Promise<Server> => {
-    const res = await fetch("/api/servers", {
+    const res = await fetch(withBase("/api/servers"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -95,7 +103,7 @@ export const createServerMutation = mutation({
 
 export const updateServerMutation = mutation({
   mutationFn: async ({ id, ...data }: UpdateServer): Promise<Server> => {
-    const res = await fetch(`/api/servers/${id}`, {
+    const res = await fetch(withBase(`/api/servers/${id}`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -108,7 +116,7 @@ export const updateServerMutation = mutation({
 
 export const deleteServerMutation = mutation({
   mutationFn: async (id: string): Promise<void> => {
-    const res = await fetch(`/api/servers/${id}`, { method: "DELETE" });
+    const res = await fetch(withBase(`/api/servers/${id}`), { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete server");
   },
   invalidates: [serversQuery, statsQuery],
@@ -125,7 +133,7 @@ interface MetricQueryParams {
 
 export const metricsQuery = query<MetricQueryParams, Metric[]>({
   queryFn: async (params) => {
-    const res = await fetch("/api/metrics/query", {
+    const res = await fetch(withBase("/api/metrics/query"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
@@ -137,7 +145,7 @@ export const metricsQuery = query<MetricQueryParams, Metric[]>({
 
 export const latestMetricsQuery = query<string[], Record<string, Metric | null>>({
   queryFn: async (serverIds) => {
-    const res = await fetch(`/api/metrics/latest?serverIds=${serverIds.join(",")}`);
+    const res = await fetch(withBase(`/api/metrics/latest?serverIds=${serverIds.join(",")}`));
     if (!res.ok) throw new Error("Failed to fetch latest metrics");
     return res.json();
   },
@@ -168,7 +176,7 @@ export const logsQuery = query<LogQueryWithRange, LogsResponse>({
     if (params.limit) searchParams.set("limit", String(params.limit));
     if (params.offset) searchParams.set("offset", String(params.offset));
 
-    const res = await fetch(`/api/logs?${searchParams}`);
+    const res = await fetch(withBase(`/api/logs?${searchParams}`));
     if (!res.ok) throw new Error("Failed to fetch logs");
     return res.json();
   },
@@ -176,7 +184,7 @@ export const logsQuery = query<LogQueryWithRange, LogsResponse>({
 
 export const logQuery = query<string, LogEntry>({
   queryFn: async (id) => {
-    const res = await fetch(`/api/logs/${id}`);
+    const res = await fetch(withBase(`/api/logs/${id}`));
     if (!res.ok) throw new Error("Failed to fetch log");
     return res.json();
   },
@@ -188,7 +196,7 @@ export const logQuery = query<string, LogEntry>({
 
 export const alertsQuery = query<void, Alert[]>({
   queryFn: async () => {
-    const res = await fetch("/api/alerts");
+    const res = await fetch(withBase("/api/alerts"));
     if (!res.ok) throw new Error("Failed to fetch alerts");
     return res.json();
   },
@@ -196,7 +204,7 @@ export const alertsQuery = query<void, Alert[]>({
 
 export const alertQuery = query<string, Alert>({
   queryFn: async (id) => {
-    const res = await fetch(`/api/alerts/${id}`);
+    const res = await fetch(withBase(`/api/alerts/${id}`));
     if (!res.ok) throw new Error("Failed to fetch alert");
     return res.json();
   },
@@ -204,7 +212,7 @@ export const alertQuery = query<string, Alert>({
 
 export const createAlertMutation = mutation({
   mutationFn: async (data: CreateAlert): Promise<Alert> => {
-    const res = await fetch("/api/alerts", {
+    const res = await fetch(withBase("/api/alerts"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -217,7 +225,7 @@ export const createAlertMutation = mutation({
 
 export const updateAlertMutation = mutation({
   mutationFn: async ({ id, ...data }: UpdateAlert): Promise<Alert> => {
-    const res = await fetch(`/api/alerts/${id}`, {
+    const res = await fetch(withBase(`/api/alerts/${id}`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -230,7 +238,7 @@ export const updateAlertMutation = mutation({
 
 export const deleteAlertMutation = mutation({
   mutationFn: async (id: string): Promise<void> => {
-    const res = await fetch(`/api/alerts/${id}`, { method: "DELETE" });
+    const res = await fetch(withBase(`/api/alerts/${id}`), { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete alert");
   },
   invalidates: [alertsQuery],
@@ -238,7 +246,7 @@ export const deleteAlertMutation = mutation({
 
 export const toggleAlertMutation = mutation({
   mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }): Promise<Alert> => {
-    const res = await fetch(`/api/alerts/${id}/toggle`, {
+    const res = await fetch(withBase(`/api/alerts/${id}/toggle`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled }),
@@ -255,7 +263,7 @@ export const toggleAlertMutation = mutation({
 
 export const incidentsQuery = query<string | undefined, Incident[]>({
   queryFn: async (status) => {
-    const url = status ? `/api/incidents?status=${status}` : "/api/incidents";
+    const url = status ? withBase(`/api/incidents?status=${status}`) : withBase("/api/incidents");
     const res = await fetch(url);
     if (!res.ok) throw new Error("Failed to fetch incidents");
     return res.json();
@@ -264,7 +272,7 @@ export const incidentsQuery = query<string | undefined, Incident[]>({
 
 export const acknowledgeIncidentMutation = mutation({
   mutationFn: async (id: string): Promise<Incident> => {
-    const res = await fetch(`/api/incidents/${id}/acknowledge`, { method: "POST" });
+    const res = await fetch(withBase(`/api/incidents/${id}/acknowledge`), { method: "POST" });
     if (!res.ok) throw new Error("Failed to acknowledge incident");
     return res.json();
   },
@@ -273,7 +281,7 @@ export const acknowledgeIncidentMutation = mutation({
 
 export const resolveIncidentMutation = mutation({
   mutationFn: async (id: string): Promise<Incident> => {
-    const res = await fetch(`/api/incidents/${id}/resolve`, { method: "POST" });
+    const res = await fetch(withBase(`/api/incidents/${id}/resolve`), { method: "POST" });
     if (!res.ok) throw new Error("Failed to resolve incident");
     return res.json();
   },

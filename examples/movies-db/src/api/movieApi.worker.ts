@@ -29,6 +29,14 @@ type WorkerResponse =
       error: string;
     };
 
+const basePath = import.meta.env.BASE_URL.endsWith("/")
+  ? import.meta.env.BASE_URL.slice(0, -1)
+  : import.meta.env.BASE_URL;
+
+function withBase(path: string): string {
+  return `${basePath}${path}`;
+}
+
 // Handler function type
 type Handler<P> = (payload: P) => Promise<ArrayBuffer>;
 
@@ -64,7 +72,7 @@ async function handleSearchMovies(payload: { query: string; limit: number }): Pr
     limit: payload.limit.toString(),
   });
 
-  const response = await fetch(`/api/movies/search?${searchParams.toString()}`);
+  const response = await fetch(withBase(`/api/movies/search?${searchParams.toString()}`));
 
   if (!response.ok) {
     throw new Error(`Failed to search movies: ${response.statusText}`);
@@ -74,7 +82,7 @@ async function handleSearchMovies(payload: { query: string; limit: number }): Pr
 }
 
 async function handleGetMovieById(payload: { movieId: string }): Promise<ArrayBuffer> {
-  const response = await fetch(`/api/movies/${payload.movieId}`);
+  const response = await fetch(withBase(`/api/movies/${payload.movieId}`));
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -90,7 +98,7 @@ async function handleUpdateMovieRating(payload: {
   movieId: string;
   newRating: number;
 }): Promise<ArrayBuffer> {
-  const response = await fetch(`/api/movies/${payload.movieId}/rating`, {
+  const response = await fetch(withBase(`/api/movies/${payload.movieId}/rating`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rating: payload.newRating }),

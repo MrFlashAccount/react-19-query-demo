@@ -18,6 +18,7 @@
   "dependencies": {
     "@hookform/resolvers": "5.2.2",
     "@lib/goat-query": "workspace:*",
+    "@lib/rsc-prism": "workspace:*",
     "@lib/rsc-service-worker-bff": "workspace:*",
     "@react-aria/collections": "3.0.1",
     "@react-aria/interactions": "3.26.0",

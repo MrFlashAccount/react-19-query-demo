@@ -8,9 +8,11 @@ import { rscPrism } from "@lib/rsc-prism/vite";
 const rootDir = import.meta.dirname;
 const repoRoot = path.resolve(rootDir, "../..");
 const rscPrismSourceDir = path.resolve(repoRoot, "lib/rsc-prism/src");
+const appBase = (process.env.VITE_APP_BASE ?? "/").replace(/\/?$/, "/");
 
 export default defineConfig(() => ({
   root: rootDir,
+  base: appBase,
   publicDir: path.resolve(repoRoot, "public"),
   plugins: [
     tailwindcss(),

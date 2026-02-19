@@ -2,6 +2,28 @@
 
 const CACHE_SCOPE = "movies-backend-v1";
 let movieDatabaseCache = null;
+const scopePath = (() => {
+  const pathname = new URL(self.registration.scope).pathname;
+  if (pathname === "/") {
+    return "";
+  }
+  return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+})();
+
+function withScope(pathname) {
+  return `${scopePath}${pathname}`;
+}
+
+function stripScope(pathname) {
+  if (scopePath.length === 0) {
+    return pathname;
+  }
+  if (!pathname.startsWith(scopePath)) {
+    return pathname;
+  }
+  const stripped = pathname.slice(scopePath.length);
+  return stripped.length > 0 ? stripped : "/";
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -37,8 +59,8 @@ async function getDatabase() {
   }
 
   const [movies1, movies2] = await Promise.all([
-    fetch("/movies/1.json").then((res) => res.json()),
-    fetch("/movies/2.json").then((res) => res.json()),
+    fetch(withScope("/movies/1.json")).then((res) => res.json()),
+    fetch(withScope("/movies/2.json")).then((res) => res.json()),
   ]);
 
   movieDatabaseCache = [...movies1, ...movies2].map((movie) => ({
@@ -76,7 +98,7 @@ async function searchMovies(query, limit = 500) {
 
 async function handleApiRequest(request) {
   const url = new URL(request.url);
-  const pathname = url.pathname;
+  const pathname = stripScope(url.pathname);
 
   if (request.method === "GET" && pathname === "/api/movies/search") {
     const query = url.searchParams.get("query") ?? "";
@@ -126,7 +148,8 @@ async function handleApiRequest(request) {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
-  if (!url.pathname.startsWith("/api/movies")) {
+  const pathname = stripScope(url.pathname);
+  if (!pathname.startsWith("/api/movies")) {
     return;
   }
 

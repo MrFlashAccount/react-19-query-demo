@@ -7,13 +7,14 @@ import react from "@vitejs/plugin-react";
 import { defineConfig, build as viteBuild } from "vite";
 
 const rootDir = import.meta.dirname;
+const appBase = (process.env.VITE_APP_BASE ?? "/").replace(/\/?$/, "/");
 
 // Service worker config
 const swConfig = {
   name: "monitoring-dashboard",
   entry: path.resolve(rootDir, "src/api/sw.tsx"),
   outDir: path.resolve(rootDir, ".sw-cache"),
-  serveUrl: "/sw.js",
+  serveUrl: `${appBase}sw.js`,
   watchPattern: "api/",
 };
 
@@ -54,6 +55,7 @@ async function buildSW(mode: "development" | "production"): Promise<void> {
 
 export default defineConfig(({ mode }) => ({
   root: rootDir,
+  base: appBase,
   plugins: [
     tailwindcss(),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }),

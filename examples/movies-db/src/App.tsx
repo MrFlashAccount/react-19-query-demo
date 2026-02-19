@@ -26,6 +26,9 @@ interface StressTestResult {
   tracedMs: number;
 }
 
+// TODO: move into a separate project/example
+// @ts-ignore
+// oxlint-disable-next-line no-unused-vars
 function TracingStressTest() {
   const [transitioning, startTransition] = useTransition();
   const [result, setResult] = useState<StressTestResult | null>(null);
@@ -140,9 +143,6 @@ export default function App() {
           </h1>
           <p className="text-gray-500 text-xs md:text-sm mb-6">Search thousands of movies</p>
           <TabSelector activeTab={activeTab} onTabChange={setActiveTab} />
-          <div className="mt-6 flex justify-center">
-            <TracingStressTest />
-          </div>
         </div>
 
         {(() => {

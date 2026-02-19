@@ -1,7 +1,13 @@
 import { use } from "react";
 
-const BACKEND_SW_URL = "/movies-backend-sw.js";
+const APP_BASE = import.meta.env.BASE_URL.replace(/\/?$/, "/");
+const BACKEND_SW_URL = `${APP_BASE}movies-backend-sw.js`;
+const BACKEND_SW_SCOPE = APP_BASE;
 const BACKEND_SW_BASENAME = "movies-backend-sw.js";
+
+function toPathname(urlOrPath: string): string {
+  return new URL(urlOrPath, window.location.origin).pathname;
+}
 
 async function registerBackendServiceWorker() {
   if (!("serviceWorker" in navigator)) {
@@ -12,8 +18,14 @@ async function registerBackendServiceWorker() {
   // Clean up previously registered app service workers that may still control
   // requests and interfere with worker runtime script loading.
   const existingRegistrations = await navigator.serviceWorker.getRegistrations();
+  const backendScopePath = toPathname(BACKEND_SW_SCOPE);
   await Promise.all(
     existingRegistrations.map(async (registration) => {
+      const registrationScopePath = toPathname(registration.scope);
+      if (!registrationScopePath.startsWith(backendScopePath)) {
+        return;
+      }
+
       const activeScript = registration.active?.scriptURL ?? "";
       const waitingScript = registration.waiting?.scriptURL ?? "";
       const installingScript = registration.installing?.scriptURL ?? "";
@@ -28,7 +40,7 @@ async function registerBackendServiceWorker() {
   );
 
   const registration = await navigator.serviceWorker.register(BACKEND_SW_URL, {
-    scope: "/",
+    scope: BACKEND_SW_SCOPE,
     type: "classic",
   });
 

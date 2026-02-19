@@ -1,4 +1,4 @@
-import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
+import "@lib/rsc-prism/polyfill";
 
 import { startTransition, StrictMode, Suspense, use, useEffect } from "react";
 import { createRoot } from "react-dom/client";
@@ -8,7 +8,7 @@ import { QueryProvider, QueryClient } from "@lib/goat-query/react";
 import { graph } from "@/queries";
 import { router } from "@/router";
 import { createWorker } from "@lib/rsc-service-worker-bff";
-import { registerClientModule } from "@lib/rsc-service-worker-bff/rsc";
+import { registerClientModule } from "@lib/rsc-prism/runtime/module-registry";
 import { seedDatabase } from "@/db/seed";
 import { startSimulation } from "@/db/simulation";
 import { Loader } from "@/components/Loader";
@@ -16,7 +16,8 @@ import "./index.css";
 import UIProviders from "./components/UIProviders";
 import * as ServerClientComponents from "./routes/Server/client-components";
 
-const worker = createWorker("/sw.js");
+const workerScope = import.meta.env.BASE_URL;
+const worker = createWorker(`${workerScope}sw.js`, { scope: workerScope });
 
 // Register client components for RSC
 registerClientModule("server-monitoring", ServerClientComponents);

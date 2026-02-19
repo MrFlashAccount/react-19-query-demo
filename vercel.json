@@ -1,4 +1,8 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm run build:vercel:single",
+  "outputDirectory": "dist",
   "headers": [
     {
       "source": "/(.*)",
@@ -12,6 +16,23 @@
           "value": "same-origin"
         }
       ]
+    }
+  ],
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/movies-db(?:/.*)?$",
+      "dest": "/movies-db/index.html"
+    },
+    {
+      "src": "^/monitoring-dashboard(?:/.*)?$",
+      "dest": "/monitoring-dashboard/index.html"
+    },
+    {
+      "src": "^/(.*)$",
+      "dest": "/index.html"
     }
   ]
 }

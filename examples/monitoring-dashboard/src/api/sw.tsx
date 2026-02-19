@@ -1,14 +1,12 @@
-import "@lib/rsc-service-worker-bff/rsc/webpack-shim";
-
 import {
   setupWorker,
   http,
   json,
   error,
   noContent,
-  createClientModule,
-  createFlightResponse,
 } from "@lib/rsc-service-worker-bff";
+import { createClientModule } from "@lib/rsc-prism";
+import { createFlightResponse } from "@lib/rsc-prism/flight-serializer";
 import { getDB, setLastMetricTime } from "@/db/index";
 import {
   CreateServerSchema,
@@ -492,4 +490,6 @@ setupWorker([
   getStats,
   // Simulation
   recordMetricTime,
-]);
+], {
+  basePath: self.location.pathname.replace(/\/sw\.js$/, ""),
+});
