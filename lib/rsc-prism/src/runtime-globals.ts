@@ -1,10 +1,36 @@
 /**
  * Global keys used by plugin-generated runtime bootstrap and client helpers.
  */
+import type { FlightRowMessage } from "./flight-runtime/wire";
+
 export const WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY = "__rscPrismBootstrapWorkerRuntime";
 export const DEFAULT_WORKER_RUNTIME_GLOBAL_KEY = "__rscPrismDefaultWorkerRuntime";
 export const INVALIDATE_RSC_GLOBAL_KEY = "__rscPrismInvalidateRSC";
 export const MAIN_THREAD_MODULES_GLOBAL_KEY = "__rscPrismMainThreadModules";
+export const RSC_REFRESH_RUNTIME_GLOBAL_KEY = "__rscPrismRSCRefreshRuntime";
+
+export interface RSCRefreshTarget {
+  targetKey: string;
+  componentId: string;
+  componentProps: unknown;
+}
+
+export interface RSCRefreshBatchEntry {
+  targetKey: string;
+  rows?: FlightRowMessage[];
+  error?: string;
+}
+
+export interface RSCRefreshBatch {
+  seq: number;
+  entries: RSCRefreshBatchEntry[];
+}
+
+export interface RSCRefreshRuntime {
+  collectTargets: () => RSCRefreshTarget[];
+  applyBatch: (batch: RSCRefreshBatch) => void;
+  legacyInvalidate: () => void;
+}
 
 export function setInvalidateRSC(invalidateRSC: () => void): void {
   // @ts-expect-error - globalThis[INVALIDATE_RSC_GLOBAL_KEY] is defined in the runtime-globals.ts file
@@ -14,6 +40,11 @@ export function setInvalidateRSC(invalidateRSC: () => void): void {
 export function setMainThreadModules(modules: Record<string, unknown>): void {
   // @ts-expect-error - globalThis[MAIN_THREAD_MODULES_GLOBAL_KEY] is defined in the runtime-globals.ts file
   globalThis[MAIN_THREAD_MODULES_GLOBAL_KEY] = modules;
+}
+
+export function setRSCRefreshRuntime(runtime: RSCRefreshRuntime): void {
+  // @ts-expect-error - globalThis[RSC_REFRESH_RUNTIME_GLOBAL_KEY] is defined in the runtime-globals.ts file
+  globalThis[RSC_REFRESH_RUNTIME_GLOBAL_KEY] = runtime;
 }
 
 export function getInvalidateRSC(): () => void {
@@ -36,4 +67,13 @@ export function getMainThreadModules(): Record<string, unknown> {
     );
   }
   return modules;
+}
+
+export function getRSCRefreshRuntimeOrNull(): RSCRefreshRuntime | null {
+  // @ts-expect-error - globalThis[RSC_REFRESH_RUNTIME_GLOBAL_KEY] is defined in the runtime-globals.ts file
+  const runtime = globalThis[RSC_REFRESH_RUNTIME_GLOBAL_KEY];
+  if (runtime == null) {
+    return null;
+  }
+  return runtime as RSCRefreshRuntime;
 }

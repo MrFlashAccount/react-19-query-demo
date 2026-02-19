@@ -9,6 +9,15 @@ async function gotoTodoApp(page: Page): Promise<void> {
   await expect(page.locator(".todo-error")).toHaveCount(0);
 }
 
+async function readMetricCount(page: Page, testId: string): Promise<number> {
+  const text = await page.getByTestId(testId).textContent();
+  const parsed = Number(text ?? "");
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid metric value for ${testId}: ${String(text)}`);
+  }
+  return parsed;
+}
+
 const workerRuntimeErrorPatterns = [
   /expects a "use worker" component reference/,
   /expects a "use worker" action reference/,
@@ -48,6 +57,18 @@ test.describe("TodoMVC integration", () => {
 
     await expect(page.getByText(newTodo)).toBeVisible();
     await expect(page.getByRole("checkbox", { name: `Toggle ${newTodo}` })).not.toBeChecked();
+  });
+
+  test("updates metrics panel after action refresh", async ({ page }) => {
+    const beforeTotal = await readMetricCount(page, "todo-total-count");
+    const beforeActive = await readMetricCount(page, "todo-active-count");
+
+    await page.getByRole("textbox", { name: "New todo" }).fill("Metrics refresh todo");
+    await page.getByRole("textbox", { name: "New todo" }).press("Enter");
+
+    await expect(page.getByText("Metrics refresh todo")).toBeVisible();
+    await expect(page.getByTestId("todo-total-count")).toHaveText(String(beforeTotal + 1));
+    await expect(page.getByTestId("todo-active-count")).toHaveText(String(beforeActive + 1));
   });
 
   test("removes a todo", async ({ page }) => {

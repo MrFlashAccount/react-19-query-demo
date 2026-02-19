@@ -16,7 +16,12 @@ export default defineConfig(() => ({
   root: rootDir,
   resolve: { alias: [...rscPrismAliases] },
   plugins: [
-    rscPrism({ experimental: { componentLevelDirectives: true } }),
+    rscPrism({
+      experimental: {
+        componentLevelDirectives: true,
+        actionBatchRefresh: true,
+      },
+    }),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }) as unknown as PluginOption,
   ],
 }));

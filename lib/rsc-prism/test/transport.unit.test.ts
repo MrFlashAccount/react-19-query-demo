@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { setInvalidateRSC } from "../src/runtime-globals";
+import { setInvalidateRSC, setRSCRefreshRuntime } from "../src/runtime-globals";
 
 import {
   createFunctionTransport,
@@ -66,11 +66,18 @@ const CANONICAL_WORKER_REQUEST_KEYS = [
   "requestInit",
   "componentId",
   "componentProps",
+  "refreshTargets",
+  "refreshBatchSeq",
 ];
 
 describe("transport", () => {
   beforeEach(() => {
     setInvalidateRSC(() => {});
+    setRSCRefreshRuntime({
+      collectTargets: () => [],
+      applyBatch: () => {},
+      legacyInvalidate: () => {},
+    });
   });
 
   it("function transport maps action and fetch requests", async () => {
@@ -478,6 +485,223 @@ describe("transport", () => {
     expect(Object.keys(seenRequests[0] as object)).toEqual(CANONICAL_WORKER_REQUEST_KEYS);
   });
 
+  it("worker row transport includes refresh targets and batch sequence for action direct requests", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const applyBatch = vi.fn();
+    const legacyInvalidate = vi.fn();
+    setRSCRefreshRuntime({
+      collectTargets: () => [
+        {
+          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          componentId: "worker-view.tsx#TodoWorkerView",
+          componentProps: { filter: "all" },
+        },
+      ],
+      applyBatch,
+      legacyInvalidate,
+    });
+
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      expect(request.refreshBatchSeq).toBe(1);
+      expect(request.refreshTargets).toEqual([
+        {
+          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          componentId: "worker-view.tsx#TodoWorkerView",
+          componentProps: { filter: "all" },
+        },
+      ]);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        rows: [flightModelRow(0, "ok"), flightDoneRow()],
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint, {
+      experimentalActionBatchRefresh: true,
+    });
+    await expect(
+      transport.sendActionDirect?.<string>({
+        endpoint: "/rsc/action",
+        actionId: "actions#save",
+        body: "[]",
+        contentType: "text/plain",
+      }),
+    ).resolves.toBe("ok");
+    expect(applyBatch).not.toHaveBeenCalled();
+    expect(legacyInvalidate).not.toHaveBeenCalled();
+  });
+
+  it("worker row transport falls back to legacy invalidate when no refresh targets are mounted", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const applyBatch = vi.fn();
+    const legacyInvalidate = vi.fn();
+    setRSCRefreshRuntime({
+      collectTargets: () => [],
+      applyBatch,
+      legacyInvalidate,
+    });
+
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      expect(request.refreshBatchSeq).toBeUndefined();
+      expect(request.refreshTargets).toBeUndefined();
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        rows: [flightModelRow(0, "ok"), flightDoneRow()],
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint, {
+      experimentalActionBatchRefresh: true,
+    });
+    await expect(
+      transport.sendActionDirect?.<string>({
+        endpoint: "/rsc/action",
+        actionId: "actions#save",
+        body: "[]",
+        contentType: "text/plain",
+      }),
+    ).resolves.toBe("ok");
+    expect(applyBatch).not.toHaveBeenCalled();
+    expect(legacyInvalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it("worker row transport applies action refresh batch metadata without legacy invalidate", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const applyBatch = vi.fn();
+    const legacyInvalidate = vi.fn();
+    setRSCRefreshRuntime({
+      collectTargets: () => [
+        {
+          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          componentId: "worker-view.tsx#TodoWorkerView",
+          componentProps: { filter: "all" },
+        },
+      ],
+      applyBatch,
+      legacyInvalidate,
+    });
+
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        rows: [flightModelRow(0, "ok"), flightDoneRow()],
+        actionRefreshBatch: {
+          seq: request.refreshBatchSeq ?? 0,
+          entries: [
+            {
+              targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+              rows: [flightModelRow(0, "batched"), flightDoneRow()],
+            },
+          ],
+        },
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint, {
+      experimentalActionBatchRefresh: true,
+    });
+    await expect(
+      transport.sendActionDirect?.<string>({
+        endpoint: "/rsc/action",
+        actionId: "actions#save",
+        body: "[]",
+        contentType: "text/plain",
+      }),
+    ).resolves.toBe("ok");
+    expect(applyBatch).toHaveBeenCalledTimes(1);
+    expect(applyBatch).toHaveBeenCalledWith({
+      seq: 1,
+      entries: [
+        {
+          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          rows: [flightModelRow(0, "batched"), flightDoneRow()],
+          error: undefined,
+        },
+      ],
+    });
+    expect(legacyInvalidate).not.toHaveBeenCalled();
+  });
+
+  it("worker row transport ignores stale action refresh batches", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const applyBatch = vi.fn();
+    const legacyInvalidate = vi.fn();
+    setRSCRefreshRuntime({
+      collectTargets: () => [
+        {
+          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          componentId: "worker-view.tsx#TodoWorkerView",
+          componentProps: { filter: "all" },
+        },
+      ],
+      applyBatch,
+      legacyInvalidate,
+    });
+
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      const emit = () => {
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          rows: [flightModelRow(0, request.actionId), flightDoneRow()],
+          actionRefreshBatch: {
+            seq: request.refreshBatchSeq ?? 0,
+            entries: [
+              {
+                targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+                rows: [flightModelRow(0, request.actionId), flightDoneRow()],
+              },
+            ],
+          },
+        } satisfies WorkerRowResponseMessage);
+      };
+      if (request.actionId === "first") {
+        setTimeout(emit, 20);
+      } else {
+        setTimeout(emit, 0);
+      }
+    };
+
+    const transport = createWorkerRowTransport(endpoint, {
+      experimentalActionBatchRefresh: true,
+    });
+
+    await Promise.all([
+      transport.sendActionDirect?.<string>({
+        endpoint: "/rsc/action",
+        actionId: "first",
+        body: "[]",
+        contentType: "text/plain",
+      }),
+      transport.sendActionDirect?.<string>({
+        endpoint: "/rsc/action",
+        actionId: "second",
+        body: "[]",
+        contentType: "text/plain",
+      }),
+    ]);
+
+    expect(applyBatch).toHaveBeenCalledTimes(1);
+    expect(applyBatch).toHaveBeenCalledWith({
+      seq: 2,
+      entries: [
+        {
+          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          rows: [flightModelRow(0, "second"), flightDoneRow()],
+          error: undefined,
+        },
+      ],
+    });
+    expect(legacyInvalidate).not.toHaveBeenCalled();
+  });
+
   it("worker row transport handles binary rows", async () => {
     const endpoint = new MockWorkerEndpoint();
     endpoint.onPostMessage = (message) => {
@@ -640,6 +864,44 @@ describe("transport", () => {
       }),
     );
     expect(postMessage.mock.calls[0]?.[1]).toEqual(expect.any(Array));
+  });
+
+  it("worker row message handler includes action refresh batch metadata", async () => {
+    const postMessage = vi.fn();
+    const onMessage = createWorkerRowTransportMessageHandler(async (_request, emit, controls) => {
+      controls.setActionRefreshBatch({
+        seq: 7,
+        entries: [{ targetKey: "mod#Comp|props:{}", rows: [flightModelRow(0, "next"), flightDoneRow()] }],
+      });
+      emit(flightModelRow(0, "ok"));
+      emit(flightDoneRow());
+    });
+
+    await onMessage({
+      data: {
+        type: "rsc.transport.request",
+        id: "abc",
+        operation: "action",
+        endpoint: "/rsc/action",
+      },
+      currentTarget: { postMessage },
+    } as unknown as MessageEvent<unknown>);
+
+    expect(postMessage.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        type: "rsc.transport.response.row",
+        id: "abc",
+        actionRefreshBatch: {
+          seq: 7,
+          entries: [
+            {
+              targetKey: "mod#Comp|props:{}",
+              rows: [flightModelRow(0, "next"), flightDoneRow()],
+            },
+          ],
+        },
+      }),
+    );
   });
 
   it("worker row message handler emits error row on failure", async () => {

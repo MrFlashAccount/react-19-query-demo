@@ -339,6 +339,7 @@ export function A() { return null; }
       'import { createWorkerRowTransport } from "@lib/rsc-prism/transport";',
     );
     expect(loadedCode).toContain("createWorkerRowTransport");
+    expect(loadedCode).toContain("experimentalActionBatchRefresh: false");
     expect(loadedCode).toContain("dispose()");
     expect(loadedCode).toContain("let __rscPrismBootstrappedRuntime = null;");
     expect(loadedCode).toContain("let __rscPrismBootstrapPromise = null;");
@@ -346,6 +347,38 @@ export function A() { return null; }
     expect(loadedCode).toContain(
       "globalThis[__RSC_PRISM_BOOTSTRAP_GLOBAL_KEY] = bootstrapWorkerRuntime;",
     );
+  });
+
+  it("wires experimental action batch refresh into worker bootstrap runtime", async () => {
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+      experimental: {
+        actionBatchRefresh: true,
+      },
+    });
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:worker-bootstrap");
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+    expect(loadedCode).toContain("experimentalActionBatchRefresh: true");
+  });
+
+  it("does not bypass worker-ready handshake with fallback timer", async () => {
+    const plugin = rscPrism({
+      workerRuntime: {
+        enabled: true,
+      },
+    });
+    const root = "/virtual/project";
+    callHook(plugin.configResolved, undefined, createResolvedConfig(root));
+
+    const loaded = await callHook(plugin.load, undefined, "\0rsc-prism:worker-bootstrap");
+    const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
+    expect(loadedCode).not.toContain("fallbackReady");
+    expect(loadedCode).toContain('event.data.type === "rsc.prism.worker.ready"');
   });
 
   it("throws when workerRuntime.entry is provided", () => {

@@ -69,6 +69,7 @@ function App() {
           {isPending ? "Refreshing RSC view..." : ""}
         </p>
 
+        <TodoMetricsRSC filter={filter} />
         <TodoViewRSC filter={filter} />
       </main>
     </TodoProvider>
@@ -117,6 +118,26 @@ const TodoViewRSC = rsc(async function TodoViewRSC({ filter }: TodoViewProps) {
           clearCompleted={clearCompleted}
         />
       </section>
+    </section>
+  );
+});
+
+const TodoMetricsRSC = rsc(async function TodoMetricsRSC({ filter }: TodoViewProps) {
+  "use worker";
+
+  const { totalCount, activeCount, completedCount } = await buildTodoWorkerViewData(filter);
+
+  return (
+    <section className="todo-metrics" aria-live="polite">
+      <p>
+        Total: <strong data-testid="todo-total-count">{totalCount}</strong>
+      </p>
+      <p>
+        Active: <strong data-testid="todo-active-count">{activeCount}</strong>
+      </p>
+      <p>
+        Completed: <strong data-testid="todo-completed-count">{completedCount}</strong>
+      </p>
     </section>
   );
 });

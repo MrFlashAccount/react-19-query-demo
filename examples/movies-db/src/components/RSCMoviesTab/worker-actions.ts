@@ -7,14 +7,8 @@ async function readJsonOrThrow<T>(response: Response, fallbackMessage: string): 
   return (await response.json()) as T;
 }
 
-export async function searchMovies(searchQuery: string, limit: number): Promise<Movie[]> {
-  const params = new URLSearchParams({ query: searchQuery, limit: String(limit) });
-
-  const response = await fetch(`/api/movies/search?${params}`);
-  return readJsonOrThrow<Movie[]>(response, "Failed to load movies");
-}
-
 export async function updateMovieRating(movieId: string, rating: number): Promise<Movie> {
+  "use worker";
   const response = await fetch(`/api/movies/${encodeURIComponent(movieId)}/rating`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

@@ -130,6 +130,7 @@ export interface RscPrismWorkerRuntimeOptions {
 
 export interface RscPrismExperimentalOptions {
   componentLevelDirectives?: boolean;
+  actionBatchRefresh?: boolean;
 }
 
 export interface RscPrismVitePluginOptions {
@@ -1528,7 +1529,10 @@ function buildWorkerComponentRegistryCode(
   return `${lines.join("\n")}\n`;
 }
 
-function buildGeneratedWorkerEntryCode(endpoint: string): string {
+function buildGeneratedWorkerEntryCode(
+  endpoint: string,
+  experimentalActionBatchRefresh: boolean,
+): string {
   return `
 import { createRSCHandler } from "@lib/rsc-prism/response";
 import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport";
@@ -1536,6 +1540,7 @@ import { resolveWorkerComponent, workerActionModules } from "./worker-component-
 
 const WORKER_ORIGIN = "https://rsc.prism.local";
 const ACTION_ENDPOINT = "/rsc/action";
+const ACTION_BATCH_REFRESH = ${experimentalActionBatchRefresh ? "true" : "false"};
 const handler = createRSCHandler({ actionModules: workerActionModules });
 
 function toActionRequest(message, endpoint) {
@@ -1554,9 +1559,31 @@ function toActionRequest(message, endpoint) {
   });
 }
 
+async function renderRowsToArray(element) {
+  const rows = [];
+  await handler.renderRows(element, (row) => {
+    rows.push(row);
+  });
+  return rows;
+}
+
+function splitTerminalRow(rows) {
+  const lastRow = rows[rows.length - 1];
+  if (lastRow != null && (lastRow.k === 2 || lastRow.k === 3)) {
+    return {
+      contentRows: rows.slice(0, -1),
+      terminalRow: lastRow,
+    };
+  }
+  return {
+    contentRows: rows,
+    terminalRow: { k: 2 },
+  };
+}
+
 self.addEventListener(
   "message",
-  createWorkerRowTransportMessageHandler(async (request, emit) => {
+  createWorkerRowTransportMessageHandler(async (request, emit, controls) => {
     const target = new URL(request.endpoint, WORKER_ORIGIN);
 
     if (request.operation === "fetch") {
@@ -1577,10 +1604,53 @@ self.addEventListener(
       if (target.pathname !== ACTION_ENDPOINT) {
         throw new Error("Unknown endpoint: " + target.pathname);
       }
+      const refreshTargets = Array.isArray(request.refreshTargets) ? request.refreshTargets : [];
+      if (!ACTION_BATCH_REFRESH || refreshTargets.length === 0) {
+        const actionRequest = toActionRequest(request, target);
+        await handler.actionRows(actionRequest, emit, {
+          status: 200,
+        });
+        return;
+      }
+
       const actionRequest = toActionRequest(request, target);
-      await handler.actionRows(actionRequest, emit, {
-        status: 200,
+      const actionValue = await handler.executeAction(actionRequest);
+      const actionRows = await renderRowsToArray(actionValue);
+      const { contentRows, terminalRow } = splitTerminalRow(actionRows);
+
+      const entries = [];
+      for (let i = 0; i < refreshTargets.length; i += 1) {
+        const refreshTarget = refreshTargets[i];
+        const targetKey = typeof refreshTarget?.targetKey === "string" ? refreshTarget.targetKey : "";
+        const componentId =
+          typeof refreshTarget?.componentId === "string" ? refreshTarget.componentId : "";
+        const component = resolveWorkerComponent(componentId);
+        if (component == null) {
+          entries.push({
+            targetKey,
+            error: "Missing or unknown worker component reference: " + componentId,
+          });
+          continue;
+        }
+        try {
+          const rows = await renderRowsToArray(component(refreshTarget.componentProps ?? {}));
+          entries.push({ targetKey, rows });
+        } catch (error) {
+          entries.push({
+            targetKey,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      controls.setActionRefreshBatch({
+        seq: typeof request.refreshBatchSeq === "number" ? request.refreshBatchSeq : 0,
+        entries,
       });
+      for (let i = 0; i < contentRows.length; i += 1) {
+        emit(contentRows[i]);
+      }
+      emit(terminalRow);
       return;
     }
 
@@ -1592,7 +1662,10 @@ export const __rscPrismWorkerRuntimeMarker = true;
 `;
 }
 
-function buildWorkerBootstrapCode(servePath: string): string {
+function buildWorkerBootstrapCode(
+  servePath: string,
+  experimentalActionBatchRefresh: boolean,
+): string {
   return `
 import { createWorkerRowTransport } from "@lib/rsc-prism/transport";
 
@@ -1615,18 +1688,9 @@ async function initializeWorkerRuntime() {
       }, 1500);
       const cleanup = () => {
         clearTimeout(timeout);
-        clearTimeout(fallbackReady);
         worker.removeEventListener("message", onMessage);
         worker.removeEventListener("error", onError);
       };
-      const fallbackReady = setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        cleanup();
-        resolve(undefined);
-      }, 50);
       const onMessage = (event) => {
         if (event.data != null && event.data.type === "rsc.prism.worker.ready") {
           if (settled) {
@@ -1661,7 +1725,9 @@ async function initializeWorkerRuntime() {
     throw error;
   }
 
-  const transport = createWorkerRowTransport(worker);
+  const transport = createWorkerRowTransport(worker, {
+    experimentalActionBatchRefresh: ${experimentalActionBatchRefresh ? "true" : "false"},
+  });
   let isDisposed = false;
   const runtime = {
     worker,
@@ -1895,6 +1961,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     options.workerBootstrapVirtualId ?? DEFAULT_WORKER_BOOTSTRAP_VIRTUAL_ID;
   const experimentalComponentLevelDirectives =
     options.experimental?.componentLevelDirectives === true;
+  const experimentalActionBatchRefresh = options.experimental?.actionBatchRefresh === true;
   const workerRuntimeEnabled = options.mode === "main" && options.workerRuntime?.enabled === true;
   const workerEndpoint = options.workerRuntime?.endpoint ?? "/rsc/view";
 
@@ -2637,7 +2704,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       ),
       "utf8",
     );
-    await writeFile(entryPath, buildGeneratedWorkerEntryCode(workerEndpoint), "utf8");
+    await writeFile(
+      entryPath,
+      buildGeneratedWorkerEntryCode(workerEndpoint, experimentalActionBatchRefresh),
+      "utf8",
+    );
 
     generatedWorkerOutDir = outDir;
     generatedWorkerEntryPath = entryPath;
@@ -2982,7 +3053,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
             config?.base ?? "/",
             `assets/${INTERNAL_WORKER_RUNTIME_ASSET_NAME}.js`,
           );
-          return buildWorkerBootstrapCode(generatedWorkerServePublicPath ?? fallbackWorkerPath);
+          return buildWorkerBootstrapCode(
+            generatedWorkerServePublicPath ?? fallbackWorkerPath,
+            experimentalActionBatchRefresh,
+          );
         }
         return null;
       }

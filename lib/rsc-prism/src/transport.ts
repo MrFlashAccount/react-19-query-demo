@@ -1,4 +1,4 @@
-import { getInvalidateRSC } from "./runtime-globals";
+import { getInvalidateRSC, getRSCRefreshRuntimeOrNull } from "./runtime-globals";
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightClientOptions } from "./flight-runtime/types";
 import { flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
@@ -135,6 +135,8 @@ export interface WorkerTransportRequestMessage {
   requestInit?: Omit<RequestInit, "method" | "body" | "headers">;
   componentId?: string;
   componentProps?: unknown;
+  refreshTargets?: WorkerRefreshTargetMessage[];
+  refreshBatchSeq?: number;
 }
 
 export interface WorkerTransportResponseMessage {
@@ -161,12 +163,31 @@ export interface WorkerRowResponseMessage {
   type: string;
   id: string;
   rows: FlightRowMessage[];
+  actionRefreshBatch?: WorkerActionRefreshBatchMessage;
 }
 
 export interface WorkerTransportOptions {
   requestType?: string;
   responseType?: string;
   timeoutMs?: number;
+  experimentalActionBatchRefresh?: boolean;
+}
+
+export interface WorkerRefreshTargetMessage {
+  targetKey: string;
+  componentId: string;
+  componentProps: unknown;
+}
+
+export interface WorkerActionRefreshBatchEntryMessage {
+  targetKey: string;
+  rows?: FlightRowMessage[];
+  error?: string;
+}
+
+export interface WorkerActionRefreshBatchMessage {
+  seq: number;
+  entries: WorkerActionRefreshBatchEntryMessage[];
 }
 
 const DEFAULT_REQUEST_TYPE = "rsc.transport.request";
@@ -218,6 +239,7 @@ interface NormalizedWorkerResponseMessage {
 interface NormalizedWorkerRowMessage {
   matchedType: boolean;
   rows: FlightRowMessage[];
+  actionRefreshBatch: WorkerActionRefreshBatchMessage | null;
 }
 
 function createWorkerResponseTypeMap(baseType: string): WorkerResponseTypeMap {
@@ -302,12 +324,63 @@ function normalizeWorkerRowMessage(
     return {
       matchedType: false,
       rows: [],
+      actionRefreshBatch: null,
     };
   }
   const rows = Array.isArray(message.rows) ? (message.rows as FlightRowMessage[]) : [];
+  const actionRefreshBatch = normalizeActionRefreshBatchMessage(message.actionRefreshBatch);
   return {
     matchedType: true,
     rows,
+    actionRefreshBatch,
+  };
+}
+
+function normalizeRefreshTargetMessage(target: unknown): WorkerRefreshTargetMessage | null {
+  if (typeof target !== "object" || target == null) {
+    return null;
+  }
+  const candidate = target as Record<string, unknown>;
+  if (typeof candidate.targetKey !== "string" || typeof candidate.componentId !== "string") {
+    return null;
+  }
+  return {
+    targetKey: candidate.targetKey,
+    componentId: candidate.componentId,
+    componentProps: candidate.componentProps,
+  };
+}
+
+function normalizeActionRefreshBatchMessage(batch: unknown): WorkerActionRefreshBatchMessage | null {
+  if (typeof batch !== "object" || batch == null) {
+    return null;
+  }
+  const candidate = batch as Record<string, unknown>;
+  if (!Number.isFinite(candidate.seq as number) || !Array.isArray(candidate.entries)) {
+    return null;
+  }
+
+  const entries: WorkerActionRefreshBatchEntryMessage[] = [];
+  for (let i = 0; i < candidate.entries.length; i += 1) {
+    const rawEntry = candidate.entries[i];
+    if (typeof rawEntry !== "object" || rawEntry == null) {
+      continue;
+    }
+    const entry = rawEntry as Record<string, unknown>;
+    if (typeof entry.targetKey !== "string") {
+      continue;
+    }
+    const normalizedEntry: WorkerActionRefreshBatchEntryMessage = {
+      targetKey: entry.targetKey,
+      rows: Array.isArray(entry.rows) ? (entry.rows as FlightRowMessage[]) : undefined,
+      error: typeof entry.error === "string" ? entry.error : undefined,
+    };
+    entries.push(normalizedEntry);
+  }
+
+  return {
+    seq: Math.trunc(candidate.seq as number),
+    entries,
   };
 }
 
@@ -328,6 +401,8 @@ function createWorkerRequestEnvelope(
     requestInit: request.requestInit ?? undefined,
     componentId: request.componentId ?? undefined,
     componentProps: request.componentProps,
+    refreshTargets: request.refreshTargets ?? undefined,
+    refreshBatchSeq: request.refreshBatchSeq ?? undefined,
   };
 }
 
@@ -360,6 +435,15 @@ function normalizeIncomingWorkerTransportRequest(
       undefined,
     componentId: typeof message.componentId === "string" ? message.componentId : undefined,
     componentProps: message.componentProps,
+    refreshTargets: Array.isArray(message.refreshTargets)
+      ? message.refreshTargets
+          .map((target) => normalizeRefreshTargetMessage(target))
+          .filter((target): target is WorkerRefreshTargetMessage => target != null)
+      : undefined,
+    refreshBatchSeq:
+      typeof message.refreshBatchSeq === "number" && Number.isFinite(message.refreshBatchSeq)
+        ? Math.trunc(message.refreshBatchSeq)
+        : undefined,
   };
 }
 
@@ -633,9 +717,14 @@ export function createWorkerRowTransport(
   const rowResponseType = options.responseType ?? DEFAULT_ROW_RESPONSE_TYPE;
   const timeoutMs = options.timeoutMs ?? 10000;
   const endpointState = getWorkerEndpointState(endpoint);
+  let actionRefreshDispatchSeq = 0;
+  let actionRefreshAppliedSeq = 0;
 
   function sendRowRequest<T>(
     request: Omit<WorkerTransportRequestMessage, "id" | "type">,
+    hooks?: {
+      onActionRefreshBatch?: (batch: WorkerActionRefreshBatchMessage) => void;
+    },
     clientOptions?: FlightClientOptions,
   ): Promise<T> {
     const id = nextRequestId();
@@ -684,7 +773,13 @@ export function createWorkerRowTransport(
         touchActivity,
         handleMessage: (data) => {
           const message = normalizeWorkerRowMessage(data, rowResponseType);
-          if (!message.matchedType || message.rows.length === 0) {
+          if (!message.matchedType) {
+            return;
+          }
+          if (message.actionRefreshBatch != null && hooks?.onActionRefreshBatch != null) {
+            hooks.onActionRefreshBatch(message.actionRefreshBatch);
+          }
+          if (message.rows.length === 0) {
             return;
           }
           for (let i = 0; i < message.rows.length; i += 1) {
@@ -735,11 +830,18 @@ export function createWorkerRowTransport(
           componentId: input.componentId,
           componentProps: input.componentProps,
         },
+        undefined,
         clientOptions,
       );
     },
     sendActionDirect<T>(input: SendActionInput, clientOptions?: FlightClientOptions): Promise<T> {
       const invalidateRSC = getInvalidateRSC();
+      const refreshRuntime =
+        options.experimentalActionBatchRefresh === true ? getRSCRefreshRuntimeOrNull() : null;
+      const refreshTargets = refreshRuntime?.collectTargets() ?? [];
+      const refreshBatchSeq =
+        refreshRuntime != null && refreshTargets.length > 0 ? ++actionRefreshDispatchSeq : undefined;
+      let sawBatchMetadata = false;
       return sendRowRequest<T>(
         {
           operation: "action",
@@ -749,9 +851,45 @@ export function createWorkerRowTransport(
           headers: toHeaderTuples(input.headers),
           body: input.body,
           requestInit: input.requestInit,
+          refreshTargets: refreshTargets.length > 0 ? refreshTargets : undefined,
+          refreshBatchSeq,
+        },
+        {
+          onActionRefreshBatch: (batch) => {
+            if (refreshRuntime == null) {
+              return;
+            }
+            sawBatchMetadata = true;
+            if (batch.seq < actionRefreshAppliedSeq) {
+              return;
+            }
+            actionRefreshAppliedSeq = batch.seq;
+            refreshRuntime.applyBatch({
+              seq: batch.seq,
+              entries: batch.entries.map((entry) => ({
+                targetKey: entry.targetKey,
+                rows: entry.rows,
+                error: entry.error,
+              })),
+            });
+          },
         },
         clientOptions,
-      ).finally(() => invalidateRSC());
+      ).finally(() => {
+        if (sawBatchMetadata) {
+          return;
+        }
+        if (refreshRuntime != null) {
+          // When a batch refresh request was dispatched, avoid legacy fallback fan-out.
+          // Late/partial metadata should not trigger an extra invalidate+refetch cycle.
+          if (refreshBatchSeq != null) {
+            return;
+          }
+          refreshRuntime.legacyInvalidate();
+          return;
+        }
+        invalidateRSC();
+      });
     },
   };
 }
@@ -889,6 +1027,9 @@ export function createWorkerTransportMessageHandler(
 export type WorkerRowTransportRequestHandler = (
   request: WorkerTransportRequestMessage,
   emit: (row: FlightRowMessage, transfer?: Transferable[]) => void,
+  controls: {
+    setActionRefreshBatch: (batch: WorkerActionRefreshBatchMessage) => void;
+  },
 ) => Promise<void> | void;
 
 export function createWorkerRowTransportMessageHandler(
@@ -907,11 +1048,12 @@ export function createWorkerRowTransportMessageHandler(
 
     const pendingRows: FlightRowMessage[] = [];
     const pendingTransfer: Transferable[] = [];
+    let pendingActionRefreshBatch: WorkerActionRefreshBatchMessage | null = null;
     let flushScheduled = false;
     let closed = false;
     const flush = (): void => {
       flushScheduled = false;
-      if (pendingRows.length === 0) {
+      if (pendingRows.length === 0 && pendingActionRefreshBatch == null) {
         return;
       }
       const message: WorkerRowResponseMessage = {
@@ -919,6 +1061,10 @@ export function createWorkerRowTransportMessageHandler(
         id: request.id,
         rows: pendingRows.splice(0, pendingRows.length),
       };
+      if (pendingActionRefreshBatch != null) {
+        message.actionRefreshBatch = pendingActionRefreshBatch;
+        pendingActionRefreshBatch = null;
+      }
       const transfer =
         pendingTransfer.length === 0
           ? undefined
@@ -947,9 +1093,13 @@ export function createWorkerRowTransportMessageHandler(
       }
       scheduleFlush();
     };
+    const setActionRefreshBatch = (batch: WorkerActionRefreshBatchMessage): void => {
+      pendingActionRefreshBatch = batch;
+      scheduleFlush();
+    };
 
     try {
-      await handler(request, emit);
+      await handler(request, emit, { setActionRefreshBatch });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit(flightErrorRow(message));

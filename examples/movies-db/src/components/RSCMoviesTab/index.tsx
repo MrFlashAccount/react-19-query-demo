@@ -3,7 +3,8 @@
  *
  * Renders movie list via React Server Components from dedicated worker runtime.
  */
-import { searchMovies, updateMovieRating } from "./worker-actions";
+import { updateMovieRating } from "./worker-actions";
+import { searchMovies } from "./worker-queries";
 import { Suspense } from "react";
 import { rsc, RuntimeProvider } from "@lib/rsc-prism/react";
 import type { TabProps } from "../shared/types";

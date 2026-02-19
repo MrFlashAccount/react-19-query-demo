@@ -11,6 +11,7 @@ import {
   renderRSCRows,
   handleAction,
   handleActionRows,
+  executeAction as executeServerAction,
   getActionIdFromRequest,
   createRSCContext,
   registerActions,
@@ -66,6 +67,13 @@ async function createFlightErrorRows(
     status: 500,
   } as unknown as ReactNode;
   await renderRSCRows(errorRecord, ctx, emit, { onError: options?.onError });
+}
+
+async function readEncodedActionArgs(request: Request): Promise<EncodedActionArgs> {
+  const contentType = request.headers.get("Content-Type") ?? "";
+  return contentType.includes("form")
+    ? { type: "formdata", data: await request.formData() }
+    : { type: "string", data: await request.text() };
 }
 
 /**
@@ -142,11 +150,7 @@ export async function rscAction(
     return createFlightErrorResponse(ctx, "Missing action ID", 400, options);
   }
 
-  // Parse encoded args from request body without forcing text round-trips for form payloads.
-  const contentType = request.headers.get("Content-Type") ?? "";
-  const encodedArgs: EncodedActionArgs = contentType.includes("form")
-    ? { type: "formdata", data: await request.formData() }
-    : { type: "string", data: await request.text() };
+  const encodedArgs = await readEncodedActionArgs(request);
 
   try {
     const stream = await handleAction(ctx, actionId, encodedArgs, { onError: options?.onError });
@@ -216,6 +220,7 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
     emit: FlightRowEmit,
     responseOptions?: RSCResponseOptions,
   ) => Promise<void>;
+  executeAction: (request: Request) => Promise<unknown>;
   ready: Promise<void>;
 } {
   const ctx = createRSCContext(options.manifest);
@@ -275,10 +280,7 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
         return;
       }
 
-      const contentType = request.headers.get("Content-Type") ?? "";
-      const encodedArgs: EncodedActionArgs = contentType.includes("form")
-        ? { type: "formdata", data: await request.formData() }
-        : { type: "string", data: await request.text() };
+      const encodedArgs = await readEncodedActionArgs(request);
 
       try {
         await handleActionRows(ctx, actionId, encodedArgs, emit, {
@@ -295,6 +297,16 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
           onError: options.onError,
         });
       }
+    },
+
+    async executeAction(request: Request): Promise<unknown> {
+      await ready;
+      const actionId = getActionIdFromRequest(request);
+      if (!actionId) {
+        throw new Error("Missing action ID");
+      }
+      const encodedArgs = await readEncodedActionArgs(request);
+      return executeServerAction(ctx, actionId, encodedArgs);
     },
 
     ready,

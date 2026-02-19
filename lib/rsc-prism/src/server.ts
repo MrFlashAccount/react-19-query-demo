@@ -172,6 +172,19 @@ export async function handleAction(
   encodedArgs: EncodedActionArgs,
   options?: RSCRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
+  const result = await executeAction(ctx, actionId, encodedArgs);
+
+  return defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
+    onError: options?.onError,
+    signal: options?.signal,
+  });
+}
+
+export async function executeAction(
+  ctx: RSCContext,
+  actionId: string,
+  encodedArgs: EncodedActionArgs,
+): Promise<unknown> {
   const action = ctx.actions.get(actionId);
   if (!action) {
     const available = Array.from(ctx.actions.keys()).join(", ") || "(none)";
@@ -179,12 +192,7 @@ export async function handleAction(
   }
 
   const args = await decodeActionArgs(encodedArgs);
-  const result = await action.fn(...args);
-
-  return defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
-    onError: options?.onError,
-    signal: options?.signal,
-  });
+  return action.fn(...args);
 }
 
 export async function handleActionRows(
@@ -194,14 +202,7 @@ export async function handleActionRows(
   emit: FlightRowEmit,
   options?: RSCRenderOptions,
 ): Promise<void> {
-  const action = ctx.actions.get(actionId);
-  if (!action) {
-    const available = Array.from(ctx.actions.keys()).join(", ") || "(none)";
-    throw new Error(`Action "${actionId}" not found. Available: ${available}`);
-  }
-
-  const args = await decodeActionArgs(encodedArgs);
-  const result = await action.fn(...args);
+  const result = await executeAction(ctx, actionId, encodedArgs);
 
   return renderRSCRows(result as ReactNode, ctx, emit, {
     onError: options?.onError,

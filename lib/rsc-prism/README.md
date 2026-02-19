@@ -146,6 +146,8 @@ await callAction(increment, []);
 
 Component-level worker directives are opt-in behind `experimental.componentLevelDirectives`.
 
+Action batch refresh is opt-in behind `experimental.actionBatchRefresh`.
+
 ```ts
 import { defineConfig } from "vite";
 import { rscPrism } from "@lib/rsc-prism/vite";
@@ -158,11 +160,20 @@ export default defineConfig({
       },
       experimental: {
         componentLevelDirectives: true,
+        actionBatchRefresh: true,
       },
     }),
   ],
 });
 ```
+
+`experimental.actionBatchRefresh` behavior:
+
+1. Only mounted `rsc(...)` loaders are included in one-shot refresh targets.
+2. Worker action path executes action, rerenders mounted targets in worker, and returns one batched refresh payload.
+3. Main thread applies target refreshes in one transition and avoids legacy per-component post-action refetch fan-out.
+4. If a specific target rerender fails, that target receives an error payload (ErrorBoundary path) while successful targets still apply.
+5. Non-direct/non-worker action paths keep legacy invalidation behavior.
 
 When enabled, any top-level function component whose first statement is `"use worker"` is transformed to a worker component reference, including non-exported declarations in mixed modules.
 

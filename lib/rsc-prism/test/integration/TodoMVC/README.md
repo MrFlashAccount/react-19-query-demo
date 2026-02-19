@@ -25,3 +25,4 @@ pnpm --filter @lib/rsc-prism exec vite build --config test/integration/TodoMVC/v
 - Worker runtime build + transport wiring are plugin-generated in this scenario
 - No custom worker entry file is used; runtime modules are discovered from local `"use worker"` exports
 - Worker action registration is plugin-generated from function-level `"use worker"` exports
+- `experimental.actionBatchRefresh` is enabled to cover one-shot action refresh flow

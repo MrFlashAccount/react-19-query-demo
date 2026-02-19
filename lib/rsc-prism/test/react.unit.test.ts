@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flightDoneRow, flightModelRow } from "../src/flight-runtime/wire";
 
 const mocks = vi.hoisted(() => ({
   fetchRSC: vi.fn(async () => null),
+  createCallServer: vi.fn(() => vi.fn(async () => null)),
   bootstrapWorkerRuntime: vi.fn(async () => ({
     worker: {} as Worker,
     transport: { sendAction: vi.fn() },
@@ -20,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../src/client", () => ({
   fetchRSC: mocks.fetchRSC,
+  createCallServer: mocks.createCallServer,
   bootstrapWorkerRuntime: mocks.bootstrapWorkerRuntime,
 }));
 
@@ -93,6 +96,8 @@ describe("react rsc invalidation", () => {
       transport: { sendAction: vi.fn() },
       dispose: vi.fn(),
     });
+    mocks.createCallServer.mockReset();
+    mocks.createCallServer.mockImplementation(() => vi.fn(async () => null));
     mocks.stateSetter.mockReset();
     mocks.startTransition.mockClear();
     mocks.activeLoader = null;
@@ -162,6 +167,69 @@ describe("react rsc invalidation", () => {
 
     invalidateRSC();
     expect(mocks.stateSetter).not.toHaveBeenCalled();
+  });
+
+  it("registers and unregisters mounted refresh targets", async () => {
+    const { rsc } = await import("../src/react");
+    const { getRSCRefreshRuntimeOrNull } = await import("../src/runtime-globals");
+    const WorkerViewRef = {
+      $$typeof: Symbol.for("rsc.worker.reference"),
+      $$id: "worker-components.tsx#TodoView",
+      $$moduleId: "worker-components.tsx",
+      $$name: "TodoView",
+    };
+    const RSCLoader = rsc<Record<string, unknown>>(WorkerViewRef as any);
+
+    await renderLoader(RSCLoader, { filter: "all" });
+    const runtime = getRSCRefreshRuntimeOrNull();
+    expect(runtime).not.toBeNull();
+    expect(runtime?.collectTargets()).toEqual([
+      {
+        targetKey: 'worker-components.tsx#TodoView|props:{"filter":"all"}',
+        componentId: "worker-components.tsx#TodoView",
+        componentProps: { filter: "all" },
+      },
+    ]);
+
+    cleanupLoader(RSCLoader as unknown as object);
+    expect(runtime?.collectTargets()).toEqual([]);
+  });
+
+  it("applies one-shot batch rows and per-target errors", async () => {
+    const { rsc } = await import("../src/react");
+    const { getRSCRefreshRuntimeOrNull } = await import("../src/runtime-globals");
+    const WorkerViewRef = {
+      $$typeof: Symbol.for("rsc.worker.reference"),
+      $$id: "worker-components.tsx#TodoView",
+      $$moduleId: "worker-components.tsx",
+      $$name: "TodoView",
+    };
+    const RSCLoader = rsc<Record<string, unknown>>(WorkerViewRef as any);
+    const targetKey = 'worker-components.tsx#TodoView|props:{"filter":"all"}';
+
+    await renderLoader(RSCLoader, { filter: "all" });
+    mocks.fetchRSC.mockReset();
+    const runtime = getRSCRefreshRuntimeOrNull();
+    expect(runtime).not.toBeNull();
+
+    runtime?.applyBatch({
+      seq: 1,
+      entries: [
+        {
+          targetKey,
+          rows: [flightModelRow(0, "batched"), flightDoneRow()],
+        },
+      ],
+    });
+    await expect(renderLoader(RSCLoader, { filter: "all" })).resolves.toBe("batched");
+    expect(mocks.fetchRSC).not.toHaveBeenCalled();
+
+    runtime?.applyBatch({
+      seq: 2,
+      entries: [{ targetKey, error: "component failed" }],
+    });
+    await expect(renderLoader(RSCLoader, { filter: "all" })).rejects.toThrow("component failed");
+    expect(mocks.fetchRSC).not.toHaveBeenCalled();
   });
 
   it("maintains independent cache per loader instance", async () => {

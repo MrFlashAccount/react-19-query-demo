@@ -1,10 +1,11 @@
 import { createRSCHandler } from "./response";
 import {
   createWorkerRowTransportMessageHandler,
+  type WorkerActionRefreshBatchEntryMessage,
   type WorkerTransportRequestMessage,
 } from "./transport";
 import type { ReactNode } from "react";
-import { flightErrorRow } from "./flight-runtime/wire";
+import { flightDoneRow, flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
 
 interface WorkerRuntimeModuleConfig {
   moduleId: string;
@@ -17,6 +18,7 @@ export interface CreateWorkerRuntimeOptions {
   workerOrigin?: string;
   componentModules: WorkerRuntimeModuleConfig[];
   actionModules?: WorkerRuntimeModuleConfig[];
+  actionBatchRefresh?: boolean;
 }
 
 function buildComponentRegistry(
@@ -56,13 +58,40 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
   const actionEndpoint = options.actionEndpoint ?? "/rsc/action";
   const workerOrigin = options.workerOrigin ?? "https://rsc.prism.local";
   const componentRegistry = buildComponentRegistry(options.componentModules);
+  const actionBatchRefreshEnabled = options.actionBatchRefresh === true;
   const handler = createRSCHandler({
     actionModules: options.actionModules ?? [],
   });
 
+  async function renderRowsToArray(element: ReactNode): Promise<FlightRowMessage[]> {
+    const rows: FlightRowMessage[] = [];
+    await handler.renderRows(element, (row) => {
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  function splitTerminalRow(rows: FlightRowMessage[]): {
+    contentRows: FlightRowMessage[];
+    terminalRow: FlightRowMessage;
+  } {
+    const lastRow = rows[rows.length - 1];
+    if (lastRow != null && (lastRow.k === ROW_DONE || lastRow.k === ROW_ERROR)) {
+      return {
+        contentRows: rows.slice(0, -1),
+        terminalRow: lastRow,
+      };
+    }
+    return {
+      contentRows: rows,
+      terminalRow: flightDoneRow(),
+    };
+  }
+
   self.addEventListener(
     "message",
-    createWorkerRowTransportMessageHandler(async (request: WorkerTransportRequestMessage, emit) => {
+    createWorkerRowTransportMessageHandler(
+      async (request: WorkerTransportRequestMessage, emit, controls) => {
       const target = new URL(request.endpoint, workerOrigin);
 
       if (request.operation === "fetch") {
@@ -87,10 +116,63 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
           return;
         }
 
-        await handler.actionRows(toActionRequest(request, target), emit, {
-          status: 200,
-        });
-        return;
+        const refreshTargets = request.refreshTargets ?? [];
+        if (!actionBatchRefreshEnabled || refreshTargets.length === 0) {
+          await handler.actionRows(toActionRequest(request, target), emit, {
+            status: 200,
+          });
+          return;
+        }
+
+        try {
+          const actionValue = await handler.executeAction(toActionRequest(request, target));
+          const actionRows = await renderRowsToArray(actionValue as ReactNode);
+          const { contentRows, terminalRow } = splitTerminalRow(actionRows);
+
+          const batchEntries: WorkerActionRefreshBatchEntryMessage[] = [];
+          for (let i = 0; i < refreshTargets.length; i += 1) {
+            const refreshTarget = refreshTargets[i];
+            const component = componentRegistry.get(refreshTarget.componentId);
+            if (component == null) {
+              batchEntries.push({
+                targetKey: refreshTarget.targetKey,
+                error: `Missing or unknown worker component reference: ${refreshTarget.componentId}`,
+              });
+              continue;
+            }
+
+            try {
+              const refreshRows = await renderRowsToArray(
+                component(refreshTarget.componentProps ?? {}) as ReactNode,
+              );
+              batchEntries.push({
+                targetKey: refreshTarget.targetKey,
+                rows: refreshRows,
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              batchEntries.push({
+                targetKey: refreshTarget.targetKey,
+                error: message,
+              });
+            }
+          }
+
+          controls.setActionRefreshBatch({
+            seq: request.refreshBatchSeq ?? 0,
+            entries: batchEntries,
+          });
+          for (let i = 0; i < contentRows.length; i += 1) {
+            emit(contentRows[i]);
+          }
+          emit(terminalRow);
+          return;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          emit(flightErrorRow(message));
+          return;
+        }
+
       }
 
       emit(flightErrorRow("Unsupported operation"));

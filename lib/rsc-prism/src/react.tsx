@@ -1,20 +1,14 @@
-import { startTransition, use, useEffect, useState } from "react";
-import { bootstrapWorkerRuntime, fetchRSC } from "./client";
+import { startTransition, use, useEffect, useRef, useState } from "react";
+import { bootstrapWorkerRuntime, createCallServer, fetchRSC } from "./client";
+import { createFromRowEmitter } from "./flight-runtime/client";
+import type { FlightRowMessage } from "./flight-runtime/wire";
 import type { ComponentReference } from "./types";
-import { setInvalidateRSC } from "./runtime-globals";
-
-const $$invalidations = new Set<() => void>();
-export function invalidateRSC() {
-  for (const invalidation of $$invalidations) {
-    try {
-      invalidation();
-    } catch (error) {
-      console.error("Error invalidating RSC", error);
-    }
-  }
-}
-
-setInvalidateRSC(invalidateRSC);
+import {
+  DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
+  setInvalidateRSC,
+  setRSCRefreshRuntime,
+  type RSCRefreshBatch,
+} from "./runtime-globals";
 
 export type RSCLoaderProps<Props = unknown> = Props & {
   /**
@@ -27,6 +21,140 @@ interface LoaderCacheEntry {
   key: string;
   promise: Promise<React.ReactNode>;
 }
+
+interface LoaderStore {
+  cache: Map<string, LoaderCacheEntry>;
+  subscribers: Set<() => void>;
+}
+
+interface ActiveTargetConsumer {
+  store: LoaderStore;
+  cacheKey: string;
+  subscriber: () => void;
+}
+
+interface ActiveTarget {
+  targetKey: string;
+  componentId: string;
+  componentProps: unknown;
+  consumers: Set<ActiveTargetConsumer>;
+}
+
+const DEFAULT_ACTION_ENDPOINT = "/rsc/action";
+const loaderStores = new Set<LoaderStore>();
+const activeTargets = new Map<string, ActiveTarget>();
+
+function toError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error(String(error));
+}
+
+function toRejectedPromise(error: unknown): Promise<React.ReactNode> {
+  const rejected = Promise.reject(toError(error));
+  void rejected.catch(() => {});
+  return rejected;
+}
+
+function createPromiseFromRows(rows: FlightRowMessage[]): Promise<React.ReactNode> {
+  try {
+    const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+    const runtime = globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] as
+      | { transport?: unknown }
+      | undefined;
+    const callServer =
+      runtime != null && runtime.transport != null
+        ? createCallServer(DEFAULT_ACTION_ENDPOINT, {
+            transport: runtime.transport as any,
+          })
+        : createCallServer(DEFAULT_ACTION_ENDPOINT);
+    const emitter = createFromRowEmitter<React.ReactNode>({
+      callServer,
+    });
+    for (let i = 0; i < rows.length; i += 1) {
+      emitter.push(rows[i]);
+    }
+    return emitter.result;
+  } catch (error) {
+    return toRejectedPromise(error);
+  }
+}
+
+function notifySubscribers(subscribers: Set<() => void>): void {
+  if (subscribers.size === 0) {
+    return;
+  }
+  startTransition(() => {
+    for (const subscriber of subscribers) {
+      try {
+        subscriber();
+      } catch (error) {
+        console.error("Error invalidating RSC", error);
+      }
+    }
+  });
+}
+
+function legacyInvalidateInternal(): void {
+  const subscribers = new Set<() => void>();
+  for (const store of loaderStores) {
+    store.cache.clear();
+    for (const subscriber of store.subscribers) {
+      subscribers.add(subscriber);
+    }
+  }
+  notifySubscribers(subscribers);
+}
+
+function collectTargetsInternal(): Array<{
+  targetKey: string;
+  componentId: string;
+  componentProps: unknown;
+}> {
+  return Array.from(activeTargets.values(), (target) => ({
+    targetKey: target.targetKey,
+    componentId: target.componentId,
+    componentProps: target.componentProps,
+  }));
+}
+
+function applyBatchInternal(batch: RSCRefreshBatch): void {
+  const subscribers = new Set<() => void>();
+  for (let i = 0; i < batch.entries.length; i += 1) {
+    const entry = batch.entries[i];
+    const target = activeTargets.get(entry.targetKey);
+    if (target == null || target.consumers.size === 0) {
+      continue;
+    }
+    const promise =
+      entry.error != null
+        ? toRejectedPromise(new Error(entry.error))
+        : Array.isArray(entry.rows)
+          ? createPromiseFromRows(entry.rows)
+          : toRejectedPromise(new Error(`Missing rows for "${entry.targetKey}"`));
+    for (const consumer of target.consumers) {
+      consumer.store.cache.delete(consumer.cacheKey);
+      consumer.store.cache.set(consumer.cacheKey, {
+        key: consumer.cacheKey,
+        promise,
+      });
+      subscribers.add(consumer.subscriber);
+    }
+  }
+  notifySubscribers(subscribers);
+}
+
+export function invalidateRSC() {
+  legacyInvalidateInternal();
+}
+
+setInvalidateRSC(invalidateRSC);
+setRSCRefreshRuntime({
+  collectTargets: collectTargetsInternal,
+  applyBatch: applyBatchInternal,
+  legacyInvalidate: legacyInvalidateInternal,
+});
 
 function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
@@ -147,33 +275,80 @@ function createPropsToken(props: unknown): string {
 }
 
 export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
-  const cache = new Map<string, LoaderCacheEntry>();
+  const store: LoaderStore = {
+    cache: new Map<string, LoaderCacheEntry>(),
+    subscribers: new Set<() => void>(),
+  };
+  loaderStores.add(store);
+
+  const referenceCandidate = reference as unknown as { $$id?: unknown };
+  const componentId = typeof referenceCandidate.$$id === "string" ? referenceCandidate.$$id : null;
 
   return function RSCLoader(props: RSCLoaderProps<Props>) {
     const [, $$refresh] = useState({});
-    const key = createPropsToken(props);
+    const cacheKey = createPropsToken(props);
+    const targetKey = componentId == null ? null : `${componentId}|${cacheKey}`;
+    const subscriberRef = useRef<(() => void) | null>(null);
+    if (subscriberRef.current == null) {
+      subscriberRef.current = () => {
+        $$refresh({});
+      };
+    }
 
     useEffect(() => {
-      const invalidate = () => {
-        startTransition(() => {
-          cache.clear();
-          $$refresh({});
-        });
-      };
-      $$invalidations.add(invalidate);
-      return () => {
-        $$invalidations.delete(invalidate);
-      };
-    }, []);
+      const subscriber = subscriberRef.current;
+      if (subscriber == null) {
+        return;
+      }
 
-    const cached = cache.get(key);
+      store.subscribers.add(subscriber);
+
+      let consumer: ActiveTargetConsumer | null = null;
+      if (targetKey != null && componentId != null) {
+        const target =
+          activeTargets.get(targetKey) ??
+          (() => {
+            const next: ActiveTarget = {
+              targetKey,
+              componentId,
+              componentProps: props,
+              consumers: new Set<ActiveTargetConsumer>(),
+            };
+            activeTargets.set(targetKey, next);
+            return next;
+          })();
+        consumer = {
+          store,
+          cacheKey,
+          subscriber,
+        };
+        target.consumers.add(consumer);
+      }
+
+      return () => {
+        store.subscribers.delete(subscriber);
+        if (consumer == null || targetKey == null) {
+          return;
+        }
+        const target = activeTargets.get(targetKey);
+        if (target == null) {
+          return;
+        }
+        target.consumers.delete(consumer);
+        if (target.consumers.size === 0) {
+          activeTargets.delete(targetKey);
+        }
+      };
+    }, [cacheKey, componentId, targetKey]);
+
+    const cached = store.cache.get(cacheKey);
     if (cached != null) {
       return cached.promise;
     }
 
     const promise = fetchRSC(reference, { props });
-    const entry = { key, promise } as const;
-    cache.set(key, entry);
+    const entry = { key: cacheKey, promise } as const;
+    store.cache.set(cacheKey, entry);
 
     return promise;
   };

@@ -7,6 +7,7 @@ import { rscPrism } from "@lib/rsc-prism/vite";
 
 const rootDir = import.meta.dirname;
 const repoRoot = path.resolve(rootDir, "../..");
+const rscPrismSourceDir = path.resolve(repoRoot, "lib/rsc-prism/src");
 
 export default defineConfig(() => ({
   root: rootDir,
@@ -15,12 +16,16 @@ export default defineConfig(() => ({
     tailwindcss(),
     rscPrism({
       workerRuntime: { enabled: true },
-      experimental: { componentLevelDirectives: true },
+      experimental: {
+        componentLevelDirectives: true,
+        actionBatchRefresh: true,
+      },
     }),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }),
   ],
   resolve: {
     alias: [
+      { find: "@lib/rsc-prism", replacement: rscPrismSourceDir },
       { find: "@", replacement: path.resolve(rootDir, "src") },
       { find: "#", replacement: path.resolve(rootDir, "src/*") },
     ],
