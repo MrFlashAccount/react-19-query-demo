@@ -32,18 +32,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./rsc": {
-      "types": "./dist/rsc/index.d.ts",
-      "default": "./dist/rsc/index.js"
-    },
-    "./rsc/client-only": {
-      "types": "./dist/rsc/client-only.d.ts",
-      "default": "./dist/rsc/client-only.js"
-    },
-    "./rsc/webpack-shim": {
-      "types": "./dist/rsc/webpack-shim.d.ts",
-      "default": "./dist/rsc/webpack-shim.js"
     }
   },
   "publishConfig": {
