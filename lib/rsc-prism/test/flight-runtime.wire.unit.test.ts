@@ -10,6 +10,7 @@ import {
   encodeWireValueWithBinaryRows,
   parseModelString,
 } from "../src/flight-runtime/wire";
+import { TraceRecorder } from "./utils/trace-recorder";
 
 function decodeWithResolver(value: unknown): unknown {
   return decodeWireValue(value, (id) => `client:${id}`);
@@ -24,6 +25,64 @@ function measureDecodeMs(value: unknown, iterations = 1): number {
 }
 
 describe("flight wire decode correctness", () => {
+  it("emits component encode/decode spans with non-negative durations", () => {
+    const traceRecorder = new TraceRecorder();
+    traceRecorder.start();
+    try {
+      const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+      const element = {
+        $$typeof: REACT_ELEMENT_SYMBOL,
+        type: "div",
+        key: null,
+        props: { children: "trace me" },
+      };
+
+      encodeStreamValue(element, {
+        seen: new WeakSet<object>(),
+        emitBinaryRow: () => 1,
+        outlineValue: () => 1,
+        traceContext: {
+          requestId: "wire-trace-1",
+          source: "transport",
+        },
+      });
+
+      decodeWireValue(
+        {
+          $t: "element",
+          ty: { $t: "host", v: "div" },
+          props: { children: "trace me" },
+          key: null,
+        },
+        (id) => `client:${id}`,
+        undefined,
+        undefined,
+        {
+          traceContext: {
+            requestId: "wire-trace-1",
+            source: "react",
+          },
+        },
+      );
+
+      const encodeSpans = traceRecorder.getSpansByName("rsc.component.encode");
+      const decodeSpans = traceRecorder.getSpansByName("rsc.component.decode");
+      expect(encodeSpans.length).toBeGreaterThan(0);
+      expect(decodeSpans.length).toBeGreaterThan(0);
+      expect(
+        encodeSpans.some((span) => span.payload.componentKind === "host" && span.payload.hostTag === "div"),
+      ).toBe(true);
+      expect(
+        decodeSpans.some((span) => span.payload.componentKind === "host" && span.payload.hostTag === "div"),
+      ).toBe(true);
+      expect([...encodeSpans, ...decodeSpans].every((span) => (span.duration ?? -1) >= 0)).toBe(
+        true,
+      );
+    } finally {
+      traceRecorder.stop();
+    }
+  });
+
   it("decodes all supported tagged values", () => {
     const formDataWire = {
       $t: "formdata",

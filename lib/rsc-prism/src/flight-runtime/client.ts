@@ -15,6 +15,7 @@ import {
   ROW_MODEL,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
+import { createComponentTraceTracker, type ComponentTraceTracker } from "../tracing";
 
 const CHUNK_PENDING = 0;
 const CHUNK_RESOLVED_MODEL = 1;
@@ -31,6 +32,7 @@ type ChunkResolveListener<T> = (value: T) => void;
 type ChunkRejectListener = (reason: unknown) => void;
 
 interface FlightChunk<T = unknown> {
+  id: number;
   status: ChunkStatus;
   value: T | string | null;
   reason: unknown;
@@ -46,6 +48,9 @@ interface FlightResponse {
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
   closed: boolean;
   closedReason: unknown;
+  traceContext?: FlightClientOptions["traceContext"];
+  componentTrace?: ComponentTraceTracker;
+  currentRowId?: number;
 }
 
 const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
@@ -64,8 +69,9 @@ function isLazyWrapper(
   return candidate.$$typeof === REACT_LAZY_SYMBOL && typeof candidate._init === "function";
 }
 
-function createPendingChunk<T>(): FlightChunk<T> {
+function createPendingChunk<T>(id: number): FlightChunk<T> {
   return {
+    id,
     status: CHUNK_PENDING,
     value: null,
     reason: null,
@@ -105,13 +111,13 @@ function getChunk<T = unknown>(response: FlightResponse, id: number): FlightChun
     return existing as FlightChunk<T>;
   }
   if (response.closed) {
-    const errored = createPendingChunk<T>();
+    const errored = createPendingChunk<T>(id);
     errored.status = CHUNK_ERRORED;
     errored.reason = response.closedReason;
     response.chunks.set(id, errored);
     return errored;
   }
-  const pending = createPendingChunk<T>();
+  const pending = createPendingChunk<T>(id);
   response.chunks.set(id, pending);
   return pending;
 }
@@ -150,6 +156,8 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     return;
   }
   const model = chunk.value as string;
+  const previousRowId = response.currentRowId;
+  response.currentRowId = chunk.id;
   try {
     const parsed = reviveModelValueTree(
       {
@@ -159,6 +167,9 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
           createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
         resolveClientReference: (id) => response.resolveClientReference(id),
         callServer: response.callServer,
+        traceContext: response.traceContext,
+        componentTrace: response.componentTrace,
+        getCurrentRowId: () => response.currentRowId,
       },
       JSON.parse(model),
     ) as T;
@@ -179,6 +190,8 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
       return;
     }
     errorChunk(chunk, error);
+  } finally {
+    response.currentRowId = previousRowId;
   }
 }
 
@@ -290,7 +303,17 @@ function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
 function createFlightResponse(
   resolveClientReference: (id: string) => unknown,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
+  options?: FlightClientOptions,
 ): FlightResponse {
+  const componentTrace =
+    options?.componentTrace ??
+    (options?.traceContext != null
+      ? createComponentTraceTracker({
+          requestId: options.traceContext.requestId,
+          actionId: options.traceContext.actionId,
+          parentSpan: options.traceContext.parentSpan,
+        })
+      : undefined);
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
     resolveClientReference,
@@ -298,6 +321,9 @@ function createFlightResponse(
     fromJSON: (_key, value) => value,
     closed: false,
     closedReason: null,
+    traceContext: options?.traceContext,
+    componentTrace,
+    currentRowId: undefined,
   };
   response.fromJSON = createModelReviver({
     getChunk: (id) => getChunk(response, id),
@@ -306,6 +332,9 @@ function createFlightResponse(
       createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
     resolveClientReference: (id) => response.resolveClientReference(id),
     callServer,
+    traceContext: options?.traceContext,
+    componentTrace,
+    getCurrentRowId: () => response.currentRowId,
   });
   return response;
 }
@@ -522,7 +551,7 @@ export async function createFromReadableStream<T>(
   options?: FlightClientOptions,
 ): Promise<T> {
   const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference, options?.callServer);
+  const response = createFlightResponse(resolveClientReference, options?.callServer, options);
   return await new Promise<T>((resolve, reject) => {
     let rootSettled = false;
     const settleRoot = (): void => {
@@ -567,7 +596,7 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   result: Promise<T>;
 } {
   const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference, options?.callServer);
+  const response = createFlightResponse(resolveClientReference, options?.callServer, options);
   let hasAnyRow = false;
   let rootSettled = false;
 
@@ -609,7 +638,9 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
     push(row) {
       switch (row.k) {
         case ROW_MODEL:
+          response.currentRowId = row.id;
           resolveModelChunk(response, row.id, row.v);
+          response.currentRowId = undefined;
           hasAnyRow = true;
           settleRoot();
           return;

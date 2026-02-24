@@ -24,4 +24,10 @@ export default defineConfig(() => ({
     }),
     react({ babel: { plugins: ["babel-plugin-react-compiler"] } }) as unknown as PluginOption,
   ],
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
 }));

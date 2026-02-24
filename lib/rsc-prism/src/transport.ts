@@ -2,6 +2,18 @@ import { getInvalidateRSC, getRSCRefreshRuntimeOrNull } from "./runtime-globals"
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightClientOptions } from "./flight-runtime/types";
 import { flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
+import {
+  createTraceRequestId,
+  finishTraceSpanError,
+  finishTraceSpanSuccess,
+  startTraceSpan,
+  summarizeBody,
+  summarizeError,
+  summarizeHeaders,
+  traceEvent,
+  type InvalidateCause,
+  type RSCTraceContext,
+} from "./tracing";
 
 export interface SendActionInput {
   endpoint: string;
@@ -10,6 +22,7 @@ export interface SendActionInput {
   contentType?: string;
   headers?: HeadersInit;
   requestInit?: Omit<RequestInit, "method" | "body" | "headers">;
+  trace?: RSCTraceContext;
 }
 
 export interface FetchRSCInput {
@@ -18,6 +31,7 @@ export interface FetchRSCInput {
   requestInit?: Omit<RequestInit, "headers">;
   componentId?: string;
   componentProps?: unknown;
+  trace?: RSCTraceContext;
 }
 
 export interface RSCTransport {
@@ -31,24 +45,75 @@ export function createFetchTransport(): RSCTransport {
   return {
     async sendAction(input): Promise<Response> {
       const invalidateRSC = getInvalidateRSC();
+      const requestId = input.trace?.requestId ?? createTraceRequestId("fetch-action");
+      const span = startTraceSpan(
+        "rsc.transport.sendAction",
+        {
+          requestId,
+          actionId: input.actionId,
+          endpoint: input.endpoint,
+          transport: "fetch",
+          source: "transport",
+          ...summarizeBody(input.body),
+          ...summarizeHeaders(input.headers),
+        },
+        input.trace?.parentSpan,
+      );
 
       const headers = new Headers(input.headers);
       headers.set("x-rsc-action", input.actionId);
+      headers.set("x-rsc-request-id", requestId);
       if (input.contentType != null) {
         headers.set("content-type", input.contentType);
       }
 
-      return fetch(input.endpoint, {
-        method: "POST",
-        body: input.body,
-        headers,
-        ...input.requestInit,
-      }).finally(invalidateRSC);
+      try {
+        const response = await fetch(input.endpoint, {
+          method: "POST",
+          body: input.body,
+          headers,
+          ...input.requestInit,
+        });
+        finishTraceSpanSuccess(span, {
+          requestId,
+          status: response.status,
+        });
+        return response;
+      } catch (error) {
+        finishTraceSpanError(span, error, {
+          requestId,
+        });
+        throw error;
+      } finally {
+        const cause: InvalidateCause = {
+          causeType: "action-legacy-invalidate",
+          requestId,
+          actionId: input.actionId,
+          parentSpan: input.trace?.parentSpan,
+          dispatchedAt: Date.now(),
+          generation: nextInvalidateGeneration(),
+        };
+        invalidateRSC(cause);
+      }
     },
 
     async fetchRSC(input): Promise<Response> {
+      const requestId = input.trace?.requestId ?? createTraceRequestId("fetch-rsc");
+      const span = startTraceSpan(
+        "rsc.transport.fetchRSC",
+        {
+          requestId,
+          endpoint: input.url,
+          componentId: input.componentId,
+          transport: "fetch",
+          source: "transport",
+          ...summarizeHeaders(input.headers),
+        },
+        input.trace?.parentSpan,
+      );
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
+      headers.set("x-rsc-request-id", requestId);
       if (input.componentId != null) {
         headers.set("x-rsc-component-id", input.componentId);
       }
@@ -56,10 +121,22 @@ export function createFetchTransport(): RSCTransport {
         headers.set("x-rsc-component-props", JSON.stringify(input.componentProps));
       }
 
-      return fetch(input.url, {
-        headers,
-        ...input.requestInit,
-      });
+      try {
+        const response = await fetch(input.url, {
+          headers,
+          ...input.requestInit,
+        });
+        finishTraceSpanSuccess(span, {
+          requestId,
+          status: response.status,
+        });
+        return response;
+      } catch (error) {
+        finishTraceSpanError(span, error, {
+          requestId,
+        });
+        throw error;
+      }
     },
   };
 }
@@ -78,6 +155,20 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
   return {
     async sendAction(input): Promise<Response> {
       const invalidateRSC = getInvalidateRSC();
+      const requestId = input.trace?.requestId ?? createTraceRequestId("function-action");
+      const span = startTraceSpan(
+        "rsc.transport.sendAction",
+        {
+          requestId,
+          actionId: input.actionId,
+          endpoint: input.endpoint,
+          transport: "function",
+          source: "transport",
+          ...summarizeBody(input.body),
+          ...summarizeHeaders(input.headers),
+        },
+        input.trace?.parentSpan,
+      );
 
       const headers = new Headers(input.headers);
       if (input.contentType != null) {
@@ -86,31 +177,80 @@ export function createFunctionTransport(handler: FunctionTransportHandler): RSCT
         headers.delete("content-type");
       }
       headers.set("x-rsc-action", input.actionId);
-      return handler({
-        method: "POST",
-        url: input.endpoint,
-        headers,
-        body: input.body,
-        requestInit: input.requestInit,
-      }).finally(invalidateRSC);
+      headers.set("x-rsc-request-id", requestId);
+      try {
+        const response = await handler({
+          method: "POST",
+          url: input.endpoint,
+          headers,
+          body: input.body,
+          requestInit: input.requestInit,
+        });
+        finishTraceSpanSuccess(span, {
+          requestId,
+          status: response.status,
+        });
+        return response;
+      } catch (error) {
+        finishTraceSpanError(span, error, {
+          requestId,
+        });
+        throw error;
+      } finally {
+        const cause: InvalidateCause = {
+          causeType: "action-legacy-invalidate",
+          requestId,
+          actionId: input.actionId,
+          parentSpan: input.trace?.parentSpan,
+          dispatchedAt: Date.now(),
+          generation: nextInvalidateGeneration(),
+        };
+        invalidateRSC(cause);
+      }
     },
 
     async fetchRSC(input): Promise<Response> {
+      const requestId = input.trace?.requestId ?? createTraceRequestId("function-fetch");
+      const span = startTraceSpan(
+        "rsc.transport.fetchRSC",
+        {
+          requestId,
+          endpoint: input.url,
+          componentId: input.componentId,
+          transport: "function",
+          source: "transport",
+          ...summarizeHeaders(input.headers),
+        },
+        input.trace?.parentSpan,
+      );
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
+      headers.set("x-rsc-request-id", requestId);
       if (input.componentId != null) {
         headers.set("x-rsc-component-id", input.componentId);
       }
       if (input.componentProps !== undefined) {
         headers.set("x-rsc-component-props", JSON.stringify(input.componentProps));
       }
-      return handler({
-        method: "GET",
-        url: input.url,
-        headers,
-        body: "",
-        requestInit: input.requestInit,
-      });
+      try {
+        const response = await handler({
+          method: "GET",
+          url: input.url,
+          headers,
+          body: "",
+          requestInit: input.requestInit,
+        });
+        finishTraceSpanSuccess(span, {
+          requestId,
+          status: response.status,
+        });
+        return response;
+      } catch (error) {
+        finishTraceSpanError(span, error, {
+          requestId,
+        });
+        throw error;
+      }
     },
   };
 }
@@ -199,6 +339,12 @@ const WORKER_RESPONSE_KIND_HEAD = 1;
 const WORKER_RESPONSE_KIND_NEXT = 2;
 const WORKER_RESPONSE_KIND_DONE = 3;
 const WORKER_RESPONSE_KIND_ERROR = 4;
+let invalidateGeneration = 0;
+
+function nextInvalidateGeneration(): number {
+  invalidateGeneration += 1;
+  return invalidateGeneration;
+}
 
 function responseHeadType(baseType: string): string {
   return `${baseType}.head`;
@@ -523,13 +669,29 @@ function sendWorkerRequest(
   endpoint: WorkerMessageEndpoint,
   request: Omit<WorkerTransportRequestMessage, "id" | "type">,
   options: WorkerTransportOptions = {},
+  requestId?: string,
+  traceContext?: RSCTraceContext,
 ): Promise<Response> {
   const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
   const responseType = options.responseType ?? DEFAULT_RESPONSE_TYPE;
   const responseTypeMap = createWorkerResponseTypeMap(responseType);
   const timeoutMs = options.timeoutMs ?? 10000;
-  const id = nextRequestId();
+  const id = requestId ?? nextRequestId();
   const endpointState = getWorkerEndpointState(endpoint);
+  const span = startTraceSpan(
+    "rsc.transport.worker.request",
+    {
+      requestId: id,
+      operation: request.operation,
+      endpoint: request.endpoint,
+      actionId: request.actionId ?? traceContext?.actionId,
+      componentId: request.componentId,
+      timeoutMs,
+      source: "transport",
+    },
+    traceContext?.parentSpan,
+    "secondary",
+  );
 
   return new Promise<Response>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -579,14 +741,26 @@ function sendWorkerRequest(
       }
 
       const timeoutError = new Error(`Worker transport timed out after ${timeoutMs}ms`);
+      traceEvent(span, "timeout", {
+        requestId: id,
+        timeoutMs,
+      });
       if (!didResolveHead) {
         cleanup();
         isSettled = true;
+        finishTraceSpanError(span, timeoutError, {
+          requestId: id,
+          phase: "before-head",
+        });
         reject(timeoutError);
         return;
       }
 
       cleanup();
+      finishTraceSpanError(span, timeoutError, {
+        requestId: id,
+        phase: "after-head",
+      });
       failStream(timeoutError);
     };
 
@@ -621,6 +795,10 @@ function sendWorkerRequest(
             if (didResolveHead || isSettled) return;
             didResolveHead = true;
             isSettled = true;
+            traceEvent(span, "head", {
+              requestId: id,
+              status: message.status,
+            });
             resolve(
               new Response(stream, {
                 status: message.status,
@@ -630,6 +808,10 @@ function sendWorkerRequest(
             return;
           case WORKER_RESPONSE_KIND_NEXT:
             if (!didResolveHead || streamDone || message.chunk == null) return;
+            traceEvent(span, "chunk", {
+              requestId: id,
+              bytes: message.chunk.byteLength,
+            });
             if (streamController != null) {
               streamController.enqueue(message.chunk);
             } else {
@@ -639,11 +821,17 @@ function sendWorkerRequest(
           case WORKER_RESPONSE_KIND_DONE:
             if (!didResolveHead || streamDone) return;
             cleanup();
+            finishTraceSpanSuccess(span, {
+              requestId: id,
+            });
             closeStream();
             return;
           case WORKER_RESPONSE_KIND_ERROR: {
             const error = new Error(message.error);
             cleanup();
+            finishTraceSpanError(span, error, {
+              requestId: id,
+            });
             if (!didResolveHead && !isSettled) {
               isSettled = true;
               reject(error);
@@ -673,6 +861,9 @@ export function createWorkerTransport(
   return {
     async sendAction(input): Promise<Response> {
       const invalidateRSC = getInvalidateRSC();
+      const requestId = input.trace?.requestId ?? nextRequestId();
+      const headers = new Headers(input.headers);
+      headers.set("x-rsc-request-id", requestId);
 
       return sendWorkerRequest(
         endpoint,
@@ -681,17 +872,31 @@ export function createWorkerTransport(
           endpoint: input.endpoint,
           actionId: input.actionId,
           contentType: input.contentType,
-          headers: toHeaderTuples(input.headers),
+          headers: toHeaderTuples(headers),
           body: input.body,
           requestInit: input.requestInit,
         },
         options,
-      ).finally(() => invalidateRSC());
+        requestId,
+        input.trace,
+      ).finally(() => {
+        const cause: InvalidateCause = {
+          causeType: "action-legacy-invalidate",
+          requestId,
+          actionId: input.actionId,
+          parentSpan: input.trace?.parentSpan,
+          dispatchedAt: Date.now(),
+          generation: nextInvalidateGeneration(),
+        };
+        invalidateRSC(cause);
+      });
     },
 
     async fetchRSC(input): Promise<Response> {
+      const requestId = input.trace?.requestId ?? nextRequestId();
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
+      headers.set("x-rsc-request-id", requestId);
       return sendWorkerRequest(
         endpoint,
         {
@@ -703,6 +908,8 @@ export function createWorkerTransport(
           componentProps: input.componentProps,
         },
         options,
+        requestId,
+        input.trace,
       );
     },
   };
@@ -721,20 +928,40 @@ export function createWorkerRowTransport(
   let actionRefreshAppliedSeq = 0;
 
   function sendRowRequest<T>(
-    request: Omit<WorkerTransportRequestMessage, "id" | "type">,
+    request: Omit<WorkerTransportRequestMessage, "id" | "type"> & {
+      trace?: RSCTraceContext;
+    },
     hooks?: {
       onActionRefreshBatch?: (batch: WorkerActionRefreshBatchMessage) => void;
     },
     clientOptions?: FlightClientOptions,
   ): Promise<T> {
-    const id = nextRequestId();
-    const emitter = createFromRowEmitter<T>(clientOptions);
+    const id = request.trace?.requestId ?? nextRequestId();
+    const span = startTraceSpan(
+      "rsc.transport.worker.rowRequest",
+      {
+        requestId: id,
+        operation: request.operation,
+        endpoint: request.endpoint,
+        actionId: request.actionId ?? request.trace?.actionId,
+        componentId: request.componentId,
+        timeoutMs,
+        source: "transport",
+      },
+      request.trace?.parentSpan,
+      "secondary",
+    );
+    const emitter = createFromRowEmitter<T>({
+      ...clientOptions,
+      traceContext: request.trace,
+    });
 
     return new Promise<T>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
       let lastActivity = Date.now();
       let rootSettled = false;
       let streamSettled = false;
+      let seenRows = 0;
 
       const cleanup = (): void => {
         endpointState.pending.delete(id);
@@ -748,6 +975,10 @@ export function createWorkerRowTransport(
         streamSettled = true;
         cleanup();
         emitter.push(flightErrorRow(error.message));
+        finishTraceSpanError(span, error, {
+          requestId: id,
+          seenRows,
+        });
         if (!rootSettled) {
           rootSettled = true;
           reject(error);
@@ -777,17 +1008,28 @@ export function createWorkerRowTransport(
             return;
           }
           if (message.actionRefreshBatch != null && hooks?.onActionRefreshBatch != null) {
+            traceEvent(span, "actionRerenderRows", {
+              requestId: id,
+              seq: message.actionRefreshBatch.seq,
+              entries: message.actionRefreshBatch.entries.length,
+            });
             hooks.onActionRefreshBatch(message.actionRefreshBatch);
           }
           if (message.rows.length === 0) {
             return;
           }
+          seenRows += message.rows.length;
           for (let i = 0; i < message.rows.length; i += 1) {
             const row = message.rows[i];
             emitter.push(row);
             if (row.k === ROW_DONE || row.k === ROW_ERROR) {
               streamSettled = true;
               cleanup();
+              finishTraceSpanSuccess(span, {
+                requestId: id,
+                seenRows,
+                terminalKind: row.k,
+              });
               break;
             }
           }
@@ -798,12 +1040,21 @@ export function createWorkerRowTransport(
         (value) => {
           if (rootSettled) return;
           rootSettled = true;
+          finishTraceSpanSuccess(span, {
+            requestId: id,
+            seenRows,
+            resolved: true,
+          });
           resolve(value);
         },
         (error) => {
           if (rootSettled) return;
           rootSettled = true;
           cleanup();
+          finishTraceSpanError(span, error, {
+            requestId: id,
+            seenRows,
+          });
           reject(error);
         },
       );
@@ -812,15 +1063,18 @@ export function createWorkerRowTransport(
         timer = setTimeout(watchTimeout, timeoutMs);
       }
 
-      endpoint.postMessage(createWorkerRequestEnvelope(requestType, id, request));
+      const { trace: _trace, ...wireRequest } = request;
+      endpoint.postMessage(createWorkerRequestEnvelope(requestType, id, wireRequest));
     });
   }
 
   return {
     ...baseTransport,
     fetchRSCDirect<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T> {
+      const requestId = input.trace?.requestId ?? nextRequestId();
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
+      headers.set("x-rsc-request-id", requestId);
       return sendRowRequest<T>(
         {
           operation: "fetch",
@@ -829,6 +1083,11 @@ export function createWorkerRowTransport(
           requestInit: input.requestInit,
           componentId: input.componentId,
           componentProps: input.componentProps,
+          trace: {
+            ...input.trace,
+            requestId,
+            source: input.trace?.source ?? "transport",
+          },
         },
         undefined,
         clientOptions,
@@ -842,17 +1101,34 @@ export function createWorkerRowTransport(
       const refreshBatchSeq =
         refreshRuntime != null && refreshTargets.length > 0 ? ++actionRefreshDispatchSeq : undefined;
       let sawBatchMetadata = false;
+      const cause: InvalidateCause = {
+        causeType: "action-batch-refresh",
+        requestId: input.trace?.requestId,
+        actionId: input.actionId,
+        parentSpan: input.trace?.parentSpan,
+        dispatchedAt: Date.now(),
+        generation: nextInvalidateGeneration(),
+      };
+      const requestId = input.trace?.requestId ?? nextRequestId();
+      cause.requestId = requestId;
+      const headers = new Headers(input.headers);
+      headers.set("x-rsc-request-id", requestId);
       return sendRowRequest<T>(
         {
           operation: "action",
           endpoint: input.endpoint,
           actionId: input.actionId,
           contentType: input.contentType,
-          headers: toHeaderTuples(input.headers),
+          headers: toHeaderTuples(headers),
           body: input.body,
           requestInit: input.requestInit,
           refreshTargets: refreshTargets.length > 0 ? refreshTargets : undefined,
           refreshBatchSeq,
+          trace: {
+            ...input.trace,
+            requestId,
+            source: input.trace?.source ?? "transport",
+          },
         },
         {
           onActionRefreshBatch: (batch) => {
@@ -871,10 +1147,13 @@ export function createWorkerRowTransport(
                 rows: entry.rows,
                 error: entry.error,
               })),
-            });
+            }, cause);
           },
         },
-        clientOptions,
+        {
+          ...clientOptions,
+          traceContext: input.trace,
+        },
       ).finally(() => {
         if (sawBatchMetadata) {
           return;
@@ -885,10 +1164,13 @@ export function createWorkerRowTransport(
           if (refreshBatchSeq != null) {
             return;
           }
-          refreshRuntime.legacyInvalidate();
+          refreshRuntime.legacyInvalidate(cause);
           return;
         }
-        invalidateRSC();
+        invalidateRSC({
+          ...cause,
+          causeType: "action-legacy-invalidate",
+        });
       });
     },
   };
@@ -956,9 +1238,25 @@ export function createWorkerTransportMessageHandler(
   return async (event: MessageEvent<unknown>) => {
     const request = normalizeIncomingWorkerTransportRequest(event.data, requestType);
     if (request == null) return;
+    const span = startTraceSpan(
+      "rsc.worker.transport.message",
+      {
+        requestId: request.id,
+        operation: request.operation,
+        endpoint: request.endpoint,
+        source: "worker",
+      },
+      undefined,
+      "secondary",
+    );
 
     const replyTarget = resolveReplyTarget(event);
-    if (replyTarget == null) return;
+    if (replyTarget == null) {
+      finishTraceSpanSuccess(span, {
+        dropped: true,
+      });
+      return;
+    }
 
     try {
       const response = await handler(request);
@@ -1013,6 +1311,9 @@ export function createWorkerTransportMessageHandler(
         type: responseTypeMap.done,
         id: request.id,
       } satisfies WorkerTransportResponseDoneMessage);
+      finishTraceSpanSuccess(span, {
+        status: response.status,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       replyTarget.postMessage({
@@ -1020,6 +1321,10 @@ export function createWorkerTransportMessageHandler(
         id: request.id,
         error: message,
       } satisfies WorkerTransportResponseErrorMessage);
+      finishTraceSpanError(span, error, {
+        requestId: request.id,
+        ...summarizeError(error),
+      });
     }
   };
 }
@@ -1042,9 +1347,25 @@ export function createWorkerRowTransportMessageHandler(
   return async (event: MessageEvent<unknown>) => {
     const request = normalizeIncomingWorkerTransportRequest(event.data, requestType);
     if (request == null) return;
+    const span = startTraceSpan(
+      "rsc.worker.transport.rowMessage",
+      {
+        requestId: request.id,
+        operation: request.operation,
+        endpoint: request.endpoint,
+        source: "worker",
+      },
+      undefined,
+      "secondary",
+    );
 
     const replyTarget = resolveReplyTarget(event);
-    if (replyTarget == null) return;
+    if (replyTarget == null) {
+      finishTraceSpanSuccess(span, {
+        dropped: true,
+      });
+      return;
+    }
 
     const pendingRows: FlightRowMessage[] = [];
     const pendingTransfer: Transferable[] = [];
@@ -1100,9 +1421,13 @@ export function createWorkerRowTransportMessageHandler(
 
     try {
       await handler(request, emit, { setActionRefreshBatch });
+      finishTraceSpanSuccess(span);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit(flightErrorRow(message));
+      finishTraceSpanError(span, error, {
+        ...summarizeError(error),
+      });
     }
   };
 }

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { encodeReply } from "../src/flight-runtime/client";
 import { decodeReply, renderToReadableStream } from "../src/flight-runtime/server";
+import { TraceRecorder } from "./utils/trace-recorder";
 
 describe("flight runtime server stream behavior", () => {
   it("returns stream before server render resolves and emits deferred rows", async () => {
@@ -79,5 +80,49 @@ describe("flight runtime server stream behavior", () => {
     };
     expect(Array.from(decoded.typed)).toEqual([100, 200, 300]);
     expect(Array.from(new Uint8Array(decoded.buf))).toEqual([1, 2, 3]);
+  });
+
+  it("emits component render/encode spans with host tag coverage and durations", async () => {
+    const traceRecorder = new TraceRecorder();
+    traceRecorder.start();
+    try {
+      const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+      const Child = () =>
+        ({
+          $$typeof: REACT_ELEMENT_SYMBOL,
+          type: "span",
+          key: null,
+          props: { children: "ok" },
+        }) as ReactNode;
+      const root = {
+        $$typeof: REACT_ELEMENT_SYMBOL,
+        type: Child,
+        key: null,
+        props: {},
+      } as ReactNode;
+
+      const stream = await renderToReadableStream(root, {}, {
+        traceContext: {
+          requestId: "server-trace-1",
+          source: "server",
+        },
+      });
+      await new Response(stream).text();
+
+      const renderSpans = traceRecorder.getSpansByName("rsc.component.render");
+      const encodeSpans = traceRecorder.getSpansByName("rsc.component.encode");
+      expect(renderSpans.length).toBeGreaterThan(0);
+      expect(encodeSpans.length).toBeGreaterThan(0);
+      expect(
+        encodeSpans.some(
+          (span) => span.payload.componentKind === "host" && span.payload.hostTag === "span",
+        ),
+      ).toBe(true);
+      expect([...renderSpans, ...encodeSpans].every((span) => (span.duration ?? -1) >= 0)).toBe(
+        true,
+      );
+    } finally {
+      traceRecorder.stop();
+    }
   });
 });

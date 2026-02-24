@@ -18,6 +18,139 @@ async function readMetricCount(page: Page, testId: string): Promise<number> {
   return parsed;
 }
 
+interface BrowserTraceEvent {
+  kind: "start" | "event" | "end";
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  payload?: Record<string, unknown>;
+  status?: "success" | "error";
+  timestamp: number;
+}
+
+interface BrowserTraceSpan {
+  spanId: string;
+  parentSpanId?: string;
+  name: string;
+  payload?: Record<string, unknown>;
+  status?: "success" | "error";
+  duration?: number;
+}
+
+async function installTraceRecorder(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const tracer = (window as unknown as Record<string, unknown>).__rscPrismTracer as
+      | { addReporter?: unknown }
+      | undefined;
+    return tracer != null && typeof tracer.addReporter === "function";
+  });
+
+  await page.evaluate(() => {
+    const state = window as unknown as Record<string, unknown>;
+    state.__rscPrismCapturedTraceEvents = [];
+    const tracer = state.__rscPrismTracer as {
+      addReporter: (reporter: { handleEvent: (event: unknown) => void }) => () => void;
+    };
+    const unsubscribe = tracer.addReporter({
+      handleEvent(event) {
+        const traceEvent = event as {
+          kind: "start" | "event" | "end";
+          span: { spanId: bigint; name: string; startTime: number; duration: number };
+          parentSpan?: { spanId: bigint };
+          name?: string;
+          payload?: Record<string, unknown>;
+          status?: "success" | "error";
+          timestamp: number;
+        };
+        const output: BrowserTraceEvent = {
+          kind: traceEvent.kind,
+          spanId: String(traceEvent.span.spanId),
+          parentSpanId:
+            traceEvent.parentSpan == null ? undefined : String(traceEvent.parentSpan.spanId),
+          name: traceEvent.kind === "start" ? traceEvent.name ?? traceEvent.span.name : traceEvent.span.name,
+          payload: traceEvent.payload,
+          status: traceEvent.status,
+          timestamp: traceEvent.timestamp,
+        };
+        (state.__rscPrismCapturedTraceEvents as BrowserTraceEvent[]).push(output);
+      },
+    });
+    state.__rscPrismDisposeTraceReporter = unsubscribe;
+  });
+}
+
+async function disposeTraceRecorder(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window as unknown as Record<string, unknown>;
+    const dispose = state.__rscPrismDisposeTraceReporter as (() => void) | undefined;
+    if (typeof dispose === "function") {
+      dispose();
+    }
+    delete state.__rscPrismDisposeTraceReporter;
+  });
+}
+
+function buildSpans(events: BrowserTraceEvent[]): BrowserTraceSpan[] {
+  const spans = new Map<string, BrowserTraceSpan & { startTime?: number; endTime?: number }>();
+  for (const event of events) {
+    const existing = spans.get(event.spanId);
+    if (event.kind === "start") {
+      spans.set(event.spanId, {
+        spanId: event.spanId,
+        parentSpanId: event.parentSpanId,
+        name: event.name,
+        payload: event.payload,
+        startTime: event.timestamp,
+      });
+      continue;
+    }
+    if (existing == null) {
+      continue;
+    }
+    if (event.kind === "end") {
+      existing.status = event.status;
+      existing.endTime = event.timestamp;
+      existing.duration = Math.max(0, event.timestamp - (existing.startTime ?? event.timestamp));
+    }
+  }
+  return Array.from(spans.values());
+}
+
+function spanMatches(span: BrowserTraceSpan, traceKey: string): boolean {
+  if (span.name === traceKey) {
+    return true;
+  }
+
+  const prefixesByTraceKey: Record<string, string[]> = {
+    "rsc.action.call": ["Action Send"],
+    "rsc.client.callServer": ["Action Send"],
+    "rsc.react.rerender.fetch": ["Rerender Send Fetch"],
+    "rsc.react.applyBatch": ["Rerender Decode Updates"],
+    "rsc.component.decode": ["Decode #", "Decode:"],
+  };
+
+  const prefixes = prefixesByTraceKey[traceKey];
+  if (prefixes == null) {
+    return false;
+  }
+  return prefixes.some((prefix) => span.name.startsWith(prefix));
+}
+
+function isDescendant(
+  childSpanId: string,
+  ancestorSpanId: string,
+  spansById: Map<string, BrowserTraceSpan>,
+): boolean {
+  let current = spansById.get(childSpanId);
+  while (current != null && current.parentSpanId != null) {
+    if (current.parentSpanId === ancestorSpanId) {
+      return true;
+    }
+    current = spansById.get(current.parentSpanId);
+  }
+  return false;
+}
+
 const workerRuntimeErrorPatterns = [
   /expects a "use worker" component reference/,
   /expects a "use worker" action reference/,
@@ -43,6 +176,7 @@ test.describe("TodoMVC integration", () => {
   });
 
   test.afterEach(async ({ page }) => {
+    await disposeTraceRecorder(page);
     const errors = pageErrors.get(page) ?? [];
     const workerErrors = errors.filter((error) =>
       workerRuntimeErrorPatterns.some((pattern) => pattern.test(error)),
@@ -125,5 +259,39 @@ test.describe("TodoMVC integration", () => {
     await expect(page).not.toHaveURL(/filter=/);
     await expect(page.getByText(activeTodo)).toBeVisible();
     await expect(page.getByText(completedTodo)).toBeVisible();
+  });
+
+  test("captures action-parented rerender tracing with component decode durations", async ({
+    page,
+  }) => {
+    await installTraceRecorder(page);
+
+    const title = `Trace todo ${Date.now()}`;
+    await page.getByRole("textbox", { name: "New todo" }).fill(title);
+    await page.getByRole("textbox", { name: "New todo" }).press("Enter");
+    await expect(page.getByText(title)).toBeVisible();
+
+    const events = await page.evaluate(() => {
+      const state = window as unknown as Record<string, unknown>;
+      return (state.__rscPrismCapturedTraceEvents ?? []) as BrowserTraceEvent[];
+    });
+    const spans = buildSpans(events);
+    const spansById = new Map(spans.map((span) => [span.spanId, span]));
+
+    const actionSpan = spans.find(
+      (span) => spanMatches(span, "rsc.action.call") || spanMatches(span, "rsc.client.callServer"),
+    );
+    const rerenderSpans = spans.filter((span) => spanMatches(span, "rsc.react.rerender.fetch"));
+    const applyBatchSpans = spans.filter((span) => spanMatches(span, "rsc.react.applyBatch"));
+    const rerenderOrBatch = [...rerenderSpans, ...applyBatchSpans];
+    const decodeSpans = spans.filter((span) => spanMatches(span, "rsc.component.decode"));
+
+    expect(actionSpan).toBeDefined();
+    expect(rerenderOrBatch.length).toBeGreaterThan(0);
+    expect(
+      rerenderOrBatch.some((span) => isDescendant(span.spanId, actionSpan!.spanId, spansById)),
+    ).toBe(true);
+    expect(decodeSpans.length).toBeGreaterThan(0);
+    expect(decodeSpans.every((span) => (span.duration ?? -1) >= 0)).toBe(true);
   });
 });

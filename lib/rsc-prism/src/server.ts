@@ -13,6 +13,14 @@ import { registerServerReference } from "./flight-runtime/server";
 import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { createClientModuleProxy } from "./flight-runtime/references";
 import type { FlightRowEmit } from "./flight-runtime/server";
+import {
+  createTraceRequestId,
+  finishTraceSpanError,
+  finishTraceSpanSuccess,
+  startTraceSpan,
+  summarizeArgs,
+  type RSCTraceContext,
+} from "./tracing";
 
 /**
  * Create an RSC context for rendering
@@ -98,6 +106,29 @@ export async function createClientProxy<T = Record<string, unknown>>(moduleId: s
   return createClientModuleProxy(moduleId) as T;
 }
 
+function toServerTraceContext(traceContext?: RSCTraceContext): RSCTraceContext | undefined {
+  if (traceContext == null) {
+    return undefined;
+  }
+  return {
+    ...traceContext,
+    source: "server",
+  };
+}
+
+function createActionTraceContext(
+  actionId: string,
+  traceContext?: RSCTraceContext,
+): RSCTraceContext {
+  const serverTrace = toServerTraceContext(traceContext);
+  return {
+    requestId: serverTrace?.requestId ?? createTraceRequestId("server-action"),
+    actionId,
+    parentSpan: serverTrace?.parentSpan,
+    source: "server",
+  };
+}
+
 /**
  * Render a React element to an RSC stream
  *
@@ -114,15 +145,34 @@ export async function renderRSC(
   ctx: RSCContext,
   options?: RSCRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
-  return defaultFlightProtocolAdapter.renderStream(element, ctx.manifest, {
-    onError:
-      options?.onError ??
-      ((err) => {
-        console.error("[rsc-sw-bff] Render error:", err);
-        return "An error occurred during server rendering.";
-      }),
-    signal: options?.signal,
-  });
+  const traceContext = toServerTraceContext(options?.traceContext);
+  const span = startTraceSpan(
+    "rsc.server.renderRSC",
+    {
+      requestId: traceContext?.requestId,
+      actionId: traceContext?.actionId,
+      source: "server",
+    },
+    traceContext?.parentSpan,
+    "secondary",
+  );
+  try {
+    const stream = await defaultFlightProtocolAdapter.renderStream(element, ctx.manifest, {
+      onError:
+        options?.onError ??
+        ((err) => {
+          console.error("[rsc-sw-bff] Render error:", err);
+          return "An error occurred during server rendering.";
+        }),
+      signal: options?.signal,
+      traceContext,
+    });
+    finishTraceSpanSuccess(span);
+    return stream;
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 }
 
 export async function renderRSCRows(
@@ -131,28 +181,73 @@ export async function renderRSCRows(
   emit: FlightRowEmit,
   options?: RSCRenderOptions,
 ): Promise<void> {
+  const traceContext = toServerTraceContext(options?.traceContext);
+  const span = startTraceSpan(
+    "rsc.server.renderRSCRows",
+    {
+      requestId: traceContext?.requestId,
+      actionId: traceContext?.actionId,
+      source: "server",
+    },
+    traceContext?.parentSpan,
+    "secondary",
+  );
   if (defaultFlightProtocolAdapter.renderRows == null) {
+    finishTraceSpanError(
+      span,
+      new Error("[rsc-prism] Active Flight protocol adapter does not support row rendering."),
+    );
     throw new Error("[rsc-prism] Active Flight protocol adapter does not support row rendering.");
   }
 
-  return defaultFlightProtocolAdapter.renderRows(element, ctx.manifest, emit, {
-    onError:
-      options?.onError ??
-      ((err) => {
-        console.error("[rsc-sw-bff] Render error:", err);
-        return "An error occurred during server rendering.";
-      }),
-    signal: options?.signal,
-  });
+  try {
+    await defaultFlightProtocolAdapter.renderRows(element, ctx.manifest, emit, {
+      onError:
+        options?.onError ??
+        ((err) => {
+          console.error("[rsc-sw-bff] Render error:", err);
+          return "An error occurred during server rendering.";
+        }),
+      signal: options?.signal,
+      traceContext,
+    });
+    finishTraceSpanSuccess(span);
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 }
 
 /**
  * Decode encoded action arguments back to JavaScript values
  */
-export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
+export async function decodeActionArgs(
+  encoded: EncodedActionArgs,
+  traceContext?: RSCTraceContext,
+): Promise<unknown[]> {
+  const span = startTraceSpan(
+    "rsc.server.decodeActionArgs",
+    {
+      requestId: traceContext?.requestId,
+      actionId: traceContext?.actionId,
+      source: "server",
+      encodedType: encoded.type,
+    },
+    traceContext?.parentSpan,
+    "secondary",
+  );
   const manifest = resolveClientManifestOrThrow();
-  const decoded = await defaultFlightProtocolAdapter.decodeActionArgs(encoded, manifest);
-  return Array.isArray(decoded) ? decoded : [decoded];
+  try {
+    const decoded = await defaultFlightProtocolAdapter.decodeActionArgs(encoded, manifest);
+    const args = Array.isArray(decoded) ? decoded : [decoded];
+    finishTraceSpanSuccess(span, {
+      argsCount: args.length,
+    });
+    return args;
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 }
 
 /**
@@ -172,27 +267,74 @@ export async function handleAction(
   encodedArgs: EncodedActionArgs,
   options?: RSCRenderOptions,
 ): Promise<ReadableStream<Uint8Array>> {
-  const result = await executeAction(ctx, actionId, encodedArgs);
-
-  return defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
-    onError: options?.onError,
-    signal: options?.signal,
-  });
+  const traceContext = createActionTraceContext(actionId, options?.traceContext);
+  const span = startTraceSpan(
+    "rsc.server.handleAction",
+    {
+      requestId: traceContext.requestId,
+      actionId,
+      source: "server",
+    },
+    traceContext.parentSpan,
+    "secondary",
+  );
+  try {
+    const result = await executeAction(ctx, actionId, encodedArgs, {
+      ...traceContext,
+      parentSpan: span,
+    });
+    const stream = await defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
+      onError: options?.onError,
+      signal: options?.signal,
+      traceContext: {
+        ...traceContext,
+        parentSpan: span,
+      },
+    });
+    finishTraceSpanSuccess(span);
+    return stream;
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 }
 
 export async function executeAction(
   ctx: RSCContext,
   actionId: string,
   encodedArgs: EncodedActionArgs,
+  traceContext?: RSCTraceContext,
 ): Promise<unknown> {
+  const resolvedTraceContext = createActionTraceContext(actionId, traceContext);
+  const span = startTraceSpan(
+    "rsc.server.executeAction",
+    {
+      requestId: resolvedTraceContext.requestId,
+      actionId,
+      source: "server",
+    },
+    resolvedTraceContext.parentSpan,
+  );
   const action = ctx.actions.get(actionId);
   if (!action) {
     const available = Array.from(ctx.actions.keys()).join(", ") || "(none)";
-    throw new Error(`Action "${actionId}" not found. Available: ${available}`);
+    const error = new Error(`Action "${actionId}" not found. Available: ${available}`);
+    finishTraceSpanError(span, error);
+    throw error;
   }
 
-  const args = await decodeActionArgs(encodedArgs);
-  return action.fn(...args);
+  try {
+    const args = await decodeActionArgs(encodedArgs, {
+      ...resolvedTraceContext,
+      parentSpan: span,
+    });
+    const result = await action.fn(...args);
+    finishTraceSpanSuccess(span, summarizeArgs(args));
+    return result;
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 }
 
 export async function handleActionRows(
@@ -202,12 +344,35 @@ export async function handleActionRows(
   emit: FlightRowEmit,
   options?: RSCRenderOptions,
 ): Promise<void> {
-  const result = await executeAction(ctx, actionId, encodedArgs);
-
-  return renderRSCRows(result as ReactNode, ctx, emit, {
-    onError: options?.onError,
-    signal: options?.signal,
-  });
+  const traceContext = createActionTraceContext(actionId, options?.traceContext);
+  const span = startTraceSpan(
+    "rsc.server.handleActionRows",
+    {
+      requestId: traceContext.requestId,
+      actionId,
+      source: "server",
+    },
+    traceContext.parentSpan,
+    "secondary",
+  );
+  try {
+    const result = await executeAction(ctx, actionId, encodedArgs, {
+      ...traceContext,
+      parentSpan: span,
+    });
+    await renderRSCRows(result as ReactNode, ctx, emit, {
+      onError: options?.onError,
+      signal: options?.signal,
+      traceContext: {
+        ...traceContext,
+        parentSpan: span,
+      },
+    });
+    finishTraceSpanSuccess(span);
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 }
 
 /**

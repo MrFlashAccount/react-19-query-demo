@@ -110,6 +110,28 @@ describe("transport", () => {
     await expect(fetchResponse?.text()).resolves.toBe("fetch-ok");
   });
 
+  it("function transport propagates action invalidate cause metadata", async () => {
+    const invalidateSpy = vi.fn();
+    setInvalidateRSC(invalidateSpy);
+    const transport = createFunctionTransport(async () => new Response("ok", { status: 200 }));
+
+    await transport.sendAction({
+      endpoint: "/rsc",
+      actionId: "run",
+      body: "[]",
+      contentType: "text/plain",
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy.mock.calls[0]?.[0]).toMatchObject({
+      causeType: "action-legacy-invalidate",
+      actionId: "run",
+      requestId: expect.any(String),
+      generation: expect.any(Number),
+      dispatchedAt: expect.any(Number),
+    });
+  });
+
   it("worker transport resolves head and streams chunks", async () => {
     const endpoint = new MockWorkerEndpoint();
     const chunkA = Uint8Array.from([1, 2, 3]);
@@ -615,7 +637,8 @@ describe("transport", () => {
       }),
     ).resolves.toBe("ok");
     expect(applyBatch).toHaveBeenCalledTimes(1);
-    expect(applyBatch).toHaveBeenCalledWith({
+    const [appliedBatch, appliedCause] = applyBatch.mock.calls[0];
+    expect(appliedBatch).toEqual({
       seq: 1,
       entries: [
         {
@@ -624,6 +647,13 @@ describe("transport", () => {
           error: undefined,
         },
       ],
+    });
+    expect(appliedCause).toMatchObject({
+      causeType: "action-batch-refresh",
+      actionId: "actions#save",
+      requestId: expect.any(String),
+      generation: expect.any(Number),
+      dispatchedAt: expect.any(Number),
     });
     expect(legacyInvalidate).not.toHaveBeenCalled();
   });
@@ -689,7 +719,8 @@ describe("transport", () => {
     ]);
 
     expect(applyBatch).toHaveBeenCalledTimes(1);
-    expect(applyBatch).toHaveBeenCalledWith({
+    const [appliedBatch, appliedCause] = applyBatch.mock.calls[0];
+    expect(appliedBatch).toEqual({
       seq: 2,
       entries: [
         {
@@ -698,6 +729,13 @@ describe("transport", () => {
           error: undefined,
         },
       ],
+    });
+    expect(appliedCause).toMatchObject({
+      causeType: "action-batch-refresh",
+      actionId: "second",
+      requestId: expect.any(String),
+      generation: expect.any(Number),
+      dispatchedAt: expect.any(Number),
     });
     expect(legacyInvalidate).not.toHaveBeenCalled();
   });

@@ -8,6 +8,13 @@ import {
   type FlightRowEmit,
 } from "./server";
 import type { FlightRowMessage } from "./wire";
+import type { ComponentTraceTracker, RSCTraceContext } from "../tracing";
+
+export interface FlightConsumeOptions {
+  callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
+  traceContext?: RSCTraceContext;
+  componentTrace?: ComponentTraceTracker;
+}
 
 export interface FlightProtocolAdapter {
   renderStream(
@@ -18,7 +25,7 @@ export interface FlightProtocolAdapter {
   consumeStream<T = unknown>(
     stream: ReadableStream<Uint8Array>,
     manifest: ClientManifest,
-    callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
+    options?: FlightConsumeOptions,
   ): Promise<T>;
   renderRows?(
     element: ReactNode,
@@ -28,7 +35,7 @@ export interface FlightProtocolAdapter {
   ): Promise<void>;
   consumeRows?<T = unknown>(
     manifest: ClientManifest,
-    callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
+    options?: FlightConsumeOptions,
   ): {
     push: (row: FlightRowMessage) => void;
     result: Promise<T>;
@@ -42,10 +49,12 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
     return renderToReadableStream(element, manifest, options);
   },
 
-  consumeStream(stream, manifest, callServer) {
+  consumeStream(stream, manifest, options) {
     return createFromReadableStream(stream, {
       manifest,
-      callServer,
+      callServer: options?.callServer,
+      traceContext: options?.traceContext,
+      componentTrace: options?.componentTrace,
     });
   },
 
@@ -53,10 +62,12 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
     return renderToRowEmitter(element, manifest, emit, options);
   },
 
-  consumeRows(manifest, callServer) {
+  consumeRows(manifest, options) {
     return createFromRowEmitter({
       manifest,
-      callServer,
+      callServer: options?.callServer,
+      traceContext: options?.traceContext,
+      componentTrace: options?.componentTrace,
     });
   },
 

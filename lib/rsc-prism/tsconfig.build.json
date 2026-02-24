@@ -6,7 +6,11 @@
     "declaration": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    "paths": {
+      "@lib/tracing": ["../tracing/dist/index.d.ts"],
+      "@lib/tracing/helpers": ["../tracing/dist/helpers.d.ts"]
+    }
   },
   "include": ["./src/**/*.ts"],
   "exclude": [

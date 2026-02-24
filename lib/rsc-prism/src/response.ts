@@ -5,6 +5,7 @@
  */
 
 import type { ReactNode } from "react";
+import type { ISpan } from "@lib/tracing";
 import { polyfillReady } from "./polyfill";
 import {
   renderRSC,
@@ -20,6 +21,13 @@ import {
 import type { ClientManifest, EncodedActionArgs, RSCResponseOptions, RSCContext } from "./types";
 import type { FlightRowEmit } from "./flight-runtime/server";
 import { flightErrorRow } from "./flight-runtime/wire";
+import {
+  createTraceRequestId,
+  finishTraceSpanError,
+  finishTraceSpanSuccess,
+  startTraceSpan,
+  type RSCTraceContext,
+} from "./tracing";
 
 /**
  * RSC content type header
@@ -76,6 +84,18 @@ async function readEncodedActionArgs(request: Request): Promise<EncodedActionArg
     : { type: "string", data: await request.text() };
 }
 
+function requestTraceContext(
+  request: Request,
+  parentSpan?: ISpan,
+): RSCTraceContext {
+  return {
+    requestId: request.headers.get("x-rsc-request-id") ?? createTraceRequestId("response"),
+    actionId: getActionIdFromRequest(request) ?? undefined,
+    parentSpan,
+    source: "server",
+  };
+}
+
 /**
  * Create an RSC streaming response from a React element
  *
@@ -94,7 +114,31 @@ export async function rsc(
   await polyfillReady;
 
   const ctx = createRSCContext(manifest);
-  const stream = await renderRSC(element, ctx, { onError: options?.onError });
+  const span = startTraceSpan(
+    "rsc.response.render",
+    {
+      source: "server",
+    },
+    undefined,
+    "secondary",
+  );
+
+  const traceContext: RSCTraceContext = {
+    requestId: createTraceRequestId("response-render"),
+    parentSpan: span,
+    source: "server",
+  };
+  let stream: ReadableStream<Uint8Array>;
+  try {
+    stream = await renderRSC(element, ctx, {
+      onError: options?.onError,
+      traceContext,
+    });
+    finishTraceSpanSuccess(span);
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 
   return new Response(stream, {
     status: options?.status ?? 200,
@@ -120,7 +164,30 @@ export async function rscWithContext(
 ): Promise<Response> {
   await polyfillReady;
 
-  const stream = await renderRSC(element, ctx, { onError: options?.onError });
+  const span = startTraceSpan(
+    "rsc.response.renderWithContext",
+    {
+      source: "server",
+    },
+    undefined,
+    "secondary",
+  );
+  const traceContext: RSCTraceContext = {
+    requestId: createTraceRequestId("response-render"),
+    parentSpan: span,
+    source: "server",
+  };
+  let stream: ReadableStream<Uint8Array>;
+  try {
+    stream = await renderRSC(element, ctx, {
+      onError: options?.onError,
+      traceContext,
+    });
+    finishTraceSpanSuccess(span);
+  } catch (error) {
+    finishTraceSpanError(span, error);
+    throw error;
+  }
 
   return new Response(stream, {
     status: options?.status ?? 200,
@@ -150,16 +217,31 @@ export async function rscAction(
     return createFlightErrorResponse(ctx, "Missing action ID", 400, options);
   }
 
+  const actionSpan = startTraceSpan(
+    "rsc.response.action",
+    {
+      requestId: request.headers.get("x-rsc-request-id") ?? undefined,
+      actionId,
+      source: "server",
+    },
+    undefined,
+    "secondary",
+  );
   const encodedArgs = await readEncodedActionArgs(request);
 
   try {
-    const stream = await handleAction(ctx, actionId, encodedArgs, { onError: options?.onError });
+    const stream = await handleAction(ctx, actionId, encodedArgs, {
+      onError: options?.onError,
+      traceContext: requestTraceContext(request, actionSpan),
+    });
+    finishTraceSpanSuccess(actionSpan);
 
     return new Response(stream, {
       status: options?.status ?? 200,
       headers: createRSCHeaders(options?.headers),
     });
   } catch (err) {
+    finishTraceSpanError(actionSpan, err);
     const message = err instanceof Error ? err.message : String(err);
     console.error("[rsc-sw-bff] Action error:", err);
     return createFlightErrorResponse(ctx, message, 500, options);
@@ -226,14 +308,28 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
   const ctx = createRSCContext(options.manifest);
 
   const ready = (async () => {
-    await polyfillReady;
-    if (options.actions) {
-      await registerActions(ctx, options.actions);
-    }
-    if (options.actionModules) {
-      for (const actionModule of options.actionModules) {
-        await registerActionModule(ctx, actionModule.moduleId, actionModule.moduleExports);
+    const readySpan = startTraceSpan(
+      "rsc.response.handler.ready",
+      {
+        source: "server",
+      },
+      undefined,
+      "secondary",
+    );
+    try {
+      await polyfillReady;
+      if (options.actions) {
+        await registerActions(ctx, options.actions);
       }
+      if (options.actionModules) {
+        for (const actionModule of options.actionModules) {
+          await registerActionModule(ctx, actionModule.moduleId, actionModule.moduleExports);
+        }
+      }
+      finishTraceSpanSuccess(readySpan);
+    } catch (error) {
+      finishTraceSpanError(readySpan, error);
+      throw error;
     }
   })();
 
@@ -254,9 +350,23 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
       _responseOptions?: RSCResponseOptions,
     ): Promise<void> {
       await ready;
+      const span = startTraceSpan(
+        "rsc.response.handler.renderRows",
+        {
+          source: "server",
+        },
+        undefined,
+        "secondary",
+      );
       await renderRSCRows(element, ctx, emit, {
         onError: options.onError,
+        traceContext: {
+          requestId: createTraceRequestId("response-rows"),
+          parentSpan: span,
+          source: "server",
+        },
       });
+      finishTraceSpanSuccess(span);
     },
 
     async action(request: Request, responseOptions?: RSCResponseOptions): Promise<Response> {
@@ -279,14 +389,27 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
         emit(flightErrorRow("Missing action ID"));
         return;
       }
+      const actionSpan = startTraceSpan(
+        "rsc.response.handler.actionRows",
+        {
+          requestId: request.headers.get("x-rsc-request-id") ?? undefined,
+          actionId,
+          source: "server",
+        },
+        undefined,
+        "secondary",
+      );
 
       const encodedArgs = await readEncodedActionArgs(request);
 
       try {
         await handleActionRows(ctx, actionId, encodedArgs, emit, {
           onError: options.onError,
+          traceContext: requestTraceContext(request, actionSpan),
         });
+        finishTraceSpanSuccess(actionSpan);
       } catch (err) {
+        finishTraceSpanError(actionSpan, err);
         const message = err instanceof Error ? err.message : String(err);
         console.error("[rsc-sw-bff] Action error:", err);
         if (message.length > 0) {
@@ -306,7 +429,7 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
         throw new Error("Missing action ID");
       }
       const encodedArgs = await readEncodedActionArgs(request);
-      return executeServerAction(ctx, actionId, encodedArgs);
+      return executeServerAction(ctx, actionId, encodedArgs, requestTraceContext(request));
     },
 
     ready,

@@ -4,6 +4,7 @@
 
 import type { ReactNode, ComponentType } from "react";
 import type { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
+import type { InvalidateCause, RSCTraceContext } from "./tracing";
 
 /**
  * ESM module reference identifier used by RSC.
@@ -66,6 +67,8 @@ export interface RSCRenderOptions {
   onError?: (error: unknown) => string | void;
   /** Abort signal for cancellation */
   signal?: AbortSignal;
+  /** Trace context propagated through render/decode flows */
+  traceContext?: RSCTraceContext;
 }
 
 /**
@@ -118,9 +121,9 @@ export type ComponentReference<Props = unknown> = (
 
 declare global {
   interface Window {
-    [INVALIDATE_RSC_GLOBAL_KEY]: () => void;
+    [INVALIDATE_RSC_GLOBAL_KEY]: (cause?: InvalidateCause) => void;
   }
   interface WorkerGlobalScope {
-    [INVALIDATE_RSC_GLOBAL_KEY]: () => void;
+    [INVALIDATE_RSC_GLOBAL_KEY]: (cause?: InvalidateCause) => void;
   }
 }

@@ -1,3 +1,5 @@
+import "./trace-logger";
+
 import {
   addTodoItem,
   clearCompletedTodos,

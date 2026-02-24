@@ -1,4 +1,12 @@
 import { Fragment, isValidElement } from "react";
+import {
+  createComponentTraceTracker,
+  endComponentPhaseSpan,
+  startComponentPhaseSpan,
+  summarizeProps,
+  type ComponentTraceTracker,
+  type RSCTraceContext,
+} from "../tracing";
 
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const SERVER_REFERENCE_SYMBOL = Symbol.for("react.server.reference");
@@ -221,6 +229,58 @@ function encodeStreamType(value: unknown): string {
   throw new Error("Unsupported element type in minimal runtime.");
 }
 
+function resolveComponentName(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "function") {
+    return value.name || "Anonymous";
+  }
+  if (value === REACT_FRAGMENT_SYMBOL || value === Fragment) {
+    return "Fragment";
+  }
+  if (isClientReference(value)) {
+    return value.$$id;
+  }
+  return String(value);
+}
+
+function describeComponentType(value: unknown): {
+  componentKind: string;
+  componentName: string;
+  hostTag?: string;
+} {
+  if (typeof value === "string") {
+    return {
+      componentKind: "host",
+      componentName: value,
+      hostTag: value,
+    };
+  }
+  if (value === REACT_FRAGMENT_SYMBOL || value === Fragment) {
+    return {
+      componentKind: "fragment",
+      componentName: "Fragment",
+    };
+  }
+  if (isClientReference(value)) {
+    return {
+      componentKind: "client",
+      componentName: value.$$id,
+    };
+  }
+  if (typeof value === "function") {
+    return {
+      componentKind: "function",
+      componentName: value.name || "Anonymous",
+    };
+  }
+  return {
+    componentKind: "unknown",
+    componentName: resolveComponentName(value),
+  };
+}
+
 function decodeType(value: JsonObject, resolveClientReference: (id: string) => unknown): unknown {
   switch (value.$t) {
     case "host":
@@ -238,6 +298,9 @@ export interface StreamEncodeContext {
   outlineValue: (value: unknown) => number;
   emitBinaryRow: StreamEmitBinaryRow;
   seen: WeakSet<object>;
+  traceContext?: RSCTraceContext;
+  componentTrace?: ComponentTraceTracker;
+  currentRowId?: number;
 }
 
 export function escapeStringValue(str: string): string {
@@ -331,10 +394,36 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     );
   }
   if (isReactElementLike(value)) {
-    const type = encodeStreamType(value.type);
-    const key = value.key == null ? null : String(value.key);
-    const props = encodeStreamValueInternal(value.props, context);
-    return ["$", type, key, props];
+    const tracker =
+      context.componentTrace ??
+      (context.traceContext != null
+        ? createComponentTraceTracker({
+            requestId: context.traceContext.requestId,
+            actionId: context.traceContext.actionId,
+            parentSpan: context.traceContext.parentSpan,
+          })
+        : undefined);
+    const componentInfo = describeComponentType(value.type);
+    const encodeSpan = startComponentPhaseSpan(tracker, "encode", {
+      ...componentInfo,
+      rowId: context.currentRowId,
+      source: context.traceContext?.source ?? "transport",
+      mode: "stream",
+      ...summarizeProps(value.props),
+    });
+    try {
+      const type = encodeStreamType(value.type);
+      const key = value.key == null ? null : String(value.key);
+      const props = encodeStreamValueInternal(value.props, {
+        ...context,
+        componentTrace: tracker,
+      });
+      endComponentPhaseSpan(tracker, encodeSpan.span);
+      return ["$", type, key, props];
+    } catch (error) {
+      endComponentPhaseSpan(tracker, encodeSpan.span, error);
+      throw error;
+    }
   }
   if (isClientReference(value)) {
     return `$C${value.$$id}`;
@@ -364,6 +453,9 @@ export interface StreamDecodeContext<Chunk = unknown> {
   createLazyChunkWrapper: (chunk: Chunk) => unknown;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
+  traceContext?: RSCTraceContext;
+  componentTrace?: ComponentTraceTracker;
+  getCurrentRowId?: () => number | undefined;
 }
 
 function decodeFromOutlinedEntries<Chunk>(
@@ -494,18 +586,45 @@ export function parseModelString<Chunk>(
   }
 }
 
-function maybeDecodeElementTuple(value: unknown): unknown {
+function maybeDecodeElementTuple<Chunk>(
+  value: unknown,
+  context: StreamDecodeContext<Chunk>,
+): unknown {
   if (!Array.isArray(value) || value.length !== 4 || value[0] !== "$") {
     return value;
   }
   const key = value[2];
-  return {
-    $$typeof: REACT_ELEMENT_SYMBOL,
-    type: value[1],
-    key: key == null ? null : String(key),
-    ref: null,
-    props: value[3] as Record<string, unknown>,
-  };
+  const tracker =
+    context.componentTrace ??
+    (context.traceContext != null
+      ? createComponentTraceTracker({
+          requestId: context.traceContext.requestId,
+          actionId: context.traceContext.actionId,
+          parentSpan: context.traceContext.parentSpan,
+        })
+      : undefined);
+  const componentInfo = describeComponentType(value[1]);
+  const decodeSpan = startComponentPhaseSpan(tracker, "decode", {
+    ...componentInfo,
+    rowId: context.getCurrentRowId?.(),
+    source: context.traceContext?.source ?? "react",
+    mode: "stream",
+    ...summarizeProps(value[3]),
+  });
+  try {
+    const decoded = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: value[1],
+      key: key == null ? null : String(key),
+      ref: null,
+      props: value[3] as Record<string, unknown>,
+    };
+    endComponentPhaseSpan(tracker, decodeSpan.span);
+    return decoded;
+  } catch (error) {
+    endComponentPhaseSpan(tracker, decodeSpan.span, error);
+    throw error;
+  }
 }
 
 export function createModelReviver<Chunk>(
@@ -515,7 +634,7 @@ export function createModelReviver<Chunk>(
     if (typeof value === "string") {
       return parseModelString(context, value);
     }
-    return maybeDecodeElementTuple(value);
+    return maybeDecodeElementTuple(value, context);
   };
 }
 
@@ -531,6 +650,7 @@ function reviveModelValueTreeInternal<Chunk>(
       Array.from({ length: value.length }, (_, i) =>
         reviveModelValueTreeInternal(context, value[i]),
       ),
+      context,
     );
   }
   if (typeof value !== "object" || value == null) {
@@ -840,13 +960,30 @@ export function decodeWireValue(
   resolveClientReference: (id: string) => unknown,
   resolveRowReference?: (id: string) => unknown,
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
+  traceOptions?: {
+    traceContext?: RSCTraceContext;
+    componentTrace?: ComponentTraceTracker;
+    currentRowId?: number;
+  },
 ): unknown {
+  const componentTrace =
+    traceOptions?.componentTrace ??
+    (traceOptions?.traceContext != null
+      ? createComponentTraceTracker({
+          requestId: traceOptions.traceContext.requestId,
+          actionId: traceOptions.traceContext.actionId,
+          parentSpan: traceOptions.traceContext.parentSpan,
+        })
+      : undefined);
   return decodeWireValueInternal(
     value,
     resolveClientReference,
     resolveRowReference,
     callServer,
     new Set<string>(),
+    traceOptions?.traceContext,
+    componentTrace,
+    traceOptions?.currentRowId,
   );
 }
 
@@ -856,6 +993,9 @@ function decodeWireValueInternal(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): unknown {
   if (typeof value !== "object" || value == null) {
     return value;
@@ -867,6 +1007,9 @@ function decodeWireValueInternal(
       resolveRowReference,
       callServer,
       visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
     );
   }
 
@@ -880,6 +1023,9 @@ function decodeWireValueInternal(
       resolveRowReference,
       callServer,
       visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
     );
   }
   return decodeWirePlainObjectValue(
@@ -888,6 +1034,9 @@ function decodeWireValueInternal(
     resolveRowReference,
     callServer,
     visitingRowRefs,
+    traceContext,
+    componentTrace,
+    currentRowId,
   );
 }
 
@@ -897,6 +1046,9 @@ function decodeWireArrayValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): unknown[] {
   return Array.from({ length: value.length }, (_, i) =>
     decodeWireValueInternal(
@@ -905,6 +1057,9 @@ function decodeWireArrayValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
     ),
   );
 }
@@ -915,6 +1070,9 @@ function decodeWirePlainObjectValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const keys = Object.keys(value);
@@ -926,6 +1084,9 @@ function decodeWirePlainObjectValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
     );
   }
   return result;
@@ -937,6 +1098,9 @@ function decodeWireRowReferenceValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): unknown {
   if (resolveRowReference == null) {
     throw new Error('Unknown wire tag "rowRef"');
@@ -964,6 +1128,9 @@ function decodeWireRowReferenceValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
     );
   } finally {
     visitingRowRefs.delete(rowId);
@@ -976,6 +1143,9 @@ function decodeWireMapValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): Map<unknown, unknown> {
   const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
   if (!Array.isArray(entries)) {
@@ -991,6 +1161,9 @@ function decodeWireMapValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       ),
       decodeWireValueInternal(
         tuple[1],
@@ -998,6 +1171,9 @@ function decodeWireMapValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       ),
     );
   }
@@ -1010,6 +1186,9 @@ function decodeWireSetValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): Set<unknown> {
   const items = (value.v as unknown[]) ?? EMPTY_ARRAY;
   if (!Array.isArray(items)) {
@@ -1024,6 +1203,9 @@ function decodeWireSetValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       ),
     );
   }
@@ -1036,6 +1218,9 @@ function decodeWireFormDataValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): FormData {
   const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
   const form = new FormData();
@@ -1052,6 +1237,9 @@ function decodeWireFormDataValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
     );
     form.append(
       typeof key === "string" ? key : String(key),
@@ -1067,6 +1255,9 @@ function decodeWireElementValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): {
   $$typeof: symbol;
   type: unknown;
@@ -1075,21 +1266,38 @@ function decodeWireElementValue(
   props: Record<string, unknown>;
 } {
   const type = decodeType(value.ty as JsonObject, resolveClientReference);
-  const props = decodeWireValueInternal(
-    value.props,
-    resolveClientReference,
-    resolveRowReference,
-    callServer,
-    visitingRowRefs,
-  ) as Record<string, unknown>;
-  const key = value.key as string | null;
-  return {
-    $$typeof: REACT_ELEMENT_SYMBOL,
-    type,
-    key: key == null ? null : key,
-    ref: null,
-    props,
-  };
+  const decodeSpan = startComponentPhaseSpan(componentTrace, "decode", {
+    ...describeComponentType(type),
+    rowId: currentRowId,
+    source: traceContext?.source ?? "server",
+    mode: "wire",
+    ...summarizeProps(value.props),
+  });
+  try {
+    const props = decodeWireValueInternal(
+      value.props,
+      resolveClientReference,
+      resolveRowReference,
+      callServer,
+      visitingRowRefs,
+      traceContext,
+      componentTrace,
+      currentRowId,
+    ) as Record<string, unknown>;
+    const key = value.key as string | null;
+    const decoded = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type,
+      key: key == null ? null : key,
+      ref: null,
+      props,
+    };
+    endComponentPhaseSpan(componentTrace, decodeSpan.span);
+    return decoded;
+  } catch (error) {
+    endComponentPhaseSpan(componentTrace, decodeSpan.span, error);
+    throw error;
+  }
 }
 
 function decodeTaggedWireValue(
@@ -1099,6 +1307,9 @@ function decodeTaggedWireValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
+  traceContext: RSCTraceContext | undefined,
+  componentTrace: ComponentTraceTracker | undefined,
+  currentRowId: number | undefined,
 ): unknown {
   switch (tag) {
     case "rowRef":
@@ -1108,6 +1319,9 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       );
     case "undef":
       return undefined;
@@ -1124,6 +1338,9 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       );
     case "set":
       return decodeWireSetValue(
@@ -1132,6 +1349,9 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       );
     case "formdata":
       return decodeWireFormDataValue(
@@ -1140,6 +1360,9 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       );
     case "clientRef":
       return resolveClientReference(value.id as string);
@@ -1152,6 +1375,9 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
+        traceContext,
+        componentTrace,
+        currentRowId,
       );
     default:
       throw new Error(`Unknown wire tag "${tag}"`);

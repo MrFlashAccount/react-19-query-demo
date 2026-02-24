@@ -2,6 +2,7 @@
  * Global keys used by plugin-generated runtime bootstrap and client helpers.
  */
 import type { FlightRowMessage } from "./flight-runtime/wire";
+import type { InvalidateCause } from "./tracing";
 
 export const WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY = "__rscPrismBootstrapWorkerRuntime";
 export const DEFAULT_WORKER_RUNTIME_GLOBAL_KEY = "__rscPrismDefaultWorkerRuntime";
@@ -28,11 +29,11 @@ export interface RSCRefreshBatch {
 
 export interface RSCRefreshRuntime {
   collectTargets: () => RSCRefreshTarget[];
-  applyBatch: (batch: RSCRefreshBatch) => void;
-  legacyInvalidate: () => void;
+  applyBatch: (batch: RSCRefreshBatch, cause?: InvalidateCause) => void;
+  legacyInvalidate: (cause?: InvalidateCause) => void;
 }
 
-export function setInvalidateRSC(invalidateRSC: () => void): void {
+export function setInvalidateRSC(invalidateRSC: (cause?: InvalidateCause) => void): void {
   // @ts-expect-error - globalThis[INVALIDATE_RSC_GLOBAL_KEY] is defined in the runtime-globals.ts file
   globalThis[INVALIDATE_RSC_GLOBAL_KEY] = invalidateRSC;
 }
@@ -47,7 +48,7 @@ export function setRSCRefreshRuntime(runtime: RSCRefreshRuntime): void {
   globalThis[RSC_REFRESH_RUNTIME_GLOBAL_KEY] = runtime;
 }
 
-export function getInvalidateRSC(): () => void {
+export function getInvalidateRSC(): (cause?: InvalidateCause) => void {
   // @ts-expect-error - globalThis[INVALIDATE_RSC_GLOBAL_KEY] is defined in the runtime-globals.ts file
   const invalidateRSC = globalThis[INVALIDATE_RSC_GLOBAL_KEY];
   if (invalidateRSC == null) {
