@@ -10,6 +10,7 @@ import {
   encodeWireValue,
   encodeWireValueWithBinaryRows,
   parseModelString,
+  pathsToTree,
   reviveModelValueTree,
   traverseElementTuplesOnly,
 } from "../src/flight-runtime/wire";
@@ -399,7 +400,8 @@ describe("flight wire compact stream format", () => {
       resolveClientReference: (id: string) => `client:${id}`,
     };
 
-    applyDirectPathReplacements(encoded, revivePaths, context);
+    const tree = pathsToTree(revivePaths);
+    applyDirectPathReplacements(encoded, tree, context);
     const revived = traverseElementTuplesOnly(context, encoded) as {
       type: string;
       props: { onClick: unknown; children: string };

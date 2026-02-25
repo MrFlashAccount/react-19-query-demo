@@ -8,7 +8,9 @@ import {
   flightErrorRow,
   flightMetadataRow,
   flightModelRow,
+  pathsToTree,
   type FlightRowMessage,
+  type RevivePathTree,
   decodeBinaryWireRow,
   decodeWireValue,
   encodeStreamType,
@@ -68,10 +70,10 @@ function encodeFlightRow(id: number, value: unknown): Uint8Array {
 
 function encodeMetadataFlightRow(
   id: number,
-  revivePaths: (string | number)[][],
+  revivePathTree: RevivePathTree,
 ): Uint8Array {
   return FLIGHT_ROW_ENCODER.encode(
-    `M${id.toString(16)}:${JSON.stringify({ revivePaths })}\n`,
+    `M${id.toString(16)}:${JSON.stringify({ revivePaths: revivePathTree })}\n`,
   );
 }
 
@@ -104,7 +106,7 @@ export type FlightRowEmit = (row: FlightRowMessage, transfer?: Transferable[]) =
 interface RenderSink {
   readonly settled: boolean;
   emitModelRow: (id: number, value: unknown) => void;
-  emitMetadataRow?: (id: number, revivePaths: (string | number)[][]) => void;
+  emitMetadataRow?: (id: number, revivePathTree: RevivePathTree) => void;
   emitBinaryRow: (id: number, kind: string, bytes: Uint8Array) => void;
 }
 
@@ -135,7 +137,7 @@ function createEncodeContext(
       if (sink.settled) return;
       const paths = currentRevivePathsRef.current;
       if (paths.length > 0 && sink.emitMetadataRow) {
-        sink.emitMetadataRow(id, paths);
+        sink.emitMetadataRow(id, pathsToTree(paths));
       }
       sink.emitModelRow(id, value);
       currentRevivePathsRef.current = [];

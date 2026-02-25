@@ -7,6 +7,7 @@ import {
   createModelReviver,
   decodeBinaryWireRow,
   type FlightRowMessage,
+  type RevivePathTree,
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
   reviveModelValueTree,
@@ -50,7 +51,7 @@ interface FlightChunk<T = unknown> {
 
 interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
-  revivePathsByRowId: Map<number, (string | number)[][]>;
+  revivePathsByRowId: Map<number, RevivePathTree>;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
@@ -427,17 +428,65 @@ function attachRootResolution(
   }
 }
 
-async function materializeLazyValue(value: unknown): Promise<unknown> {
-  while (isLazyWrapper(value)) {
+function materializeLazyValueTopLevel(value: unknown): Promise<unknown> {
+  return (async (): Promise<unknown> => {
+    while (isLazyWrapper(value)) {
+      try {
+        value = value._init(value._payload);
+      } catch (error) {
+        if (isThenable(error)) {
+          await error;
+          continue;
+        }
+        throw error;
+      }
+    }
+    return value;
+  })();
+}
+
+async function materializeLazyValueRecursive(value: unknown): Promise<unknown> {
+  if (isLazyWrapper(value)) {
     try {
       value = value._init(value._payload);
     } catch (error) {
       if (isThenable(error)) {
         await error;
-        continue;
+        return materializeLazyValueRecursive(value);
       }
       throw error;
     }
+    return materializeLazyValueRecursive(value);
+  }
+  if (Array.isArray(value)) {
+    return Promise.all(value.map((item) => materializeLazyValueRecursive(item)));
+  }
+  if (value instanceof Map) {
+    const entries = await Promise.all(
+      Array.from(value.entries(), async ([k, v]) => [
+        await materializeLazyValueRecursive(k),
+        await materializeLazyValueRecursive(v),
+      ] as const),
+    );
+    return new Map(entries);
+  }
+  if (value instanceof Set) {
+    const items = await Promise.all(
+      Array.from(value.values(), (item) => materializeLazyValueRecursive(item)),
+    );
+    return new Set(items);
+  }
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    const obj = value as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = await materializeLazyValueRecursive(obj[key]);
+    }
+    return result;
   }
   return value;
 }
@@ -474,10 +523,10 @@ async function consumeFlightStream(
     parsingRowTag = false;
     const decoded = decoder.decode(rowBytes);
     if (wasMetadata) {
-      const meta = JSON.parse(decoded) as { revivePaths?: (string | number)[][] };
-      const paths = meta.revivePaths;
-      if (Array.isArray(paths) && paths.length > 0) {
-        response.revivePathsByRowId.set(currentId, paths);
+      const meta = JSON.parse(decoded) as { revivePaths?: RevivePathTree };
+      const tree = meta.revivePaths;
+      if (Array.isArray(tree) && tree.length > 0) {
+        response.revivePathsByRowId.set(currentId, tree);
       }
     } else {
       resolveModelChunk(response, currentId, decoded, true);
@@ -645,7 +694,11 @@ export async function createFromReadableStream<T>(
       attachRootResolution(
         response,
         (value) => {
-          void materializeLazyValue(value)
+          const materialize =
+            options?.materializeDeferredChunks === true
+              ? materializeLazyValueRecursive
+              : materializeLazyValueTopLevel;
+          void materialize(value)
             .then((materialized) => {
               if (rootSettled) return;
               rootSettled = true;
@@ -698,7 +751,11 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
     attachRootResolution(
       response,
       (value) => {
-        void materializeLazyValue(value)
+        const materialize =
+          options?.materializeDeferredChunks === true
+            ? materializeLazyValueRecursive
+            : materializeLazyValueTopLevel;
+        void materialize(value)
           .then((materialized) => {
             if (rootSettled) return;
             rootSettled = true;

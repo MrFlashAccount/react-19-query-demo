@@ -401,9 +401,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
   if (value instanceof Set) {
     if (context.useRawForCloneableTypes) {
-      return new Set(
-        Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)),
-      );
+      return new Set(Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)));
     }
     const outlinedId = context.outlineValue(Array.from(value.values()));
     return emitRevivable(context, `$W${outlinedId.toString(16)}`);
@@ -568,9 +566,6 @@ export function parseModelString<Chunk>(
   if (value.length === 0 || value.charCodeAt(0) !== 36) {
     return value;
   }
-  if (value === "$undefined") {
-    return undefined;
-  }
   if (value.length === 1) {
     return value;
   }
@@ -619,45 +614,19 @@ export function parseModelString<Chunk>(
   }
 }
 
-function maybeDecodeElementTuple<Chunk>(
-  value: unknown,
-  context: StreamDecodeContext<Chunk>,
-): unknown {
+function maybeDecodeElementTuple(value: unknown): unknown {
   if (!Array.isArray(value) || value.length !== 4 || value[0] !== "$") {
     return value;
   }
   const key = value[2];
-  const tracker =
-    context.componentTrace ??
-    (context.traceContext != null
-      ? createComponentTraceTracker({
-          requestId: context.traceContext.requestId,
-          actionId: context.traceContext.actionId,
-          parentSpan: context.traceContext.parentSpan,
-        })
-      : undefined);
-  const componentInfo = describeComponentType(value[1]);
-  const decodeSpan = startComponentPhaseSpan(tracker, "decode", {
-    ...componentInfo,
-    rowId: context.getCurrentRowId?.(),
-    source: context.traceContext?.source ?? "react",
-    mode: "stream",
-    ...summarizeProps(value[3]),
-  });
-  try {
-    const decoded = {
-      $$typeof: REACT_ELEMENT_SYMBOL,
-      type: value[1],
-      key: key == null ? null : String(key),
-      ref: null,
-      props: value[3] as Record<string, unknown>,
-    };
-    endComponentPhaseSpan(tracker, decodeSpan.span);
-    return decoded;
-  } catch (error) {
-    endComponentPhaseSpan(tracker, decodeSpan.span, error);
-    throw error;
-  }
+  const decoded = {
+    $$typeof: REACT_ELEMENT_SYMBOL,
+    type: value[1],
+    key: key == null ? null : String(key),
+    ref: null,
+    props: value[3] as Record<string, unknown>,
+  };
+  return decoded;
 }
 
 export function createModelReviver<Chunk>(
@@ -667,7 +636,7 @@ export function createModelReviver<Chunk>(
     if (typeof value === "string") {
       return parseModelString(context, value);
     }
-    return maybeDecodeElementTuple(value, context);
+    return maybeDecodeElementTuple(value);
   };
 }
 
@@ -689,7 +658,7 @@ export function createModelReviverWithReviveValues<Chunk>(
     if (typeof value === "string") {
       return parseModelString(context, value);
     }
-    return maybeDecodeElementTuple(value, context);
+    return maybeDecodeElementTuple(value);
   };
 }
 
@@ -704,10 +673,13 @@ function reviveModelValueTreeInternal<Chunk>(
     return parseModelString(context, value);
   }
   if (value instanceof Map) {
-    const entries = Array.from(value.entries()).map(([k, v]) => [
-      reviveModelValueTreeInternal(context, k),
-      reviveModelValueTreeInternal(context, v),
-    ] as const);
+    const entries = Array.from(value.entries()).map(
+      ([k, v]) =>
+        [
+          reviveModelValueTreeInternal(context, k),
+          reviveModelValueTreeInternal(context, v),
+        ] as const,
+    );
     value.clear();
     for (const [k, v] of entries) {
       value.set(k, v);
@@ -715,9 +687,7 @@ function reviveModelValueTreeInternal<Chunk>(
     return value;
   }
   if (value instanceof Set) {
-    const items = Array.from(value.values()).map((v) =>
-      reviveModelValueTreeInternal(context, v),
-    );
+    const items = Array.from(value.values()).map((v) => reviveModelValueTreeInternal(context, v));
     value.clear();
     for (const item of items) {
       value.add(item);
@@ -725,12 +695,10 @@ function reviveModelValueTreeInternal<Chunk>(
     return value;
   }
   if (Array.isArray(value)) {
-    return maybeDecodeElementTuple(
-      Array.from({ length: value.length }, (_, i) =>
-        reviveModelValueTreeInternal(context, value[i]),
-      ),
-      context,
-    );
+    for (let i = 0; i < value.length; i += 1) {
+      value[i] = reviveModelValueTreeInternal(context, value[i]);
+    }
+    return maybeDecodeElementTuple(value);
   }
   if (typeof value !== "object" || value == null) {
     return value;
@@ -774,10 +742,13 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
     return parseModelString(context, value);
   }
   if (value instanceof Map) {
-    const entries = Array.from(value.entries()).map(([k, v]) => [
-      reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, k),
-      reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
-    ] as const);
+    const entries = Array.from(value.entries()).map(
+      ([k, v]) =>
+        [
+          reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, k),
+          reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
+        ] as const,
+    );
     value.clear();
     for (const [k, v] of entries) {
       value.set(k, v);
@@ -795,12 +766,10 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
     return value;
   }
   if (Array.isArray(value)) {
-    return maybeDecodeElementTuple(
-      Array.from({ length: value.length }, (_, i) =>
-        reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, value[i]),
-      ),
-      context,
-    );
+    for (let i = 0; i < value.length; i += 1) {
+      value[i] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, value[i]);
+    }
+    return maybeDecodeElementTuple(value);
   }
   if (typeof value !== "object" || value == null) {
     return value;
@@ -810,11 +779,7 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
   const keys = Object.keys(source);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    revived[key] = reviveModelValueTreeWithReviveValuesInternal(
-      context,
-      reviveValues,
-      source[key],
-    );
+    revived[key] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, source[key]);
   }
   return revived;
 }
@@ -850,21 +815,78 @@ function setAtPath(root: unknown, path: (string | number)[], value: unknown): vo
   }
 }
 
-export function applyDirectPathReplacements<Chunk>(
-  root: unknown,
-  revivePaths: ReadonlyArray<(string | number)[]>,
-  context: StreamDecodeContext<Chunk>,
-): void {
-  for (const path of revivePaths) {
-    const raw = getAtPath(root, path);
-    if (
-      typeof raw === "string" &&
-      raw.length > 0 &&
-      raw.charCodeAt(0) === 36
-    ) {
-      setAtPath(root, path, parseModelString(context, raw));
+/** Tree: [key, subtree][] where subtree is true (leaf) or nested [key, subtree][] */
+export type RevivePathTree = [string | number, RevivePathTree | true][];
+
+export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePathTree {
+  type Node = Map<string | number, Node | true>;
+  const root: Node = new Map();
+  for (const path of paths) {
+    let current = root;
+    for (let i = 0; i < path.length; i += 1) {
+      const seg = path[i];
+      const isLast = i === path.length - 1;
+      if (isLast) {
+        current.set(seg, true);
+      } else {
+        let next = current.get(seg);
+        if (next === undefined || next === true) {
+          next = new Map();
+          current.set(seg, next);
+        }
+        current = next;
+      }
     }
   }
+  function mapToArray(m: Node): RevivePathTree {
+    const out: RevivePathTree = [];
+    for (const [k, v] of m) {
+      out.push([k, v === true ? true : mapToArray(v)]);
+    }
+    return out;
+  }
+  return mapToArray(root);
+}
+
+function isRevivePathTree(value: unknown): value is RevivePathTree {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    Array.isArray(value[0]) &&
+    value[0].length === 2 &&
+    (value[0][1] === true || Array.isArray(value[0][1]))
+  );
+}
+
+function applyPathTreeReplacements<Chunk>(
+  root: unknown,
+  tree: RevivePathTree,
+  context: StreamDecodeContext<Chunk>,
+  path: (string | number)[],
+): void {
+  for (const [key, child] of tree) {
+    const childPath = [...path, key];
+    if (child === true) {
+      const raw = getAtPath(root, childPath);
+      if (typeof raw === "string" && raw.length > 0 && raw.charCodeAt(0) === 36) {
+        setAtPath(root, childPath, parseModelString(context, raw));
+      }
+    } else {
+      applyPathTreeReplacements(root, child, context, childPath);
+    }
+  }
+}
+
+export function applyDirectPathReplacements<Chunk>(
+  root: unknown,
+  revivePathsOrTree: RevivePathTree | ReadonlyArray<(string | number)[]>,
+  context: StreamDecodeContext<Chunk>,
+): void {
+  const tree = isRevivePathTree(revivePathsOrTree)
+    ? revivePathsOrTree
+    : pathsToTree(revivePathsOrTree);
+  if (tree.length === 0) return;
+  applyPathTreeReplacements(root, tree, context, []);
 }
 
 function traverseElementTuplesOnlyInternal<Chunk>(
@@ -888,25 +910,21 @@ function traverseElementTuplesOnlyInternal<Chunk>(
   }
   if (value.length === 4 && value[0] === "$") {
     let type = value[1];
-    if (
-      typeof type === "string" &&
-      type.length > 0 &&
-      type.charCodeAt(0) === 36
-    ) {
+    if (typeof type === "string" && type.length > 0 && type.charCodeAt(0) === 36) {
       type = parseModelString(context, type);
     }
     const key = value[2];
     const props = value[3] as Record<string, unknown>;
     const children = props.children;
-    const revivedProps: Record<string, unknown> =
-      children !== undefined
-        ? { ...props, children: traverseElementTuplesOnlyInternal(children, context) }
-        : props;
-    return maybeDecodeElementTuple(["$", type, key, revivedProps], context);
+    if (children !== undefined) {
+      props.children = traverseElementTuplesOnlyInternal(children, context);
+    }
+    return maybeDecodeElementTuple(["$", type, key, props]);
   }
-  return Array.from({ length: value.length }, (_, i) =>
-    traverseElementTuplesOnlyInternal(value[i], context),
-  );
+  for (let i = 0; i < value.length; i += 1) {
+    value[i] = traverseElementTuplesOnlyInternal(value[i], context);
+  }
+  return value;
 }
 
 export function traverseElementTuplesOnly<Chunk>(
@@ -1161,17 +1179,14 @@ export type FlightRowMessage =
   | { k: typeof ROW_BINARY; id: number; t: string; v: ArrayBuffer }
   | { k: typeof ROW_DONE }
   | { k: typeof ROW_ERROR; v: string }
-  | { k: typeof ROW_METADATA; id: number; revivePaths: (string | number)[][] };
+  | { k: typeof ROW_METADATA; id: number; revivePaths: RevivePathTree };
 
 export function flightModelRow(id: number, value: unknown): FlightRowMessage {
   return { k: ROW_MODEL, id, v: value };
 }
 
-export function flightMetadataRow(
-  id: number,
-  revivePaths: (string | number)[][],
-): FlightRowMessage {
-  return { k: ROW_METADATA, id, revivePaths };
+export function flightMetadataRow(id: number, revivePathTree: RevivePathTree): FlightRowMessage {
+  return { k: ROW_METADATA, id, revivePaths: revivePathTree };
 }
 
 function toTransferableBuffer(bytes: Uint8Array): ArrayBuffer {

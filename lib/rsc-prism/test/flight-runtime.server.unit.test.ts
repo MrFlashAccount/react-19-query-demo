@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
 
 import { encodeReply } from "../src/flight-runtime/client";
-import { decodeReply, renderToReadableStream } from "../src/flight-runtime/server";
+import { decodeReply, renderToReadableStream, renderToRowEmitter } from "../src/flight-runtime/server";
+import { ROW_METADATA, ROW_MODEL } from "../src/flight-runtime/wire";
 import { TraceRecorder } from "./utils/trace-recorder";
 
 describe("flight runtime server stream behavior", () => {
@@ -108,8 +109,40 @@ describe("flight runtime server stream behavior", () => {
     }
 
     const fullText = chunks.join("");
-    expect(fullText).toMatch(/M0:\{"revivePaths":\[/);
+    expect(fullText).toMatch(/M0:\{"revivePaths":\[\[/);
     expect(fullText).toContain(`0:["$","div",null,`);
+  });
+
+  it("emits metadata row before model row when using renderToRowEmitter", async () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
+    const clientRef = {
+      $$typeof: CLIENT_REFERENCE_SYMBOL,
+      $$id: "mod#Button",
+    };
+    const root = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: { onClick: clientRef, children: "hi" },
+    } as ReactNode;
+
+    const rows: { k: number; id?: number; revivePaths?: unknown; v?: unknown }[] = [];
+    await renderToRowEmitter(root, null, (row) => {
+      rows.push(row as typeof rows[0]);
+    });
+
+    const metadataRow = rows.find((r) => r.k === ROW_METADATA);
+    const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
+    expect(metadataRow).toBeDefined();
+    expect(metadataRow?.id).toBe(0);
+    expect(Array.isArray(metadataRow?.revivePaths)).toBe(true);
+    expect((metadataRow?.revivePaths as unknown[]).length).toBeGreaterThan(0);
+    expect((metadataRow?.revivePaths as [string, unknown][])[0]).toHaveLength(2);
+    expect(modelRow).toBeDefined();
+    const metadataIdx = rows.indexOf(metadataRow!);
+    const modelIdx = rows.indexOf(modelRow!);
+    expect(metadataIdx).toBeLessThan(modelIdx);
   });
 
   it("emits component render/encode spans with host tag coverage and durations", async () => {

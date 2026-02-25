@@ -7,6 +7,8 @@ export interface FlightClientOptions {
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   traceContext?: RSCTraceContext;
   componentTrace?: ComponentTraceTracker;
+  /** When true, recursively materialize all deferred chunks before resolving. Single suspend. Default false preserves lazy wrappers (one suspend per chunk). */
+  materializeDeferredChunks?: boolean;
 }
 
 export interface FlightServerRenderOptions {
