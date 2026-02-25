@@ -7,6 +7,7 @@ import {
   createModelReviver,
   decodeBinaryWireRow,
   type FlightRowMessage,
+  type FlightTemplateRowShape,
   type RevivePathTree,
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
@@ -50,6 +51,7 @@ interface FlightChunk<T = unknown> {
 interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
   revivePathsByRowId: Map<number, RevivePathTree>;
+  templatesByRowId: Map<number, FlightTemplateRowShape[]>;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
@@ -60,6 +62,10 @@ interface FlightResponse {
 }
 
 const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
+const TEMPLATE_SLOT_KEY = "$slot";
+const TEMPLATE_REF_KEY = "$tpl";
+const TEMPLATE_VALUES_KEY = "$v";
+const TEMPLATE_SCAN_NODE_BUDGET = 4000;
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return typeof value === "object" && value != null && "then" in value;
@@ -73,6 +79,124 @@ function isLazyWrapper(
   }
   const candidate = value as { $$typeof?: unknown; _payload?: unknown; _init?: unknown };
   return candidate.$$typeof === REACT_LAZY_SYMBOL && typeof candidate._init === "function";
+}
+
+function expandTemplateShape(
+  node: unknown,
+  slots: unknown[],
+  templatesById: Map<number, unknown>,
+): unknown {
+  if (node == null || typeof node !== "object") {
+    return node;
+  }
+  if (Array.isArray(node)) {
+    return node.map((entry) => expandTemplateShape(entry, slots, templatesById));
+  }
+  const objectNode = node as Record<string, unknown>;
+  if (typeof objectNode[TEMPLATE_SLOT_KEY] === "number") {
+    return slots[objectNode[TEMPLATE_SLOT_KEY] as number];
+  }
+  if (
+    typeof objectNode[TEMPLATE_REF_KEY] === "number" &&
+    Array.isArray(objectNode[TEMPLATE_VALUES_KEY])
+  ) {
+    const templateShape = templatesById.get(objectNode[TEMPLATE_REF_KEY] as number);
+    if (templateShape !== undefined) {
+      return expandTemplateShape(
+        templateShape,
+        objectNode[TEMPLATE_VALUES_KEY] as unknown[],
+        templatesById,
+      );
+    }
+  }
+  const out: Record<string, unknown> = {};
+  const keys = Object.keys(objectNode);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    out[key] = expandTemplateShape(objectNode[key], slots, templatesById);
+  }
+  return out;
+}
+
+function hasTemplateReferences(node: unknown, budget: { count: number }): boolean {
+  if (budget.count > TEMPLATE_SCAN_NODE_BUDGET) {
+    return false;
+  }
+  budget.count += 1;
+  if (node == null || typeof node !== "object") {
+    return false;
+  }
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i += 1) {
+      if (hasTemplateReferences(node[i], budget)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  const objectNode = node as Record<string, unknown>;
+  if (typeof objectNode[TEMPLATE_REF_KEY] === "number") {
+    return true;
+  }
+  const keys = Object.keys(objectNode);
+  for (let i = 0; i < keys.length; i += 1) {
+    if (hasTemplateReferences(objectNode[keys[i]], budget)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function expandTemplateReferencesInPlace(
+  node: unknown,
+  templatesById: Map<number, unknown>,
+): unknown {
+  if (node == null || typeof node !== "object") {
+    return node;
+  }
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i += 1) {
+      node[i] = expandTemplateReferencesInPlace(node[i], templatesById);
+    }
+    return node;
+  }
+  const objectNode = node as Record<string, unknown>;
+  if (
+    typeof objectNode[TEMPLATE_REF_KEY] === "number" &&
+    Array.isArray(objectNode[TEMPLATE_VALUES_KEY])
+  ) {
+    const templateShape = templatesById.get(objectNode[TEMPLATE_REF_KEY] as number);
+    if (templateShape !== undefined) {
+      return expandTemplateShape(
+        templateShape,
+        objectNode[TEMPLATE_VALUES_KEY] as unknown[],
+        templatesById,
+      );
+    }
+  }
+  const keys = Object.keys(objectNode);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    objectNode[key] = expandTemplateReferencesInPlace(objectNode[key], templatesById);
+  }
+  return objectNode;
+}
+
+function expandTemplatesInRowValue(
+  root: unknown,
+  templates: FlightTemplateRowShape[] | undefined,
+): unknown {
+  if (templates == null || templates.length === 0) {
+    return root;
+  }
+  if (!hasTemplateReferences(root, { count: 0 })) {
+    return root;
+  }
+  const templatesById = new Map<number, unknown>();
+  for (let i = 0; i < templates.length; i += 1) {
+    templatesById.set(templates[i].id, templates[i].shape);
+  }
+  return expandTemplateReferencesInPlace(root, templatesById);
 }
 
 function createPendingChunk<T>(id: number): FlightChunk<T> {
@@ -205,14 +329,16 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     getCurrentRowId: () => response.currentRowId,
   };
   const revivePaths = response.revivePathsByRowId.get(chunk.id);
+  const templates = response.templatesByRowId.get(chunk.id);
   try {
+    const expandedRoot = expandTemplatesInRowValue(model, templates);
     let revived: T;
     if (revivePaths != null && revivePaths.length > 0) {
-      const root = model;
+      const root = expandedRoot;
       applyDirectPathReplacements(root, revivePaths, decodeContext);
       revived = traverseElementTuplesOnly(decodeContext, root) as T;
     } else {
-      revived = reviveModelValueTree(decodeContext, model) as T;
+      revived = reviveModelValueTree(decodeContext, expandedRoot) as T;
     }
     chunk.status = CHUNK_INITIALIZED;
     chunk.value = revived;
@@ -349,6 +475,7 @@ function createFlightResponse(
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
     revivePathsByRowId: new Map(),
+    templatesByRowId: new Map(),
     resolveClientReference,
     callServer,
     fromJSON: (_key, value) => value,
@@ -511,10 +638,16 @@ async function consumeFlightStream(
     parsingRowTag = false;
     const decoded = decoder.decode(rowBytes);
     if (wasMetadata) {
-      const meta = JSON.parse(decoded) as { revivePaths?: RevivePathTree };
+      const meta = JSON.parse(decoded) as {
+        revivePaths?: RevivePathTree;
+        templates?: FlightTemplateRowShape[];
+      };
       const tree = meta.revivePaths;
       if (Array.isArray(tree) && tree.length > 0) {
         response.revivePathsByRowId.set(currentId, tree);
+      }
+      if (Array.isArray(meta.templates) && meta.templates.length > 0) {
+        response.templatesByRowId.set(currentId, meta.templates);
       }
     } else {
       resolveModelChunk(response, currentId, JSON.parse(decoded));
@@ -807,6 +940,9 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
         case ROW_METADATA:
           if (row.revivePaths.length > 0) {
             response.revivePathsByRowId.set(row.id, row.revivePaths);
+          }
+          if (Array.isArray(row.templates) && row.templates.length > 0) {
+            response.templatesByRowId.set(row.id, row.templates);
           }
           hasAnyRow = true;
           scheduleRootRetry();

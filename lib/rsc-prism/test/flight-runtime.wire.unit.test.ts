@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createFromRowEmitter } from "../src/flight-runtime/client";
 
 import {
   applyDirectPathReplacements,
@@ -11,6 +12,7 @@ import {
   encodeWireValueWithBinaryRows,
   parseModelString,
   pathsToTree,
+  REVIVE_PATH_WILDCARD,
   traverseElementTuplesOnly,
 } from "../src/flight-runtime/wire";
 function decodeWithResolver(value: unknown): unknown {
@@ -203,6 +205,16 @@ describe("flight wire decode correctness", () => {
 });
 
 describe("flight wire compact stream format", () => {
+  it("compacts repeated array-index revive paths using wildcard node", () => {
+    const tree = pathsToTree([
+      ["items", 0, "onClick"],
+      ["items", 1, "onClick"],
+      ["items", 2, "onClick"],
+    ]);
+
+    expect(tree).toEqual([["items", [[REVIVE_PATH_WILDCARD, [["onClick", true]]]]]]);
+  });
+
   it("encodes compact stream tags for primitive wrappers", () => {
     const outlinedRows: unknown[] = [];
     const encoded = encodeStreamValue(
@@ -360,6 +372,91 @@ describe("flight wire compact stream format", () => {
     expect(revived.type).toBe("div");
     expect(revived.props.onClick).toBe("client:mod#Button");
     expect(revived.props.children).toBe("hello");
+  });
+
+  it("applies wildcard revive paths across list children", () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
+    const clientRef = {
+      $$typeof: CLIENT_REFERENCE_SYMBOL,
+      $$id: "mod#Button",
+    };
+    const element = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: {
+        children: [
+          {
+            $$typeof: REACT_ELEMENT_SYMBOL,
+            type: "button",
+            key: "a",
+            props: { onClick: clientRef, children: "a" },
+          },
+          {
+            $$typeof: REACT_ELEMENT_SYMBOL,
+            type: "button",
+            key: "b",
+            props: { onClick: clientRef, children: "b" },
+          },
+        ],
+      },
+    };
+
+    const revivePaths: (string | number)[][] = [];
+    const encoded = encodeStreamValue(element, {
+      seen: new WeakSet<object>(),
+      emitBinaryRow: () => 1,
+      outlineValue: () => 1,
+      _path: [],
+      pushReviveValue: (_v, path) => revivePaths.push([...path]),
+    });
+    const tree = pathsToTree(revivePaths);
+    const context = {
+      getChunk: () => null,
+      readChunk: () => null,
+      createLazyChunkWrapper: () => null,
+      resolveClientReference: (id: string) => `client:${id}`,
+    };
+
+    applyDirectPathReplacements(encoded, tree, context);
+    const revived = traverseElementTuplesOnly(context, encoded) as {
+      props: { children: Array<{ props: { onClick: unknown } }> };
+    };
+
+    expect(revived.props.children).toHaveLength(2);
+    expect(revived.props.children[0].props.onClick).toBe("client:mod#Button");
+    expect(revived.props.children[1].props.onClick).toBe("client:mod#Button");
+  });
+
+  it("expands template metadata before model revival", async () => {
+    const emitter = createFromRowEmitter<Array<{ type: string; props: { children: string } }>>();
+    emitter.push({
+      k: 4,
+      id: 0,
+      revivePaths: [],
+      templates: [
+        {
+          id: 0,
+          shape: ["$", "div", null, { children: { $slot: 0 } }],
+        },
+      ],
+    });
+    emitter.push({
+      k: 0,
+      id: 0,
+      v: [
+        { $tpl: 0, $v: ["first"] },
+        { $tpl: 0, $v: ["second"] },
+      ],
+    });
+    emitter.push({ k: 2 });
+
+    const resolved = await emitter.result;
+    expect(Array.isArray(resolved)).toBe(true);
+    expect(resolved[0].type).toBe("div");
+    expect(resolved[0].props.children).toBe("first");
+    expect(resolved[1].props.children).toBe("second");
   });
 });
 

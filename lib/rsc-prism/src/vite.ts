@@ -1166,9 +1166,12 @@ function resolveDirectiveModuleType(
 function buildMainWorkerReferenceModuleCode(
   moduleId: string,
   exportsInfo: ParsedModuleExports,
+  actionShortIdMap: Map<string, string>,
 ): string {
   const lines: string[] = [];
   const actionExports = new Set(exportsInfo.actionExports);
+  const getActionId = (name: string) =>
+    actionShortIdMap.get(`${moduleId}#${name}`) ?? `${moduleId}#${name}`;
   lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
   lines.push("");
   lines.push('const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");');
@@ -1180,7 +1183,10 @@ function buildMainWorkerReferenceModuleCode(
     'const __rscPrismCreateWorkerRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...)."); }; ref.$$typeof = __rscPrismWorkerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$moduleId = __rscPrismModuleId; ref.$$name = name; return ref; };',
   );
   lines.push(
-    "const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };",
+    `const __rscPrismActionIdMap = ${JSON.stringify(Object.fromEntries(Array.from(actionExports).map((name) => [name, getActionId(name)])))};`,
+  );
+  lines.push(
+    "const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = __rscPrismActionIdMap[name] ?? `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };",
   );
   lines.push("");
 
@@ -1223,9 +1229,12 @@ function buildMainWorkerReferenceModuleCode(
 function buildMainWorkerActionReferenceModuleCode(
   moduleId: string,
   exportsInfo: ParsedModuleExports,
+  actionShortIdMap: Map<string, string>,
 ): string {
   const lines: string[] = [];
   const actionExports = new Set(exportsInfo.actionExports);
+  const getActionId = (name: string) =>
+    actionShortIdMap.get(`${moduleId}#${name}`) ?? `${moduleId}#${name}`;
   const nonActionExports: string[] = [];
   if (exportsInfo.hasDefault && !actionExports.has("default")) {
     nonActionExports.push("default");
@@ -1245,7 +1254,10 @@ function buildMainWorkerActionReferenceModuleCode(
   lines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push(
-    "const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };",
+    `const __rscPrismActionIdMap = ${JSON.stringify(Object.fromEntries(Array.from(actionExports).map((name) => [name, getActionId(name)])))};`,
+  );
+  lines.push(
+    "const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = __rscPrismActionIdMap[name] ?? `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };",
   );
   lines.push("");
 
@@ -1276,10 +1288,13 @@ function buildMainWorkerDirectiveReferenceModuleCode(
   moduleId: string,
   exportsInfo: ParsedModuleExports,
   sourceImportPath: string,
+  actionShortIdMap: Map<string, string>,
 ): string {
   const lines: string[] = [];
   const actionExports = new Set(exportsInfo.actionExports);
   const componentExports = new Set(exportsInfo.componentExports);
+  const getActionId = (name: string) =>
+    actionShortIdMap.get(`${moduleId}#${name}`) ?? `${moduleId}#${name}`;
   lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
   lines.push(`import * as __rscPrismSourceModule from ${JSON.stringify(sourceImportPath)};`);
   lines.push("");
@@ -1292,7 +1307,10 @@ function buildMainWorkerDirectiveReferenceModuleCode(
     'const __rscPrismCreateWorkerRef = (name) => { const ref = function() { throw new Error("[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...)."); }; ref.$$typeof = __rscPrismWorkerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$moduleId = __rscPrismModuleId; ref.$$name = name; return ref; };',
   );
   lines.push(
-    "const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };",
+    `const __rscPrismActionIdMap = ${JSON.stringify(Object.fromEntries(Array.from(actionExports).map((name) => [name, getActionId(name)])))};`,
+  );
+  lines.push(
+    "const __rscPrismCreateActionRef = (name) => { const ref = function(...args) { return __rscPrismCallAction(ref, args); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = __rscPrismActionIdMap[name] ?? `${__rscPrismModuleId}#${name}`; ref.$$bound = null; return ref; };",
   );
   lines.push("");
 
@@ -1453,11 +1471,23 @@ function buildMainVirtualModuleCode(
 function buildWorkerComponentRegistryCode(
   modules: WorkerRuntimeModuleEntry[],
   componentBindings: WorkerRuntimeComponentBinding[],
-): string {
+): { code: string; actionShortIdMap: Map<string, string> } {
+  const actionShortIdMap = new Map<string, string>();
+  let shortIdCounter = 0;
+  const getShortId = (fullId: string): string => {
+    let shortId = actionShortIdMap.get(fullId);
+    if (shortId == null) {
+      shortId = String(shortIdCounter++);
+      actionShortIdMap.set(fullId, shortId);
+    }
+    return shortId;
+  };
+
   const lines: string[] = [];
   lines.push("const componentRegistry = new Map();");
   lines.push("const actionRegistry = new Map();");
   lines.push("const actionModules = [];");
+  lines.push("const workerActions = {};");
   lines.push("");
   modules.forEach((entry, index) => {
     const importName = `__rscPrismWorkerModule${index}`;
@@ -1480,9 +1510,14 @@ function buildWorkerComponentRegistryCode(
       const accessExpression =
         exportName === "default" ? `${importName}.default` : `${importName}.${exportName}`;
       if (actionExports.has(exportName)) {
+        const fullId = `${entry.moduleId}#${exportName}`;
+        const shortId = getShortId(fullId);
         lines.push(`if (typeof ${accessExpression} === "function") {`);
         lines.push(
-          `  actionRegistry.set(${JSON.stringify(`${entry.moduleId}#${exportName}`)}, ${accessExpression});`,
+          `  actionRegistry.set(${JSON.stringify(shortId)}, ${accessExpression});`,
+        );
+        lines.push(
+          `  workerActions[${JSON.stringify(shortId)}] = ${accessExpression};`,
         );
         lines.push("}");
       } else if (entry.isWorkerDirectiveModule || componentExports.has(exportName)) {
@@ -1516,6 +1551,7 @@ function buildWorkerComponentRegistryCode(
   lines.push("}");
   lines.push("");
   lines.push("export const workerActionModules = actionModules;");
+  lines.push("export { workerActions };");
   lines.push("");
   lines.push("export const workerActionCount = actionRegistry.size;");
   lines.push("");
@@ -1526,7 +1562,7 @@ function buildWorkerComponentRegistryCode(
   lines.push("export function hasWorkerAction(actionId) {");
   lines.push("  return actionRegistry.has(actionId);");
   lines.push("}");
-  return `${lines.join("\n")}\n`;
+  return { code: `${lines.join("\n")}\n`, actionShortIdMap };
 }
 
 function buildGeneratedWorkerEntryCode(
@@ -1536,12 +1572,12 @@ function buildGeneratedWorkerEntryCode(
   return `
 import { createRSCHandler } from "@lib/rsc-prism/response";
 import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport";
-import { resolveWorkerComponent, workerActionModules } from "./worker-component-registry";
+import { resolveWorkerComponent, workerActions } from "./worker-component-registry";
 
 const WORKER_ORIGIN = "https://rsc.prism.local";
 const ACTION_ENDPOINT = "/rsc/action";
 const ACTION_BATCH_REFRESH = ${experimentalActionBatchRefresh ? "true" : "false"};
-const handler = createRSCHandler({ actionModules: workerActionModules });
+const handler = createRSCHandler({ actions: workerActions });
 
 function toActionRequest(message, endpoint) {
   const headers = new Headers(message.headers ?? []);
@@ -1975,6 +2011,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   let generatedWorkerRegistryPath: string | null = null;
   let generatedWorkerInlineComponentsDir: string | null = null;
   let inferredClientModulePaths = new Set<string>();
+  let actionShortIdMap = new Map<string, string>();
   const workerActionDirectives = new Set([...workerDirectives, WORKER_ACTION_DIRECTIVE]);
 
   const mapModuleId = (absolutePath: string): string => {
@@ -2696,14 +2733,13 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       const inlinePath = path.resolve(inlineComponentsDir, inlineSource.fileName);
       await writeFile(inlinePath, inlineSource.sourceCode, "utf8");
     }
-    await writeFile(
-      registryPath,
+    const { code: registryCode, actionShortIdMap: registryActionShortIdMap } =
       buildWorkerComponentRegistryCode(
         workerRuntimeCollection.modules,
         workerRuntimeCollection.componentBindings,
-      ),
-      "utf8",
-    );
+      );
+    actionShortIdMap = registryActionShortIdMap;
+    await writeFile(registryPath, registryCode, "utf8");
     await writeFile(
       entryPath,
       buildGeneratedWorkerEntryCode(workerEndpoint, experimentalActionBatchRefresh),
@@ -2996,6 +3032,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       }
 
       if (options.mode === "main" && id.startsWith(MAIN_WORKER_REF_VIRTUAL_ID_PREFIX)) {
+        if (workerRuntimeEnabled && actionShortIdMap.size === 0) {
+          await ensureGeneratedWorkerSources();
+        }
         const absolutePath = id.slice(MAIN_WORKER_REF_VIRTUAL_ID_PREFIX.length);
         const directiveModule = await parseDirectiveModule(absolutePath);
         if (
@@ -3008,10 +3047,17 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           );
         }
         const moduleId = mapModuleId(absolutePath);
-        return buildMainWorkerReferenceModuleCode(moduleId, directiveModule.exportsInfo);
+        return buildMainWorkerReferenceModuleCode(
+          moduleId,
+          directiveModule.exportsInfo,
+          actionShortIdMap,
+        );
       }
 
       if (options.mode === "main" && id.startsWith(MAIN_WORKER_ACTION_REF_VIRTUAL_ID_PREFIX)) {
+        if (workerRuntimeEnabled && actionShortIdMap.size === 0) {
+          await ensureGeneratedWorkerSources();
+        }
         const absolutePath = id.slice(MAIN_WORKER_ACTION_REF_VIRTUAL_ID_PREFIX.length);
         const directiveModule = await parseDirectiveModule(absolutePath);
         if (
@@ -3024,10 +3070,17 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           );
         }
         const moduleId = mapModuleId(absolutePath);
-        return buildMainWorkerActionReferenceModuleCode(moduleId, directiveModule.exportsInfo);
+        return buildMainWorkerActionReferenceModuleCode(
+          moduleId,
+          directiveModule.exportsInfo,
+          actionShortIdMap,
+        );
       }
 
       if (options.mode === "main" && id.startsWith(MAIN_WORKER_DIRECTIVE_REF_VIRTUAL_ID_PREFIX)) {
+        if (workerRuntimeEnabled && actionShortIdMap.size === 0) {
+          await ensureGeneratedWorkerSources();
+        }
         const absolutePath = id.slice(MAIN_WORKER_DIRECTIVE_REF_VIRTUAL_ID_PREFIX.length);
         const directiveModule = await parseDirectiveModule(absolutePath);
         if (directiveModule.exportsInfo == null || !directiveModule.hasWorkerComponentExports) {
@@ -3040,6 +3093,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           moduleId,
           directiveModule.exportsInfo,
           withBypassQuery(normalizePath(absolutePath)),
+          actionShortIdMap,
         );
       }
 
@@ -3158,7 +3212,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
 
       await copyDirectoryContents(workerSourceDir, workerTargetDir);
     },
-    transform(code, id) {
+    async transform(code, id) {
       if (id.includes(ORIGINAL_MODULE_BYPASS_QUERY)) {
         return null;
       }
@@ -3227,6 +3281,18 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       ) {
         return null;
       }
+      if (
+        options.mode === "main" &&
+        workerRuntimeEnabled &&
+        hasWorkerActionExports &&
+        actionShortIdMap.size === 0
+      ) {
+        try {
+          await ensureGeneratedWorkerSources();
+        } catch {
+          // Fall back to full-path refs when worker sources cannot be generated (e.g. virtual roots in tests)
+        }
+      }
       let transformedCode: string | null = null;
 
       if (options.mode === "worker" && directiveType === "main") {
@@ -3234,7 +3300,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       }
 
       if (options.mode === "main" && directiveType === "worker") {
-        transformedCode = buildMainWorkerReferenceModuleCode(moduleId, exportsInfo);
+        transformedCode = buildMainWorkerReferenceModuleCode(
+          moduleId,
+          exportsInfo,
+          actionShortIdMap,
+        );
       }
 
       if (options.mode === "main" && directiveType == null && hasLocalOnlyWorkerComponents) {
@@ -3249,9 +3319,14 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           moduleId,
           exportsInfo,
           withBypassQuery(normalizePath(projectFilePath)),
+          actionShortIdMap,
         );
       } else if (options.mode === "main" && directiveType == null && hasWorkerActionExports) {
-        transformedCode = buildMainWorkerActionReferenceModuleCode(moduleId, exportsInfo);
+        transformedCode = buildMainWorkerActionReferenceModuleCode(
+          moduleId,
+          exportsInfo,
+          actionShortIdMap,
+        );
       }
 
       if (transformedCode == null) {

@@ -178,7 +178,7 @@ export function Counter() { return null; }
 export * from "./other";
 `;
 
-    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow(
+    await expect(callHook(plugin.transform, undefined, source, id)).rejects.toThrow(
       'Unsupported "export *"',
     );
   });
@@ -741,7 +741,7 @@ export function addTodo() {
 export const metadata = { feature: true };
 `;
 
-    expect(() => callHook(plugin.transform, undefined, source, id)).toThrow(
+    await expect(callHook(plugin.transform, undefined, source, id)).rejects.toThrow(
       "must only export actions",
     );
   });

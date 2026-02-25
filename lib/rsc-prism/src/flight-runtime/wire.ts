@@ -24,6 +24,7 @@ const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
 
 type JsonObject = Record<string, unknown>;
 const EMPTY_ARRAY: unknown[] = [];
+export const REVIVE_PATH_WILDCARD = -1 as const;
 
 type EmitBinaryRow = (kind: string, bytes: Uint8Array) => string | number;
 type StreamEmitBinaryRow = (kind: string, bytes: Uint8Array) => number;
@@ -270,6 +271,13 @@ function emitRevivable(context: StreamEncodeContext, encoded: string): string {
   return encoded;
 }
 
+function getMutablePath(context: StreamEncodeContext): (string | number)[] {
+  if (context._path == null) {
+    context._path = [];
+  }
+  return context._path;
+}
+
 function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext): unknown {
   if (value === undefined) {
     return undefined;
@@ -350,20 +358,34 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return emitRevivable(context, `$${id.toString(16)}`);
   }
   if (Array.isArray(value)) {
-    const basePath = context._path ?? [];
+    const path = getMutablePath(context);
     for (let i = 0; i < value.length; i += 1) {
-      value[i] = encodeStreamValueInternal(value[i], { ...context, _path: [...basePath, i] });
+      path.push(i);
+      try {
+        value[i] = encodeStreamValueInternal(value[i], context);
+      } finally {
+        path.pop();
+      }
     }
     return value;
   }
   if (isReactElementLike(value)) {
-    const basePath = context._path ?? [];
-    const type = encodeStreamType(value.type, { ...context, _path: [...basePath, 1] });
+    const path = getMutablePath(context);
+    path.push(1);
+    let type: string;
+    try {
+      type = encodeStreamType(value.type, context);
+    } finally {
+      path.pop();
+    }
     const key = value.key == null ? null : String(value.key);
-    const props = encodeStreamValueInternal(value.props, {
-      ...context,
-      _path: [...basePath, 3],
-    });
+    path.push(3);
+    let props: unknown;
+    try {
+      props = encodeStreamValueInternal(value.props, context);
+    } finally {
+      path.pop();
+    }
     return ["$", type, key, props];
   }
   if (isClientReference(value)) {
@@ -378,9 +400,14 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
 
   const result: Record<string, unknown> = {};
-  const basePath = context._path ?? [];
+  const path = getMutablePath(context);
   for (const [key, item] of Object.entries(value)) {
-    result[key] = encodeStreamValueInternal(item, { ...context, _path: [...basePath, key] });
+    path.push(key);
+    try {
+      result[key] = encodeStreamValueInternal(item, context);
+    } finally {
+      path.pop();
+    }
   }
   return result;
 }
@@ -585,13 +612,12 @@ function reviveModelValueTreeInternal<Chunk>(
     return value;
   }
   const source = value as Record<string, unknown>;
-  const revived: Record<string, unknown> = {};
   const keys = Object.keys(source);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    revived[key] = reviveModelValueTreeInternal(context, source[key]);
+    source[key] = reviveModelValueTreeInternal(context, source[key]);
   }
-  return revived;
+  return source;
 }
 
 export function reviveModelValueTree<Chunk>(
@@ -649,13 +675,16 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
     return value;
   }
   const source = value as Record<string, unknown>;
-  const revived: Record<string, unknown> = {};
   const keys = Object.keys(source);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    revived[key] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, source[key]);
+    source[key] = reviveModelValueTreeWithReviveValuesInternal(
+      context,
+      reviveValues,
+      source[key],
+    );
   }
-  return revived;
+  return source;
 }
 
 export function reviveModelValueTreeWithReviveValues<Chunk>(
@@ -666,31 +695,40 @@ export function reviveModelValueTreeWithReviveValues<Chunk>(
   return reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, parsedValue);
 }
 
-function getAtPath(root: unknown, path: (string | number)[]): unknown {
-  let current: unknown = root;
-  for (const segment of path) {
-    if (current == null || typeof current !== "object") return undefined;
-    current = (current as Record<string, unknown>)[String(segment)];
-  }
-  return current;
-}
-
-function setAtPath(root: unknown, path: (string | number)[], value: unknown): void {
-  if (path.length === 0) return;
-  let current: unknown = root;
-  for (let i = 0; i < path.length - 1; i += 1) {
-    const segment = path[i];
-    if (current == null || typeof current !== "object") return;
-    current = (current as Record<string, unknown>)[String(segment)];
-  }
-  const last = path[path.length - 1];
-  if (current != null && typeof current === "object") {
-    (current as Record<string, unknown>)[String(last)] = value;
-  }
-}
-
-/** Tree: [key, subtree][] where subtree is true (leaf) or nested [key, subtree][] */
+/** Tree: [key, subtree][] where subtree is true (leaf) or nested [key, subtree][]. */
+/** REVIVE_PATH_WILDCARD (-1) means "all array indexes at this level". */
 export type RevivePathTree = [string | number, RevivePathTree | true][];
+
+function compactRevivePathTree(tree: RevivePathTree): RevivePathTree {
+  const compactedChildren: RevivePathTree = tree.map(([key, child]) => [
+    key,
+    child === true ? true : compactRevivePathTree(child),
+  ]);
+
+  const numericChildren: RevivePathTree = [];
+  const otherChildren: RevivePathTree = [];
+  for (const entry of compactedChildren) {
+    const [key] = entry;
+    if (typeof key === "number" && key >= 0) {
+      numericChildren.push(entry);
+      continue;
+    }
+    otherChildren.push(entry);
+  }
+
+  if (numericChildren.length < 2) {
+    return compactedChildren;
+  }
+
+  const firstChild = JSON.stringify(numericChildren[0][1]);
+  for (let i = 1; i < numericChildren.length; i += 1) {
+    if (JSON.stringify(numericChildren[i][1]) !== firstChild) {
+      return compactedChildren;
+    }
+  }
+
+  return [...otherChildren, [REVIVE_PATH_WILDCARD, numericChildren[0][1]]];
+}
 
 export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePathTree {
   type Node = Map<string | number, Node | true>;
@@ -724,7 +762,7 @@ export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePa
     subtreeCache.set(key, out);
     return out;
   }
-  return mapToArray(root);
+  return compactRevivePathTree(mapToArray(root));
 }
 
 function isRevivePathTree(value: unknown): value is RevivePathTree {
@@ -744,16 +782,66 @@ function applyPathTreeReplacements<Chunk>(
   path: (string | number)[],
 ): void {
   for (const [key, child] of tree) {
+    if (key === REVIVE_PATH_WILDCARD) {
+      const target = path.length === 0 ? root : getValueAtPath(root, path);
+      if (!Array.isArray(target)) {
+        continue;
+      }
+      for (let i = 0; i < target.length; i += 1) {
+        const childPath = [...path, i];
+        if (child === true) {
+          const raw = target[i];
+          if (typeof raw === "string" && isFlightWireString(raw)) {
+            target[i] = parseModelString(context, raw);
+          }
+          continue;
+        }
+        applyPathTreeReplacements(root, child, context, childPath);
+      }
+      continue;
+    }
+
     const childPath = [...path, key];
     if (child === true) {
-      const raw = getAtPath(root, childPath);
+      const raw = getValueAtPath(root, childPath);
       if (typeof raw === "string" && isFlightWireString(raw)) {
-        setAtPath(root, childPath, parseModelString(context, raw));
+        setValueAtPath(root, childPath, parseModelString(context, raw));
       }
     } else {
       applyPathTreeReplacements(root, child, context, childPath);
     }
   }
+}
+
+function getValueAtPath(root: unknown, path: (string | number)[]): unknown {
+  let current: unknown = root;
+  for (let i = 0; i < path.length; i += 1) {
+    const segment = path[i];
+    if (current == null || typeof current !== "object") {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[String(segment)];
+  }
+  return current;
+}
+
+function setValueAtPath(root: unknown, path: (string | number)[], value: unknown): void {
+  if (path.length === 0) {
+    return;
+  }
+  let current: unknown = root;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const segment = path[i];
+    if (current == null || typeof current !== "object") {
+      return;
+    }
+    current = (current as Record<string, unknown>)[String(segment)];
+  }
+  if (current == null || typeof current !== "object") {
+    return;
+  }
+  const last = path[path.length - 1];
+  (current as Record<string, unknown>)[String(last)] = value;
 }
 
 export function applyDirectPathReplacements<Chunk>(
@@ -1053,19 +1141,35 @@ export const ROW_DONE = 2 as const;
 export const ROW_ERROR = 3 as const;
 export const ROW_METADATA = 4 as const;
 
+export interface FlightTemplateRowShape {
+  id: number;
+  shape: unknown;
+}
+
 export type FlightRowMessage =
   | { k: typeof ROW_MODEL; id: number; v: unknown }
   | { k: typeof ROW_BINARY; id: number; t: string; v: ArrayBuffer }
   | { k: typeof ROW_DONE }
   | { k: typeof ROW_ERROR; v: string }
-  | { k: typeof ROW_METADATA; id: number; revivePaths: RevivePathTree };
+  | {
+      k: typeof ROW_METADATA;
+      id: number;
+      revivePaths: RevivePathTree;
+      templates?: FlightTemplateRowShape[];
+    };
 
 export function flightModelRow(id: number, value: unknown): FlightRowMessage {
   return { k: ROW_MODEL, id, v: value };
 }
 
-export function flightMetadataRow(id: number, revivePathTree: RevivePathTree): FlightRowMessage {
-  return { k: ROW_METADATA, id, revivePaths: revivePathTree };
+export function flightMetadataRow(
+  id: number,
+  revivePathTree: RevivePathTree,
+  templates?: FlightTemplateRowShape[],
+): FlightRowMessage {
+  return templates != null && templates.length > 0
+    ? { k: ROW_METADATA, id, revivePaths: revivePathTree, templates }
+    : { k: ROW_METADATA, id, revivePaths: revivePathTree };
 }
 
 function toTransferableBuffer(bytes: Uint8Array): ArrayBuffer {
