@@ -122,9 +122,7 @@ export async function renderRSCRows(
 /**
  * Decode encoded action arguments back to JavaScript values
  */
-export async function decodeActionArgs(
-  encoded: EncodedActionArgs,
-): Promise<unknown[]> {
+export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
   const manifest = resolveClientManifestOrThrow();
   const decoded = await defaultFlightProtocolAdapter.decodeActionArgs(encoded, manifest);
   return Array.isArray(decoded) ? decoded : [decoded];

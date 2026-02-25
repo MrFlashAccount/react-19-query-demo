@@ -239,8 +239,6 @@ export interface StreamEncodeContext {
   emitBinaryRow: StreamEmitBinaryRow;
   seen: WeakSet<object>;
   currentRowId?: number;
-  /** When true (row/postMessage path), send raw Date, BigInt, -0, NaN, Infinity for structured clone */
-  useRawForCloneableTypes?: boolean;
   /** Optional: collect path for inline revival; client uses paths for direct replacement */
   pushReviveValue?: (encoded: string, path: (string | number)[]) => void;
   /** Current path (set by caller for path collection) */
@@ -259,25 +257,19 @@ function emitRevivable(context: StreamEncodeContext, encoded: string): string {
 
 function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext): unknown {
   if (value === undefined) {
-    if (context.useRawForCloneableTypes) return undefined;
-    return emitRevivable(context, "$undefined");
+    return undefined;
   }
   if (typeof value === "string") {
     return escapeStringValue(value);
   }
   if (typeof value === "number") {
-    if (context.useRawForCloneableTypes) return value;
-    if (Number.isNaN(value)) return emitRevivable(context, "$NaN");
-    if (!Number.isFinite(value)) return value < 0 ? "$-Infinity" : "$Infinity";
-    if (Object.is(value, -0)) return emitRevivable(context, "$-0");
     return value;
   }
   if (typeof value === "boolean" || value == null) {
     return value;
   }
   if (typeof value === "bigint") {
-    if (context.useRawForCloneableTypes) return value;
-    return emitRevivable(context, `$n${value.toString()}`);
+    return value;
   }
   if (typeof value === "symbol") {
     const key = Symbol.keyFor(value);
@@ -303,8 +295,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   context.seen.add(value as object);
 
   if (value instanceof Date) {
-    if (context.useRawForCloneableTypes) return value;
-    return emitRevivable(context, `$D${value.toJSON()}`);
+    return value;
   }
   if (value instanceof URLSearchParams) {
     return emitRevivable(context, `$P${value.toString()}`);
@@ -326,23 +317,15 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return emitRevivable(context, `$K${outlinedId.toString(16)}`);
   }
   if (value instanceof Map) {
-    if (context.useRawForCloneableTypes) {
-      return new Map(
-        Array.from(value.entries()).map(([k, v]) => [
-          encodeStreamValueInternal(k, context),
-          encodeStreamValueInternal(v, context),
-        ]),
-      );
-    }
-    const outlinedId = context.outlineValue(Array.from(value.entries()));
-    return emitRevivable(context, `$Q${outlinedId.toString(16)}`);
+    return new Map(
+      Array.from(value.entries()).map(([k, v]) => [
+        encodeStreamValueInternal(k, context),
+        encodeStreamValueInternal(v, context),
+      ]),
+    );
   }
   if (value instanceof Set) {
-    if (context.useRawForCloneableTypes) {
-      return new Set(Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)));
-    }
-    const outlinedId = context.outlineValue(Array.from(value.values()));
-    return emitRevivable(context, `$W${outlinedId.toString(16)}`);
+    return new Set(Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)));
   }
   if (value instanceof ArrayBuffer) {
     const id = context.emitBinaryRow("ArrayBuffer", new Uint8Array(value));

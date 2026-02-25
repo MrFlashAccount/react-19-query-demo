@@ -224,13 +224,13 @@ describe("flight wire compact stream format", () => {
       },
     ) as Record<string, unknown>;
 
-    expect(encoded.undef).toBe("$undefined");
-    expect(encoded.bigint).toBe("$n42");
-    expect(encoded.date).toBe("$D2025-01-01T00:00:00.000Z");
+    expect(encoded.undef).toBeUndefined();
+    expect(encoded.bigint).toBe(42n);
+    expect(encoded.date).toEqual(new Date("2025-01-01T00:00:00.000Z"));
     expect(encoded.search).toBe("$Pa=1&b=2");
     expect(encoded.escaped).toBe("$$root");
-    expect(encoded.map).toBe("$Q1");
-    expect(outlinedRows).toHaveLength(1);
+    expect(encoded.map).toEqual(new Map([["a", 1]]));
+    expect(outlinedRows).toHaveLength(0);
   });
 
   it("parses compact stream strings and creates lazy wrappers for unresolved chunks", () => {

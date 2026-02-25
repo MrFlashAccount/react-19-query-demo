@@ -100,7 +100,6 @@ interface RenderSink {
 function createEncodeContext(
   sink: RenderSink,
   queueDeferred: (task: Promise<void>) => void,
-  options?: FlightServerRenderOptions & { useRawForCloneableTypes?: boolean },
 ): EncodeContext {
   let nextRowId = 1;
   const currentRevivePathsRef: { current: (string | number)[][] } = { current: [] };
@@ -149,7 +148,6 @@ function createEncodeContext(
       emitBinaryRow: (kind, bytes) => context.emitBinaryRow(kind, bytes),
       seen: new WeakSet<object>(),
       currentRowId: undefined,
-      useRawForCloneableTypes: options?.useRawForCloneableTypes,
       pushReviveValue: (_encoded, path) => {
         currentRevivePathsRef.current.push([...path]);
       },
@@ -329,7 +327,6 @@ export async function renderToReadableStream(
             },
           },
           queueDeferred,
-          options,
         );
 
         context.preparePathsForEncode();
@@ -409,7 +406,6 @@ export async function renderToRowEmitter(
         },
       },
       queueDeferred,
-      { ...options, useRawForCloneableTypes: true },
     );
 
     context.preparePathsForEncode();
