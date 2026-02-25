@@ -696,7 +696,7 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        rows: [flightModelRow(0, { $t: "rowRef", id: 1 })],
+        rows: [flightModelRow(0, "$1")],
       } satisfies WorkerRowResponseMessage);
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
@@ -724,12 +724,20 @@ describe("transport", () => {
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        rows: [
-          flightModelRow(0, { $t: "rowRef", id: 1 }),
-          flightModelRow(1, "ready"),
-          flightDoneRow(),
-        ],
+        rows: [flightModelRow(0, "$1")],
       } satisfies WorkerRowResponseMessage);
+      setTimeout(() => {
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          rows: [flightModelRow(1, "ready")],
+        } satisfies WorkerRowResponseMessage);
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          rows: [flightDoneRow()],
+        } satisfies WorkerRowResponseMessage);
+      }, 0);
     };
 
     const transport = createWorkerRowTransport(endpoint);
@@ -740,20 +748,32 @@ describe("transport", () => {
     ).resolves.toBe("ready");
   });
 
-  it("worker row transport resolves nested deferred row refs", async () => {
+  it("worker row transport continues hydrating deferred chunks after root resolution", async () => {
     const endpoint = new MockWorkerEndpoint();
     endpoint.onPostMessage = (message) => {
       const request = message as WorkerTransportRequestMessage;
       endpoint.emitMessage({
         type: "rsc.transport.response.row",
         id: request.id,
-        rows: [
-          flightModelRow(0, { $t: "rowRef", id: 1 }),
-          flightModelRow(1, { first: { $t: "rowRef", id: 2 } }),
-          flightModelRow(2, "ready"),
-          flightDoneRow(),
-        ],
+        rows: [flightModelRow(0, "$1")],
       } satisfies WorkerRowResponseMessage);
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        rows: [flightModelRow(1, { first: "$2" })],
+      } satisfies WorkerRowResponseMessage);
+      setTimeout(() => {
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          rows: [flightModelRow(2, "ready")],
+        } satisfies WorkerRowResponseMessage);
+        endpoint.emitMessage({
+          type: "rsc.transport.response.row",
+          id: request.id,
+          rows: [flightDoneRow()],
+        } satisfies WorkerRowResponseMessage);
+      }, 20);
     };
 
     const transport = createWorkerRowTransport(endpoint);
@@ -761,9 +781,31 @@ describe("transport", () => {
       url: "/rsc",
     });
 
-    const lazy = value?.first as { _init: (p: unknown) => unknown; _payload: unknown };
-    expect(lazy).toBeDefined();
-    expect(typeof lazy._init).toBe("function");
+    const lazy = value?.first as {
+      $$typeof?: symbol;
+      _payload: unknown;
+      _init: (payload: unknown) => unknown;
+    };
+
+    expect(String(lazy?.$$typeof)).toBe("Symbol(react.lazy)");
+
+    let thrown: unknown;
+    try {
+      lazy._init(lazy._payload);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeDefined();
+    expect(typeof (thrown as { then?: unknown }).then).toBe("function");
+
+    await expect(
+      Promise.race([
+        Promise.resolve(thrown).then(() => "resolved"),
+        new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 200)),
+      ]),
+    ).resolves.toBe("resolved");
+
     expect(lazy._init(lazy._payload)).toBe("ready");
   });
 

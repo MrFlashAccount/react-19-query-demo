@@ -106,8 +106,7 @@ export function createClientRefs<M extends ComponentModule>(
  * // Use in JSX:
  * <Client.Counter count={0} />
  *
- * // Use manifest for serialization:
- * createFlightResponse(<App />, manifest);
+ * // Use manifest with createRSCHandler renderRows from @lib/rsc-prism/response
  * ```
  */
 export function createClientModule<M extends ComponentModule>(

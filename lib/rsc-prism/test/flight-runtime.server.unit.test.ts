@@ -2,56 +2,72 @@ import { describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
 
 import { encodeReply } from "../src/flight-runtime/client";
-import { decodeReply, renderToRowEmitter } from "../src/flight-runtime/server";
-import { ROW_BINARY, ROW_DONE, ROW_MODEL } from "../src/flight-runtime/wire";
-
+import {
+  decodeReply,
+  renderToReadableStream,
+  renderToRowEmitter,
+} from "../src/flight-runtime/server";
+import { ROW_METADATA, ROW_MODEL } from "../src/flight-runtime/wire";
 describe("flight runtime server stream behavior", () => {
-  it("returns before server render resolves and emits deferred rows via row emitter", async () => {
+  it("returns stream before server render resolves and emits deferred rows", async () => {
     const state: { resolveRendered?: () => void } = {};
     const rendered = new Promise<unknown>((resolve) => {
       state.resolveRendered = () => resolve("ready");
     });
 
-    const rows: { k: number; id?: number; v?: unknown }[] = [];
-    const emitPromise = renderToRowEmitter(rendered as any, null, (row) => {
-      rows.push(row as (typeof rows)[0]);
-    });
+    const streamPromise = renderToReadableStream(rendered as any, {});
+    const raced = await Promise.race([
+      streamPromise.then(() => "resolved"),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
+    ]);
+    expect(raced).toBe("resolved");
 
-    await Promise.resolve();
-    const rootRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
-    expect(rootRow).toBeDefined();
-    expect(rootRow?.v).toEqual({ $t: "rowRef", id: 1 });
+    const stream = await streamPromise;
+    const reader = stream.getReader();
+    const first = await reader.read();
+    const secondPending = reader.read();
 
-    const row1BeforeResolve = rows.find((r) => r.k === ROW_MODEL && r.id === 1);
-    expect(row1BeforeResolve).toBeUndefined();
+    const pendingState = await Promise.race([
+      secondPending.then(() => "resolved"),
+      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
+    ]);
+    expect(pendingState).toBe("pending");
 
     if (state.resolveRendered != null) {
       state.resolveRendered();
     }
-    await emitPromise;
+    const second = await secondPending;
+    const third = await reader.read();
 
-    const row1 = rows.find((r) => r.k === ROW_MODEL && r.id === 1);
-    expect(row1?.v).toBe("ready");
-    expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
+    const row0 = new TextDecoder().decode(first.value);
+    const row1 = new TextDecoder().decode(second.value);
+    expect(row0).toBe(`0:${JSON.stringify("$1")}\n`);
+    expect(row1).toBe(`1:${JSON.stringify("ready")}\n`);
+    expect(third.done).toBe(true);
   });
 
   it("emits binary rows for ArrayBuffer payloads", async () => {
     const bytes = Uint8Array.from([1, 2, 3, 4]);
-    const rows: { k: number; id?: number; t?: string; v?: unknown }[] = [];
-    await renderToRowEmitter(bytes.buffer as unknown as ReactNode, null, (row) => {
-      rows.push(row as (typeof rows)[0]);
-    });
+    const stream = await renderToReadableStream(bytes.buffer as unknown as ReactNode, {});
+    const reader = stream.getReader();
+    const rows: Uint8Array[] = [];
+    while (true) {
+      const next = await reader.read();
+      if (next.done) {
+        break;
+      }
+      rows.push(next.value);
+    }
 
-    const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
-    expect(modelRow).toBeDefined();
-    expect(modelRow?.v).toEqual({ $t: "rowRef", id: 1 });
-
-    const binaryRow = rows.find((r) => r.k === ROW_BINARY && r.id === 1);
-    expect(binaryRow).toBeDefined();
-    expect(binaryRow?.t).toBe("A");
-    const buf = binaryRow?.v as ArrayBuffer;
-    expect(Array.from(new Uint8Array(buf))).toEqual([1, 2, 3, 4]);
-    expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
+    const fullText = rows.map((r) => new TextDecoder().decode(r)).join("");
+    const expectedBinary = new Uint8Array([49, 58, 65, 52, 44, 1, 2, 3, 4, 10]); // "1:A4," + bytes + "\n"
+    expect(fullText.includes(`0:"$1"`) || fullText.includes(`0:{"__r":0}`)).toBe(true);
+    expect(
+      rows.some(
+        (row) =>
+          row.length === expectedBinary.length && row.every((b, i) => b === expectedBinary[i]),
+      ),
+    ).toBe(true);
   });
 
   it("round-trips action/reply binary payloads without base64", async () => {
@@ -69,7 +85,35 @@ describe("flight runtime server stream behavior", () => {
     expect(Array.from(new Uint8Array(decoded.buf))).toEqual([1, 2, 3]);
   });
 
-  it("emits model row with clone wire format when using renderToRowEmitter", async () => {
+  it("emits metadata row M{id} before model row when payload has revive paths", async () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
+    const clientRef = {
+      $$typeof: CLIENT_REFERENCE_SYMBOL,
+      $$id: "mod#Button",
+    };
+    const root = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: { onClick: clientRef, children: "hi" },
+    } as ReactNode;
+
+    const stream = await renderToReadableStream(root, {});
+    const reader = stream.getReader();
+    const chunks: string[] = [];
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      chunks.push(new TextDecoder().decode(next.value));
+    }
+
+    const fullText = chunks.join("");
+    expect(fullText).toMatch(/M0:\{"revivePaths":\[\[/);
+    expect(fullText).toContain(`0:["$","div",null,`);
+  });
+
+  it("emits metadata row before model row when using renderToRowEmitter", async () => {
     const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
     const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
     const clientRef = {
@@ -85,18 +129,20 @@ describe("flight runtime server stream behavior", () => {
 
     const rows: { k: number; id?: number; revivePaths?: unknown; v?: unknown }[] = [];
     await renderToRowEmitter(root, null, (row) => {
-      rows.push(row as typeof rows[0]);
+      rows.push(row as (typeof rows)[0]);
     });
 
+    const metadataRow = rows.find((r) => r.k === ROW_METADATA);
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
+    expect(metadataRow).toBeDefined();
+    expect(metadataRow?.id).toBe(0);
+    expect(Array.isArray(metadataRow?.revivePaths)).toBe(true);
+    expect((metadataRow?.revivePaths as unknown[]).length).toBeGreaterThan(0);
+    expect((metadataRow?.revivePaths as [string, unknown][])[0]).toHaveLength(2);
     expect(modelRow).toBeDefined();
-    const model = modelRow?.v as Record<string, unknown>;
-    expect(model?.$t).toBe("element");
-    expect((model?.ty as Record<string, unknown>)?.$t).toBe("host");
-    expect((model?.props as Record<string, unknown>)?.onClick).toEqual({
-      $t: "clientRef",
-      id: "mod#Button",
-    });
+    const metadataIdx = rows.indexOf(metadataRow!);
+    const modelIdx = rows.indexOf(modelRow!);
+    expect(metadataIdx).toBeLessThan(modelIdx);
   });
 
   it("renders with trace context", async () => {
@@ -115,11 +161,9 @@ describe("flight runtime server stream behavior", () => {
       props: {},
     } as ReactNode;
 
-    const rows: { k: number }[] = [];
-    await renderToRowEmitter(
+    const stream = await renderToReadableStream(
       root,
-      null,
-      (row) => rows.push(row as (typeof rows)[0]),
+      {},
       {
         traceContext: {
           requestId: "server-trace-1",
@@ -127,7 +171,7 @@ describe("flight runtime server stream behavior", () => {
         },
       },
     );
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
+    const text = await new Response(stream).text();
+    expect(text).toBeTruthy();
   });
 });

@@ -9,8 +9,6 @@ import {
   setRSCRefreshRuntime,
   type RSCRefreshBatch,
 } from "./runtime-globals";
-import { createTraceRequestId } from "./runtime-globals";
-import type { InvalidateCause } from "./types";
 
 function resolveComponentName(componentId: string | undefined): string | undefined {
   if (componentId == null || componentId.length === 0) return undefined;
@@ -40,7 +38,6 @@ interface LoaderStore {
   cache: Map<string, LoaderCacheEntry>;
   subscribers: Set<() => void>;
   pendingCause?: {
-    cause: InvalidateCause;
     seenSubscribers: WeakSet<() => void>;
     remaining: number;
   };
@@ -77,12 +74,8 @@ function toRejectedPromise(error: unknown): Promise<React.ReactNode> {
   return rejected;
 }
 
-function createPromiseFromRows(
-  rows: FlightRowMessage[],
-  cause?: InvalidateCause,
-): Promise<React.ReactNode> {
+function createPromiseFromRows(rows: FlightRowMessage[]): Promise<React.ReactNode> {
   try {
-    const requestId = cause?.requestId ?? createTraceRequestId("batch");
     const globalState = globalThis as typeof globalThis & Record<string, unknown>;
     const runtime = globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] as
       | { transport?: unknown }
@@ -95,11 +88,6 @@ function createPromiseFromRows(
         : createCallServer(DEFAULT_ACTION_ENDPOINT);
     const emitter = createFromRowEmitter<React.ReactNode>({
       callServer,
-      traceContext: {
-        requestId,
-        actionId: cause?.actionId,
-        source: "react",
-      },
     });
     for (let i = 0; i < rows.length; i += 1) {
       emitter.push(rows[i]);
@@ -125,33 +113,12 @@ function notifySubscribers(subscribers: Set<() => void>): void {
   });
 }
 
-let localInvalidateGeneration = 0;
-
-function nextLocalInvalidateGeneration(): number {
-  localInvalidateGeneration += 1;
-  return localInvalidateGeneration;
-}
-
-function resolveCause(cause?: InvalidateCause): InvalidateCause {
-  if (cause != null) {
-    return cause;
-  }
-
-  return {
-    causeType: "manual",
-    dispatchedAt: Date.now(),
-    generation: nextLocalInvalidateGeneration(),
-  };
-}
-
-function legacyInvalidateInternal(cause?: InvalidateCause): void {
-  const resolvedCause = resolveCause(cause);
+function legacyInvalidateInternal(): void {
   const subscribers = new Set<() => void>();
   for (const store of loaderStores) {
     store.cache.clear();
     if (store.subscribers.size > 0) {
       store.pendingCause = {
-        cause: resolvedCause,
         seenSubscribers: new WeakSet(),
         remaining: store.subscribers.size,
       };
@@ -177,8 +144,7 @@ function collectTargetsInternal(): Array<{
   }));
 }
 
-function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): void {
-  const resolvedCause = resolveCause(cause);
+function applyBatchInternal(batch: RSCRefreshBatch): void {
   const subscribers = new Set<() => void>();
   for (let i = 0; i < batch.entries.length; i += 1) {
     const entry = batch.entries[i];
@@ -190,7 +156,7 @@ function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): vo
       entry.error != null
         ? toRejectedPromise(new Error(entry.error))
         : Array.isArray(entry.rows)
-          ? createPromiseFromRows(entry.rows, resolvedCause)
+          ? createPromiseFromRows(entry.rows)
           : toRejectedPromise(new Error(`Missing rows for "${entry.targetKey}"`));
     for (const consumer of target.consumers) {
       consumer.store.cache.delete(consumer.cacheKey);
@@ -204,8 +170,8 @@ function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): vo
   notifySubscribers(subscribers);
 }
 
-export function invalidateRSC(cause?: InvalidateCause) {
-  legacyInvalidateInternal(cause);
+export function invalidateRSC() {
+  legacyInvalidateInternal();
 }
 
 setInvalidateRSC(invalidateRSC);

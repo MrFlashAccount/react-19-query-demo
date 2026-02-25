@@ -1,6 +1,5 @@
 import { setupWorker, http, json, error, noContent } from "@lib/rsc-service-worker-bff";
 import { createClientModule } from "@lib/rsc-prism";
-import { createFlightResponse } from "@lib/rsc-prism/flight-serializer";
 import { getDB, setLastMetricTime } from "@/db/index";
 import {
   CreateServerSchema,
@@ -427,28 +426,11 @@ const getServerRSC = http.get("/rsc/server", async ({ url }) => {
     logs = allLogs.slice(offset, offset + limit);
   }
 
-  // Extract unique services
-  const services = [
-    ...new Set(logs.map((log) => log.service).filter((s): s is string => Boolean(s))),
-  ];
-
-  // Render RSC
-  const element = (
-    <ServerBody
-      Client={Client}
-      server={server}
-      servers={servers}
-      metrics={metrics}
-      logs={logs}
-      logsTotal={logsTotal}
-      services={services}
-      startTime={startTime}
-      endTime={endTime}
-      range={rangeParam || "last_6h"}
-    />
+  // RSC stream API removed; use rscPrism vite plugin with worker row transport instead
+  return error(
+    "RSC stream transport not supported. Migrate to rscPrism vite plugin with worker row transport.",
+    501,
   );
-
-  return createFlightResponse(element, manifest);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

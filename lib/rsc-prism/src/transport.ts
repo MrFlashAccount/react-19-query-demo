@@ -2,8 +2,6 @@ import { getInvalidateRSC, getRSCRefreshRuntimeOrNull } from "./runtime-globals"
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightClientOptions } from "./flight-runtime/types";
 import { flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
-import type { InvalidateCause, RSCTraceContext } from "./types";
-
 export interface SendActionInput {
   endpoint: string;
   actionId: string;
@@ -11,7 +9,6 @@ export interface SendActionInput {
   contentType?: string;
   headers?: HeadersInit;
   requestInit?: Omit<RequestInit, "method" | "body" | "headers">;
-  trace?: RSCTraceContext;
 }
 
 export interface FetchRSCInput {
@@ -20,7 +17,6 @@ export interface FetchRSCInput {
   requestInit?: Omit<RequestInit, "headers">;
   componentId?: string;
   componentProps?: unknown;
-  trace?: RSCTraceContext;
 }
 
 export interface RSCTransport {
@@ -114,13 +110,6 @@ const WORKER_RESPONSE_KIND_HEAD = 1;
 const WORKER_RESPONSE_KIND_NEXT = 2;
 const WORKER_RESPONSE_KIND_DONE = 3;
 const WORKER_RESPONSE_KIND_ERROR = 4;
-let invalidateGeneration = 0;
-
-function nextInvalidateGeneration(): number {
-  invalidateGeneration += 1;
-  return invalidateGeneration;
-}
-
 function responseHeadType(baseType: string): string {
   return `${baseType}.head`;
 }
@@ -447,7 +436,6 @@ function sendWorkerRequest(
   request: Omit<WorkerTransportRequestMessage, "id" | "type">,
   options: WorkerTransportOptions = {},
   requestId?: string,
-  _traceContext?: RSCTraceContext,
 ): Promise<Response> {
   const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
   const responseType = options.responseType ?? DEFAULT_RESPONSE_TYPE;
@@ -598,7 +586,7 @@ export function createWorkerTransport(
   return {
     async sendAction(input): Promise<Response> {
       const invalidateRSC = getInvalidateRSC();
-      const requestId = input.trace?.requestId ?? nextRequestId();
+      const requestId = nextRequestId();
       const headers = new Headers(input.headers);
       headers.set("x-rsc-request-id", requestId);
 
@@ -615,21 +603,13 @@ export function createWorkerTransport(
         },
         options,
         requestId,
-        input.trace,
       ).finally(() => {
-        const cause: InvalidateCause = {
-          causeType: "action-legacy-invalidate",
-          requestId,
-          actionId: input.actionId,
-          dispatchedAt: Date.now(),
-          generation: nextInvalidateGeneration(),
-        };
-        invalidateRSC(cause);
+        invalidateRSC();
       });
     },
 
     async fetchRSC(input): Promise<Response> {
-      const requestId = input.trace?.requestId ?? nextRequestId();
+      const requestId = nextRequestId();
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
       headers.set("x-rsc-request-id", requestId);
@@ -645,7 +625,6 @@ export function createWorkerTransport(
         },
         options,
         requestId,
-        input.trace,
       );
     },
   };
@@ -664,19 +643,14 @@ export function createWorkerRowTransport(
   let actionRefreshAppliedSeq = 0;
 
   function sendRowRequest<T>(
-    request: Omit<WorkerTransportRequestMessage, "id" | "type"> & {
-      trace?: RSCTraceContext;
-    },
+    request: Omit<WorkerTransportRequestMessage, "id" | "type">,
     hooks?: {
       onActionRefreshBatch?: (batch: WorkerActionRefreshBatchMessage) => void;
     },
     clientOptions?: FlightClientOptions,
   ): Promise<T> {
-    const id = request.trace?.requestId ?? nextRequestId();
-    const emitter = createFromRowEmitter<T>({
-      ...clientOptions,
-      traceContext: request.trace,
-    });
+    const id = nextRequestId();
+    const emitter = createFromRowEmitter<T>(clientOptions);
 
     return new Promise<T>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -762,15 +736,14 @@ export function createWorkerRowTransport(
         timer = setTimeout(watchTimeout, timeoutMs);
       }
 
-      const { trace: _trace, ...wireRequest } = request;
-      endpoint.postMessage(createWorkerRequestEnvelope(requestType, id, wireRequest));
+      endpoint.postMessage(createWorkerRequestEnvelope(requestType, id, request));
     });
   }
 
   return {
     ...baseTransport,
     fetchRSCDirect<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T> {
-      const requestId = input.trace?.requestId ?? nextRequestId();
+      const requestId = nextRequestId();
       const headers = new Headers(input.headers);
       headers.set("accept", "text/x-component");
       headers.set("x-rsc-request-id", requestId);
@@ -782,11 +755,6 @@ export function createWorkerRowTransport(
           requestInit: input.requestInit,
           componentId: input.componentId,
           componentProps: input.componentProps,
-          trace: {
-            ...input.trace,
-            requestId,
-            source: input.trace?.source ?? "transport",
-          },
         },
         undefined,
         clientOptions,
@@ -802,15 +770,7 @@ export function createWorkerRowTransport(
           ? ++actionRefreshDispatchSeq
           : undefined;
       let sawBatchMetadata = false;
-      const cause: InvalidateCause = {
-        causeType: "action-batch-refresh",
-        requestId: input.trace?.requestId,
-        actionId: input.actionId,
-        dispatchedAt: Date.now(),
-        generation: nextInvalidateGeneration(),
-      };
-      const requestId = input.trace?.requestId ?? nextRequestId();
-      cause.requestId = requestId;
+      const requestId = nextRequestId();
       const headers = new Headers(input.headers);
       headers.set("x-rsc-request-id", requestId);
       return sendRowRequest<T>(
@@ -824,11 +784,6 @@ export function createWorkerRowTransport(
           requestInit: input.requestInit,
           refreshTargets: refreshTargets.length > 0 ? refreshTargets : undefined,
           refreshBatchSeq,
-          trace: {
-            ...input.trace,
-            requestId,
-            source: input.trace?.source ?? "transport",
-          },
         },
         {
           onActionRefreshBatch: (batch) => {
@@ -840,23 +795,17 @@ export function createWorkerRowTransport(
               return;
             }
             actionRefreshAppliedSeq = batch.seq;
-            refreshRuntime.applyBatch(
-              {
-                seq: batch.seq,
-                entries: batch.entries.map((entry) => ({
-                  targetKey: entry.targetKey,
-                  rows: entry.rows,
-                  error: entry.error,
-                })),
-              },
-              cause,
-            );
+            refreshRuntime.applyBatch({
+              seq: batch.seq,
+              entries: batch.entries.map((entry) => ({
+                targetKey: entry.targetKey,
+                rows: entry.rows,
+                error: entry.error,
+              })),
+            });
           },
         },
-        {
-          ...clientOptions,
-          traceContext: input.trace,
-        },
+        clientOptions,
       ).finally(() => {
         if (sawBatchMetadata) {
           return;
@@ -867,13 +816,10 @@ export function createWorkerRowTransport(
           if (refreshBatchSeq != null) {
             return;
           }
-          refreshRuntime.legacyInvalidate(cause);
+          refreshRuntime.legacyInvalidate();
           return;
         }
-        invalidateRSC({
-          ...cause,
-          causeType: "action-legacy-invalidate",
-        });
+        invalidateRSC();
       });
     },
   };

@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import type { ClientManifest, EncodedActionArgs, RSCRenderOptions } from "../types";
-import { createFromRowEmitter, encodeReply } from "./client";
-import { decodeReply, renderToRowEmitter, type FlightRowEmit } from "./server";
-
+import { createFromReadableStream, createFromRowEmitter, encodeReply } from "./client";
+import {
+  decodeReply,
+  renderToReadableStream,
+  renderToRowEmitter,
+  type FlightRowEmit,
+} from "./server";
 import type { FlightRowMessage } from "./wire";
 import type { ComponentTraceTracker, RSCTraceContext } from "../types";
-
-const UNSUPPORTED_STREAM_MESSAGE =
-  "[rsc-prism] HTTP text Flight stream is not supported. Use worker row transport instead.";
 
 export interface FlightConsumeOptions {
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
@@ -44,12 +45,17 @@ export interface FlightProtocolAdapter {
 }
 
 export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
-  renderStream(_element, _manifest, _options) {
-    throw new Error(UNSUPPORTED_STREAM_MESSAGE);
+  renderStream(element, manifest, options) {
+    return renderToReadableStream(element, manifest, options);
   },
 
-  consumeStream(_stream, _manifest, _options) {
-    throw new Error(UNSUPPORTED_STREAM_MESSAGE);
+  consumeStream(stream, manifest, options) {
+    return createFromReadableStream(stream, {
+      manifest,
+      callServer: options?.callServer,
+      traceContext: options?.traceContext,
+      componentTrace: options?.componentTrace,
+    });
   },
 
   renderRows(element, manifest, emit, options) {

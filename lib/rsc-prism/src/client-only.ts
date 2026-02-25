@@ -5,10 +5,8 @@
  * server-only RSC bindings.
  */
 
-// Client utilities (fetch/consume RSC)
+// Client utilities (fetch RSC via worker row transport)
 export {
-  consumeRSC,
-  consumeRSCResponse,
   bootstrapWorkerRuntime,
   encodeActionArgs,
   createCallServer,

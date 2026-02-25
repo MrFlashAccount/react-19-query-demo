@@ -3,28 +3,6 @@
  */
 
 import type { ReactNode, ComponentType } from "react";
-import type { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
-
-export interface RSCTraceContext {
-  requestId?: string;
-  actionId?: string;
-  source?: "client" | "transport" | "worker" | "server" | "react";
-}
-
-export interface InvalidateCause {
-  causeType: "action-legacy-invalidate" | "action-batch-refresh" | "manual";
-  requestId?: string;
-  actionId?: string;
-  dispatchedAt: number;
-  generation: number;
-}
-
-export interface ComponentTraceTracker {
-  requestId?: string;
-  actionId?: string;
-  componentSeq: number;
-  stack: number[];
-}
 
 /**
  * ESM module reference identifier used by RSC.
@@ -87,8 +65,6 @@ export interface RSCRenderOptions {
   onError?: (error: unknown) => string | void;
   /** Abort signal for cancellation */
   signal?: AbortSignal;
-  /** Trace context propagated through render/decode flows */
-  traceContext?: RSCTraceContext;
 }
 
 /**
@@ -138,12 +114,3 @@ export type ComponentReference<Props = unknown> = (
 ) =>
   | (React.JSX.Element | null | React.JSX.Element[])
   | Promise<React.JSX.Element | null | React.JSX.Element[]>;
-
-declare global {
-  interface Window {
-    [INVALIDATE_RSC_GLOBAL_KEY]: (cause?: InvalidateCause) => void;
-  }
-  interface WorkerGlobalScope {
-    [INVALIDATE_RSC_GLOBAL_KEY]: (cause?: InvalidateCause) => void;
-  }
-}

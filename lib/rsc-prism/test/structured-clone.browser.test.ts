@@ -68,7 +68,8 @@ describe("structured clone row transport", () => {
     const emitter = createFromRowEmitter<unknown>();
     emitter.push(flightModelRow(0, encoded));
     emitter.push(flightDoneRow());
-    const result = (await emitter.result) as Map<string, unknown>;
+    const raw = await emitter.result;
+    const result = decodeWireValue(raw, createClientRefResolver()) as Map<string, unknown>;
     expect(result).toBeInstanceOf(Map);
     expect(result.get("a")).toBe(1);
     expect(result.get("b")).toEqual({ nested: true });
@@ -80,7 +81,8 @@ describe("structured clone row transport", () => {
     const emitter = createFromRowEmitter<unknown>();
     emitter.push(flightModelRow(0, encoded));
     emitter.push(flightDoneRow());
-    const result = (await emitter.result) as Set<unknown>;
+    const raw = await emitter.result;
+    const result = decodeWireValue(raw, createClientRefResolver()) as Set<unknown>;
     expect(result).toBeInstanceOf(Set);
     expect(result.has("x")).toBe(true);
     expect(result.has("y")).toBe(true);

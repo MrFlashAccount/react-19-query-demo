@@ -11,7 +11,6 @@ import {
   encodeWireValueWithBinaryRows,
   parseModelString,
   pathsToTree,
-  reviveModelValueTree,
   traverseElementTuplesOnly,
 } from "../src/flight-runtime/wire";
 function decodeWithResolver(value: unknown): unknown {
@@ -82,9 +81,9 @@ describe("flight wire decode correctness", () => {
       props: { title: "demo", nested: { $t: "undef" } },
       key: "k1",
     };
-    const binaryRows = new Map<number, unknown>([
-      [1, decodeBinaryWireRow("A", Uint8Array.from([1, 2, 3]))],
-      [2, decodeBinaryWireRow("s", new Uint8Array(new Uint16Array([4, 5, 6]).buffer))],
+    const binaryRows = new Map<string, unknown>([
+      ["1", decodeBinaryWireRow("A", Uint8Array.from([1, 2, 3]))],
+      ["2", decodeBinaryWireRow("s", new Uint8Array(new Uint16Array([4, 5, 6]).buffer))],
     ]);
     const payload = {
       undef: { $t: "undef" },
@@ -109,7 +108,7 @@ describe("flight wire decode correctness", () => {
     const decoded = decodeWireValue(
       payload,
       (id) => `client:${id}`,
-      (id) => binaryRows.get(typeof id === "number" ? id : Number(id)),
+      (id) => binaryRows.get(id),
     ) as Record<string, unknown>;
 
     expect(decoded.undef).toBeUndefined();
@@ -177,7 +176,7 @@ describe("flight wire decode correctness", () => {
     const decoded = decodeWireValue(
       encoded,
       (id) => `client:${id}`,
-      (id) => binaryRows.get(String(id)),
+      (id) => binaryRows.get(id),
     ) as {
       int16View: Int16Array;
       dataView: DataView;
@@ -207,7 +206,7 @@ describe("flight wire decode correctness", () => {
     const decoded = decodeWireValue(
       encoded,
       (id) => `client:${id}`,
-      (id) => ((typeof id === "number" ? id : Number(id)) === 1 ? rowPayload : null),
+      (id) => (id === "1" ? rowPayload : null),
     ) as {
       bytes: Uint8Array;
     };
@@ -432,9 +431,9 @@ describe("flight wire decode perf baselines", () => {
       typed: { $t: "rowRef", id: 1 },
       arrayBuffer: { $t: "rowRef", id: 2 },
     };
-    const binaryRows = new Map<number, unknown>([
-      [1, decodeBinaryWireRow("o", bytes)],
-      [2, decodeBinaryWireRow("A", bytes)],
+    const binaryRows = new Map<string, unknown>([
+      ["1", decodeBinaryWireRow("o", bytes)],
+      ["2", decodeBinaryWireRow("A", bytes)],
     ]);
 
     const start = performance.now();

@@ -212,24 +212,15 @@ describe("react rsc invalidation", () => {
     const runtime = getRSCRefreshRuntimeOrNull();
     expect(runtime).not.toBeNull();
 
-    runtime?.applyBatch(
-      {
-        seq: 1,
-        entries: [
-          {
-            targetKey,
-            rows: [flightModelRow(0, "batched"), flightDoneRow()],
-          },
-        ],
-      },
-      {
-        causeType: "action-batch-refresh",
-        requestId: "batch-req-1",
-        actionId: "actions#batch",
-        generation: 2,
-        dispatchedAt: Date.now(),
-      },
-    );
+    runtime?.applyBatch({
+      seq: 1,
+      entries: [
+        {
+          targetKey,
+          rows: [flightModelRow(0, "batched"), flightDoneRow()],
+        },
+      ],
+    });
     await expect(renderLoader(RSCLoader, { filter: "all" })).resolves.toBe("batched");
     expect(mocks.fetchRSC).not.toHaveBeenCalled();
 

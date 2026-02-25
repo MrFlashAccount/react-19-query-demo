@@ -3,14 +3,12 @@
  */
 
 import {
-  createTraceRequestId,
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
 import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ComponentReference, EncodedActionArgs } from "./types";
-import type { RSCTraceContext } from "./types";
 import type { RSCTransport } from "./transport";
 const MISSING_TRANSPORT_ERROR_MESSAGE =
   '[rsc-prism] Missing RSC transport. Call bootstrapWorkerRuntime() from "@lib/rsc-prism/client-only" first, or pass options.transport explicitly.';
@@ -120,7 +118,6 @@ export interface ConsumeRSCOptions {
    * Required if the RSC payload contains server action references
    */
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
-  traceContext?: RSCTraceContext;
 }
 
 /**
@@ -182,72 +179,17 @@ function isWorkerActionReference(value: unknown): value is WorkerActionReference
   return candidate.$$typeof === SERVER_ACTION_REFERENCE && typeof candidate.$$id === "string";
 }
 
-/**
- * Consume an RSC stream and return the React element tree
- *
- * @example
- * ```ts
- * const response = await fetch('/rsc');
- * const element = await consumeRSC(response.body!);
- * root.render(element);
- * ```
- */
-export async function consumeRSC<T = unknown>(
-  stream: ReadableStream<Uint8Array>,
-  options?: ConsumeRSCOptions,
-): Promise<T> {
-  const manifest = resolveClientManifestOrThrow();
-  const value = await defaultFlightProtocolAdapter.consumeStream<T>(stream, manifest, {
-    callServer: options?.callServer,
-    traceContext: options?.traceContext,
-  });
-  return value;
-}
-
-/**
- * Consume an RSC Response and return the React element tree
- */
-export async function consumeRSCResponse<T = unknown>(
-  response: Response,
-  options?: ConsumeRSCOptions,
-): Promise<T> {
-  if (!response.body) {
-    throw new Error("Response has no body");
-  }
-  return consumeRSC<T>(response.body, options);
-}
-
 async function readActionErrorMessage(response: Response): Promise<string | null> {
   if (response.body == null) {
     return null;
   }
-
   try {
-    const manifest = resolveClientManifestOrThrow();
-    const parsed = await defaultFlightProtocolAdapter.consumeStream<unknown>(
-      response.body,
-      manifest,
-    );
-    if (typeof parsed === "string" && parsed.length > 0) {
-      return parsed;
-    }
-    if (typeof parsed === "object" && parsed != null) {
-      const tagged = parsed as {
-        __rscPrismError?: unknown;
-        message?: unknown;
-        error?: unknown;
-      };
-      if (tagged.__rscPrismError === true && typeof tagged.message === "string") {
-        return tagged.message;
-      }
-      if (typeof tagged.error === "string") {
-        return tagged.error;
-      }
-    }
+    const json = (await response.clone().json()) as Record<string, unknown>;
+    if (typeof json?.error === "string" && json.error.length > 0) return json.error;
+    if (typeof json?.message === "string" && json.message.length > 0) return json.message;
   } catch {
     // Ignore parsing errors; caller will fallback to HTTP status.
   }
-
   return null;
 }
 
@@ -269,12 +211,12 @@ export async function encodeActionArgs(args: unknown[]): Promise<EncodedActionAr
 }
 
 /**
- * Create a callServer function for use with consumeRSC
+ * Create a callServer function for use with RSC row transport
  *
  * @example
  * ```ts
  * const callServer = createCallServer('/rsc/action');
- * const element = await consumeRSC(stream, { callServer });
+ * const element = await fetchRSC(componentRef, { callServer });
  * ```
  */
 export function createCallServer(
@@ -282,54 +224,28 @@ export function createCallServer(
   options?: Omit<RequestInit, "method" | "body"> & RSCRequestOptions,
 ): (actionId: string, args: unknown[]) => Promise<unknown> {
   const transport = resolveTransport(options?.transport);
+  if (transport.sendActionDirect == null) {
+    throw new Error(
+      "[rsc-prism] Transport must support sendActionDirect. Use worker row transport.",
+    );
+  }
   const { transport: _transport, ...requestInit } = options ?? {};
   const callServer = async (actionId: string, args: unknown[]): Promise<unknown> => {
-    const requestId = createTraceRequestId("callserver");
     const encodedArgs = await encodeActionArgs(args);
     const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
-    const traceContext: RSCTraceContext = {
-      requestId,
-      actionId,
-      source: "client",
-    };
-
-    if (transport.sendActionDirect != null) {
-      const manifest = resolveClientManifestOrThrow();
-      return transport.sendActionDirect(
-        {
-          endpoint: actionEndpoint,
-          actionId,
-          body: encodedArgs.data,
-          contentType,
-          headers: requestInit.headers,
-          requestInit,
-          trace: traceContext,
-        },
-        { manifest, callServer, traceContext },
-      );
-    }
-
-    const response = await transport.sendAction({
-      endpoint: actionEndpoint,
-      actionId,
-      body: encodedArgs.data,
-      contentType,
-      headers: requestInit.headers,
-      requestInit,
-      trace: traceContext,
-    });
-
-    if (!response.ok) {
-      const message = await readActionErrorMessage(response);
-      throw new Error(message ?? `Action request failed: ${response.status}`);
-    }
-
-    return consumeRSC(response.body!, {
-      callServer,
-      traceContext,
-    });
+    const manifest = resolveClientManifestOrThrow();
+    return transport.sendActionDirect!(
+      {
+        endpoint: actionEndpoint,
+        actionId,
+        body: encodedArgs.data,
+        contentType,
+        headers: requestInit.headers,
+        requestInit,
+      },
+      { manifest, callServer },
+    );
   };
-
   return callServer;
 }
 
@@ -354,20 +270,9 @@ export async function fetchRSC(
   options?: FetchRSCOptions,
 ): Promise<unknown> {
   const workerComponentCandidate = typeof target === "string" ? null : target;
-  const requestId = createTraceRequestId("fetch");
   const transport = resolveTransport(options?.transport);
-  const {
-    callServer,
-    props,
-    transport: _transport,
-    ...restOptions
-  } = options ?? {};
-  const traceContext: RSCTraceContext = {
-    requestId,
-    source: "client",
-  };
-  const resolvedCallServer =
-    callServer ?? createCallServer(DEFAULT_ACTION_ENDPOINT, { transport });
+  const { callServer, props, transport: _transport } = options ?? {};
+  const resolvedCallServer = callServer ?? createCallServer(DEFAULT_ACTION_ENDPOINT, { transport });
   const workerComponent = workerComponentCandidate;
   const url = "/rsc/view";
 
@@ -377,39 +282,18 @@ export async function fetchRSC(
     );
   }
 
-  if (transport.fetchRSCDirect != null) {
-    const manifest = resolveClientManifestOrThrow();
-    return transport.fetchRSCDirect(
-      {
-        url,
-        componentId: workerComponent?.$$id,
-        componentProps: props,
-        trace: traceContext,
-      },
-      { manifest, callServer: resolvedCallServer, traceContext },
-    );
+  if (transport.fetchRSCDirect == null) {
+    throw new Error("[rsc-prism] Transport must support fetchRSCDirect. Use worker row transport.");
   }
-
-  if (transport.fetchRSC == null) {
-    throw new Error("[rsc-prism] Active transport does not support fetchRSC().");
-  }
-
-  const response = await transport.fetchRSC({
-    url,
-    componentId: workerComponent?.$$id,
-    componentProps: props,
-    trace: traceContext,
-  });
-
-  if (!response.ok) {
-    throw new Error(`RSC fetch failed: ${response.status}`);
-  }
-
-  return consumeRSC(response.body!, {
-    callServer: resolvedCallServer,
-    traceContext,
-    ...restOptions,
-  });
+  const manifest = resolveClientManifestOrThrow();
+  return transport.fetchRSCDirect(
+    {
+      url,
+      componentId: workerComponent?.$$id,
+      componentProps: props,
+    },
+    { manifest, callServer: resolvedCallServer },
+  );
 }
 
 /**
@@ -461,19 +345,18 @@ export async function callAction<T = void>(
   }
 
   const actionId = action.$$id;
-  const requestId = createTraceRequestId("action");
   const transport = resolveTransport(options?.transport);
   const endpoint = options.endpoint ?? DEFAULT_ACTION_ENDPOINT;
   const { parseResponse = true } = options;
   const encodedArgs = await encodeActionArgs(args);
   const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
-  const traceContext: RSCTraceContext = {
-    requestId,
-    actionId,
-    source: "client",
-  };
 
-  if (parseResponse && transport.sendActionDirect != null) {
+  if (parseResponse) {
+    if (transport.sendActionDirect == null) {
+      throw new Error(
+        "[rsc-prism] Transport must support sendActionDirect for parseResponse. Use worker row transport.",
+      );
+    }
     const manifest = resolveClientManifestOrThrow();
     return transport.sendActionDirect<T>(
       {
@@ -481,31 +364,20 @@ export async function callAction<T = void>(
         actionId,
         body: encodedArgs.data,
         contentType,
-        trace: traceContext,
       },
-      { manifest, traceContext },
+      { manifest },
     );
   }
-
   const response = await transport.sendAction({
     endpoint,
     actionId,
     body: encodedArgs.data,
     contentType,
-    trace: traceContext,
   });
-
   if (!response.ok) {
     const message = await readActionErrorMessage(response);
     throw new Error(message ?? `Action '${actionId}' failed: ${response.status}`);
   }
-
-  if (parseResponse && response.body) {
-    return consumeRSC<T>(response.body, {
-      traceContext,
-    });
-  }
-
   return response.body as T;
 }
 
