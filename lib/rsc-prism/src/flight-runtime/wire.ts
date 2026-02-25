@@ -913,13 +913,13 @@ export const ROW_DONE = 2 as const;
 export const ROW_ERROR = 3 as const;
 
 export type FlightRowMessage =
-  | { k: typeof ROW_MODEL; id: number; v: string }
+  | { k: typeof ROW_MODEL; id: number; v: unknown }
   | { k: typeof ROW_BINARY; id: number; t: string; v: ArrayBuffer }
   | { k: typeof ROW_DONE }
   | { k: typeof ROW_ERROR; v: string };
 
 export function flightModelRow(id: number, value: unknown): FlightRowMessage {
-  return { k: ROW_MODEL, id, v: JSON.stringify(value) };
+  return { k: ROW_MODEL, id, v: value };
 }
 
 function toTransferableBuffer(bytes: Uint8Array): ArrayBuffer {

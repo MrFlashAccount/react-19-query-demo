@@ -36,6 +36,7 @@ interface FlightChunk<T = unknown> {
   status: ChunkStatus;
   value: T | string | null;
   reason: unknown;
+  modelFromStream?: boolean;
   listeners: ChunkResolveListener<T>[] | null;
   rejectListeners: ChunkRejectListener[] | null;
   then: (resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) => void;
@@ -155,11 +156,14 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
   if (chunk.status !== CHUNK_RESOLVED_MODEL) {
     return;
   }
-  const model = chunk.value as string;
+  const model = chunk.value;
   const previousRowId = response.currentRowId;
   response.currentRowId = chunk.id;
+  const fromStream = (chunk as FlightChunk<unknown>).modelFromStream ?? false;
+  const parsed =
+    fromStream && typeof model === "string" ? JSON.parse(model) : model;
   try {
-    const parsed = reviveModelValueTree(
+    const revived = reviveModelValueTree(
       {
         getChunk: (id) => getChunk(response, id),
         readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
@@ -171,12 +175,12 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
         componentTrace: response.componentTrace,
         getCurrentRowId: () => response.currentRowId,
       },
-      JSON.parse(model),
+      parsed,
     ) as T;
     chunk.status = CHUNK_INITIALIZED;
-    chunk.value = parsed;
+    chunk.value = revived;
     chunk.reason = null;
-    wakeInitializedChunk(chunk, parsed);
+    wakeInitializedChunk(chunk, revived);
   } catch (error) {
     if (isThenable(error)) {
       error.then(
@@ -212,10 +216,16 @@ function readChunk<T>(response: FlightResponse, chunk: FlightChunk<T>): T {
   }
 }
 
-function resolveModelChunk(response: FlightResponse, id: number, model: string): void {
+function resolveModelChunk(
+  response: FlightResponse,
+  id: number,
+  model: string | unknown,
+  fromStream?: boolean,
+): void {
   const chunk = getChunk(response, id);
   chunk.status = CHUNK_RESOLVED_MODEL;
   chunk.value = model;
+  chunk.modelFromStream = fromStream;
   chunk.reason = response;
   if (chunk.listeners != null || chunk.rejectListeners != null) {
     initializeModelChunk(response, chunk);
@@ -402,7 +412,7 @@ async function consumeFlightStream(
     hasRowId = false;
     parsingRowTag = false;
     const model = decoder.decode(rowBytes);
-    resolveModelChunk(response, currentId, model);
+    resolveModelChunk(response, currentId, model, true);
     hasAnyRow = true;
     onRootMaybeReady();
   };

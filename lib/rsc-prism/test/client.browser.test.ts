@@ -214,9 +214,9 @@ describe("rsc client browser workflows", () => {
 
   it("notifies late then subscribers when deferred row chunks have already settled", async () => {
     const emitter = createFromRowEmitter<{ first: unknown }>();
-    emitter.push({ k: 0, id: 0, v: JSON.stringify("$1") });
-    emitter.push({ k: 0, id: 1, v: JSON.stringify({ first: "$2" }) });
-    emitter.push({ k: 0, id: 2, v: JSON.stringify("ready") });
+    emitter.push({ k: 0, id: 0, v: "$1" });
+    emitter.push({ k: 0, id: 1, v: { first: "$2" } });
+    emitter.push({ k: 0, id: 2, v: "ready" });
     emitter.push({ k: 2 });
 
     const value = await emitter.result;
