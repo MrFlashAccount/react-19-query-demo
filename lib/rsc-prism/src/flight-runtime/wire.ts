@@ -1,5 +1,28 @@
 import { Fragment, isValidElement } from "react";
 
+/** ASCII char codes for Flight wire format prefixes ($X) */
+const CHR = {
+  DOLLAR: 36, // '$'
+  u: 117, // 'u' - undefined
+  n: 110, // 'n' - bigint
+  D: 68, // 'D' - Date
+  P: 80, // 'P' - URLSearchParams
+  S: 83, // 'S' - Symbol
+  C: 67, // 'C' - client reference
+  Q: 81, // 'Q' - Map
+  W: 87, // 'W' - Set
+  K: 75, // 'K' - FormData
+  F: 70, // 'F' - server reference
+  L: 76, // 'L' - lazy chunk
+  I: 73, // 'I' - Infinity
+  N: 78, // 'N' - NaN
+  MINUS: 45, // '-' - minus
+} as const;
+
+function isDollarPrefixed(str: string): boolean {
+  return str.length > 0 && str.charCodeAt(0) === CHR.DOLLAR;
+}
+
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const SERVER_REFERENCE_SYMBOL = Symbol.for("react.server.reference");
 const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
@@ -246,7 +269,7 @@ export interface StreamEncodeContext {
 }
 
 export function escapeStringValue(str: string): string {
-  return str.length > 0 && str.charCodeAt(0) === 36 ? `$${str}` : str;
+  return isDollarPrefixed(str) ? `$${str}` : str;
 }
 
 function emitRevivable(context: StreamEncodeContext, encoded: string): string {
@@ -289,11 +312,6 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     throw new Error("Functions are not supported by the minimal Flight runtime.");
   }
 
-  if (context.seen.has(value as object)) {
-    throw new Error("Circular structures are not supported by the minimal Flight runtime.");
-  }
-  context.seen.add(value as object);
-
   if (value instanceof Date) {
     return value;
   }
@@ -317,15 +335,18 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return emitRevivable(context, `$K${outlinedId.toString(16)}`);
   }
   if (value instanceof Map) {
-    return new Map(
-      Array.from(value.entries()).map(([k, v]) => [
-        encodeStreamValueInternal(k, context),
-        encodeStreamValueInternal(v, context),
-      ]),
-    );
+    value.forEach((v, k) => {
+      value.delete(k);
+      value.set(encodeStreamValueInternal(k, context), encodeStreamValueInternal(v, context));
+    });
+    return value;
   }
   if (value instanceof Set) {
-    return new Set(Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)));
+    value.forEach((v) => {
+      value.delete(v);
+      value.add(encodeStreamValueInternal(v, context));
+    });
+    return value;
   }
   if (value instanceof ArrayBuffer) {
     const id = context.emitBinaryRow("ArrayBuffer", new Uint8Array(value));
@@ -338,9 +359,10 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
   if (Array.isArray(value)) {
     const basePath = context._path ?? [];
-    return Array.from({ length: value.length }, (_, i) =>
-      encodeStreamValueInternal(value[i], { ...context, _path: [...basePath, i] }),
-    );
+    for (let i = 0; i < value.length; i += 1) {
+      value[i] = encodeStreamValueInternal(value[i], { ...context, _path: [...basePath, i] });
+    }
+    return value;
   }
   if (isReactElementLike(value)) {
     const basePath = context._path ?? [];
@@ -458,48 +480,48 @@ export function parseModelString<Chunk>(
   context: StreamDecodeContext<Chunk>,
   value: string,
 ): unknown {
-  if (value.length === 0 || value.charCodeAt(0) !== 36) {
+  if (!isDollarPrefixed(value)) {
     return value;
   }
   if (value.length === 1) {
     return value;
   }
   switch (value.charCodeAt(1)) {
-    case 36:
+    case CHR.DOLLAR:
       return value.slice(1);
-    case 117:
+    case CHR.u:
       return undefined;
-    case 110:
+    case CHR.n:
       return BigInt(value.slice(2));
-    case 68:
+    case CHR.D:
       return new Date(value.slice(2));
-    case 80:
+    case CHR.P:
       return new URLSearchParams(value.slice(2));
-    case 83:
+    case CHR.S:
       return Symbol.for(value.slice(2));
-    case 67:
+    case CHR.C:
       return context.resolveClientReference(value.slice(2));
-    case 81: {
+    case CHR.Q: {
       const entries = decodeFromOutlinedEntries(context, "$Q", value) as Array<[unknown, unknown]>;
       return new Map(entries);
     }
-    case 87: {
+    case CHR.W: {
       const items = decodeFromOutlinedEntries(context, "$W", value);
       return new Set(items);
     }
-    case 75:
+    case CHR.K:
       return decodeFormDataFromChunk(context, value);
-    case 70:
+    case CHR.F:
       return decodeServerReferenceFromChunk(context, value);
-    case 76: {
+    case CHR.L: {
       const id = parseHexChunkId(value.slice(2));
       return context.createLazyChunkWrapper(context.getChunk(id));
     }
-    case 73:
+    case CHR.I:
       return Infinity;
-    case 78:
+    case CHR.N:
       return NaN;
-    case 45:
+    case CHR.MINUS:
       return value === "$-0" ? -0 : -Infinity;
     default: {
       const id = parseHexChunkId(value.slice(1));
@@ -748,7 +770,7 @@ function applyPathTreeReplacements<Chunk>(
     const childPath = [...path, key];
     if (child === true) {
       const raw = getAtPath(root, childPath);
-      if (typeof raw === "string" && raw.length > 0 && raw.charCodeAt(0) === 36) {
+      if (typeof raw === "string" && isDollarPrefixed(raw)) {
         setAtPath(root, childPath, parseModelString(context, raw));
       }
     } else {
@@ -777,7 +799,7 @@ function traverseElementTuplesOnlyInternal<Chunk>(
     return value;
   }
   if (typeof value === "string") {
-    if (value.length > 0 && value.charCodeAt(0) === 36) {
+    if (isDollarPrefixed(value)) {
       return parseModelString(context, value);
     }
     return value;
@@ -790,7 +812,7 @@ function traverseElementTuplesOnlyInternal<Chunk>(
   }
   if (value.length === 4 && value[0] === "$") {
     let type = value[1];
-    if (typeof type === "string" && type.length > 0 && type.charCodeAt(0) === 36) {
+    if (typeof type === "string" && isDollarPrefixed(type)) {
       type = parseModelString(context, type);
     }
     const key = value[2];
