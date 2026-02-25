@@ -12,7 +12,6 @@ import {
   ROW_ERROR,
   type FlightRowMessage,
 } from "./flight-runtime/wire";
-import { finishTraceSpanError, finishTraceSpanSuccess, startTraceSpan } from "./tracing";
 
 interface WorkerRuntimeModuleConfig {
   moduleId: string;
@@ -99,114 +98,48 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
     "message",
     createWorkerRowTransportMessageHandler(
       async (request: WorkerTransportRequestMessage, emit, controls) => {
-        const requestSpan =
-          request.operation === "action"
-            ? startTraceSpan(
-                "rsc.worker.request.action",
-                {
-                  requestId: request.id,
-                  actionId: request.actionId,
-                  operation: request.operation,
-                  endpoint: request.endpoint,
-                  source: "worker",
-                },
-                undefined,
-              )
-            : undefined;
         const target = new URL(request.endpoint, workerOrigin);
 
         if (request.operation === "fetch") {
           if (target.pathname !== endpoint) {
-            finishTraceSpanError(requestSpan, new Error(`Unknown endpoint: ${target.pathname}`));
             emit(flightErrorRow(`Unknown endpoint: ${target.pathname}`));
             return;
           }
 
           const component = componentRegistry.get(request.componentId ?? "");
           if (component == null) {
-            finishTraceSpanError(
-              requestSpan,
-              new Error("Missing or unknown worker component reference."),
-            );
             emit(flightErrorRow("Missing or unknown worker component reference."));
             return;
           }
 
           await handler.renderRows(component(request.componentProps ?? {}) as ReactNode, emit);
-          finishTraceSpanSuccess(requestSpan);
           return;
         }
 
         if (request.operation === "action") {
           if (target.pathname !== actionEndpoint) {
-            finishTraceSpanError(requestSpan, new Error(`Unknown endpoint: ${target.pathname}`));
             emit(flightErrorRow(`Unknown endpoint: ${target.pathname}`));
             return;
           }
 
           const refreshTargets = request.refreshTargets ?? [];
           if (!actionBatchRefreshEnabled || refreshTargets.length === 0) {
-            try {
-              await handler.actionRows(toActionRequest(request, target), emit, {
-                status: 200,
-              });
-              finishTraceSpanSuccess(requestSpan, {
-                mode: "legacy",
-              });
-            } catch (error) {
-              finishTraceSpanError(requestSpan, error);
-              throw error;
-            }
+            await handler.actionRows(toActionRequest(request, target), emit, {
+              status: 200,
+            });
             return;
           }
 
           try {
-            const actionExecSpan = startTraceSpan(
-              "rsc.server.executeAction",
-              {
-                requestId: request.id,
-                actionId: request.actionId,
-                source: "worker",
-              },
-              requestSpan,
-              "secondary",
-            );
-            let actionValue: unknown;
-            try {
-              actionValue = await handler.executeAction(toActionRequest(request, target));
-              finishTraceSpanSuccess(actionExecSpan);
-            } catch (error) {
-              finishTraceSpanError(actionExecSpan, error);
-              throw error;
-            }
-
-            const actionRenderSpan = startTraceSpan(
-              "rsc.worker.action.renderResultRows",
-              {
-                requestId: request.id,
-                actionId: request.actionId,
-                source: "worker",
-              },
-              requestSpan,
-              "secondary",
-            );
-            let actionRows: FlightRowMessage[];
-            try {
-              actionRows = await renderRowsToArray(actionValue as ReactNode);
-              finishTraceSpanSuccess(actionRenderSpan, {
-                rowCount: actionRows.length,
-              });
-            } catch (error) {
-              finishTraceSpanError(actionRenderSpan, error);
-              throw error;
-            }
+            const actionValue = await handler.executeAction(toActionRequest(request, target));
+            const actionRows = await renderRowsToArray(actionValue as ReactNode);
             const { contentRows, terminalRow } = splitTerminalRow(actionRows);
 
             const batchEntries: WorkerActionRefreshBatchEntryMessage[] = [];
             for (let i = 0; i < refreshTargets.length; i += 1) {
               const refreshTarget = refreshTargets[i];
-              const component = componentRegistry.get(refreshTarget.componentId);
-              if (component == null) {
+              const refreshComponent = componentRegistry.get(refreshTarget.componentId);
+              if (refreshComponent == null) {
                 batchEntries.push({
                   targetKey: refreshTarget.targetKey,
                   error: `Missing or unknown worker component reference: ${refreshTarget.componentId}`,
@@ -214,34 +147,16 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
                 continue;
               }
 
-              const refreshRenderSpan = startTraceSpan(
-                "rsc.worker.action.refreshTarget.render",
-                {
-                  requestId: request.id,
-                  actionId: request.actionId,
-                  targetKey: refreshTarget.targetKey,
-                  componentId: refreshTarget.componentId,
-                  source: "worker",
-                },
-                requestSpan,
-                "secondary",
-              );
               try {
                 const refreshRows = await renderRowsToArray(
-                  component(refreshTarget.componentProps ?? {}) as ReactNode,
+                  refreshComponent(refreshTarget.componentProps ?? {}) as ReactNode,
                 );
-                finishTraceSpanSuccess(refreshRenderSpan, {
-                  rowCount: refreshRows.length,
-                });
                 batchEntries.push({
                   targetKey: refreshTarget.targetKey,
                   rows: refreshRows,
                 });
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                finishTraceSpanError(refreshRenderSpan, error, {
-                  targetKey: refreshTarget.targetKey,
-                });
                 batchEntries.push({
                   targetKey: refreshTarget.targetKey,
                   error: message,
@@ -257,20 +172,14 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
               emit(contentRows[i]);
             }
             emit(terminalRow);
-            finishTraceSpanSuccess(requestSpan, {
-              mode: "batch",
-              refreshTargets: refreshTargets.length,
-            });
             return;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            finishTraceSpanError(requestSpan, error);
             emit(flightErrorRow(message));
             return;
           }
         }
 
-        finishTraceSpanError(requestSpan, new Error("Unsupported operation"));
         emit(flightErrorRow("Unsupported operation"));
       },
     ),

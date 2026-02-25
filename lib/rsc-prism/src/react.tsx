@@ -9,15 +9,20 @@ import {
   setRSCRefreshRuntime,
   type RSCRefreshBatch,
 } from "./runtime-globals";
-import {
-  createTraceRequestId,
-  finishTraceSpanError,
-  finishTraceSpanSuccess,
-  resolveComponentName,
-  startTraceSpan,
-  summarizeError,
-  type InvalidateCause,
-} from "./tracing";
+import { createTraceRequestId } from "./runtime-globals";
+import type { InvalidateCause } from "./types";
+
+function resolveComponentName(componentId: string | undefined): string | undefined {
+  if (componentId == null || componentId.length === 0) return undefined;
+  let label = componentId.trim();
+  const hashIndex = label.lastIndexOf("#");
+  if (hashIndex >= 0 && hashIndex < label.length - 1) {
+    label = label.slice(hashIndex + 1);
+  }
+  label = label.split(/[\\/]/).pop() ?? label;
+  label = label.replace(/\.(tsx?|jsx?|mjs|cjs)$/i, "");
+  return label.length > 0 ? label : componentId;
+}
 
 export type RSCLoaderProps<Props = unknown> = Props & {
   /**
@@ -75,24 +80,9 @@ function toRejectedPromise(error: unknown): Promise<React.ReactNode> {
 function createPromiseFromRows(
   rows: FlightRowMessage[],
   cause?: InvalidateCause,
-  componentName?: string,
-  componentId?: string,
 ): Promise<React.ReactNode> {
   try {
     const requestId = cause?.requestId ?? createTraceRequestId("batch");
-    const decodeSpan = startTraceSpan(
-      "rsc.react.batch.target.decodeRows",
-      {
-        requestId,
-        actionId: cause?.actionId,
-        rowCount: rows.length,
-        componentName,
-        componentId,
-        source: "react",
-      },
-      cause?.parentSpan,
-      "secondary",
-    );
     const globalState = globalThis as typeof globalThis & Record<string, unknown>;
     const runtime = globalState[DEFAULT_WORKER_RUNTIME_GLOBAL_KEY] as
       | { transport?: unknown }
@@ -108,30 +98,13 @@ function createPromiseFromRows(
       traceContext: {
         requestId,
         actionId: cause?.actionId,
-        parentSpan: decodeSpan,
         source: "react",
       },
     });
     for (let i = 0; i < rows.length; i += 1) {
       emitter.push(rows[i]);
     }
-    return emitter.result.then(
-      (value) => {
-        finishTraceSpanSuccess(decodeSpan, {
-          requestId,
-          rowCount: rows.length,
-        });
-        return value;
-      },
-      (error) => {
-        finishTraceSpanError(decodeSpan, error, {
-          requestId,
-          rowCount: rows.length,
-          ...summarizeError(error),
-        });
-        throw error;
-      },
-    );
+    return emitter.result;
   } catch (error) {
     return toRejectedPromise(error);
   }
@@ -171,30 +144,8 @@ function resolveCause(cause?: InvalidateCause): InvalidateCause {
   };
 }
 
-function formatInvalidateReason(causeType: InvalidateCause["causeType"]): string {
-  if (causeType === "action-legacy-invalidate") {
-    return "action invalidate";
-  }
-  if (causeType === "action-batch-refresh") {
-    return "action rerender";
-  }
-  return "manual invalidate";
-}
-
 function legacyInvalidateInternal(cause?: InvalidateCause): void {
   const resolvedCause = resolveCause(cause);
-  const span = startTraceSpan(
-    "rsc.react.invalidate",
-    {
-      invalidateReason: formatInvalidateReason(resolvedCause.causeType),
-      requestId: resolvedCause.requestId,
-      actionId: resolvedCause.actionId,
-      generation: resolvedCause.generation,
-      source: "react",
-    },
-    resolvedCause.parentSpan,
-    "secondary",
-  );
   const subscribers = new Set<() => void>();
   for (const store of loaderStores) {
     store.cache.clear();
@@ -212,9 +163,6 @@ function legacyInvalidateInternal(cause?: InvalidateCause): void {
     }
   }
   notifySubscribers(subscribers);
-  finishTraceSpanSuccess(span, {
-    subscribers: subscribers.size,
-  });
 }
 
 function collectTargetsInternal(): Array<{
@@ -231,18 +179,6 @@ function collectTargetsInternal(): Array<{
 
 function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): void {
   const resolvedCause = resolveCause(cause);
-  const span = startTraceSpan(
-    "rsc.react.applyBatch",
-    {
-      requestId: resolvedCause.requestId,
-      actionId: resolvedCause.actionId,
-      seq: batch.seq,
-      entries: batch.entries.length,
-      source: "react",
-    },
-    resolvedCause.parentSpan,
-    "secondary",
-  );
   const subscribers = new Set<() => void>();
   for (let i = 0; i < batch.entries.length; i += 1) {
     const entry = batch.entries[i];
@@ -254,12 +190,7 @@ function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): vo
       entry.error != null
         ? toRejectedPromise(new Error(entry.error))
         : Array.isArray(entry.rows)
-          ? createPromiseFromRows(
-              entry.rows,
-              resolvedCause,
-              target.componentName,
-              target.componentId,
-            )
+          ? createPromiseFromRows(entry.rows, resolvedCause)
           : toRejectedPromise(new Error(`Missing rows for "${entry.targetKey}"`));
     for (const consumer of target.consumers) {
       consumer.store.cache.delete(consumer.cacheKey);
@@ -271,9 +202,6 @@ function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): vo
     }
   }
   notifySubscribers(subscribers);
-  finishTraceSpanSuccess(span, {
-    subscribers: subscribers.size,
-  });
 }
 
 export function invalidateRSC(cause?: InvalidateCause) {
@@ -494,8 +422,6 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
 
     const pendingCause = store.pendingCause;
     const subscriber = subscriberRef.current;
-    let fetchParentSpan = pendingCause?.cause.parentSpan;
-    let rerenderSpan = undefined;
     if (
       pendingCause != null &&
       subscriber != null &&
@@ -503,44 +429,12 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
     ) {
       pendingCause.seenSubscribers.add(subscriber);
       pendingCause.remaining -= 1;
-      rerenderSpan = startTraceSpan(
-        "rsc.react.rerender.fetch",
-        {
-          requestId: pendingCause.cause.requestId,
-          actionId: pendingCause.cause.actionId,
-          generation: pendingCause.cause.generation,
-          componentName,
-          componentId,
-          cacheKey,
-          source: "react",
-        },
-        pendingCause.cause.parentSpan,
-        "secondary",
-      );
-      fetchParentSpan = rerenderSpan;
       if (pendingCause.remaining <= 0) {
         store.pendingCause = undefined;
       }
     }
 
-    const promise = fetchRSC(reference, {
-      props,
-      parentSpan: fetchParentSpan,
-    }).then(
-      (value) => {
-        finishTraceSpanSuccess(rerenderSpan, {
-          cacheKey,
-        });
-        return value;
-      },
-      (error) => {
-        finishTraceSpanError(rerenderSpan, error, {
-          cacheKey,
-          ...summarizeError(error),
-        });
-        throw error;
-      },
-    );
+    const promise = fetchRSC(reference, { props });
     const entry = { key: cacheKey, promise } as const;
     store.cache.set(cacheKey, entry);
 

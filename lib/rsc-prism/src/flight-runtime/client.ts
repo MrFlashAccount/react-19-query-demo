@@ -19,7 +19,7 @@ import {
   traverseElementTuplesOnly,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
-import { createComponentTraceTracker, type ComponentTraceTracker } from "../tracing";
+import type { ComponentTraceTracker } from "../types";
 
 const CHUNK_PENDING = 0;
 const CHUNK_RESOLVED_MODEL = 1;
@@ -362,15 +362,7 @@ function createFlightResponse(
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   options?: FlightClientOptions,
 ): FlightResponse {
-  const componentTrace =
-    options?.componentTrace ??
-    (options?.traceContext != null
-      ? createComponentTraceTracker({
-          requestId: options.traceContext.requestId,
-          actionId: options.traceContext.actionId,
-          parentSpan: options.traceContext.parentSpan,
-        })
-      : undefined);
+  const componentTrace = options?.componentTrace;
   const lazyWrapperCache = new Map<FlightChunk, unknown>();
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),

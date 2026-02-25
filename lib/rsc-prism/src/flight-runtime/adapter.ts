@@ -8,7 +8,7 @@ import {
   type FlightRowEmit,
 } from "./server";
 import type { FlightRowMessage } from "./wire";
-import type { ComponentTraceTracker, RSCTraceContext } from "../tracing";
+import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 export interface FlightConsumeOptions {
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;

@@ -1,5 +1,5 @@
 import type { ClientManifest } from "../types";
-import type { ComponentTraceTracker, RSCTraceContext } from "../tracing";
+import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 export interface FlightClientOptions {
   moduleBaseURL?: string;

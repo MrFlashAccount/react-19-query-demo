@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flightDoneRow, flightModelRow } from "../src/flight-runtime/wire";
-import { finishTraceSpanSuccess, startTraceSpan } from "../src/tracing";
-import { TraceRecorder } from "./utils/trace-recorder";
 
 const mocks = vi.hoisted(() => ({
   fetchRSC: vi.fn(async () => null),
@@ -89,8 +87,6 @@ function cleanupLoader(loader: object): void {
 }
 
 describe("react rsc invalidation", () => {
-  const traceRecorder = new TraceRecorder();
-
   beforeEach(() => {
     mocks.fetchRSC.mockReset();
     mocks.fetchRSC.mockResolvedValue(null);
@@ -110,8 +106,6 @@ describe("react rsc invalidation", () => {
     mocks.effectRegisteredByLoader = new WeakSet<object>();
     mocks.seenLoaders.clear();
     vi.resetModules();
-    traceRecorder.reset();
-    traceRecorder.start();
   });
 
   afterEach(() => {
@@ -119,7 +113,6 @@ describe("react rsc invalidation", () => {
       cleanupLoader(loader);
     }
     mocks.seenLoaders.clear();
-    traceRecorder.stop();
   });
 
   it("supports repeated invalidateRSC refresh cycles", async () => {
@@ -144,54 +137,6 @@ describe("react rsc invalidation", () => {
     expect(mocks.stateSetter).toHaveBeenCalledTimes(2);
     await renderLoader(RSCLoader, { filter: "all" });
     expect(mocks.fetchRSC).toHaveBeenCalledTimes(3);
-  });
-
-  it("parents invalidate-triggered rerender spans under the action span", async () => {
-    const { invalidateRSC, rsc } = await import("../src/react");
-    const WorkerViewRef = {
-      $$typeof: Symbol.for("rsc.worker.reference"),
-      $$id: "worker-components.tsx#TodoView",
-      $$moduleId: "worker-components.tsx",
-      $$name: "TodoView",
-    };
-    const RSCLoader = rsc<Record<string, unknown>>(WorkerViewRef as any);
-
-    await renderLoader(RSCLoader, { filter: "all" });
-    const actionSpan = startTraceSpan(
-      "rsc.action.call",
-      {
-        requestId: "action-req-1",
-        actionId: "actions#toggle",
-        source: "client",
-      },
-      undefined,
-    );
-    invalidateRSC({
-      causeType: "action-legacy-invalidate",
-      requestId: "action-req-1",
-      actionId: "actions#toggle",
-      parentSpan: actionSpan,
-      generation: 1,
-      dispatchedAt: Date.now(),
-    });
-    await renderLoader(RSCLoader, { filter: "all" });
-    finishTraceSpanSuccess(actionSpan);
-
-    const action = traceRecorder
-      .getSpansByName("rsc.action.call")
-      .find((span) => span.payload.requestId === "action-req-1");
-    const rerender = traceRecorder
-      .getSpansByName("rsc.react.rerender.fetch")
-      .find((span) => span.payload.requestId === "action-req-1");
-    const invalidate = traceRecorder
-      .getSpansByName("rsc.react.invalidate")
-      .find((span) => span.payload.requestId === "action-req-1");
-
-    expect(action).toBeDefined();
-    expect(rerender).toBeDefined();
-    expect(invalidate).toBeDefined();
-    expect(traceRecorder.isDescendant(invalidate!.spanId, action!.spanId)).toBe(true);
-    expect(traceRecorder.isDescendant(rerender!.spanId, action!.spanId)).toBe(true);
   });
 
   it("defers bootstrap until RuntimeProvider render and only bootstraps once", async () => {
@@ -267,16 +212,6 @@ describe("react rsc invalidation", () => {
     const runtime = getRSCRefreshRuntimeOrNull();
     expect(runtime).not.toBeNull();
 
-    const actionSpan = startTraceSpan(
-      "rsc.action.call",
-      {
-        requestId: "batch-req-1",
-        actionId: "actions#batch",
-        source: "client",
-      },
-      undefined,
-    );
-
     runtime?.applyBatch(
       {
         seq: 1,
@@ -291,7 +226,6 @@ describe("react rsc invalidation", () => {
         causeType: "action-batch-refresh",
         requestId: "batch-req-1",
         actionId: "actions#batch",
-        parentSpan: actionSpan,
         generation: 2,
         dispatchedAt: Date.now(),
       },
@@ -299,27 +233,12 @@ describe("react rsc invalidation", () => {
     await expect(renderLoader(RSCLoader, { filter: "all" })).resolves.toBe("batched");
     expect(mocks.fetchRSC).not.toHaveBeenCalled();
 
-    const applyBatchSpan = traceRecorder
-      .getSpansByName("rsc.react.applyBatch")
-      .find((span) => span.payload.requestId === "batch-req-1");
-    const decodeSpan = traceRecorder
-      .getSpansByName("rsc.react.batch.target.decodeRows")
-      .find((span) => span.payload.requestId === "batch-req-1");
-    expect(actionSpan).toBeDefined();
-    expect(applyBatchSpan).toBeDefined();
-    expect(decodeSpan).toBeDefined();
-    expect(traceRecorder.isDescendant(applyBatchSpan!.spanId, String(actionSpan?.spanId))).toBe(
-      true,
-    );
-    expect(traceRecorder.isDescendant(decodeSpan!.spanId, String(actionSpan?.spanId))).toBe(true);
-
     runtime?.applyBatch({
       seq: 2,
       entries: [{ targetKey, error: "component failed" }],
     });
     await expect(renderLoader(RSCLoader, { filter: "all" })).rejects.toThrow("component failed");
     expect(mocks.fetchRSC).not.toHaveBeenCalled();
-    finishTraceSpanSuccess(actionSpan);
   });
 
   it("maintains independent cache per loader instance", async () => {

@@ -2,7 +2,7 @@
  * Global keys used by plugin-generated runtime bootstrap and client helpers.
  */
 import type { FlightRowMessage } from "./flight-runtime/wire";
-import type { InvalidateCause } from "./tracing";
+import type { InvalidateCause } from "./types";
 
 export const WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY = "__rscPrismBootstrapWorkerRuntime";
 export const DEFAULT_WORKER_RUNTIME_GLOBAL_KEY = "__rscPrismDefaultWorkerRuntime";
@@ -68,6 +68,13 @@ export function getMainThreadModules(): Record<string, unknown> {
     );
   }
   return modules;
+}
+
+let requestSequence = 0;
+
+export function createTraceRequestId(prefix: string = "rsc"): string {
+  requestSequence += 1;
+  return `${prefix}-${Date.now()}-${requestSequence}`;
 }
 
 export function getRSCRefreshRuntimeOrNull(): RSCRefreshRuntime | null {

@@ -2,15 +2,7 @@ import { getInvalidateRSC, getRSCRefreshRuntimeOrNull } from "./runtime-globals"
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightClientOptions } from "./flight-runtime/types";
 import { flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
-import {
-  finishTraceSpanError,
-  finishTraceSpanSuccess,
-  startTraceSpan,
-  summarizeError,
-  traceEvent,
-  type InvalidateCause,
-  type RSCTraceContext,
-} from "./tracing";
+import type { InvalidateCause, RSCTraceContext } from "./types";
 
 export interface SendActionInput {
   endpoint: string;
@@ -455,7 +447,7 @@ function sendWorkerRequest(
   request: Omit<WorkerTransportRequestMessage, "id" | "type">,
   options: WorkerTransportOptions = {},
   requestId?: string,
-  traceContext?: RSCTraceContext,
+  _traceContext?: RSCTraceContext,
 ): Promise<Response> {
   const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
   const responseType = options.responseType ?? DEFAULT_RESPONSE_TYPE;
@@ -463,20 +455,6 @@ function sendWorkerRequest(
   const timeoutMs = options.timeoutMs ?? 10000;
   const id = requestId ?? nextRequestId();
   const endpointState = getWorkerEndpointState(endpoint);
-  const span = startTraceSpan(
-    "rsc.transport.worker.request",
-    {
-      requestId: id,
-      operation: request.operation,
-      endpoint: request.endpoint,
-      actionId: request.actionId ?? traceContext?.actionId,
-      componentId: request.componentId,
-      timeoutMs,
-      source: "transport",
-    },
-    traceContext?.parentSpan,
-    "secondary",
-  );
 
   return new Promise<Response>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -526,26 +504,14 @@ function sendWorkerRequest(
       }
 
       const timeoutError = new Error(`Worker transport timed out after ${timeoutMs}ms`);
-      traceEvent(span, "timeout", {
-        requestId: id,
-        timeoutMs,
-      });
       if (!didResolveHead) {
         cleanup();
         isSettled = true;
-        finishTraceSpanError(span, timeoutError, {
-          requestId: id,
-          phase: "before-head",
-        });
         reject(timeoutError);
         return;
       }
 
       cleanup();
-      finishTraceSpanError(span, timeoutError, {
-        requestId: id,
-        phase: "after-head",
-      });
       failStream(timeoutError);
     };
 
@@ -580,10 +546,6 @@ function sendWorkerRequest(
             if (didResolveHead || isSettled) return;
             didResolveHead = true;
             isSettled = true;
-            traceEvent(span, "head", {
-              requestId: id,
-              status: message.status,
-            });
             resolve(
               new Response(stream, {
                 status: message.status,
@@ -593,10 +555,6 @@ function sendWorkerRequest(
             return;
           case WORKER_RESPONSE_KIND_NEXT:
             if (!didResolveHead || streamDone || message.chunk == null) return;
-            traceEvent(span, "chunk", {
-              requestId: id,
-              bytes: message.chunk.byteLength,
-            });
             if (streamController != null) {
               streamController.enqueue(message.chunk);
             } else {
@@ -606,17 +564,11 @@ function sendWorkerRequest(
           case WORKER_RESPONSE_KIND_DONE:
             if (!didResolveHead || streamDone) return;
             cleanup();
-            finishTraceSpanSuccess(span, {
-              requestId: id,
-            });
             closeStream();
             return;
           case WORKER_RESPONSE_KIND_ERROR: {
             const error = new Error(message.error);
             cleanup();
-            finishTraceSpanError(span, error, {
-              requestId: id,
-            });
             if (!didResolveHead && !isSettled) {
               isSettled = true;
               reject(error);
@@ -669,7 +621,6 @@ export function createWorkerTransport(
           causeType: "action-legacy-invalidate",
           requestId,
           actionId: input.actionId,
-          parentSpan: input.trace?.parentSpan,
           dispatchedAt: Date.now(),
           generation: nextInvalidateGeneration(),
         };
@@ -722,20 +673,6 @@ export function createWorkerRowTransport(
     clientOptions?: FlightClientOptions,
   ): Promise<T> {
     const id = request.trace?.requestId ?? nextRequestId();
-    const span = startTraceSpan(
-      "rsc.transport.worker.rowRequest",
-      {
-        requestId: id,
-        operation: request.operation,
-        endpoint: request.endpoint,
-        actionId: request.actionId ?? request.trace?.actionId,
-        componentId: request.componentId,
-        timeoutMs,
-        source: "transport",
-      },
-      request.trace?.parentSpan,
-      "secondary",
-    );
     const emitter = createFromRowEmitter<T>({
       ...clientOptions,
       traceContext: request.trace,
@@ -760,10 +697,6 @@ export function createWorkerRowTransport(
         streamSettled = true;
         cleanup();
         emitter.push(flightErrorRow(error.message));
-        finishTraceSpanError(span, error, {
-          requestId: id,
-          seenRows,
-        });
         if (!rootSettled) {
           rootSettled = true;
           reject(error);
@@ -793,11 +726,6 @@ export function createWorkerRowTransport(
             return;
           }
           if (message.actionRefreshBatch != null && hooks?.onActionRefreshBatch != null) {
-            traceEvent(span, "actionRerenderRows", {
-              requestId: id,
-              seq: message.actionRefreshBatch.seq,
-              entries: message.actionRefreshBatch.entries.length,
-            });
             hooks.onActionRefreshBatch(message.actionRefreshBatch);
           }
           if (message.rows.length === 0) {
@@ -810,11 +738,6 @@ export function createWorkerRowTransport(
             if (row.k === ROW_DONE || row.k === ROW_ERROR) {
               streamSettled = true;
               cleanup();
-              finishTraceSpanSuccess(span, {
-                requestId: id,
-                seenRows,
-                terminalKind: row.k,
-              });
               break;
             }
           }
@@ -825,21 +748,12 @@ export function createWorkerRowTransport(
         (value) => {
           if (rootSettled) return;
           rootSettled = true;
-          finishTraceSpanSuccess(span, {
-            requestId: id,
-            seenRows,
-            resolved: true,
-          });
           resolve(value);
         },
         (error) => {
           if (rootSettled) return;
           rootSettled = true;
           cleanup();
-          finishTraceSpanError(span, error, {
-            requestId: id,
-            seenRows,
-          });
           reject(error);
         },
       );
@@ -892,7 +806,6 @@ export function createWorkerRowTransport(
         causeType: "action-batch-refresh",
         requestId: input.trace?.requestId,
         actionId: input.actionId,
-        parentSpan: input.trace?.parentSpan,
         dispatchedAt: Date.now(),
         generation: nextInvalidateGeneration(),
       };
@@ -1028,23 +941,9 @@ export function createWorkerTransportMessageHandler(
   return async (event: MessageEvent<unknown>) => {
     const request = normalizeIncomingWorkerTransportRequest(event.data, requestType);
     if (request == null) return;
-    const span = startTraceSpan(
-      "rsc.worker.transport.message",
-      {
-        requestId: request.id,
-        operation: request.operation,
-        endpoint: request.endpoint,
-        source: "worker",
-      },
-      undefined,
-      "secondary",
-    );
 
     const replyTarget = resolveReplyTarget(event);
     if (replyTarget == null) {
-      finishTraceSpanSuccess(span, {
-        dropped: true,
-      });
       return;
     }
 
@@ -1101,9 +1000,6 @@ export function createWorkerTransportMessageHandler(
         type: responseTypeMap.done,
         id: request.id,
       } satisfies WorkerTransportResponseDoneMessage);
-      finishTraceSpanSuccess(span, {
-        status: response.status,
-      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       replyTarget.postMessage({
@@ -1111,10 +1007,6 @@ export function createWorkerTransportMessageHandler(
         id: request.id,
         error: message,
       } satisfies WorkerTransportResponseErrorMessage);
-      finishTraceSpanError(span, error, {
-        requestId: request.id,
-        ...summarizeError(error),
-      });
     }
   };
 }
@@ -1137,23 +1029,9 @@ export function createWorkerRowTransportMessageHandler(
   return async (event: MessageEvent<unknown>) => {
     const request = normalizeIncomingWorkerTransportRequest(event.data, requestType);
     if (request == null) return;
-    const span = startTraceSpan(
-      "rsc.worker.transport.rowMessage",
-      {
-        requestId: request.id,
-        operation: request.operation,
-        endpoint: request.endpoint,
-        source: "worker",
-      },
-      undefined,
-      "secondary",
-    );
 
     const replyTarget = resolveReplyTarget(event);
     if (replyTarget == null) {
-      finishTraceSpanSuccess(span, {
-        dropped: true,
-      });
       return;
     }
 
@@ -1211,13 +1089,9 @@ export function createWorkerRowTransportMessageHandler(
 
     try {
       await handler(request, emit, { setActionRefreshBatch });
-      finishTraceSpanSuccess(span);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit(flightErrorRow(message));
-      finishTraceSpanError(span, error, {
-        ...summarizeError(error),
-      });
     }
   };
 }

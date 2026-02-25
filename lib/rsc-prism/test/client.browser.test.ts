@@ -11,8 +11,6 @@ import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runt
 import { createMockWorkerTransport } from "./utils/mock-worker-transport";
 import { setAutoClientManifest } from "../src/runtime/client-manifest";
 import { createFromRowEmitter } from "../src/flight-runtime/client";
-import { TraceRecorder } from "./utils/trace-recorder";
-
 function flightValueResponse(value: unknown): Response {
   return new Response(`0:${JSON.stringify(value)}\n`, {
     status: 200,
@@ -65,33 +63,6 @@ describe("rsc client browser workflows", () => {
     await expect(consumeRSCResponse<string>(flightValueResponse("flight-ok"))).resolves.toBe(
       "flight-ok",
     );
-  });
-
-  it("emits component decode spans with non-negative durations", async () => {
-    const traceRecorder = new TraceRecorder();
-    traceRecorder.start();
-    try {
-      const response = flightValueResponse(["$", "div", null, { children: "decode-me" }]);
-      await expect(
-        consumeRSCResponse(response, {
-          traceContext: {
-            requestId: "browser-trace-1",
-            source: "client",
-          },
-        }),
-      ).resolves.toBeTruthy();
-
-      const decodeSpans = traceRecorder.getSpansByName("rsc.component.decode");
-      expect(decodeSpans.length).toBeGreaterThan(0);
-      expect(
-        decodeSpans.some(
-          (span) => span.payload.componentKind === "host" && span.payload.hostTag === "div",
-        ),
-      ).toBe(true);
-      expect(decodeSpans.every((span) => (span.duration ?? -1) >= 0)).toBe(true);
-    } finally {
-      traceRecorder.stop();
-    }
   });
 
   it("parses split flight stream chunks incrementally", async () => {

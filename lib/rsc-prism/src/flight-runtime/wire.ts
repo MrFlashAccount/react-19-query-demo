@@ -1,12 +1,5 @@
 import { Fragment, isValidElement } from "react";
-import {
-  createComponentTraceTracker,
-  endComponentPhaseSpan,
-  startComponentPhaseSpan,
-  summarizeProps,
-  type ComponentTraceTracker,
-  type RSCTraceContext,
-} from "../tracing";
+import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const SERVER_REFERENCE_SYMBOL = Symbol.for("react.server.reference");
@@ -229,58 +222,6 @@ export function encodeStreamType(value: unknown, context?: StreamEncodeContext):
   throw new Error("Unsupported element type in minimal runtime.");
 }
 
-function resolveComponentName(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "function") {
-    return value.name || "Anonymous";
-  }
-  if (value === REACT_FRAGMENT_SYMBOL || value === Fragment) {
-    return "Fragment";
-  }
-  if (isClientReference(value)) {
-    return value.$$id;
-  }
-  return String(value);
-}
-
-function describeComponentType(value: unknown): {
-  componentKind: string;
-  componentName: string;
-  hostTag?: string;
-} {
-  if (typeof value === "string") {
-    return {
-      componentKind: "host",
-      componentName: value,
-      hostTag: value,
-    };
-  }
-  if (value === REACT_FRAGMENT_SYMBOL || value === Fragment) {
-    return {
-      componentKind: "fragment",
-      componentName: "Fragment",
-    };
-  }
-  if (isClientReference(value)) {
-    return {
-      componentKind: "client",
-      componentName: value.$$id,
-    };
-  }
-  if (typeof value === "function") {
-    return {
-      componentKind: "function",
-      componentName: value.name || "Anonymous",
-    };
-  }
-  return {
-    componentKind: "unknown",
-    componentName: resolveComponentName(value),
-  };
-}
-
 function decodeType(value: JsonObject, resolveClientReference: (id: string) => unknown): unknown {
   switch (value.$t) {
     case "host":
@@ -422,38 +363,15 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     );
   }
   if (isReactElementLike(value)) {
-    const tracker =
-      context.componentTrace ??
-      (context.traceContext != null
-        ? createComponentTraceTracker({
-            requestId: context.traceContext.requestId,
-            actionId: context.traceContext.actionId,
-            parentSpan: context.traceContext.parentSpan,
-          })
-        : undefined);
-    const componentInfo = describeComponentType(value.type);
-    const encodeSpan = startComponentPhaseSpan(tracker, "encode", {
-      ...componentInfo,
-      rowId: context.currentRowId,
-      source: context.traceContext?.source ?? "transport",
-      mode: "stream",
-      ...summarizeProps(value.props),
+    const basePath = context._path ?? [];
+    const type = encodeStreamType(value.type, { ...context, _path: [...basePath, 1] });
+    const key = value.key == null ? null : String(value.key);
+    const props = encodeStreamValueInternal(value.props, {
+      ...context,
+      componentTrace: context.componentTrace,
+      _path: [...basePath, 3],
     });
-    try {
-      const basePath = context._path ?? [];
-      const type = encodeStreamType(value.type, { ...context, _path: [...basePath, 1] });
-      const key = value.key == null ? null : String(value.key);
-      const props = encodeStreamValueInternal(value.props, {
-        ...context,
-        componentTrace: tracker,
-        _path: [...basePath, 3],
-      });
-      endComponentPhaseSpan(tracker, encodeSpan.span);
-      return ["$", type, key, props];
-    } catch (error) {
-      endComponentPhaseSpan(tracker, encodeSpan.span, error);
-      throw error;
-    }
+    return ["$", type, key, props];
   }
   if (isClientReference(value)) {
     return emitRevivable(context, `$C${value.$$id}`);
@@ -673,24 +591,19 @@ function reviveModelValueTreeInternal<Chunk>(
     return parseModelString(context, value);
   }
   if (value instanceof Map) {
-    const entries = Array.from(value.entries()).map(
-      ([k, v]) =>
-        [
-          reviveModelValueTreeInternal(context, k),
-          reviveModelValueTreeInternal(context, v),
-        ] as const,
-    );
-    value.clear();
-    for (const [k, v] of entries) {
-      value.set(k, v);
+    for (const [k, v] of value.entries()) {
+      value.delete(k);
+      value.set(
+        reviveModelValueTreeInternal(context, k),
+        reviveModelValueTreeInternal(context, v),
+      );
     }
     return value;
   }
   if (value instanceof Set) {
-    const items = Array.from(value.values()).map((v) => reviveModelValueTreeInternal(context, v));
-    value.clear();
-    for (const item of items) {
-      value.add(item);
+    for (const item of value) {
+      value.delete(item);
+      value.add(reviveModelValueTreeInternal(context, item));
     }
     return value;
   }
@@ -742,26 +655,19 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
     return parseModelString(context, value);
   }
   if (value instanceof Map) {
-    const entries = Array.from(value.entries()).map(
-      ([k, v]) =>
-        [
-          reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, k),
-          reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
-        ] as const,
-    );
-    value.clear();
-    for (const [k, v] of entries) {
-      value.set(k, v);
+    for (const [k, v] of value.entries()) {
+      value.delete(k);
+      value.set(
+        reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, k),
+        reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
+      );
     }
     return value;
   }
   if (value instanceof Set) {
-    const items = Array.from(value.values()).map((v) =>
-      reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
-    );
-    value.clear();
-    for (const item of items) {
-      value.add(item);
+    for (const item of value) {
+      value.delete(item);
+      value.add(reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, item));
     }
     return value;
   }
@@ -1233,15 +1139,7 @@ export function decodeWireValue(
     currentRowId?: number;
   },
 ): unknown {
-  const componentTrace =
-    traceOptions?.componentTrace ??
-    (traceOptions?.traceContext != null
-      ? createComponentTraceTracker({
-          requestId: traceOptions.traceContext.requestId,
-          actionId: traceOptions.traceContext.actionId,
-          parentSpan: traceOptions.traceContext.parentSpan,
-        })
-      : undefined);
+  const componentTrace = traceOptions?.componentTrace;
   return decodeWireValueInternal(
     value,
     resolveClientReference,
@@ -1533,38 +1431,24 @@ function decodeWireElementValue(
   props: Record<string, unknown>;
 } {
   const type = decodeType(value.ty as JsonObject, resolveClientReference);
-  const decodeSpan = startComponentPhaseSpan(componentTrace, "decode", {
-    ...describeComponentType(type),
-    rowId: currentRowId,
-    source: traceContext?.source ?? "server",
-    mode: "wire",
-    ...summarizeProps(value.props),
-  });
-  try {
-    const props = decodeWireValueInternal(
-      value.props,
-      resolveClientReference,
-      resolveRowReference,
-      callServer,
-      visitingRowRefs,
-      traceContext,
-      componentTrace,
-      currentRowId,
-    ) as Record<string, unknown>;
-    const key = value.key as string | null;
-    const decoded = {
-      $$typeof: REACT_ELEMENT_SYMBOL,
-      type,
-      key: key == null ? null : key,
-      ref: null,
-      props,
-    };
-    endComponentPhaseSpan(componentTrace, decodeSpan.span);
-    return decoded;
-  } catch (error) {
-    endComponentPhaseSpan(componentTrace, decodeSpan.span, error);
-    throw error;
-  }
+  const props = decodeWireValueInternal(
+    value.props,
+    resolveClientReference,
+    resolveRowReference,
+    callServer,
+    visitingRowRefs,
+    traceContext,
+    componentTrace,
+    currentRowId,
+  ) as Record<string, unknown>;
+  const key = value.key as string | null;
+  return {
+    $$typeof: REACT_ELEMENT_SYMBOL,
+    type,
+    key: key == null ? null : key,
+    ref: null,
+    props,
+  };
 }
 
 function decodeTaggedWireValue(

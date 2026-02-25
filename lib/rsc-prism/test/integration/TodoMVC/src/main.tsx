@@ -1,6 +1,4 @@
 import "./styles.css";
-import "./trace-logger";
-
 import { StrictMode, Suspense, useEffect, useState, useTransition } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { TodoComposer, TodoItemRow as TodoItemRowClient, TodoFooterControls } from "./components";

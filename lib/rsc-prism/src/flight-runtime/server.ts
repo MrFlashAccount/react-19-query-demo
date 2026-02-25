@@ -18,14 +18,7 @@ import {
   type StreamEncodeContext,
 } from "./wire";
 import { createClientModuleProxy } from "./references";
-import {
-  createComponentTraceTracker,
-  endComponentPhaseSpan,
-  startComponentPhaseSpan,
-  summarizeProps,
-  type ComponentTraceTracker,
-} from "../tracing";
-import type { RSCTraceContext } from "../tracing";
+import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
@@ -117,15 +110,7 @@ function createEncodeContext(
 ): EncodeContext {
   let nextRowId = 1;
   const currentRevivePathsRef: { current: (string | number)[][] } = { current: [] };
-  const componentTrace =
-    options?.componentTrace ??
-    (options?.traceContext != null
-      ? createComponentTraceTracker({
-          requestId: options.traceContext.requestId,
-          actionId: options.traceContext.actionId,
-          parentSpan: options.traceContext.parentSpan,
-        })
-      : undefined);
+  const componentTrace = options?.componentTrace;
   const context: EncodeContext = {
     queueDeferred,
     allocateRowId: () => {
@@ -187,42 +172,6 @@ function createEncodeContext(
   return context;
 }
 
-function describeComponentType(type: unknown): {
-  componentKind: string;
-  componentName: string;
-  hostTag?: string;
-} {
-  if (typeof type === "string") {
-    return {
-      componentKind: "host",
-      componentName: type,
-      hostTag: type,
-    };
-  }
-  if (type === REACT_FRAGMENT_SYMBOL) {
-    return {
-      componentKind: "fragment",
-      componentName: "Fragment",
-    };
-  }
-  if (isClientReference(type)) {
-    return {
-      componentKind: "client",
-      componentName: type.$$id,
-    };
-  }
-  if (typeof type === "function") {
-    return {
-      componentKind: "function",
-      componentName: type.name || "Anonymous",
-    };
-  }
-  return {
-    componentKind: "unknown",
-    componentName: String(type),
-  };
-}
-
 function encodeServerNode(
   value: unknown,
   context: EncodeContext,
@@ -259,33 +208,16 @@ function encodeServerNode(
 
   const type = value.type;
   if (typeof type === "function" && !isClientReference(type)) {
-    const componentInfo = describeComponentType(type);
-    const renderSpan = startComponentPhaseSpan(context.componentTrace, "render", {
-      ...componentInfo,
-      source: "server",
-      mode: "stream",
-      ...summarizeProps(value.props),
-    });
-    try {
-      const renderedValue = type(value.props);
-      if (isThenable(renderedValue)) {
-        return renderedValue.then(
-          (resolvedValue) => {
-            endComponentPhaseSpan(context.componentTrace, renderSpan.span);
-            return encodeServerNode(resolvedValue, context, path);
-          },
-          (error) => {
-            endComponentPhaseSpan(context.componentTrace, renderSpan.span, error);
-            throw error;
-          },
-        );
-      }
-      endComponentPhaseSpan(context.componentTrace, renderSpan.span);
-      return encodeServerNode(renderedValue, context, path);
-    } catch (error) {
-      endComponentPhaseSpan(context.componentTrace, renderSpan.span, error);
-      throw error;
+    const renderedValue = type(value.props);
+    if (isThenable(renderedValue)) {
+      return renderedValue.then(
+        (resolvedValue) => encodeServerNode(resolvedValue, context, path),
+        (error) => {
+          throw error;
+        },
+      );
     }
+    return encodeServerNode(renderedValue, context, path);
   }
   if (type === REACT_FRAGMENT_SYMBOL) {
     return encodeServerNode(value.props.children, context, [...path, 3, "children"]);
@@ -319,57 +251,41 @@ function encodeServerElement(
   context: EncodeContext,
   path: (string | number)[] = [],
 ): unknown {
-  const componentInfo = describeComponentType(value.type);
-  const encodeSpan = startComponentPhaseSpan(context.componentTrace, "encode", {
-    ...componentInfo,
-    source: "server",
-    mode: "stream",
-    ...summarizeProps(value.props),
-  });
-  try {
-    const propKeys = Object.keys(value.props);
-    const len = propKeys.length;
-    const encoded: unknown[] = Array.from({ length: len });
-    let hasAsync = false;
-    const propsPath = [...path, 3];
+  const propKeys = Object.keys(value.props);
+  const len = propKeys.length;
+  const encoded: unknown[] = Array.from({ length: len });
+  let hasAsync = false;
+  const propsPath = [...path, 3];
 
-    for (let i = 0; i < len; i += 1) {
-      const v = encodeServerNode(value.props[propKeys[i]], context, [...propsPath, propKeys[i]]);
-      encoded[i] = v;
-      if (!hasAsync && isThenable(v)) hasAsync = true;
-    }
-
-    const typeCtx = {
-      ...context.streamEncodeContext,
-      _path: [...path, 1],
-    };
-    const type = encodeStreamType(value.type, typeCtx);
-    const key = value.key == null ? null : String(value.key);
-
-    const buildRow = (vals: unknown[]) => {
-      const props: Record<string, unknown> = {};
-      for (let i = 0; i < len; i += 1) props[propKeys[i]] = vals[i];
-      endComponentPhaseSpan(context.componentTrace, encodeSpan.span, undefined, {
-        propsKeyCount: len,
-      });
-      return ["$", type, key, props];
-    };
-
-    if (hasAsync) {
-      return Promise.all(encoded).then(
-        (values) => buildRow(values),
-        (error) => {
-          endComponentPhaseSpan(context.componentTrace, encodeSpan.span, error);
-          throw error;
-        },
-      );
-    }
-
-    return buildRow(encoded);
-  } catch (error) {
-    endComponentPhaseSpan(context.componentTrace, encodeSpan.span, error);
-    throw error;
+  for (let i = 0; i < len; i += 1) {
+    const v = encodeServerNode(value.props[propKeys[i]], context, [...propsPath, propKeys[i]]);
+    encoded[i] = v;
+    if (!hasAsync && isThenable(v)) hasAsync = true;
   }
+
+  const typeCtx = {
+    ...context.streamEncodeContext,
+    _path: [...path, 1],
+  };
+  const type = encodeStreamType(value.type, typeCtx);
+  const key = value.key == null ? null : String(value.key);
+
+  const buildRow = (vals: unknown[]) => {
+    const props: Record<string, unknown> = {};
+    for (let i = 0; i < len; i += 1) props[propKeys[i]] = vals[i];
+    return ["$", type, key, props];
+  };
+
+  if (hasAsync) {
+    return Promise.all(encoded).then(
+      (values) => buildRow(values),
+      (error) => {
+        throw error;
+      },
+    );
+  }
+
+  return buildRow(encoded);
 }
 
 export async function renderToReadableStream(

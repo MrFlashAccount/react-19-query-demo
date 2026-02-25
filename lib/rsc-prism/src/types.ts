@@ -4,7 +4,27 @@
 
 import type { ReactNode, ComponentType } from "react";
 import type { INVALIDATE_RSC_GLOBAL_KEY } from "./runtime-globals";
-import type { InvalidateCause, RSCTraceContext } from "./tracing";
+
+export interface RSCTraceContext {
+  requestId?: string;
+  actionId?: string;
+  source?: "client" | "transport" | "worker" | "server" | "react";
+}
+
+export interface InvalidateCause {
+  causeType: "action-legacy-invalidate" | "action-batch-refresh" | "manual";
+  requestId?: string;
+  actionId?: string;
+  dispatchedAt: number;
+  generation: number;
+}
+
+export interface ComponentTraceTracker {
+  requestId?: string;
+  actionId?: string;
+  componentSeq: number;
+  stack: number[];
+}
 
 /**
  * ESM module reference identifier used by RSC.

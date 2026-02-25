@@ -2,24 +2,15 @@
  * RSC client helpers.
  */
 
-import type { ISpan } from "@lib/tracing";
 import {
+  createTraceRequestId,
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
 import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
-import {
-  createTraceRequestId,
-  finishTraceSpanError,
-  finishTraceSpanSuccess,
-  resolveActionName,
-  resolveComponentName,
-  startTraceSpan,
-  summarizeArgs,
-} from "./tracing";
 import type { ComponentReference, EncodedActionArgs } from "./types";
-import type { RSCTraceContext } from "./tracing";
+import type { RSCTraceContext } from "./types";
 import type { RSCTransport } from "./transport";
 const MISSING_TRANSPORT_ERROR_MESSAGE =
   '[rsc-prism] Missing RSC transport. Call bootstrapWorkerRuntime() from "@lib/rsc-prism/client-only" first, or pass options.transport explicitly.';
@@ -115,40 +106,9 @@ function resolveTransport(transport: RSCTransport | null | undefined): RSCTransp
   throw new Error(MISSING_TRANSPORT_ERROR_MESSAGE);
 }
 
-export async function bootstrapWorkerRuntime(options?: {
-  parentSpan?: ISpan;
-}): Promise<BootstrappedWorkerRuntime> {
-  const requestId = createTraceRequestId("bootstrap");
-  const span = startTraceSpan(
-    "rsc.client.bootstrapWorkerRuntime",
-    { requestId, source: "client" },
-    options?.parentSpan,
-  );
-  const awaitSpan = startTraceSpan(
-    "rsc.client.bootstrap.awaitReady",
-    { requestId, source: "client" },
-    span,
-    "secondary",
-  );
-  const createSpan = startTraceSpan(
-    "rsc.transport.worker.create",
-    { requestId, source: "client" },
-    span,
-    "secondary",
-  );
-
-  try {
-    const runtime = await getWorkerRuntimeBootstrap()();
-    finishTraceSpanSuccess(createSpan);
-    finishTraceSpanSuccess(awaitSpan);
-    finishTraceSpanSuccess(span);
-    return registerDefaultWorkerRuntime(runtime);
-  } catch (error) {
-    finishTraceSpanError(createSpan, error);
-    finishTraceSpanError(awaitSpan, error);
-    finishTraceSpanError(span, error);
-    throw error;
-  }
+export async function bootstrapWorkerRuntime(): Promise<BootstrappedWorkerRuntime> {
+  const runtime = await getWorkerRuntimeBootstrap()();
+  return registerDefaultWorkerRuntime(runtime);
 }
 
 /**
@@ -160,7 +120,6 @@ export interface ConsumeRSCOptions {
    * Required if the RSC payload contains server action references
    */
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
-  parentSpan?: ISpan;
   traceContext?: RSCTraceContext;
 }
 
@@ -169,7 +128,6 @@ export interface ConsumeRSCOptions {
  */
 export interface RSCRequestOptions {
   transport?: RSCTransport | null | undefined;
-  parentSpan?: ISpan;
 }
 
 const WORKER_COMPONENT_REFERENCE = Symbol.for("rsc.worker.reference");
@@ -239,28 +197,11 @@ export async function consumeRSC<T = unknown>(
   options?: ConsumeRSCOptions,
 ): Promise<T> {
   const manifest = resolveClientManifestOrThrow();
-  const traceContext = options?.traceContext;
-  const span = startTraceSpan(
-    "rsc.flight.consumeStream",
-    {
-      requestId: traceContext?.requestId,
-      actionId: traceContext?.actionId,
-      source: "client",
-    },
-    options?.parentSpan ?? traceContext?.parentSpan,
-    "secondary",
-  );
-  try {
-    const value = await defaultFlightProtocolAdapter.consumeStream<T>(stream, manifest, {
-      callServer: options?.callServer,
-      traceContext,
-    });
-    finishTraceSpanSuccess(span);
-    return value;
-  } catch (error) {
-    finishTraceSpanError(span, error);
-    throw error;
-  }
+  const value = await defaultFlightProtocolAdapter.consumeStream<T>(stream, manifest, {
+    callServer: options?.callServer,
+    traceContext: options?.traceContext,
+  });
+  return value;
 }
 
 /**
@@ -341,100 +282,52 @@ export function createCallServer(
   options?: Omit<RequestInit, "method" | "body"> & RSCRequestOptions,
 ): (actionId: string, args: unknown[]) => Promise<unknown> {
   const transport = resolveTransport(options?.transport);
-  const { transport: _transport, parentSpan, ...requestInit } = options ?? {};
+  const { transport: _transport, ...requestInit } = options ?? {};
   const callServer = async (actionId: string, args: unknown[]): Promise<unknown> => {
     const requestId = createTraceRequestId("callserver");
-    const actionName = resolveActionName(actionId);
-    const callSpan = startTraceSpan(
-      "rsc.client.callServer",
-      {
-        requestId,
-        actionId,
-        actionName,
-        endpoint: actionEndpoint,
-        source: "client",
-        ...summarizeArgs(args),
-      },
-      parentSpan,
-    );
-    const encodeSpan = startTraceSpan(
-      "rsc.action.encodeArgs",
-      { requestId, actionId, actionName, source: "client" },
-      callSpan,
-      "secondary",
-    );
     const encodedArgs = await encodeActionArgs(args);
-    finishTraceSpanSuccess(encodeSpan, {
-      encodedType: encodedArgs.type,
-    });
     const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
     const traceContext: RSCTraceContext = {
       requestId,
       actionId,
-      parentSpan: callSpan,
       source: "client",
     };
 
     if (transport.sendActionDirect != null) {
       const manifest = resolveClientManifestOrThrow();
-      try {
-        const result = await transport.sendActionDirect(
-          {
-            endpoint: actionEndpoint,
-            actionId,
-            body: encodedArgs.data,
-            contentType,
-            headers: requestInit.headers,
-            requestInit,
-            trace: traceContext,
-          },
-          { manifest, callServer, traceContext },
-        );
-        finishTraceSpanSuccess(callSpan);
-        return result;
-      } catch (error) {
-        finishTraceSpanError(callSpan, error);
-        throw error;
-      }
+      return transport.sendActionDirect(
+        {
+          endpoint: actionEndpoint,
+          actionId,
+          body: encodedArgs.data,
+          contentType,
+          headers: requestInit.headers,
+          requestInit,
+          trace: traceContext,
+        },
+        { manifest, callServer, traceContext },
+      );
     }
 
-    let response: Response;
-    try {
-      response = await transport.sendAction({
-        endpoint: actionEndpoint,
-        actionId,
-        body: encodedArgs.data,
-        contentType,
-        headers: requestInit.headers,
-        requestInit,
-        trace: traceContext,
-      });
-    } catch (error) {
-      finishTraceSpanError(callSpan, error);
-      throw error;
-    }
+    const response = await transport.sendAction({
+      endpoint: actionEndpoint,
+      actionId,
+      body: encodedArgs.data,
+      contentType,
+      headers: requestInit.headers,
+      requestInit,
+      trace: traceContext,
+    });
 
     if (!response.ok) {
       const message = await readActionErrorMessage(response);
-      finishTraceSpanError(
-        callSpan,
-        new Error(message ?? `Action request failed: ${response.status}`),
-      );
       throw new Error(message ?? `Action request failed: ${response.status}`);
     }
 
-    try {
-      const result = await consumeRSC(response.body!, {
-        callServer,
-        parentSpan: callSpan,
-        traceContext,
-      });
-      finishTraceSpanSuccess(callSpan);
-      return result;
-    } catch (error) {
-      finishTraceSpanError(callSpan, error);
-      throw error;
-    }
+    return consumeRSC(response.body!, {
+      callServer,
+      traceContext,
+    });
   };
 
   return callServer;
@@ -461,50 +354,24 @@ export async function fetchRSC(
   options?: FetchRSCOptions,
 ): Promise<unknown> {
   const workerComponentCandidate = typeof target === "string" ? null : target;
-  const workerComponentMeta = workerComponentCandidate as Partial<WorkerComponentReference> | null;
-  const componentId =
-    workerComponentMeta != null && typeof workerComponentMeta.$$id === "string"
-      ? workerComponentMeta.$$id
-      : undefined;
-  const componentName =
-    workerComponentMeta != null && typeof workerComponentMeta.$$name === "string"
-      ? workerComponentMeta.$$name
-      : resolveComponentName(componentId);
   const requestId = createTraceRequestId("fetch");
-  const rootSpan = startTraceSpan(
-    "rsc.client.fetchRSC",
-    {
-      requestId,
-      componentId,
-      componentName,
-      source: "client",
-    },
-    options?.parentSpan,
-  );
   const transport = resolveTransport(options?.transport);
   const {
     callServer,
     props,
     transport: _transport,
-    parentSpan: _parentSpan,
     ...restOptions
   } = options ?? {};
   const traceContext: RSCTraceContext = {
     requestId,
-    parentSpan: rootSpan,
     source: "client",
   };
   const resolvedCallServer =
-    callServer ??
-    createCallServer(DEFAULT_ACTION_ENDPOINT, {
-      transport,
-      parentSpan: rootSpan,
-    });
+    callServer ?? createCallServer(DEFAULT_ACTION_ENDPOINT, { transport });
   const workerComponent = workerComponentCandidate;
   const url = "/rsc/view";
 
   if (workerComponent != null && !isWorkerComponentReference(workerComponent)) {
-    finishTraceSpanError(rootSpan, new Error("Invalid worker component reference"));
     throw new Error(
       '[rsc-prism] fetchRSC(component, ...) expects a "use worker" component reference generated by @lib/rsc-prism/vite in main mode.',
     );
@@ -512,26 +379,18 @@ export async function fetchRSC(
 
   if (transport.fetchRSCDirect != null) {
     const manifest = resolveClientManifestOrThrow();
-    try {
-      const value = await transport.fetchRSCDirect(
-        {
-          url,
-          componentId: workerComponent?.$$id,
-          componentProps: props,
-          trace: traceContext,
-        },
-        { manifest, callServer: resolvedCallServer, traceContext },
-      );
-      finishTraceSpanSuccess(rootSpan);
-      return value;
-    } catch (error) {
-      finishTraceSpanError(rootSpan, error);
-      throw error;
-    }
+    return transport.fetchRSCDirect(
+      {
+        url,
+        componentId: workerComponent?.$$id,
+        componentProps: props,
+        trace: traceContext,
+      },
+      { manifest, callServer: resolvedCallServer, traceContext },
+    );
   }
 
   if (transport.fetchRSC == null) {
-    finishTraceSpanError(rootSpan, new Error("Active transport does not support fetchRSC"));
     throw new Error("[rsc-prism] Active transport does not support fetchRSC().");
   }
 
@@ -543,26 +402,14 @@ export async function fetchRSC(
   });
 
   if (!response.ok) {
-    finishTraceSpanError(rootSpan, new Error(`RSC fetch failed: ${response.status}`));
     throw new Error(`RSC fetch failed: ${response.status}`);
   }
 
-  try {
-    const value = await consumeRSC(response.body!, {
-      callServer: resolvedCallServer,
-      parentSpan: rootSpan,
-      traceContext,
-      ...restOptions,
-    });
-    finishTraceSpanSuccess(rootSpan, {
-      componentId: workerComponent?.$$id,
-      componentName: workerComponent?.$$name ?? resolveComponentName(workerComponent?.$$id),
-    });
-    return value;
-  } catch (error) {
-    finishTraceSpanError(rootSpan, error);
-    throw error;
-  }
+  return consumeRSC(response.body!, {
+    callServer: resolvedCallServer,
+    traceContext,
+    ...restOptions,
+  });
 }
 
 /**
@@ -576,7 +423,6 @@ export interface CallActionOptions extends Omit<RequestInit, "method" | "body"> 
   parseResponse?: boolean;
   transport?: RSCTransport;
   endpoint?: string;
-  parentSpan?: ISpan;
 }
 
 /**
@@ -615,60 +461,30 @@ export async function callAction<T = void>(
   }
 
   const actionId = action.$$id;
-  const actionName = resolveActionName(actionId);
   const requestId = createTraceRequestId("action");
-  const actionSpan = startTraceSpan(
-    "rsc.action.call",
-    {
-      requestId,
-      actionId,
-      actionName,
-      source: "client",
-      parseResponse: options.parseResponse ?? true,
-      ...summarizeArgs(args),
-    },
-    options.parentSpan,
-  );
   const transport = resolveTransport(options?.transport);
   const endpoint = options.endpoint ?? DEFAULT_ACTION_ENDPOINT;
   const { parseResponse = true } = options;
-  const encodeSpan = startTraceSpan(
-    "rsc.action.encodeArgs",
-    { requestId, actionId, actionName, source: "client" },
-    actionSpan,
-    "secondary",
-  );
   const encodedArgs = await encodeActionArgs(args);
-  finishTraceSpanSuccess(encodeSpan, {
-    encodedType: encodedArgs.type,
-  });
   const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
   const traceContext: RSCTraceContext = {
     requestId,
     actionId,
-    parentSpan: actionSpan,
     source: "client",
   };
 
   if (parseResponse && transport.sendActionDirect != null) {
     const manifest = resolveClientManifestOrThrow();
-    try {
-      const value = await transport.sendActionDirect<T>(
-        {
-          endpoint,
-          actionId,
-          body: encodedArgs.data,
-          contentType,
-          trace: traceContext,
-        },
-        { manifest, traceContext },
-      );
-      finishTraceSpanSuccess(actionSpan);
-      return value;
-    } catch (error) {
-      finishTraceSpanError(actionSpan, error);
-      throw error;
-    }
+    return transport.sendActionDirect<T>(
+      {
+        endpoint,
+        actionId,
+        body: encodedArgs.data,
+        contentType,
+        trace: traceContext,
+      },
+      { manifest, traceContext },
+    );
   }
 
   const response = await transport.sendAction({
@@ -681,41 +497,15 @@ export async function callAction<T = void>(
 
   if (!response.ok) {
     const message = await readActionErrorMessage(response);
-    finishTraceSpanError(
-      actionSpan,
-      new Error(message ?? `Action '${actionId}' failed: ${response.status}`),
-    );
     throw new Error(message ?? `Action '${actionId}' failed: ${response.status}`);
   }
 
   if (parseResponse && response.body) {
-    const consumeSpan = startTraceSpan(
-      "rsc.action.consumeResponse",
-      {
-        requestId,
-        actionId,
-        actionName,
-        source: "client",
-      },
-      actionSpan,
-      "secondary",
-    );
-    try {
-      const value = await consumeRSC<T>(response.body, {
-        parentSpan: actionSpan,
-        traceContext,
-      });
-      finishTraceSpanSuccess(consumeSpan);
-      finishTraceSpanSuccess(actionSpan);
-      return value;
-    } catch (error) {
-      finishTraceSpanError(consumeSpan, error);
-      finishTraceSpanError(actionSpan, error);
-      throw error;
-    }
+    return consumeRSC<T>(response.body, {
+      traceContext,
+    });
   }
 
-  finishTraceSpanSuccess(actionSpan);
   return response.body as T;
 }
 
