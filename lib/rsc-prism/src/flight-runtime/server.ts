@@ -102,6 +102,7 @@ function createEncodeContext(
   queueDeferred: (task: Promise<void>) => void,
 ): EncodeContext {
   let nextRowId = 1;
+  const outlinedByValue = new Map<string, number>();
   const currentRevivePathsRef: { current: (string | number)[][] } = { current: [] };
   const context: EncodeContext = {
     queueDeferred,
@@ -128,8 +129,12 @@ function createEncodeContext(
       return id;
     },
     outlineValue: (value) => {
+      const key = JSON.stringify(value);
+      const existing = outlinedByValue.get(key);
+      if (existing != null) return existing;
       const id = nextRowId;
       nextRowId += 1;
+      outlinedByValue.set(key, id);
       queueDeferred(
         (async () => {
           context.preparePathsForEncode();

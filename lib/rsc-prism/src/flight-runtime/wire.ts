@@ -712,11 +712,16 @@ export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePa
       }
     }
   }
+  const subtreeCache = new Map<string, RevivePathTree>();
   function mapToArray(m: Node): RevivePathTree {
     const out: RevivePathTree = [];
     for (const [k, v] of m) {
       out.push([k, v === true ? true : mapToArray(v)]);
     }
+    const key = JSON.stringify(out);
+    const cached = subtreeCache.get(key);
+    if (cached) return cached;
+    subtreeCache.set(key, out);
     return out;
   }
   return mapToArray(root);
