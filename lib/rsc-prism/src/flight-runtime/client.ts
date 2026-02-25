@@ -39,6 +39,9 @@ interface FlightChunk<T = unknown> {
   modelFromStream?: boolean;
   listeners: ChunkResolveListener<T>[] | null;
   rejectListeners: ChunkRejectListener[] | null;
+  lateResolveQueue: ChunkResolveListener<T>[] | null;
+  lateRejectQueue: ChunkRejectListener[] | null;
+  lateFlushScheduled: boolean;
   then: (resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) => void;
 }
 
@@ -52,6 +55,7 @@ interface FlightResponse {
   traceContext?: FlightClientOptions["traceContext"];
   componentTrace?: ComponentTraceTracker;
   currentRowId?: number;
+  lazyWrapperCache: Map<FlightChunk, unknown>;
 }
 
 const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
@@ -71,28 +75,51 @@ function isLazyWrapper(
 }
 
 function createPendingChunk<T>(id: number): FlightChunk<T> {
-  return {
+  const chunk: FlightChunk<T> = {
     id,
     status: CHUNK_PENDING,
     value: null,
     reason: null,
     listeners: null,
     rejectListeners: null,
+    lateResolveQueue: null,
+    lateRejectQueue: null,
+    lateFlushScheduled: false,
     // oxlint-disable-next-line unicorn/no-thenable
     then(resolve?: ChunkResolveListener<T>, reject?: ChunkRejectListener) {
       if (this.status === CHUNK_INITIALIZED || this.status === CHUNK_RESOLVED_MODEL) {
         if (resolve != null) {
-          queueMicrotask(() => {
-            resolve(this.value as T);
-          });
+          (this.lateResolveQueue ??= []).push(resolve);
+          if (!this.lateFlushScheduled) {
+            this.lateFlushScheduled = true;
+            queueMicrotask(() => {
+              const queue = this.lateResolveQueue!;
+              this.lateResolveQueue = null;
+              this.lateFlushScheduled = false;
+              const value = this.value as T;
+              for (let i = 0; i < queue.length; i += 1) {
+                queue[i](value);
+              }
+            });
+          }
         }
         return;
       }
       if (this.status === CHUNK_ERRORED) {
         if (reject != null) {
-          queueMicrotask(() => {
-            reject(this.reason);
-          });
+          (this.lateRejectQueue ??= []).push(reject);
+          if (!this.lateFlushScheduled) {
+            this.lateFlushScheduled = true;
+            queueMicrotask(() => {
+              const queue = this.lateRejectQueue!;
+              this.lateRejectQueue = null;
+              this.lateFlushScheduled = false;
+              const reason = this.reason;
+              for (let i = 0; i < queue.length; i += 1) {
+                queue[i](reason);
+              }
+            });
+          }
         }
         return;
       }
@@ -104,6 +131,7 @@ function createPendingChunk<T>(id: number): FlightChunk<T> {
       }
     },
   };
+  return chunk;
 }
 
 function getChunk<T = unknown>(response: FlightResponse, id: number): FlightChunk<T> {
@@ -167,8 +195,16 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
       {
         getChunk: (id) => getChunk(response, id),
         readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
-        createLazyChunkWrapper: (chunk) =>
-          createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
+        createLazyChunkWrapper: (chunk) => {
+          const cached = response.lazyWrapperCache.get(chunk as FlightChunk);
+          if (cached !== undefined) return cached;
+          const wrapper = createLazyChunkWrapper(
+            chunk,
+            (payload) => readChunk(response, payload as FlightChunk),
+          );
+          response.lazyWrapperCache.set(chunk as FlightChunk, wrapper);
+          return wrapper;
+        },
         resolveClientReference: (id) => response.resolveClientReference(id),
         callServer: response.callServer,
         traceContext: response.traceContext,
@@ -324,6 +360,7 @@ function createFlightResponse(
           parentSpan: options.traceContext.parentSpan,
         })
       : undefined);
+  const lazyWrapperCache = new Map<FlightChunk, unknown>();
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
     resolveClientReference,
@@ -334,12 +371,22 @@ function createFlightResponse(
     traceContext: options?.traceContext,
     componentTrace,
     currentRowId: undefined,
+    lazyWrapperCache,
   };
   response.fromJSON = createModelReviver({
     getChunk: (id) => getChunk(response, id),
     readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
-    createLazyChunkWrapper: (chunk) =>
-      createLazyChunkWrapper(chunk, (payload) => readChunk(response, payload as FlightChunk)),
+    createLazyChunkWrapper: (chunk) => {
+      let wrapper = lazyWrapperCache.get(chunk as FlightChunk);
+      if (wrapper === undefined) {
+        wrapper = createLazyChunkWrapper(
+          chunk,
+          (payload) => readChunk(response, payload as FlightChunk),
+        );
+        lazyWrapperCache.set(chunk as FlightChunk, wrapper);
+      }
+      return wrapper;
+    },
     resolveClientReference: (id) => response.resolveClientReference(id),
     callServer,
     traceContext: options?.traceContext,
