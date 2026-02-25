@@ -66,8 +66,13 @@ function encodeFlightRow(id: number, value: unknown): Uint8Array {
   return FLIGHT_ROW_ENCODER.encode(`${id.toString(16)}:${JSON.stringify(value)}\n`);
 }
 
-function encodeMetadataFlightRow(id: number, revivePaths: (string | number)[][]): Uint8Array {
-  return FLIGHT_ROW_ENCODER.encode(`M${id.toString(16)}:${JSON.stringify({ revivePaths })}\n`);
+function encodeMetadataFlightRow(
+  id: number,
+  revivePaths: (string | number)[][],
+): Uint8Array {
+  return FLIGHT_ROW_ENCODER.encode(
+    `M${id.toString(16)}:${JSON.stringify({ revivePaths })}\n`,
+  );
 }
 
 function encodeBinaryFlightRow(id: number, kind: string, bytes: Uint8Array): Uint8Array {
@@ -109,7 +114,7 @@ function createEncodeContext(
   options?: FlightServerRenderOptions & { useRawForCloneableTypes?: boolean },
 ): EncodeContext {
   let nextRowId = 1;
-  const currentPathsRef: { current: (string | number)[][] } = { current: [] };
+  const currentRevivePathsRef: { current: (string | number)[][] } = { current: [] };
   const componentTrace =
     options?.componentTrace ??
     (options?.traceContext != null
@@ -128,12 +133,12 @@ function createEncodeContext(
     },
     emitRow: (id, value) => {
       if (sink.settled) return;
-      const paths = currentPathsRef.current;
+      const paths = currentRevivePathsRef.current;
       if (paths.length > 0 && sink.emitMetadataRow) {
         sink.emitMetadataRow(id, paths);
       }
       sink.emitModelRow(id, value);
-      currentPathsRef.current = [];
+      currentRevivePathsRef.current = [];
     },
     emitBinaryRow: (kind, bytes) => {
       const id = nextRowId;
@@ -167,12 +172,14 @@ function createEncodeContext(
       componentTrace,
       currentRowId: undefined,
       useRawForCloneableTypes: options?.useRawForCloneableTypes,
-      collectRevivePaths: (path, _kind) => currentPathsRef.current.push(path),
+      pushReviveValue: (_encoded, path) => {
+        currentRevivePathsRef.current.push([...path]);
+      },
     },
     traceContext: options?.traceContext,
     componentTrace,
     preparePathsForEncode: () => {
-      currentPathsRef.current = [];
+      currentRevivePathsRef.current = [];
     },
   };
   return context;

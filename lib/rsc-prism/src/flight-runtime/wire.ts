@@ -221,12 +221,10 @@ export function encodeStreamType(value: unknown, context?: StreamEncodeContext):
     return escapeStringValue(value);
   }
   if (value === REACT_FRAGMENT_SYMBOL || value === Fragment) {
-    if (context) collectPath(context, "primitive");
-    return "$Sreact.fragment";
+    return context ? emitRevivable(context, "$Sreact.fragment") : "$Sreact.fragment";
   }
   if (isClientReference(value)) {
-    if (context) collectPath(context, "clientRef");
-    return `$C${value.$$id}`;
+    return context ? emitRevivable(context, `$C${value.$$id}`) : `$C${value.$$id}`;
   }
   throw new Error("Unsupported element type in minimal runtime.");
 }
@@ -296,15 +294,6 @@ function decodeType(value: JsonObject, resolveClientReference: (id: string) => u
   }
 }
 
-/** Revival kinds for path metadata (v1: paths alone suffice; client infers kind from value) */
-export type ReviveKind =
-  | "clientRef"
-  | "serverRef"
-  | "lazyChunk"
-  | "outlined"
-  | "primitive"
-  | "element";
-
 export interface StreamEncodeContext {
   outlineValue: (value: unknown) => number;
   emitBinaryRow: StreamEmitBinaryRow;
@@ -314,9 +303,9 @@ export interface StreamEncodeContext {
   currentRowId?: number;
   /** When true (row/postMessage path), send raw Date, BigInt, -0, NaN, Infinity for structured clone */
   useRawForCloneableTypes?: boolean;
-  /** Optional: collect paths to values that need revival for pruned client traversal */
-  collectRevivePaths?: (path: (string | number)[], kind: ReviveKind) => void;
-  /** Current path (internal; set when recursing) */
+  /** Optional: collect path for inline revival; client uses paths for direct replacement */
+  pushReviveValue?: (encoded: string, path: (string | number)[]) => void;
+  /** Current path (set by caller for path collection) */
   _path?: (string | number)[];
 }
 
@@ -324,39 +313,25 @@ export function escapeStringValue(str: string): string {
   return str.length > 0 && str.charCodeAt(0) === 36 ? `$${str}` : str;
 }
 
-function withPath(
-  context: StreamEncodeContext,
-  segment: string | number,
-): StreamEncodeContext {
-  const base = context._path ?? [];
-  return { ...context, _path: [...base, segment] };
-}
-
-function collectPath(context: StreamEncodeContext, kind: ReviveKind): void {
+function emitRevivable(context: StreamEncodeContext, encoded: string): string {
   const path = context._path ?? [];
-  context.collectRevivePaths?.(path, kind);
+  context.pushReviveValue?.(encoded, path);
+  return encoded;
 }
 
 function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext): unknown {
   if (value === undefined) {
     if (context.useRawForCloneableTypes) return undefined;
-    collectPath(context, "primitive");
-    return "$undefined";
+    return emitRevivable(context, "$undefined");
   }
   if (typeof value === "string") {
     return escapeStringValue(value);
   }
   if (typeof value === "number") {
     if (context.useRawForCloneableTypes) return value;
-    if (Number.isNaN(value)) {
-      collectPath(context, "primitive");
-      return "$NaN";
-    }
+    if (Number.isNaN(value)) return emitRevivable(context, "$NaN");
     if (!Number.isFinite(value)) return value < 0 ? "$-Infinity" : "$Infinity";
-    if (Object.is(value, -0)) {
-      collectPath(context, "primitive");
-      return "$-0";
-    }
+    if (Object.is(value, -0)) return emitRevivable(context, "$-0");
     return value;
   }
   if (typeof value === "boolean" || value == null) {
@@ -364,26 +339,22 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
   if (typeof value === "bigint") {
     if (context.useRawForCloneableTypes) return value;
-    collectPath(context, "primitive");
-    return `$n${value.toString()}`;
+    return emitRevivable(context, `$n${value.toString()}`);
   }
   if (typeof value === "symbol") {
     const key = Symbol.keyFor(value);
     if (key == null) {
       throw new Error("Only global symbols are supported by the minimal Flight runtime.");
     }
-    collectPath(context, "primitive");
-    return `$S${key}`;
+    return emitRevivable(context, `$S${key}`);
   }
   if (typeof value === "function") {
     if (isClientReference(value)) {
-      collectPath(context, "clientRef");
-      return `$C${value.$$id}`;
+      return emitRevivable(context, `$C${value.$$id}`);
     }
     if (isServerReference(value)) {
-      collectPath(context, "serverRef");
       const outlinedId = context.outlineValue({ id: value.$$id });
-      return `$F${outlinedId.toString(16)}`;
+      return emitRevivable(context, `$F${outlinedId.toString(16)}`);
     }
     throw new Error("Functions are not supported by the minimal Flight runtime.");
   }
@@ -395,12 +366,10 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
 
   if (value instanceof Date) {
     if (context.useRawForCloneableTypes) return value;
-    collectPath(context, "primitive");
-    return `$D${value.toJSON()}`;
+    return emitRevivable(context, `$D${value.toJSON()}`);
   }
   if (value instanceof URLSearchParams) {
-    collectPath(context, "primitive");
-    return `$P${value.toString()}`;
+    return emitRevivable(context, `$P${value.toString()}`);
   }
   if (value instanceof FormData) {
     const entries: Array<[string, unknown]> = [];
@@ -415,49 +384,43 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
       }
       entries.push([key, item]);
     }
-    collectPath(context, "outlined");
     const outlinedId = context.outlineValue(entries);
-    return `$K${outlinedId.toString(16)}`;
+    return emitRevivable(context, `$K${outlinedId.toString(16)}`);
   }
   if (value instanceof Map) {
     if (context.useRawForCloneableTypes) {
       return new Map(
-        Array.from(value.entries()).map(([k, v], i) => [
-          encodeStreamValueInternal(k, withPath(withPath(context, i), 0)),
-          encodeStreamValueInternal(v, withPath(withPath(context, i), 1)),
+        Array.from(value.entries()).map(([k, v]) => [
+          encodeStreamValueInternal(k, context),
+          encodeStreamValueInternal(v, context),
         ]),
       );
     }
-    collectPath(context, "outlined");
     const outlinedId = context.outlineValue(Array.from(value.entries()));
-    return `$Q${outlinedId.toString(16)}`;
+    return emitRevivable(context, `$Q${outlinedId.toString(16)}`);
   }
   if (value instanceof Set) {
     if (context.useRawForCloneableTypes) {
       return new Set(
-        Array.from(value.values()).map((v, i) =>
-          encodeStreamValueInternal(v, withPath(context, i)),
-        ),
+        Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)),
       );
     }
-    collectPath(context, "outlined");
     const outlinedId = context.outlineValue(Array.from(value.values()));
-    return `$W${outlinedId.toString(16)}`;
+    return emitRevivable(context, `$W${outlinedId.toString(16)}`);
   }
   if (value instanceof ArrayBuffer) {
-    collectPath(context, "lazyChunk");
     const id = context.emitBinaryRow("ArrayBuffer", new Uint8Array(value));
-    return `$${id.toString(16)}`;
+    return emitRevivable(context, `$${id.toString(16)}`);
   }
   const typed = normalizeTypedArray(value);
   if (typed != null) {
-    collectPath(context, "lazyChunk");
     const id = context.emitBinaryRow(typed.kind, typed.bytes);
-    return `$${id.toString(16)}`;
+    return emitRevivable(context, `$${id.toString(16)}`);
   }
   if (Array.isArray(value)) {
+    const basePath = context._path ?? [];
     return Array.from({ length: value.length }, (_, i) =>
-      encodeStreamValueInternal(value[i], withPath(context, i)),
+      encodeStreamValueInternal(value[i], { ...context, _path: [...basePath, i] }),
     );
   }
   if (isReactElementLike(value)) {
@@ -479,11 +442,13 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
       ...summarizeProps(value.props),
     });
     try {
-      const type = encodeStreamType(value.type, withPath(context, 1));
+      const basePath = context._path ?? [];
+      const type = encodeStreamType(value.type, { ...context, _path: [...basePath, 1] });
       const key = value.key == null ? null : String(value.key);
       const props = encodeStreamValueInternal(value.props, {
-        ...withPath(context, 3),
+        ...context,
         componentTrace: tracker,
+        _path: [...basePath, 3],
       });
       endComponentPhaseSpan(tracker, encodeSpan.span);
       return ["$", type, key, props];
@@ -493,21 +458,20 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     }
   }
   if (isClientReference(value)) {
-    collectPath(context, "clientRef");
-    return `$C${value.$$id}`;
+    return emitRevivable(context, `$C${value.$$id}`);
   }
   if (isServerReference(value)) {
-    collectPath(context, "serverRef");
     const outlinedId = context.outlineValue({ id: value.$$id });
-    return `$F${outlinedId.toString(16)}`;
+    return emitRevivable(context, `$F${outlinedId.toString(16)}`);
   }
   if (!isPlainObject(value)) {
     throw new Error("Only plain objects are serializable by the minimal Flight runtime.");
   }
 
   const result: Record<string, unknown> = {};
+  const basePath = context._path ?? [];
   for (const [key, item] of Object.entries(value)) {
-    result[key] = encodeStreamValueInternal(item, withPath(context, key));
+    result[key] = encodeStreamValueInternal(item, { ...context, _path: [...basePath, key] });
   }
   return result;
 }
@@ -707,6 +671,28 @@ export function createModelReviver<Chunk>(
   };
 }
 
+export function createModelReviverWithReviveValues<Chunk>(
+  context: StreamDecodeContext<Chunk>,
+  reviveValues: string[],
+): (this: unknown, key: string, value: unknown) => unknown {
+  return function modelReviver(_key: string, value: unknown): unknown {
+    if (
+      value != null &&
+      typeof value === "object" &&
+      "__r" in value &&
+      !Array.isArray(value) &&
+      typeof (value as { __r?: unknown }).__r === "number"
+    ) {
+      const idx = (value as { __r: number }).__r;
+      return parseModelString(context, reviveValues[idx]);
+    }
+    if (typeof value === "string") {
+      return parseModelString(context, value);
+    }
+    return maybeDecodeElementTuple(value, context);
+  };
+}
+
 function reviveModelValueTreeInternal<Chunk>(
   context: StreamDecodeContext<Chunk>,
   value: unknown,
@@ -766,51 +752,31 @@ export function reviveModelValueTree<Chunk>(
   return reviveModelValueTreeInternal(context, parsedValue);
 }
 
-function pathToKey(path: (string | number)[]): string {
-  return path.join(".");
-}
-
-function hasPathWithPrefix(pathSet: Set<string>, prefix: string): boolean {
-  if (pathSet.has(prefix)) return true;
-  if (prefix === "" && pathSet.size > 0) return true;
-  const prefixWithDot = prefix + ".";
-  for (const p of pathSet) {
-    if (p.startsWith(prefixWithDot)) return true;
-  }
-  return false;
-}
-
-function childPath(prefix: string, segment: string | number): string {
-  return prefix ? `${prefix}.${segment}` : String(segment);
-}
-
-function reviveModelValueTreePruned<Chunk>(
+function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
   context: StreamDecodeContext<Chunk>,
+  reviveValues: string[],
   value: unknown,
-  revivePaths: Set<string>,
-  pathPrefix: string,
 ): unknown {
   if (value instanceof Date || typeof value === "bigint") {
     return value;
   }
+  if (
+    value != null &&
+    typeof value === "object" &&
+    "__r" in value &&
+    !Array.isArray(value) &&
+    typeof (value as { __r?: unknown }).__r === "number"
+  ) {
+    const idx = (value as { __r: number }).__r;
+    return parseModelString(context, reviveValues[idx]);
+  }
   if (typeof value === "string") {
-    if (!hasPathWithPrefix(revivePaths, pathPrefix)) {
-      if (value.length > 1 && value.charCodeAt(0) === 36) {
-        return parseModelString(context, value);
-      }
-      return value;
-    }
     return parseModelString(context, value);
   }
-  if (!hasPathWithPrefix(revivePaths, pathPrefix)) {
-    if (typeof value !== "object" || value == null) return value;
-    if (value instanceof Date || typeof value === "bigint") return value;
-    if (value instanceof Map || value instanceof Set) return value;
-  }
   if (value instanceof Map) {
-    const entries = Array.from(value.entries()).map(([k, v], i) => [
-      reviveModelValueTreePruned(context, k, revivePaths, childPath(childPath(pathPrefix, i), 0)),
-      reviveModelValueTreePruned(context, v, revivePaths, childPath(childPath(pathPrefix, i), 1)),
+    const entries = Array.from(value.entries()).map(([k, v]) => [
+      reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, k),
+      reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
     ] as const);
     value.clear();
     for (const [k, v] of entries) {
@@ -819,8 +785,8 @@ function reviveModelValueTreePruned<Chunk>(
     return value;
   }
   if (value instanceof Set) {
-    const items = Array.from(value.values()).map((v, i) =>
-      reviveModelValueTreePruned(context, v, revivePaths, childPath(pathPrefix, i)),
+    const items = Array.from(value.values()).map((v) =>
+      reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
     );
     value.clear();
     for (const item of items) {
@@ -829,10 +795,12 @@ function reviveModelValueTreePruned<Chunk>(
     return value;
   }
   if (Array.isArray(value)) {
-    const revived = Array.from({ length: value.length }, (_, i) =>
-      reviveModelValueTreePruned(context, value[i], revivePaths, childPath(pathPrefix, i)),
+    return maybeDecodeElementTuple(
+      Array.from({ length: value.length }, (_, i) =>
+        reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, value[i]),
+      ),
+      context,
     );
-    return maybeDecodeElementTuple(revived, context);
   }
   if (typeof value !== "object" || value == null) {
     return value;
@@ -842,26 +810,110 @@ function reviveModelValueTreePruned<Chunk>(
   const keys = Object.keys(source);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    revived[key] = reviveModelValueTreePruned(
+    revived[key] = reviveModelValueTreeWithReviveValuesInternal(
       context,
+      reviveValues,
       source[key],
-      revivePaths,
-      childPath(pathPrefix, key),
     );
   }
   return revived;
 }
 
-export function reviveModelValueTreeWithPaths<Chunk>(
+export function reviveModelValueTreeWithReviveValues<Chunk>(
+  context: StreamDecodeContext<Chunk>,
+  reviveValues: string[],
+  parsedValue: unknown,
+): unknown {
+  return reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, parsedValue);
+}
+
+function getAtPath(root: unknown, path: (string | number)[]): unknown {
+  let current: unknown = root;
+  for (const segment of path) {
+    if (current == null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[String(segment)];
+  }
+  return current;
+}
+
+function setAtPath(root: unknown, path: (string | number)[], value: unknown): void {
+  if (path.length === 0) return;
+  let current: unknown = root;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const segment = path[i];
+    if (current == null || typeof current !== "object") return;
+    current = (current as Record<string, unknown>)[String(segment)];
+  }
+  const last = path[path.length - 1];
+  if (current != null && typeof current === "object") {
+    (current as Record<string, unknown>)[String(last)] = value;
+  }
+}
+
+export function applyDirectPathReplacements<Chunk>(
+  root: unknown,
+  revivePaths: ReadonlyArray<(string | number)[]>,
+  context: StreamDecodeContext<Chunk>,
+): void {
+  for (const path of revivePaths) {
+    const raw = getAtPath(root, path);
+    if (
+      typeof raw === "string" &&
+      raw.length > 0 &&
+      raw.charCodeAt(0) === 36
+    ) {
+      setAtPath(root, path, parseModelString(context, raw));
+    }
+  }
+}
+
+function traverseElementTuplesOnlyInternal<Chunk>(
+  value: unknown,
+  context: StreamDecodeContext<Chunk>,
+): unknown {
+  if (value instanceof Date || typeof value === "bigint") {
+    return value;
+  }
+  if (typeof value === "string") {
+    if (value.length > 0 && value.charCodeAt(0) === 36) {
+      return parseModelString(context, value);
+    }
+    return value;
+  }
+  if (typeof value !== "object" || value == null) {
+    return value;
+  }
+  if (!Array.isArray(value)) {
+    return value;
+  }
+  if (value.length === 4 && value[0] === "$") {
+    let type = value[1];
+    if (
+      typeof type === "string" &&
+      type.length > 0 &&
+      type.charCodeAt(0) === 36
+    ) {
+      type = parseModelString(context, type);
+    }
+    const key = value[2];
+    const props = value[3] as Record<string, unknown>;
+    const children = props.children;
+    const revivedProps: Record<string, unknown> =
+      children !== undefined
+        ? { ...props, children: traverseElementTuplesOnlyInternal(children, context) }
+        : props;
+    return maybeDecodeElementTuple(["$", type, key, revivedProps], context);
+  }
+  return Array.from({ length: value.length }, (_, i) =>
+    traverseElementTuplesOnlyInternal(value[i], context),
+  );
+}
+
+export function traverseElementTuplesOnly<Chunk>(
   context: StreamDecodeContext<Chunk>,
   parsedValue: unknown,
-  revivePaths: ReadonlyArray<(string | number)[]>,
 ): unknown {
-  if (revivePaths.length === 0) {
-    return reviveModelValueTree(context, parsedValue);
-  }
-  const pathSet = new Set(revivePaths.map(pathToKey));
-  return reviveModelValueTreePruned(context, parsedValue, pathSet, "");
+  return traverseElementTuplesOnlyInternal(parsedValue, context);
 }
 
 export function createLazyChunkWrapper<Chunk>(

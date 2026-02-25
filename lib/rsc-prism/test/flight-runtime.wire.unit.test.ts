@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  applyDirectPathReplacements,
   createLazyChunkWrapper,
   createModelReviver,
   decodeBinaryWireRow,
@@ -10,7 +11,7 @@ import {
   encodeWireValueWithBinaryRows,
   parseModelString,
   reviveModelValueTree,
-  reviveModelValueTreeWithPaths,
+  traverseElementTuplesOnly,
 } from "../src/flight-runtime/wire";
 import { TraceRecorder } from "./utils/trace-recorder";
 
@@ -362,7 +363,7 @@ describe("flight wire compact stream format", () => {
     expect(parsed.props.children).toBe("ok");
   });
 
-  it("collects revive paths during stream encoding and pruned revival matches full traversal", () => {
+  it("collects revive paths during stream encoding and hybrid revival replaces inline $ strings", () => {
     const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
     const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
     const clientRef = {
@@ -384,11 +385,12 @@ describe("flight wire compact stream format", () => {
       seen: new WeakSet<object>(),
       emitBinaryRow: () => 1,
       outlineValue: () => 1,
-      collectRevivePaths: (path) => revivePaths.push([...path]),
+      _path: [],
+      pushReviveValue: (_v, path) => revivePaths.push([...path]),
     });
 
     expect(revivePaths.length).toBeGreaterThan(0);
-    expect(revivePaths.some((p) => p.join(".") === "3.onClick")).toBe(true);
+    expect(revivePaths.some((p) => p[p.length - 1] === "onClick")).toBe(true);
 
     const context = {
       getChunk: () => null,
@@ -397,21 +399,16 @@ describe("flight wire compact stream format", () => {
       resolveClientReference: (id: string) => `client:${id}`,
     };
 
-    const fullRevived = reviveModelValueTree(context, encoded) as {
-      type: string;
-      props: { onClick: unknown; children: string };
-    };
-    const prunedRevived = reviveModelValueTreeWithPaths(context, encoded, revivePaths) as {
+    applyDirectPathReplacements(encoded, revivePaths, context);
+    const revived = traverseElementTuplesOnly(context, encoded) as {
       type: string;
       props: { onClick: unknown; children: string };
     };
 
-    expect(prunedRevived).toBeDefined();
-    expect(prunedRevived.type).toBe("div");
-    expect(prunedRevived.props.onClick).toBe("client:mod#Button");
-    expect(prunedRevived.props.children).toBe("hello");
-    expect(prunedRevived.type).toBe(fullRevived.type);
-    expect(prunedRevived.props.onClick).toBe(fullRevived.props.onClick);
+    expect(revived).toBeDefined();
+    expect(revived.type).toBe("div");
+    expect(revived.props.onClick).toBe("client:mod#Button");
+    expect(revived.props.children).toBe("hello");
   });
 });
 

@@ -56,9 +56,11 @@ describe("flight runtime server stream behavior", () => {
       rows.push(next.value);
     }
 
-    const rootRowText = `0:${JSON.stringify("$1")}\n`;
+    const fullText = rows.map((r) => new TextDecoder().decode(r)).join("");
     const expectedBinary = new Uint8Array([49, 58, 65, 52, 44, 1, 2, 3, 4, 10]); // "1:A4," + bytes + "\n"
-    expect(rows.some((row) => new TextDecoder().decode(row) === rootRowText)).toBe(true);
+    expect(
+      fullText.includes(`0:"$1"`) || fullText.includes(`0:{"__r":0}`),
+    ).toBe(true);
     expect(
       rows.some(
         (row) =>

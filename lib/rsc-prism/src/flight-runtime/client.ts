@@ -1,6 +1,7 @@
 import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
 import {
+  applyDirectPathReplacements,
   binaryWireTagFromKind,
   createLazyChunkWrapper,
   createModelReviver,
@@ -9,12 +10,12 @@ import {
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
   reviveModelValueTree,
-  reviveModelValueTreeWithPaths,
   ROW_BINARY,
   ROW_DONE,
   ROW_ERROR,
   ROW_METADATA,
   ROW_MODEL,
+  traverseElementTuplesOnly,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
 import { createComponentTraceTracker, type ComponentTraceTracker } from "../tracing";
@@ -191,9 +192,6 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
   const previousRowId = response.currentRowId;
   response.currentRowId = chunk.id;
   const fromStream = (chunk as FlightChunk<unknown>).modelFromStream ?? false;
-  const parsed =
-    fromStream && typeof model === "string" ? JSON.parse(model) : model;
-  const revivePaths = response.revivePathsByRowId.get(chunk.id);
   const decodeContext = {
     getChunk: (id: number) => getChunk(response, id),
     readChunk: (c: unknown) => readChunk(response, c as FlightChunk),
@@ -213,10 +211,18 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     componentTrace: response.componentTrace,
     getCurrentRowId: () => response.currentRowId,
   };
+  const revivePaths = response.revivePathsByRowId.get(chunk.id);
+  const parsed =
+    fromStream && typeof model === "string" ? JSON.parse(model) : model;
   try {
-    const revived = (revivePaths != null && revivePaths.length > 0
-      ? reviveModelValueTreeWithPaths(decodeContext, parsed, revivePaths)
-      : reviveModelValueTree(decodeContext, parsed)) as T;
+    let revived: T;
+    if (revivePaths != null && revivePaths.length > 0) {
+      const root = typeof model === "string" ? parsed : model;
+      applyDirectPathReplacements(root, revivePaths, decodeContext);
+      revived = traverseElementTuplesOnly(decodeContext, root) as T;
+    } else {
+      revived = reviveModelValueTree(decodeContext, parsed) as T;
+    }
     chunk.status = CHUNK_INITIALIZED;
     chunk.value = revived;
     chunk.reason = null;
