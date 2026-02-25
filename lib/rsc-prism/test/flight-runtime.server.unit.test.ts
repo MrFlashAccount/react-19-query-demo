@@ -82,6 +82,34 @@ describe("flight runtime server stream behavior", () => {
     expect(Array.from(new Uint8Array(decoded.buf))).toEqual([1, 2, 3]);
   });
 
+  it("emits metadata row M{id} before model row when payload has revive paths", async () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
+    const clientRef = {
+      $$typeof: CLIENT_REFERENCE_SYMBOL,
+      $$id: "mod#Button",
+    };
+    const root = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: { onClick: clientRef, children: "hi" },
+    } as ReactNode;
+
+    const stream = await renderToReadableStream(root, {});
+    const reader = stream.getReader();
+    const chunks: string[] = [];
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      chunks.push(new TextDecoder().decode(next.value));
+    }
+
+    const fullText = chunks.join("");
+    expect(fullText).toMatch(/M0:\{"revivePaths":\[/);
+    expect(fullText).toContain(`0:["$","div",null,`);
+  });
+
   it("emits component render/encode spans with host tag coverage and durations", async () => {
     const traceRecorder = new TraceRecorder();
     traceRecorder.start();

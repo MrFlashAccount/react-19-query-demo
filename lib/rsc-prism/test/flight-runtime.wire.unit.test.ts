@@ -9,6 +9,8 @@ import {
   encodeWireValue,
   encodeWireValueWithBinaryRows,
   parseModelString,
+  reviveModelValueTree,
+  reviveModelValueTreeWithPaths,
 } from "../src/flight-runtime/wire";
 import { TraceRecorder } from "./utils/trace-recorder";
 
@@ -358,6 +360,58 @@ describe("flight wire compact stream format", () => {
     expect(parsed.type).toBe("div");
     expect(parsed.key).toBeNull();
     expect(parsed.props.children).toBe("ok");
+  });
+
+  it("collects revive paths during stream encoding and pruned revival matches full traversal", () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
+    const clientRef = {
+      $$typeof: CLIENT_REFERENCE_SYMBOL,
+      $$id: "mod#Button",
+    };
+    const element = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: {
+        onClick: clientRef,
+        children: "hello",
+      },
+    };
+
+    const revivePaths: (string | number)[][] = [];
+    const encoded = encodeStreamValue(element, {
+      seen: new WeakSet<object>(),
+      emitBinaryRow: () => 1,
+      outlineValue: () => 1,
+      collectRevivePaths: (path) => revivePaths.push([...path]),
+    });
+
+    expect(revivePaths.length).toBeGreaterThan(0);
+    expect(revivePaths.some((p) => p.join(".") === "3.onClick")).toBe(true);
+
+    const context = {
+      getChunk: () => null,
+      readChunk: () => null,
+      createLazyChunkWrapper: () => null,
+      resolveClientReference: (id: string) => `client:${id}`,
+    };
+
+    const fullRevived = reviveModelValueTree(context, encoded) as {
+      type: string;
+      props: { onClick: unknown; children: string };
+    };
+    const prunedRevived = reviveModelValueTreeWithPaths(context, encoded, revivePaths) as {
+      type: string;
+      props: { onClick: unknown; children: string };
+    };
+
+    expect(prunedRevived).toBeDefined();
+    expect(prunedRevived.type).toBe("div");
+    expect(prunedRevived.props.onClick).toBe("client:mod#Button");
+    expect(prunedRevived.props.children).toBe("hello");
+    expect(prunedRevived.type).toBe(fullRevived.type);
+    expect(prunedRevived.props.onClick).toBe(fullRevived.props.onClick);
   });
 });
 

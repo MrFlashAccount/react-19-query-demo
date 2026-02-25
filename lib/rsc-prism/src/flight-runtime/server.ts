@@ -6,12 +6,13 @@ import {
   flightBinaryRow,
   flightDoneRow,
   flightErrorRow,
+  flightMetadataRow,
   flightModelRow,
   type FlightRowMessage,
   decodeBinaryWireRow,
   decodeWireValue,
+  encodeStreamType,
   encodeStreamValue,
-  escapeStringValue,
   type StreamEncodeContext,
 } from "./wire";
 import { createClientModuleProxy } from "./references";
@@ -65,6 +66,10 @@ function encodeFlightRow(id: number, value: unknown): Uint8Array {
   return FLIGHT_ROW_ENCODER.encode(`${id.toString(16)}:${JSON.stringify(value)}\n`);
 }
 
+function encodeMetadataFlightRow(id: number, revivePaths: (string | number)[][]): Uint8Array {
+  return FLIGHT_ROW_ENCODER.encode(`M${id.toString(16)}:${JSON.stringify({ revivePaths })}\n`);
+}
+
 function encodeBinaryFlightRow(id: number, kind: string, bytes: Uint8Array): Uint8Array {
   const tag = binaryWireTagFromKind(kind);
   const prefix = FLIGHT_ROW_ENCODER.encode(
@@ -86,6 +91,7 @@ interface EncodeContext {
   streamEncodeContext: StreamEncodeContext;
   traceContext: FlightServerRenderOptions["traceContext"];
   componentTrace?: ComponentTraceTracker;
+  preparePathsForEncode: () => void;
 }
 
 export type FlightRowEmit = (row: FlightRowMessage, transfer?: Transferable[]) => void;
@@ -93,6 +99,7 @@ export type FlightRowEmit = (row: FlightRowMessage, transfer?: Transferable[]) =
 interface RenderSink {
   readonly settled: boolean;
   emitModelRow: (id: number, value: unknown) => void;
+  emitMetadataRow?: (id: number, revivePaths: (string | number)[][]) => void;
   emitBinaryRow: (id: number, kind: string, bytes: Uint8Array) => void;
 }
 
@@ -102,6 +109,7 @@ function createEncodeContext(
   options?: FlightServerRenderOptions & { useRawForCloneableTypes?: boolean },
 ): EncodeContext {
   let nextRowId = 1;
+  const currentPathsRef: { current: (string | number)[][] } = { current: [] };
   const componentTrace =
     options?.componentTrace ??
     (options?.traceContext != null
@@ -120,7 +128,12 @@ function createEncodeContext(
     },
     emitRow: (id, value) => {
       if (sink.settled) return;
+      const paths = currentPathsRef.current;
+      if (paths.length > 0 && sink.emitMetadataRow) {
+        sink.emitMetadataRow(id, paths);
+      }
       sink.emitModelRow(id, value);
+      currentPathsRef.current = [];
     },
     emitBinaryRow: (kind, bytes) => {
       const id = nextRowId;
@@ -135,7 +148,8 @@ function createEncodeContext(
       nextRowId += 1;
       queueDeferred(
         (async () => {
-          const encoded = encodeServerNode(value, context);
+          context.preparePathsForEncode();
+          const encoded = encodeServerNode(value, context, []);
           if (isThenable(encoded)) {
             context.emitRow(id, await encoded);
             return;
@@ -153,9 +167,13 @@ function createEncodeContext(
       componentTrace,
       currentRowId: undefined,
       useRawForCloneableTypes: options?.useRawForCloneableTypes,
+      collectRevivePaths: (path, _kind) => currentPathsRef.current.push(path),
     },
     traceContext: options?.traceContext,
     componentTrace,
+    preparePathsForEncode: () => {
+      currentPathsRef.current = [];
+    },
   };
   return context;
 }
@@ -196,26 +214,18 @@ function describeComponentType(type: unknown): {
   };
 }
 
-function encodeElementType(type: unknown): string {
-  if (typeof type === "string") {
-    return escapeStringValue(type);
-  }
-  if (type === REACT_FRAGMENT_SYMBOL) {
-    return "$Sreact.fragment";
-  }
-  if (isClientReference(type)) {
-    return `$C${type.$$id}`;
-  }
-  throw new Error("Unsupported element type in minimal runtime.");
-}
-
-function encodeServerNode(value: unknown, context: EncodeContext): unknown {
+function encodeServerNode(
+  value: unknown,
+  context: EncodeContext,
+  path: (string | number)[] = [],
+): unknown {
   if (isThenable(value)) {
     const rowId = context.allocateRowId();
     context.queueDeferred(
       (async () => {
+        context.preparePathsForEncode();
         const resolved = await value;
-        const encoded = encodeServerNode(resolved, context);
+        const encoded = encodeServerNode(resolved, context, []);
         if (isThenable(encoded)) {
           context.emitRow(rowId, await encoded);
           return;
@@ -227,11 +237,15 @@ function encodeServerNode(value: unknown, context: EncodeContext): unknown {
   }
 
   if (Array.isArray(value)) {
-    return encodeServerArray(value, context);
+    return encodeServerArray(value, context, path);
   }
 
   if (!isReactElementLike(value)) {
-    return encodeStreamValue(value, context.streamEncodeContext);
+    const streamCtx = {
+      ...context.streamEncodeContext,
+      _path: path,
+    };
+    return encodeStreamValue(value, streamCtx);
   }
 
   const type = value.type;
@@ -249,7 +263,7 @@ function encodeServerNode(value: unknown, context: EncodeContext): unknown {
         return renderedValue.then(
           (resolvedValue) => {
             endComponentPhaseSpan(context.componentTrace, renderSpan.span);
-            return encodeServerNode(resolvedValue, context);
+            return encodeServerNode(resolvedValue, context, path);
           },
           (error) => {
             endComponentPhaseSpan(context.componentTrace, renderSpan.span, error);
@@ -258,24 +272,28 @@ function encodeServerNode(value: unknown, context: EncodeContext): unknown {
         );
       }
       endComponentPhaseSpan(context.componentTrace, renderSpan.span);
-      return encodeServerNode(renderedValue, context);
+      return encodeServerNode(renderedValue, context, path);
     } catch (error) {
       endComponentPhaseSpan(context.componentTrace, renderSpan.span, error);
       throw error;
     }
   }
   if (type === REACT_FRAGMENT_SYMBOL) {
-    return encodeServerNode(value.props.children, context);
+    return encodeServerNode(value.props.children, context, [...path, 3, "children"]);
   }
 
-  return encodeServerElement(value, context);
+  return encodeServerElement(value, context, path);
 }
 
-function encodeServerArray(value: unknown[], context: EncodeContext) {
+function encodeServerArray(
+  value: unknown[],
+  context: EncodeContext,
+  path: (string | number)[] = [],
+) {
   const results = Array.from({ length: value.length });
   let hasAsync = false;
   for (let i = 0; i < value.length; i += 1) {
-    const encoded = encodeServerNode(value[i], context);
+    const encoded = encodeServerNode(value[i], context, [...path, i]);
     results[i] = encoded;
     if (!hasAsync && isThenable(encoded)) {
       hasAsync = true;
@@ -290,6 +308,7 @@ function encodeServerArray(value: unknown[], context: EncodeContext) {
 function encodeServerElement(
   value: { $$typeof: symbol; type: unknown; key: string | null; props: Record<string, unknown> },
   context: EncodeContext,
+  path: (string | number)[] = [],
 ): unknown {
   const componentInfo = describeComponentType(value.type);
   const encodeSpan = startComponentPhaseSpan(context.componentTrace, "encode", {
@@ -303,14 +322,19 @@ function encodeServerElement(
     const len = propKeys.length;
     const encoded: unknown[] = Array.from({ length: len });
     let hasAsync = false;
+    const propsPath = [...path, 3];
 
     for (let i = 0; i < len; i += 1) {
-      const v = encodeServerNode(value.props[propKeys[i]], context);
+      const v = encodeServerNode(value.props[propKeys[i]], context, [...propsPath, propKeys[i]]);
       encoded[i] = v;
       if (!hasAsync && isThenable(v)) hasAsync = true;
     }
 
-    const type = encodeElementType(value.type);
+    const typeCtx = {
+      ...context.streamEncodeContext,
+      _path: [...path, 1],
+    };
+    const type = encodeStreamType(value.type, typeCtx);
     const key = value.key == null ? null : String(value.key);
 
     const buildRow = (vals: unknown[]) => {
@@ -382,6 +406,9 @@ export async function renderToReadableStream(
               emittedModelRows += 1;
               controller.enqueue(encodeFlightRow(id, value));
             },
+            emitMetadataRow(id, revivePaths) {
+              controller.enqueue(encodeMetadataFlightRow(id, revivePaths));
+            },
             emitBinaryRow(id, kind, bytes) {
               emittedBinaryRows += 1;
               controller.enqueue(encodeBinaryFlightRow(id, kind, bytes));
@@ -391,11 +418,11 @@ export async function renderToReadableStream(
           options,
         );
 
+        context.preparePathsForEncode();
         const rootEncoded = encodeServerNode(element, context);
         const root = isThenable(rootEncoded) ? await rootEncoded : rootEncoded;
         if (settled) return;
-        controller.enqueue(encodeFlightRow(0, root));
-        emittedModelRows += 1;
+        context.emitRow(0, root);
 
         while (pendingRows.size > 0) {
           await Promise.race(pendingRows);
@@ -458,6 +485,9 @@ export async function renderToRowEmitter(
           emittedModelRows += 1;
           emit(flightModelRow(id, value));
         },
+        emitMetadataRow(id, revivePaths) {
+          emit(flightMetadataRow(id, revivePaths));
+        },
         emitBinaryRow(id, kind, bytes) {
           emittedBinaryRows += 1;
           const { row, transfer } = flightBinaryRow(id, kind, bytes);
@@ -468,11 +498,11 @@ export async function renderToRowEmitter(
       { ...options, useRawForCloneableTypes: true },
     );
 
+    context.preparePathsForEncode();
     const rootEncoded = encodeServerNode(element, context);
     const root = isThenable(rootEncoded) ? await rootEncoded : rootEncoded;
     if (settled) return;
-    emit(flightModelRow(0, root));
-    emittedModelRows += 1;
+    context.emitRow(0, root);
 
     while (pendingRows.size > 0) {
       await Promise.race(pendingRows);

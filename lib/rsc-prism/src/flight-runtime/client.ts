@@ -9,9 +9,11 @@ import {
   encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
   reviveModelValueTree,
+  reviveModelValueTreeWithPaths,
   ROW_BINARY,
   ROW_DONE,
   ROW_ERROR,
+  ROW_METADATA,
   ROW_MODEL,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
@@ -47,6 +49,7 @@ interface FlightChunk<T = unknown> {
 
 interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
+  revivePathsByRowId: Map<number, (string | number)[][]>;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
@@ -190,29 +193,30 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
   const fromStream = (chunk as FlightChunk<unknown>).modelFromStream ?? false;
   const parsed =
     fromStream && typeof model === "string" ? JSON.parse(model) : model;
+  const revivePaths = response.revivePathsByRowId.get(chunk.id);
+  const decodeContext = {
+    getChunk: (id: number) => getChunk(response, id),
+    readChunk: (c: unknown) => readChunk(response, c as FlightChunk),
+    createLazyChunkWrapper: (c: unknown) => {
+      const cached = response.lazyWrapperCache.get(c as FlightChunk);
+      if (cached !== undefined) return cached;
+      const wrapper = createLazyChunkWrapper(
+        c,
+        (payload) => readChunk(response, payload as FlightChunk),
+      );
+      response.lazyWrapperCache.set(c as FlightChunk, wrapper);
+      return wrapper;
+    },
+    resolveClientReference: (id: string) => response.resolveClientReference(id),
+    callServer: response.callServer,
+    traceContext: response.traceContext,
+    componentTrace: response.componentTrace,
+    getCurrentRowId: () => response.currentRowId,
+  };
   try {
-    const revived = reviveModelValueTree(
-      {
-        getChunk: (id) => getChunk(response, id),
-        readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
-        createLazyChunkWrapper: (chunk) => {
-          const cached = response.lazyWrapperCache.get(chunk as FlightChunk);
-          if (cached !== undefined) return cached;
-          const wrapper = createLazyChunkWrapper(
-            chunk,
-            (payload) => readChunk(response, payload as FlightChunk),
-          );
-          response.lazyWrapperCache.set(chunk as FlightChunk, wrapper);
-          return wrapper;
-        },
-        resolveClientReference: (id) => response.resolveClientReference(id),
-        callServer: response.callServer,
-        traceContext: response.traceContext,
-        componentTrace: response.componentTrace,
-        getCurrentRowId: () => response.currentRowId,
-      },
-      parsed,
-    ) as T;
+    const revived = (revivePaths != null && revivePaths.length > 0
+      ? reviveModelValueTreeWithPaths(decodeContext, parsed, revivePaths)
+      : reviveModelValueTree(decodeContext, parsed)) as T;
     chunk.status = CHUNK_INITIALIZED;
     chunk.value = revived;
     chunk.reason = null;
@@ -363,6 +367,7 @@ function createFlightResponse(
   const lazyWrapperCache = new Map<FlightChunk, unknown>();
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
+    revivePathsByRowId: new Map(),
     resolveClientReference,
     callServer,
     fromJSON: (_key, value) => value,
@@ -440,6 +445,7 @@ async function consumeFlightStream(
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let rowId = 0;
   let hasRowId = false;
+  let isMetadataRow = false;
   let parsingRowTag = false;
   let hasAnyRow = false;
   let binaryTag: string | null = null;
@@ -455,11 +461,21 @@ async function consumeFlightStream(
     jsonParts = [];
     jsonByteLength = 0;
     const currentId = rowId;
+    const wasMetadata = isMetadataRow;
     rowId = 0;
     hasRowId = false;
+    isMetadataRow = false;
     parsingRowTag = false;
-    const model = decoder.decode(rowBytes);
-    resolveModelChunk(response, currentId, model, true);
+    const decoded = decoder.decode(rowBytes);
+    if (wasMetadata) {
+      const meta = JSON.parse(decoded) as { revivePaths?: (string | number)[][] };
+      const paths = meta.revivePaths;
+      if (Array.isArray(paths) && paths.length > 0) {
+        response.revivePathsByRowId.set(currentId, paths);
+      }
+    } else {
+      resolveModelChunk(response, currentId, decoded, true);
+    }
     hasAnyRow = true;
     onRootMaybeReady();
   };
@@ -540,6 +556,10 @@ async function consumeFlightStream(
         const byte = value[offset];
         if (!parsingRowTag) {
           offset += 1;
+          if (byte === 77 && !hasRowId) {
+            isMetadataRow = true;
+            continue;
+          }
           if (byte === 58) {
             if (!hasRowId) {
               throw new Error("[rsc-prism] Missing row id in Flight payload.");
@@ -550,6 +570,7 @@ async function consumeFlightStream(
           if (byte === 10) {
             rowId = 0;
             hasRowId = false;
+            isMetadataRow = false;
             continue;
           }
           const digit = byte <= 57 ? byte - 48 : (byte | 32) - 87;
@@ -694,6 +715,13 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   return {
     push(row) {
       switch (row.k) {
+        case ROW_METADATA:
+          if (row.revivePaths.length > 0) {
+            response.revivePathsByRowId.set(row.id, row.revivePaths);
+          }
+          hasAnyRow = true;
+          settleRoot();
+          return;
         case ROW_MODEL:
           response.currentRowId = row.id;
           resolveModelChunk(response, row.id, row.v);
