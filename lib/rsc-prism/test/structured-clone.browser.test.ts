@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFromRowEmitter } from "../src/flight-runtime/client";
+import { renderToRowEmitter } from "../src/flight-runtime/server";
 import {
   decodeWireValue,
   encodeWireValue,
@@ -96,5 +97,58 @@ describe("structured clone row transport", () => {
     const raw = await emitter.result;
     const result = decodeWireValue(raw, createClientRefResolver()) as bigint;
     expect(result).toBe(123n);
+  });
+
+  describe("renderToRowEmitter sends raw values", () => {
+    it("Date comes through as native Date", async () => {
+      const d = new Date("2025-01-15T12:00:00.000Z");
+      const rows: Array<{ k: number; id: number; v: unknown } | { k: number }> = [];
+      await renderToRowEmitter(d, null, (row) => {
+        if (row.k === 0 && "v" in row) rows.push(row as { k: number; id: number; v: unknown });
+        else if (row.k === 2) rows.push(row);
+      });
+      const modelRow = rows.find((r) => "v" in r && r.id === 0) as { v: unknown };
+      expect(modelRow.v).toBeInstanceOf(Date);
+      expect((modelRow.v as Date).toISOString()).toBe("2025-01-15T12:00:00.000Z");
+    });
+
+    it("Map comes through as native Map", async () => {
+      const m = new Map([
+        ["a", 1],
+        ["b", "x"],
+      ]);
+      const rows: Array<{ k: number; id: number; v: unknown } | { k: number }> = [];
+      await renderToRowEmitter(m, null, (row) => {
+        if (row.k === 0 && "v" in row) rows.push(row as { k: number; id: number; v: unknown });
+        else if (row.k === 2) rows.push(row);
+      });
+      const modelRow = rows.find((r) => "v" in r && r.id === 0) as { v: unknown };
+      expect(modelRow.v).toBeInstanceOf(Map);
+      expect((modelRow.v as Map<string, unknown>).get("a")).toBe(1);
+      expect((modelRow.v as Map<string, unknown>).get("b")).toBe("x");
+    });
+
+    it("Set comes through as native Set", async () => {
+      const s = new Set(["x", 1]);
+      const rows: Array<{ k: number; id: number; v: unknown } | { k: number }> = [];
+      await renderToRowEmitter(s, null, (row) => {
+        if (row.k === 0 && "v" in row) rows.push(row as { k: number; id: number; v: unknown });
+        else if (row.k === 2) rows.push(row);
+      });
+      const modelRow = rows.find((r) => "v" in r && r.id === 0) as { v: unknown };
+      expect(modelRow.v).toBeInstanceOf(Set);
+      expect((modelRow.v as Set<unknown>).has("x")).toBe(true);
+      expect((modelRow.v as Set<unknown>).has(1)).toBe(true);
+    });
+
+    it("bigint comes through as native bigint", async () => {
+      const rows: Array<{ k: number; id: number; v: unknown } | { k: number }> = [];
+      await renderToRowEmitter(123n, null, (row) => {
+        if (row.k === 0 && "v" in row) rows.push(row as { k: number; id: number; v: unknown });
+        else if (row.k === 2) rows.push(row);
+      });
+      const modelRow = rows.find((r) => "v" in r && r.id === 0) as { v: unknown };
+      expect(modelRow.v).toBe(123n);
+    });
   });
 });

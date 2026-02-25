@@ -301,6 +301,8 @@ export interface StreamEncodeContext {
   traceContext?: RSCTraceContext;
   componentTrace?: ComponentTraceTracker;
   currentRowId?: number;
+  /** When true (row/postMessage path), send raw Date, BigInt, -0, NaN, Infinity for structured clone */
+  useRawForCloneableTypes?: boolean;
 }
 
 export function escapeStringValue(str: string): string {
@@ -309,12 +311,14 @@ export function escapeStringValue(str: string): string {
 
 function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext): unknown {
   if (value === undefined) {
+    if (context.useRawForCloneableTypes) return undefined;
     return "$undefined";
   }
   if (typeof value === "string") {
     return escapeStringValue(value);
   }
   if (typeof value === "number") {
+    if (context.useRawForCloneableTypes) return value;
     if (Number.isNaN(value)) return "$NaN";
     if (!Number.isFinite(value)) return value < 0 ? "$-Infinity" : "$Infinity";
     if (Object.is(value, -0)) return "$-0";
@@ -324,6 +328,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return value;
   }
   if (typeof value === "bigint") {
+    if (context.useRawForCloneableTypes) return value;
     return `$n${value.toString()}`;
   }
   if (typeof value === "symbol") {
@@ -350,6 +355,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   context.seen.add(value as object);
 
   if (value instanceof Date) {
+    if (context.useRawForCloneableTypes) return value;
     return `$D${value.toJSON()}`;
   }
   if (value instanceof URLSearchParams) {
@@ -372,10 +378,23 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return `$K${outlinedId.toString(16)}`;
   }
   if (value instanceof Map) {
+    if (context.useRawForCloneableTypes) {
+      return new Map(
+        Array.from(value.entries()).map(([k, v]) => [
+          encodeStreamValueInternal(k, context),
+          encodeStreamValueInternal(v, context),
+        ]),
+      );
+    }
     const outlinedId = context.outlineValue(Array.from(value.entries()));
     return `$Q${outlinedId.toString(16)}`;
   }
   if (value instanceof Set) {
+    if (context.useRawForCloneableTypes) {
+      return new Set(
+        Array.from(value.values()).map((v) => encodeStreamValueInternal(v, context)),
+      );
+    }
     const outlinedId = context.outlineValue(Array.from(value.values()));
     return `$W${outlinedId.toString(16)}`;
   }
@@ -642,8 +661,32 @@ function reviveModelValueTreeInternal<Chunk>(
   context: StreamDecodeContext<Chunk>,
   value: unknown,
 ): unknown {
+  if (value instanceof Date || typeof value === "bigint") {
+    return value;
+  }
   if (typeof value === "string") {
     return parseModelString(context, value);
+  }
+  if (value instanceof Map) {
+    const entries = Array.from(value.entries()).map(([k, v]) => [
+      reviveModelValueTreeInternal(context, k),
+      reviveModelValueTreeInternal(context, v),
+    ] as const);
+    value.clear();
+    for (const [k, v] of entries) {
+      value.set(k, v);
+    }
+    return value;
+  }
+  if (value instanceof Set) {
+    const items = Array.from(value.values()).map((v) =>
+      reviveModelValueTreeInternal(context, v),
+    );
+    value.clear();
+    for (const item of items) {
+      value.add(item);
+    }
+    return value;
   }
   if (Array.isArray(value)) {
     return maybeDecodeElementTuple(

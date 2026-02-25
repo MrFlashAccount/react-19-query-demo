@@ -99,7 +99,7 @@ interface RenderSink {
 function createEncodeContext(
   sink: RenderSink,
   queueDeferred: (task: Promise<void>) => void,
-  options?: FlightServerRenderOptions,
+  options?: FlightServerRenderOptions & { useRawForCloneableTypes?: boolean },
 ): EncodeContext {
   let nextRowId = 1;
   const componentTrace =
@@ -152,6 +152,7 @@ function createEncodeContext(
       traceContext: options?.traceContext,
       componentTrace,
       currentRowId: undefined,
+      useRawForCloneableTypes: options?.useRawForCloneableTypes,
     },
     traceContext: options?.traceContext,
     componentTrace,
@@ -464,7 +465,7 @@ export async function renderToRowEmitter(
         },
       },
       queueDeferred,
-      options,
+      { ...options, useRawForCloneableTypes: true },
     );
 
     const rootEncoded = encodeServerNode(element, context);
