@@ -242,18 +242,7 @@ describe("flight wire compact stream format", () => {
       rejectListeners: null,
       then() {},
     };
-    const initializedChunk = {
-      status: 2,
-      value: [["k", 1]],
-      reason: null,
-      listeners: null,
-      rejectListeners: null,
-      then() {},
-    };
-    const chunks = new Map<number, unknown>([
-      [1, pendingChunk],
-      [2, initializedChunk],
-    ]);
+    const chunks = new Map<number, unknown>([[1, pendingChunk]]);
     const context = {
       getChunk: (id: number) => chunks.get(id),
       readChunk: (chunk: unknown) => (chunk as { value: unknown }).value,
@@ -263,11 +252,7 @@ describe("flight wire compact stream format", () => {
     };
 
     expect(parseModelString(context, "$$x")).toBe("$x");
-    expect(parseModelString(context, "$n9")).toBe(9n);
     expect(parseModelString(context, "$Cmod#default")).toBe("client:mod#default");
-
-    const map = parseModelString(context, "$Q2") as Map<string, number>;
-    expect(Array.from(map.entries())).toEqual([["k", 1]]);
 
     const lazy = parseModelString(context, "$1") as { $$typeof: symbol };
     expect(lazy.$$typeof).toBe(Symbol.for("react.lazy"));

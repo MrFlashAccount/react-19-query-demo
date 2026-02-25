@@ -3,23 +3,15 @@ import { Fragment, isValidElement } from "react";
 /** ASCII char codes for Flight wire format prefixes ($X) */
 const CHR = {
   DOLLAR: 36, // '$'
-  u: 117, // 'u' - undefined
-  n: 110, // 'n' - bigint
-  D: 68, // 'D' - Date
   P: 80, // 'P' - URLSearchParams
   S: 83, // 'S' - Symbol
   C: 67, // 'C' - client reference
-  Q: 81, // 'Q' - Map
-  W: 87, // 'W' - Set
   K: 75, // 'K' - FormData
   F: 70, // 'F' - server reference
   L: 76, // 'L' - lazy chunk
-  I: 73, // 'I' - Infinity
-  N: 78, // 'N' - NaN
-  MINUS: 45, // '-' - minus
 } as const;
 
-function isDollarPrefixed(str: string): boolean {
+function isFlightWireString(str: string): boolean {
   return str.length > 0 && str.charCodeAt(0) === CHR.DOLLAR;
 }
 
@@ -269,7 +261,7 @@ export interface StreamEncodeContext {
 }
 
 export function escapeStringValue(str: string): string {
-  return isDollarPrefixed(str) ? `$${str}` : str;
+  return isFlightWireString(str) ? `$${str}` : str;
 }
 
 function emitRevivable(context: StreamEncodeContext, encoded: string): string {
@@ -480,7 +472,7 @@ export function parseModelString<Chunk>(
   context: StreamDecodeContext<Chunk>,
   value: string,
 ): unknown {
-  if (!isDollarPrefixed(value)) {
+  if (!isFlightWireString(value)) {
     return value;
   }
   if (value.length === 1) {
@@ -489,26 +481,12 @@ export function parseModelString<Chunk>(
   switch (value.charCodeAt(1)) {
     case CHR.DOLLAR:
       return value.slice(1);
-    case CHR.u:
-      return undefined;
-    case CHR.n:
-      return BigInt(value.slice(2));
-    case CHR.D:
-      return new Date(value.slice(2));
     case CHR.P:
       return new URLSearchParams(value.slice(2));
     case CHR.S:
       return Symbol.for(value.slice(2));
     case CHR.C:
       return context.resolveClientReference(value.slice(2));
-    case CHR.Q: {
-      const entries = decodeFromOutlinedEntries(context, "$Q", value) as Array<[unknown, unknown]>;
-      return new Map(entries);
-    }
-    case CHR.W: {
-      const items = decodeFromOutlinedEntries(context, "$W", value);
-      return new Set(items);
-    }
     case CHR.K:
       return decodeFormDataFromChunk(context, value);
     case CHR.F:
@@ -517,12 +495,6 @@ export function parseModelString<Chunk>(
       const id = parseHexChunkId(value.slice(2));
       return context.createLazyChunkWrapper(context.getChunk(id));
     }
-    case CHR.I:
-      return Infinity;
-    case CHR.N:
-      return NaN;
-    case CHR.MINUS:
-      return value === "$-0" ? -0 : -Infinity;
     default: {
       const id = parseHexChunkId(value.slice(1));
       const chunk = context.getChunk(id);
@@ -770,7 +742,7 @@ function applyPathTreeReplacements<Chunk>(
     const childPath = [...path, key];
     if (child === true) {
       const raw = getAtPath(root, childPath);
-      if (typeof raw === "string" && isDollarPrefixed(raw)) {
+      if (typeof raw === "string" && isFlightWireString(raw)) {
         setAtPath(root, childPath, parseModelString(context, raw));
       }
     } else {
@@ -799,7 +771,7 @@ function traverseElementTuplesOnlyInternal<Chunk>(
     return value;
   }
   if (typeof value === "string") {
-    if (isDollarPrefixed(value)) {
+    if (isFlightWireString(value)) {
       return parseModelString(context, value);
     }
     return value;
@@ -812,7 +784,7 @@ function traverseElementTuplesOnlyInternal<Chunk>(
   }
   if (value.length === 4 && value[0] === "$") {
     let type = value[1];
-    if (typeof type === "string" && isDollarPrefixed(type)) {
+    if (typeof type === "string" && isFlightWireString(type)) {
       type = parseModelString(context, type);
     }
     const key = value[2];
