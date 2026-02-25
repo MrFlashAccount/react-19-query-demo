@@ -1,5 +1,4 @@
 import { Fragment, isValidElement } from "react";
-import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const SERVER_REFERENCE_SYMBOL = Symbol.for("react.server.reference");
@@ -239,8 +238,6 @@ export interface StreamEncodeContext {
   outlineValue: (value: unknown) => number;
   emitBinaryRow: StreamEmitBinaryRow;
   seen: WeakSet<object>;
-  traceContext?: RSCTraceContext;
-  componentTrace?: ComponentTraceTracker;
   currentRowId?: number;
   /** When true (row/postMessage path), send raw Date, BigInt, -0, NaN, Infinity for structured clone */
   useRawForCloneableTypes?: boolean;
@@ -368,7 +365,6 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     const key = value.key == null ? null : String(value.key);
     const props = encodeStreamValueInternal(value.props, {
       ...context,
-      componentTrace: context.componentTrace,
       _path: [...basePath, 3],
     });
     return ["$", type, key, props];
@@ -402,8 +398,6 @@ export interface StreamDecodeContext<Chunk = unknown> {
   createLazyChunkWrapper: (chunk: Chunk) => unknown;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
-  traceContext?: RSCTraceContext;
-  componentTrace?: ComponentTraceTracker;
   getCurrentRowId?: () => number | undefined;
 }
 
@@ -1131,20 +1125,15 @@ export function decodeWireValue(
   resolveRowReference?: (id: string) => unknown,
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
   traceOptions?: {
-    traceContext?: RSCTraceContext;
-    componentTrace?: ComponentTraceTracker;
     currentRowId?: number;
   },
 ): unknown {
-  const componentTrace = traceOptions?.componentTrace;
   return decodeWireValueInternal(
     value,
     resolveClientReference,
     resolveRowReference,
     callServer,
     new Set<string>(),
-    traceOptions?.traceContext,
-    componentTrace,
     traceOptions?.currentRowId,
   );
 }
@@ -1155,8 +1144,6 @@ function decodeWireValueInternal(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): unknown {
   if (typeof value !== "object" || value == null) {
@@ -1169,8 +1156,6 @@ function decodeWireValueInternal(
       resolveRowReference,
       callServer,
       visitingRowRefs,
-      traceContext,
-      componentTrace,
       currentRowId,
     );
   }
@@ -1185,8 +1170,6 @@ function decodeWireValueInternal(
       resolveRowReference,
       callServer,
       visitingRowRefs,
-      traceContext,
-      componentTrace,
       currentRowId,
     );
   }
@@ -1196,8 +1179,6 @@ function decodeWireValueInternal(
     resolveRowReference,
     callServer,
     visitingRowRefs,
-    traceContext,
-    componentTrace,
     currentRowId,
   );
 }
@@ -1208,8 +1189,6 @@ function decodeWireArrayValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): unknown[] {
   return Array.from({ length: value.length }, (_, i) =>
@@ -1219,8 +1198,6 @@ function decodeWireArrayValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
-      traceContext,
-      componentTrace,
       currentRowId,
     ),
   );
@@ -1232,8 +1209,6 @@ function decodeWirePlainObjectValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): Record<string, unknown> {
   const result: Record<string, unknown> = {};
@@ -1246,8 +1221,6 @@ function decodeWirePlainObjectValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
-      traceContext,
-      componentTrace,
       currentRowId,
     );
   }
@@ -1260,8 +1233,6 @@ function decodeWireRowReferenceValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): unknown {
   if (resolveRowReference == null) {
@@ -1290,8 +1261,6 @@ function decodeWireRowReferenceValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
-      traceContext,
-      componentTrace,
       currentRowId,
     );
   } finally {
@@ -1305,8 +1274,6 @@ function decodeWireMapValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): Map<unknown, unknown> {
   const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
@@ -1323,8 +1290,6 @@ function decodeWireMapValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       ),
       decodeWireValueInternal(
@@ -1333,8 +1298,6 @@ function decodeWireMapValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       ),
     );
@@ -1348,8 +1311,6 @@ function decodeWireSetValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): Set<unknown> {
   const items = (value.v as unknown[]) ?? EMPTY_ARRAY;
@@ -1365,8 +1326,6 @@ function decodeWireSetValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       ),
     );
@@ -1380,8 +1339,6 @@ function decodeWireFormDataValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): FormData {
   const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
@@ -1399,8 +1356,6 @@ function decodeWireFormDataValue(
       resolveRowReference,
       callServer,
       visitingRowRefs,
-      traceContext,
-      componentTrace,
       currentRowId,
     );
     form.append(
@@ -1417,8 +1372,6 @@ function decodeWireElementValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): {
   $$typeof: symbol;
@@ -1434,8 +1387,6 @@ function decodeWireElementValue(
     resolveRowReference,
     callServer,
     visitingRowRefs,
-    traceContext,
-    componentTrace,
     currentRowId,
   ) as Record<string, unknown>;
   const key = value.key as string | null;
@@ -1455,8 +1406,6 @@ function decodeTaggedWireValue(
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
-  traceContext: RSCTraceContext | undefined,
-  componentTrace: ComponentTraceTracker | undefined,
   currentRowId: number | undefined,
 ): unknown {
   switch (tag) {
@@ -1467,8 +1416,6 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       );
     case "undef":
@@ -1486,8 +1433,6 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       );
     case "set":
@@ -1497,8 +1442,6 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       );
     case "formdata":
@@ -1508,8 +1451,6 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       );
     case "clientRef":
@@ -1523,8 +1464,6 @@ function decodeTaggedWireValue(
         resolveRowReference,
         callServer,
         visitingRowRefs,
-        traceContext,
-        componentTrace,
         currentRowId,
       );
     default:

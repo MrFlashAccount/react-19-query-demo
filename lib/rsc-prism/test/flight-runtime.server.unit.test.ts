@@ -161,16 +161,7 @@ describe("flight runtime server stream behavior", () => {
       props: {},
     } as ReactNode;
 
-    const stream = await renderToReadableStream(
-      root,
-      {},
-      {
-        traceContext: {
-          requestId: "server-trace-1",
-          source: "server",
-        },
-      },
-    );
+    const stream = await renderToReadableStream(root, {}, {});
     const text = await new Response(stream).text();
     expect(text).toBeTruthy();
   });

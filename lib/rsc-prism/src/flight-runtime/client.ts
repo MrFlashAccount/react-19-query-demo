@@ -19,7 +19,6 @@ import {
   traverseElementTuplesOnly,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
-import type { ComponentTraceTracker } from "../types";
 
 const CHUNK_PENDING = 0;
 const CHUNK_RESOLVED_MODEL = 1;
@@ -56,8 +55,6 @@ interface FlightResponse {
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
   closed: boolean;
   closedReason: unknown;
-  traceContext?: FlightClientOptions["traceContext"];
-  componentTrace?: ComponentTraceTracker;
   currentRowId?: number;
   lazyWrapperCache: Map<FlightChunk, unknown>;
 }
@@ -205,8 +202,6 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     },
     resolveClientReference: (id: string) => response.resolveClientReference(id),
     callServer: response.callServer,
-    traceContext: response.traceContext,
-    componentTrace: response.componentTrace,
     getCurrentRowId: () => response.currentRowId,
   };
   const revivePaths = response.revivePathsByRowId.get(chunk.id);
@@ -349,9 +344,7 @@ function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
 function createFlightResponse(
   resolveClientReference: (id: string) => unknown,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
-  options?: FlightClientOptions,
 ): FlightResponse {
-  const componentTrace = options?.componentTrace;
   const lazyWrapperCache = new Map<FlightChunk, unknown>();
   const response: FlightResponse = {
     chunks: new Map<number, FlightChunk>(),
@@ -361,8 +354,6 @@ function createFlightResponse(
     fromJSON: (_key, value) => value,
     closed: false,
     closedReason: null,
-    traceContext: options?.traceContext,
-    componentTrace,
     currentRowId: undefined,
     lazyWrapperCache,
   };
@@ -381,8 +372,6 @@ function createFlightResponse(
     },
     resolveClientReference: (id) => response.resolveClientReference(id),
     callServer,
-    traceContext: options?.traceContext,
-    componentTrace,
     getCurrentRowId: () => response.currentRowId,
   });
   return response;
@@ -683,7 +672,7 @@ export async function createFromReadableStream<T>(
   options?: FlightClientOptions,
 ): Promise<T> {
   const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference, options?.callServer, options);
+  const response = createFlightResponse(resolveClientReference, options?.callServer);
   return await new Promise<T>((resolve, reject) => {
     let rootSettled = false;
     const rootResolutionState: {
@@ -751,7 +740,7 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   result: Promise<T>;
 } {
   const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference, options?.callServer, options);
+  const response = createFlightResponse(resolveClientReference, options?.callServer);
   let hasAnyRow = false;
   let rootSettled = false;
   const rootResolutionState: {

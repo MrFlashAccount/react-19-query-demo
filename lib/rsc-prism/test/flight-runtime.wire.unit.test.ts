@@ -26,7 +26,7 @@ function measureDecodeMs(value: unknown, iterations = 1): number {
 }
 
 describe("flight wire decode correctness", () => {
-  it("encodes and decodes host elements with trace context", () => {
+  it("encodes and decodes host elements", () => {
     const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
     const element = {
       $$typeof: REACT_ELEMENT_SYMBOL,
@@ -39,10 +39,6 @@ describe("flight wire decode correctness", () => {
       seen: new WeakSet<object>(),
       emitBinaryRow: () => 1,
       outlineValue: () => 1,
-      traceContext: {
-        requestId: "wire-trace-1",
-        source: "transport",
-      },
     });
 
     const decoded = decodeWireValue(
@@ -53,14 +49,6 @@ describe("flight wire decode correctness", () => {
         key: null,
       },
       (id) => `client:${id}`,
-      undefined,
-      undefined,
-      {
-        traceContext: {
-          requestId: "wire-trace-1",
-          source: "react",
-        },
-      },
     );
 
     expect(encoded).toBeDefined();

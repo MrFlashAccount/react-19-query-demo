@@ -8,12 +8,9 @@ import {
   type FlightRowEmit,
 } from "./server";
 import type { FlightRowMessage } from "./wire";
-import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 export interface FlightConsumeOptions {
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
-  traceContext?: RSCTraceContext;
-  componentTrace?: ComponentTraceTracker;
 }
 
 export interface FlightProtocolAdapter {
@@ -53,8 +50,6 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
     return createFromReadableStream(stream, {
       manifest,
       callServer: options?.callServer,
-      traceContext: options?.traceContext,
-      componentTrace: options?.componentTrace,
     });
   },
 
@@ -66,8 +61,6 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
     return createFromRowEmitter({
       manifest,
       callServer: options?.callServer,
-      traceContext: options?.traceContext,
-      componentTrace: options?.componentTrace,
     });
   },
 

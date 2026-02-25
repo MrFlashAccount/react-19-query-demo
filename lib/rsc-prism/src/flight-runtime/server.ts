@@ -18,7 +18,6 @@ import {
   type StreamEncodeContext,
 } from "./wire";
 import { createClientModuleProxy } from "./references";
-import type { ComponentTraceTracker, RSCTraceContext } from "../types";
 
 const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
 const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
@@ -86,8 +85,6 @@ interface EncodeContext {
   emitBinaryRow: (kind: string, bytes: Uint8Array) => number;
   outlineValue: (value: unknown) => number;
   streamEncodeContext: StreamEncodeContext;
-  traceContext: FlightServerRenderOptions["traceContext"];
-  componentTrace?: ComponentTraceTracker;
   preparePathsForEncode: () => void;
 }
 
@@ -107,7 +104,6 @@ function createEncodeContext(
 ): EncodeContext {
   let nextRowId = 1;
   const currentRevivePathsRef: { current: (string | number)[][] } = { current: [] };
-  const componentTrace = options?.componentTrace;
   const context: EncodeContext = {
     queueDeferred,
     allocateRowId: () => {
@@ -152,16 +148,12 @@ function createEncodeContext(
       outlineValue: (value) => context.outlineValue(value),
       emitBinaryRow: (kind, bytes) => context.emitBinaryRow(kind, bytes),
       seen: new WeakSet<object>(),
-      traceContext: options?.traceContext,
-      componentTrace,
       currentRowId: undefined,
       useRawForCloneableTypes: options?.useRawForCloneableTypes,
       pushReviveValue: (_encoded, path) => {
         currentRevivePathsRef.current.push([...path]);
       },
     },
-    traceContext: options?.traceContext,
-    componentTrace,
     preparePathsForEncode: () => {
       currentRevivePathsRef.current = [];
     },
@@ -448,8 +440,6 @@ export async function decodeReply(
   body: FormData | string,
   _moduleBasePath: unknown,
   options?: {
-    traceContext?: RSCTraceContext;
-    componentTrace?: ComponentTraceTracker;
     currentRowId?: number;
   },
 ): Promise<unknown> {
