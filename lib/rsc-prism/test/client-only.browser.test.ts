@@ -6,18 +6,11 @@ import {
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
   setInvalidateRSC,
 } from "../src/runtime-globals";
-import { createMockWorkerTransport } from "./utils/mock-worker-transport";
+import { createMockWorkerRowTransport } from "./utils/mock-worker-transport";
 
 const initialWorkerBootstrap = (globalThis as typeof globalThis & Record<string, unknown>)[
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY
 ];
-
-function flightValueResponse(value: unknown): Response {
-  return new Response(`0:${JSON.stringify(value)}\n`, {
-    status: 200,
-    headers: { "content-type": "text/x-component" },
-  });
-}
 
 describe("client-only browser workflows", () => {
   beforeEach(() => {
@@ -38,11 +31,11 @@ describe("client-only browser workflows", () => {
     expect(clientOnlyApi.registerClientModule).toBeUndefined();
     expect(clientOnlyApi.createWorkerTransport).toBeUndefined();
 
-    const transport = createMockWorkerTransport(async (request) => {
+    const transport = createMockWorkerRowTransport(async (request) => {
       if (request.operation === "fetch") {
-        return flightValueResponse("fetch-ok");
+        return "fetch-ok";
       }
-      return flightValueResponse("action-ok");
+      return "action-ok";
     });
     const runActionRef = {
       $$typeof: Symbol.for("react.server.reference"),
@@ -58,15 +51,15 @@ describe("client-only browser workflows", () => {
 
   it("bootstraps worker runtime and uses the bootstrapped runtime transport", async () => {
     const seenRequests: Array<{ operation: string; actionId: string | null }> = [];
-    const transport = createMockWorkerTransport(async (request) => {
+    const transport = createMockWorkerRowTransport(async (request) => {
       seenRequests.push({
         operation: request.operation,
         actionId: request.actionId ?? null,
       });
       if (request.operation === "fetch") {
-        return flightValueResponse("default-fetch-ok");
+        return "default-fetch-ok";
       }
-      return flightValueResponse("default-action-ok");
+      return "default-action-ok";
     });
     const runActionRef = {
       $$typeof: Symbol.for("react.server.reference"),

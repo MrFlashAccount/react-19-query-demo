@@ -2,51 +2,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   callAction,
-  consumeRSCResponse,
   createCallServer,
   encodeActionArgs,
   fetchRSC,
 } from "../src/client";
 import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
-import { createMockWorkerTransport } from "./utils/mock-worker-transport";
-import { setAutoClientManifest } from "../src/runtime/client-manifest";
+import { createMockWorkerRowTransport } from "./utils/mock-worker-transport";
+import { resolveClientManifestOrThrow, setAutoClientManifest } from "../src/runtime/client-manifest";
 import { createFromRowEmitter } from "../src/flight-runtime/client";
-function flightValueResponse(value: unknown): Response {
-  return new Response(`0:${JSON.stringify(value)}\n`, {
-    status: 200,
-    headers: { "content-type": "text/x-component" },
-  });
-}
-
-function concatBytes(parts: Uint8Array[]): Uint8Array {
-  let total = 0;
-  for (let i = 0; i < parts.length; i += 1) {
-    total += parts[i].byteLength;
-  }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (let i = 0; i < parts.length; i += 1) {
-    out.set(parts[i], offset);
-    offset += parts[i].byteLength;
-  }
-  return out;
-}
-
-function binaryRow(id: number, tag: string, bytes: Uint8Array): Uint8Array {
-  const encoder = new TextEncoder();
-  return concatBytes([
-    encoder.encode(`${id}:${tag}${bytes.byteLength.toString(16)},`),
-    bytes,
-    encoder.encode("\n"),
-  ]);
-}
-
-function flightErrorResponse(message: string, status = 500): Response {
-  return new Response(`0:${JSON.stringify({ __rscPrismError: true, message, status })}\n`, {
-    status,
-    headers: { "content-type": "text/x-component" },
-  });
-}
+import { ROW_BINARY, ROW_DONE, ROW_MODEL } from "../src/flight-runtime/wire";
 
 function clearDefaultWorkerRuntimeGlobals() {
   const globalState = globalThis as typeof globalThis & Record<string, unknown>;
@@ -59,136 +23,44 @@ describe("rsc client browser workflows", () => {
     setAutoClientManifest("/");
   });
 
-  it("consumes flight response payloads", async () => {
-    await expect(consumeRSCResponse<string>(flightValueResponse("flight-ok"))).resolves.toBe(
-      "flight-ok",
-    );
+  it("consumes flight row payloads via createFromRowEmitter", async () => {
+    const emitter = createFromRowEmitter<string>();
+    emitter.push({ k: ROW_MODEL, id: 0, v: "flight-ok" });
+    emitter.push({ k: ROW_DONE });
+    await expect(emitter.result).resolves.toBe("flight-ok");
   });
 
-  it("parses split flight stream chunks incrementally", async () => {
-    const payload = `0:${JSON.stringify("stream-✓")}\n`;
-    const bytes = new TextEncoder().encode(payload);
-    const splitAt = Math.max(1, bytes.length - 2);
-
-    const response = new Response(
-      new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(bytes.slice(0, splitAt));
-          controller.enqueue(bytes.slice(splitAt));
-          controller.close();
-        },
-      }),
-      {
-        status: 200,
-        headers: { "content-type": "text/x-component" },
-      },
-    );
-
-    await expect(consumeRSCResponse<string>(response)).resolves.toBe("stream-✓");
-  });
-
-  it("resolves before stream close once 0-row arrives", async () => {
-    const payload = `0:${JSON.stringify("early")}\n`;
-    const state: { closeStream?: () => void } = {};
-
-    const response = new Response(
-      new ReadableStream<Uint8Array>({
-        async start(controller) {
-          controller.enqueue(new TextEncoder().encode(payload));
-          await new Promise<void>((resolve) => {
-            state.closeStream = () => resolve();
-          });
-          controller.close();
-        },
-        cancel() {
-          if (state.closeStream != null) {
-            state.closeStream();
-          }
-        },
-      }),
-      {
-        status: 200,
-        headers: { "content-type": "text/x-component" },
-      },
-    );
-
-    const resultPromise = consumeRSCResponse<string>(response);
-    const raced = await Promise.race([
-      resultPromise.then(() => "resolved"),
-      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
-    ]);
-
-    expect(raced).toBe("resolved");
-    await expect(resultPromise).resolves.toBe("early");
-    if (state.closeStream != null) {
-      state.closeStream();
-    }
+  it("parses row payloads via createFromRowEmitter", async () => {
+    const emitter = createFromRowEmitter<string>();
+    emitter.push({ k: ROW_MODEL, id: 0, v: "stream-✓" });
+    emitter.push({ k: ROW_DONE });
+    await expect(emitter.result).resolves.toBe("stream-✓");
   });
 
   it("resolves root row references once deferred rows arrive", async () => {
-    const state: { releaseClose?: () => void } = {};
-    const response = new Response(
-      new ReadableStream<Uint8Array>({
-        async start(controller) {
-          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify("$1")}\n`));
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          controller.enqueue(new TextEncoder().encode(`1:${JSON.stringify("deferred")}\n`));
-          await new Promise<void>((resolve) => {
-            state.releaseClose = () => resolve();
-          });
-          controller.close();
-        },
-        cancel() {
-          if (state.releaseClose != null) {
-            state.releaseClose();
-          }
-        },
-      }),
-      {
-        status: 200,
-        headers: { "content-type": "text/x-component" },
-      },
-    );
-
-    const resultPromise = consumeRSCResponse<string>(response);
-    const raced = await Promise.race([
-      resultPromise.then(() => "resolved"),
-      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 100)),
-    ]);
-
-    expect(raced).toBe("resolved");
-    await expect(resultPromise).resolves.toBe("deferred");
-    if (state.releaseClose != null) {
-      state.releaseClose();
-    }
+    const emitter = createFromRowEmitter<string>();
+    emitter.push({ k: ROW_MODEL, id: 0, v: { $t: "rowRef", id: 1 } });
+    emitter.push({ k: ROW_MODEL, id: 1, v: "deferred" });
+    emitter.push({ k: ROW_DONE });
+    await expect(emitter.result).resolves.toBe("deferred");
   });
 
-  it("decodes binary row payloads without base64 in stream", async () => {
+  it("decodes binary row payloads via createFromRowEmitter", async () => {
     const deferredBytes = Uint8Array.from([7, 8, 9, 10]);
-    const response = new Response(
-      new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify("$1")}\n`));
-          controller.enqueue(binaryRow(1, "A", deferredBytes));
-          controller.close();
-        },
-      }),
-      {
-        status: 200,
-        headers: { "content-type": "text/x-component" },
-      },
-    );
-
-    const decoded = await consumeRSCResponse<ArrayBuffer>(response);
+    const emitter = createFromRowEmitter<ArrayBuffer>();
+    emitter.push({ k: ROW_MODEL, id: 0, v: { $t: "rowRef", id: 1 } });
+    emitter.push({ k: ROW_BINARY, id: 1, t: "A", v: deferredBytes.buffer });
+    emitter.push({ k: ROW_DONE });
+    const decoded = await emitter.result;
     expect(Array.from(new Uint8Array(decoded))).toEqual(Array.from(deferredBytes));
   });
 
   it("notifies late then subscribers when deferred row chunks have already settled", async () => {
     const emitter = createFromRowEmitter<{ first: unknown }>();
-    emitter.push({ k: 0, id: 0, v: "$1" });
-    emitter.push({ k: 0, id: 1, v: { first: "$2" } });
-    emitter.push({ k: 0, id: 2, v: "ready" });
-    emitter.push({ k: 2 });
+    emitter.push({ k: ROW_MODEL, id: 0, v: { first: { $t: "rowRef", id: 2 } } });
+    emitter.push({ k: ROW_MODEL, id: 1, v: null });
+    emitter.push({ k: ROW_MODEL, id: 2, v: "ready" });
+    emitter.push({ k: ROW_DONE });
 
     const value = await emitter.result;
     const lazy = value.first as {
@@ -224,7 +96,7 @@ describe("rsc client browser workflows", () => {
       accept: string | null;
       actionId: string | null;
     }> = [];
-    const transport = createMockWorkerTransport(async (request) => {
+    const transport = createMockWorkerRowTransport(async (request) => {
       const headers = request.headers ?? [];
       const headersMap = new Map(headers);
       seenRequests.push({
@@ -235,10 +107,10 @@ describe("rsc client browser workflows", () => {
       });
 
       if (request.operation === "fetch") {
-        return flightValueResponse("fetch-ok");
+        return "fetch-ok";
       }
 
-      return flightValueResponse("action-ok");
+      return "action-ok";
     });
 
     const runActionRef = {
@@ -289,9 +161,9 @@ describe("rsc client browser workflows", () => {
 
   it("creates callServer function that posts action request", async () => {
     const seenActionIds: string[] = [];
-    const transport = createMockWorkerTransport(async (request) => {
+    const transport = createMockWorkerRowTransport(async (request) => {
       seenActionIds.push(request.actionId ?? "");
-      return flightValueResponse("call-server-ok");
+      return "call-server-ok";
     });
 
     const callServer = createCallServer("/rsc/action", { transport });
@@ -300,11 +172,11 @@ describe("rsc client browser workflows", () => {
   });
 
   it("surfaces flight-streamed action errors", async () => {
-    const transport = createMockWorkerTransport(async (request) => {
+    const transport = createMockWorkerRowTransport(async (request) => {
       if (request.operation === "action") {
-        return flightErrorResponse("Action exploded", 500);
+        throw new Error("Action exploded");
       }
-      return flightValueResponse("ok");
+      return "ok";
     });
 
     const runActionRef = {
@@ -333,12 +205,10 @@ describe("rsc client browser workflows", () => {
       },
     });
 
-    const payload = "$C/alias/view#default";
-    const response = new Response(`0:${JSON.stringify(payload)}\n`, {
-      status: 200,
-      headers: { "content-type": "text/x-component" },
-    });
+    const emitter = createFromRowEmitter<string>({ manifest: resolveClientManifestOrThrow() });
+    emitter.push({ k: ROW_MODEL, id: 0, v: { $t: "clientRef", id: "/alias/view#default" } });
+    emitter.push({ k: ROW_DONE });
 
-    await expect(consumeRSCResponse<string>(response)).resolves.toBe("client-view-ok");
+    await expect(emitter.result).resolves.toBe("client-view-ok");
   });
 });

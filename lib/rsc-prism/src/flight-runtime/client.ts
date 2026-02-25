@@ -1,22 +1,18 @@
 import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
 import {
-  applyDirectPathReplacements,
   binaryWireTagFromKind,
   createLazyChunkWrapper,
-  createModelReviver,
   decodeBinaryWireRow,
+  decodeWireValue,
   type FlightRowMessage,
   type RevivePathTree,
   encodeWireValueWithBinaryRows,
-  isBinaryWireRowTag,
-  reviveModelValueTree,
   ROW_BINARY,
   ROW_DONE,
   ROW_ERROR,
   ROW_METADATA,
   ROW_MODEL,
-  traverseElementTuplesOnly,
 } from "./wire";
 import type { ClientManifestMap } from "../types";
 import type { ComponentTraceTracker } from "../types";
@@ -38,9 +34,8 @@ type ChunkRejectListener = (reason: unknown) => void;
 interface FlightChunk<T = unknown> {
   id: number;
   status: ChunkStatus;
-  value: T | string | null;
+  value: T | null;
   reason: unknown;
-  modelFromStream?: boolean;
   listeners: ChunkResolveListener<T>[] | null;
   rejectListeners: ChunkRejectListener[] | null;
   lateResolveQueue: ChunkResolveListener<T>[] | null;
@@ -54,7 +49,6 @@ interface FlightResponse {
   revivePathsByRowId: Map<number, RevivePathTree>;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
-  fromJSON: (this: unknown, key: string, value: unknown) => unknown;
   closed: boolean;
   closedReason: unknown;
   traceContext?: FlightClientOptions["traceContext"];
@@ -192,36 +186,32 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
   const model = chunk.value;
   const previousRowId = response.currentRowId;
   response.currentRowId = chunk.id;
-  const fromStream = (chunk as FlightChunk<unknown>).modelFromStream ?? false;
-  const decodeContext = {
-    getChunk: (id: number) => getChunk(response, id),
-    readChunk: (c: unknown) => readChunk(response, c as FlightChunk),
-    createLazyChunkWrapper: (c: unknown) => {
-      const cached = response.lazyWrapperCache.get(c as FlightChunk);
-      if (cached !== undefined) return cached;
-      const wrapper = createLazyChunkWrapper(c, (payload) =>
-        readChunk(response, payload as FlightChunk),
-      );
-      response.lazyWrapperCache.set(c as FlightChunk, wrapper);
-      return wrapper;
-    },
-    resolveClientReference: (id: string) => response.resolveClientReference(id),
-    callServer: response.callServer,
-    traceContext: response.traceContext,
-    componentTrace: response.componentTrace,
-    getCurrentRowId: () => response.currentRowId,
-  };
-  const revivePaths = response.revivePathsByRowId.get(chunk.id);
-  const parsed = fromStream && typeof model === "string" ? JSON.parse(model) : model;
-  try {
-    let revived: T;
-    if (revivePaths != null && revivePaths.length > 0) {
-      const root = typeof model === "string" ? parsed : model;
-      applyDirectPathReplacements(root, revivePaths, decodeContext);
-      revived = traverseElementTuplesOnly(decodeContext, root) as T;
-    } else {
-      revived = reviveModelValueTree(decodeContext, parsed) as T;
+  const resolveRowReference = (id: number | string): unknown => {
+    const chunkId = typeof id === "number" ? id : Number(id);
+    const rowChunk = getChunk(response, chunkId);
+    if (rowChunk.status === CHUNK_INITIALIZED) {
+      return rowChunk.value;
     }
+    const cached = response.lazyWrapperCache.get(rowChunk);
+    if (cached !== undefined) return cached;
+    const wrapper = createLazyChunkWrapper(rowChunk, (payload) =>
+      readChunk(response, payload as FlightChunk),
+    );
+    response.lazyWrapperCache.set(rowChunk, wrapper);
+    return wrapper;
+  };
+  try {
+    const revived = decodeWireValue(
+      model,
+      response.resolveClientReference,
+      resolveRowReference,
+      response.callServer,
+      {
+        traceContext: response.traceContext,
+        componentTrace: response.componentTrace,
+        currentRowId: undefined,
+      },
+    ) as T;
     chunk.status = CHUNK_INITIALIZED;
     chunk.value = revived;
     chunk.reason = null;
@@ -252,6 +242,7 @@ function readChunk<T>(response: FlightResponse, chunk: FlightChunk<T>): T {
     case CHUNK_INITIALIZED:
       return chunk.value as T;
     case CHUNK_PENDING:
+      throw chunk;
     case CHUNK_RESOLVED_MODEL:
       throw chunk;
     case CHUNK_ERRORED:
@@ -265,12 +256,10 @@ function resolveModelChunk(
   response: FlightResponse,
   id: number,
   model: unknown,
-  fromStream?: boolean,
 ): void {
   const chunk = getChunk(response, id);
   chunk.status = CHUNK_RESOLVED_MODEL;
   chunk.value = model;
-  chunk.modelFromStream = fromStream;
   chunk.reason = response;
   if (chunk.listeners != null || chunk.rejectListeners != null) {
     initializeModelChunk(response, chunk);
@@ -342,19 +331,6 @@ function createClientReferenceResolver(options?: FlightClientOptions): (id: stri
   return (id: string) => resolveClientReferenceById(id, manifest);
 }
 
-function joinByteChunks(chunks: Uint8Array[], totalLength: number): Uint8Array {
-  if (chunks.length === 1) {
-    return chunks[0];
-  }
-  const output = new Uint8Array(totalLength);
-  let offset = 0;
-  for (let i = 0; i < chunks.length; i += 1) {
-    output.set(chunks[i], offset);
-    offset += chunks[i].byteLength;
-  }
-  return output;
-}
-
 function createFlightResponse(
   resolveClientReference: (id: string) => unknown,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
@@ -362,12 +338,11 @@ function createFlightResponse(
 ): FlightResponse {
   const componentTrace = options?.componentTrace;
   const lazyWrapperCache = new Map<FlightChunk, unknown>();
-  const response: FlightResponse = {
+  return {
     chunks: new Map<number, FlightChunk>(),
     revivePathsByRowId: new Map(),
     resolveClientReference,
     callServer,
-    fromJSON: (_key, value) => value,
     closed: false,
     closedReason: null,
     traceContext: options?.traceContext,
@@ -375,26 +350,6 @@ function createFlightResponse(
     currentRowId: undefined,
     lazyWrapperCache,
   };
-  response.fromJSON = createModelReviver({
-    getChunk: (id) => getChunk(response, id),
-    readChunk: (chunk) => readChunk(response, chunk as FlightChunk),
-    createLazyChunkWrapper: (chunk) => {
-      let wrapper = lazyWrapperCache.get(chunk as FlightChunk);
-      if (wrapper === undefined) {
-        wrapper = createLazyChunkWrapper(chunk, (payload) =>
-          readChunk(response, payload as FlightChunk),
-        );
-        lazyWrapperCache.set(chunk as FlightChunk, wrapper);
-      }
-      return wrapper;
-    },
-    resolveClientReference: (id) => response.resolveClientReference(id),
-    callServer,
-    traceContext: options?.traceContext,
-    componentTrace,
-    getCurrentRowId: () => response.currentRowId,
-  });
-  return response;
 }
 
 function attachRootResolution(
@@ -499,260 +454,14 @@ async function materializeLazyValueRecursive(value: unknown): Promise<unknown> {
   return value;
 }
 
-async function consumeFlightStream(
-  stream: ReadableStream<Uint8Array>,
-  response: FlightResponse,
-  onRootMaybeReady: () => void,
-): Promise<void> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  let rowId = 0;
-  let hasRowId = false;
-  let isMetadataRow = false;
-  let parsingRowTag = false;
-  let hasAnyRow = false;
-  let binaryTag: string | null = null;
-  let hasParsedBinaryLength = false;
-  let binaryExpectedLength = 0;
-  let binaryReceivedLength = 0;
-  let binaryParts: Uint8Array[] = [];
-  let jsonParts: Uint8Array[] = [];
-  let jsonByteLength = 0;
-
-  const finalizeJsonRow = (): void => {
-    const rowBytes = joinByteChunks(jsonParts, jsonByteLength);
-    jsonParts = [];
-    jsonByteLength = 0;
-    const currentId = rowId;
-    const wasMetadata = isMetadataRow;
-    rowId = 0;
-    hasRowId = false;
-    isMetadataRow = false;
-    parsingRowTag = false;
-    const decoded = decoder.decode(rowBytes);
-    if (wasMetadata) {
-      const meta = JSON.parse(decoded) as { revivePaths?: RevivePathTree };
-      const tree = meta.revivePaths;
-      if (Array.isArray(tree) && tree.length > 0) {
-        response.revivePathsByRowId.set(currentId, tree);
-      }
-    } else {
-      resolveModelChunk(response, currentId, decoded, true);
-    }
-    hasAnyRow = true;
-    onRootMaybeReady();
-  };
-
-  const finalizeBinaryRow = (): void => {
-    const rowBytes = joinByteChunks(binaryParts, binaryExpectedLength);
-    const currentId = rowId;
-    const payload = decodeBinaryWireRow(binaryTag as string, rowBytes);
-    rowId = 0;
-    hasRowId = false;
-    parsingRowTag = false;
-    binaryTag = null;
-    hasParsedBinaryLength = false;
-    binaryExpectedLength = 0;
-    binaryReceivedLength = 0;
-    binaryParts = [];
-    resolveInitializedChunk(response, currentId, payload);
-    hasAnyRow = true;
-    onRootMaybeReady();
-  };
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      let offset = 0;
-      while (offset < value.length) {
-        if (binaryTag != null) {
-          if (!hasParsedBinaryLength) {
-            binaryExpectedLength = 0;
-            let foundComma = false;
-            while (offset < value.length) {
-              const byte = value[offset];
-              offset += 1;
-              if (byte === 44) {
-                hasParsedBinaryLength = true;
-                foundComma = true;
-                break;
-              }
-              const hexDigit = byte <= 57 ? byte - 48 : (byte | 32) - 87;
-              if (hexDigit < 0 || hexDigit > 15) {
-                throw new Error(
-                  `[rsc-prism] Invalid binary row length byte "${String.fromCharCode(byte)}".`,
-                );
-              }
-              binaryExpectedLength = binaryExpectedLength * 16 + hexDigit;
-            }
-            if (!foundComma) {
-              continue;
-            }
-          }
-
-          if (binaryReceivedLength < binaryExpectedLength) {
-            const remaining = binaryExpectedLength - binaryReceivedLength;
-            const available = value.length - offset;
-            const take = remaining < available ? remaining : available;
-            if (take > 0) {
-              binaryParts.push(value.subarray(offset, offset + take));
-              binaryReceivedLength += take;
-              offset += take;
-            }
-            if (binaryReceivedLength < binaryExpectedLength) {
-              continue;
-            }
-          }
-
-          if (offset >= value.length) {
-            continue;
-          }
-          if (value[offset] !== 10) {
-            throw new Error("[rsc-prism] Invalid binary row terminator.");
-          }
-          offset += 1;
-          finalizeBinaryRow();
-          continue;
-        }
-
-        const byte = value[offset];
-        if (!parsingRowTag) {
-          offset += 1;
-          if (byte === 77 && !hasRowId) {
-            isMetadataRow = true;
-            continue;
-          }
-          if (byte === 58) {
-            if (!hasRowId) {
-              throw new Error("[rsc-prism] Missing row id in Flight payload.");
-            }
-            parsingRowTag = true;
-            continue;
-          }
-          if (byte === 10) {
-            rowId = 0;
-            hasRowId = false;
-            isMetadataRow = false;
-            continue;
-          }
-          const digit = byte <= 57 ? byte - 48 : (byte | 32) - 87;
-          if (digit >= 0 && digit <= 15) {
-            rowId = rowId * 16 + digit;
-            hasRowId = true;
-            continue;
-          }
-          throw new Error(`[rsc-prism] Invalid row id byte "${String.fromCharCode(byte)}".`);
-        }
-
-        if (
-          jsonByteLength === 0 &&
-          jsonParts.length === 0 &&
-          binaryTag == null &&
-          isBinaryWireRowTag(byte)
-        ) {
-          binaryTag = String.fromCharCode(byte);
-          offset += 1;
-          continue;
-        }
-
-        const lineBreakIndex = value.indexOf(10, offset);
-        if (lineBreakIndex === -1) {
-          const part = value.subarray(offset);
-          if (part.byteLength > 0) {
-            jsonParts.push(part);
-            jsonByteLength += part.byteLength;
-          }
-          break;
-        }
-
-        if (lineBreakIndex > offset) {
-          const part = value.subarray(offset, lineBreakIndex);
-          jsonParts.push(part);
-          jsonByteLength += part.byteLength;
-        }
-        offset = lineBreakIndex + 1;
-        finalizeJsonRow();
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  if (binaryTag != null || jsonByteLength > 0 || parsingRowTag || hasRowId) {
-    throw new Error("[rsc-prism] Incomplete Flight stream row.");
-  }
-  if (!hasAnyRow) {
-    resolveInitializedChunk(response, 0, null);
-  }
-}
+const UNSUPPORTED_STREAM_MESSAGE =
+  "[rsc-prism] HTTP text Flight stream is not supported. Use worker row transport (createFromRowEmitter) instead.";
 
 export async function createFromReadableStream<T>(
-  stream: ReadableStream<Uint8Array>,
-  options?: FlightClientOptions,
+  _stream: ReadableStream<Uint8Array>,
+  _options?: FlightClientOptions,
 ): Promise<T> {
-  const resolveClientReference = createClientReferenceResolver(options);
-  const response = createFlightResponse(resolveClientReference, options?.callServer, options);
-  return await new Promise<T>((resolve, reject) => {
-    let rootSettled = false;
-    const rootResolutionState: {
-      subscribedThenable: PromiseLike<unknown> | null;
-      retryQueued: boolean;
-    } = {
-      subscribedThenable: null,
-      retryQueued: false,
-    };
-    const scheduleRootRetry = (): void => {
-      if (rootSettled || rootResolutionState.retryQueued) {
-        return;
-      }
-      rootResolutionState.retryQueued = true;
-      queueMicrotask(() => {
-        rootResolutionState.retryQueued = false;
-        settleRoot();
-      });
-    };
-    const settleRoot = (): void => {
-      if (rootSettled) {
-        return;
-      }
-      attachRootResolution(
-        response,
-        (value) => {
-          const materialize =
-            options?.materializeDeferredChunks === true
-              ? materializeLazyValueRecursive
-              : materializeLazyValueTopLevel;
-          void materialize(value)
-            .then((materialized) => {
-              if (rootSettled) return;
-              rootSettled = true;
-              resolve(materialized as T);
-            })
-            .catch((error) => {
-              if (rootSettled) return;
-              rootSettled = true;
-              reject(error);
-            });
-        },
-        (reason) => {
-          if (rootSettled) return;
-          rootSettled = true;
-          reject(reason);
-        },
-        rootResolutionState,
-        scheduleRootRetry,
-      );
-    };
-    void consumeFlightStream(stream, response, scheduleRootRetry).catch((error) => {
-      closeResponseWithError(response, error);
-      if (!rootSettled) {
-        rootSettled = true;
-        reject(error);
-      }
-    });
-    settleRoot();
-  });
+  throw new Error(UNSUPPORTED_STREAM_MESSAGE);
 }
 
 export function createFromRowEmitter<T>(options?: FlightClientOptions): {
@@ -879,7 +588,7 @@ export async function encodeReply(value: unknown): Promise<FormData | string> {
     const binaryPart = new Uint8Array(bytes.byteLength);
     binaryPart.set(bytes);
     formData.append(`${id}:${tag}`, new Blob([binaryPart]));
-    return `${id}:${tag}`;
+    return id;
   });
 
   if (formData == null) {

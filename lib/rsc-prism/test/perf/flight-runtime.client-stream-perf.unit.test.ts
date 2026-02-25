@@ -1,6 +1,7 @@
 import { describe, it } from "vitest";
 
-import { createFromReadableStream } from "../../src/flight-runtime/client";
+import { createFromRowEmitter } from "../../src/flight-runtime/client";
+import { ROW_DONE, ROW_MODEL } from "../../src/flight-runtime/wire";
 
 type FlightPerfStats = {
   rootScanCount: number;
@@ -43,34 +44,24 @@ function createStats(): FlightPerfStats {
   };
 }
 
-function buildFlightPayload(rowCount: number): string {
+function buildFlightRows(rowCount: number): { k: number; id?: number; v?: unknown }[] {
+  const rows: { k: number; id?: number; v?: unknown }[] = [];
   const refs = new Array(rowCount);
   for (let i = 0; i < rowCount; i += 1) {
-    refs[i] = `$${(i + 1).toString(16)}`;
+    refs[i] = { $t: "rowRef" as const, id: i + 1 };
   }
-  let text = `0:${JSON.stringify(refs)}\n`;
+  rows.push({ k: ROW_MODEL, id: 0, v: refs });
   for (let i = 0; i < rowCount; i += 1) {
-    text += `${(i + 1).toString(16)}:${JSON.stringify({ i, text: `v${i}` })}\n`;
+    rows.push({ k: ROW_MODEL, id: i + 1, v: { i, text: `v${i}` } });
   }
-  return text;
-}
-
-function toChunkedStream(payload: string, chunkSize: number): ReadableStream<Uint8Array> {
-  const bytes = new TextEncoder().encode(payload);
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        controller.enqueue(bytes.slice(i, i + chunkSize));
-      }
-      controller.close();
-    },
-  });
+  rows.push({ k: ROW_DONE });
+  return rows;
 }
 
 async function benchmark(
   iterations: number,
-  payload: string,
-  chunkSize: number,
+  rowCount: number,
+  _chunkSize: number,
 ): Promise<{
   avgTotalMs: number;
   avgRootScanCount: number;
@@ -78,10 +69,15 @@ async function benchmark(
   avgDecodeMs: number;
 }> {
   const globalState = globalThis as typeof globalThis & Record<string, unknown>;
+  const rows = buildFlightRows(rowCount);
 
   for (let i = 0; i < 2; i += 1) {
     globalState[PERF_KEY] = createStats();
-    await createFromReadableStream(toChunkedStream(payload, chunkSize));
+    const emitter = createFromRowEmitter<unknown[]>();
+    for (const row of rows) {
+      emitter.push(row as Parameters<typeof emitter.push>[0]);
+    }
+    await emitter.result;
   }
 
   let totalMs = 0;
@@ -92,9 +88,11 @@ async function benchmark(
     const stats = createStats();
     globalState[PERF_KEY] = stats;
     const start = performance.now();
-    const result = (await createFromReadableStream(
-      toChunkedStream(payload, chunkSize),
-    )) as unknown[];
+    const emitter = createFromRowEmitter<unknown[]>();
+    for (const row of rows) {
+      emitter.push(row as Parameters<typeof emitter.push>[0]);
+    }
+    const result = (await emitter.result) as unknown[];
     totalMs += performance.now() - start;
     totalRootScanCount += stats.rootScanCount;
     totalRootScanMs += stats.rootScanTimeMs;
@@ -115,19 +113,18 @@ async function benchmark(
 
 const perfIt = process.env.RSC_PERF === "1" ? it : it.skip;
 
-describe("flight runtime stream decode perf", () => {
-  perfIt("prints stream decode and root-scan timing", async () => {
+describe("flight runtime row decode perf", () => {
+  perfIt("prints row decode and root-scan timing", async () => {
     const iterations = readEnvNumber("RSC_PERF_ITERATIONS", 10);
     const rowCount = readEnvNumber("RSC_PERF_ROW_COUNT", 8000);
     const chunkSizes = readChunkSizes("RSC_PERF_CHUNK_SIZES", [64, 256, 1024]);
-    const payload = buildFlightPayload(rowCount);
 
     console.log(`\n[rsc-prism perf] iterations=${iterations} rows=${rowCount}`);
     for (let i = 0; i < chunkSizes.length; i += 1) {
       const chunkSize = chunkSizes[i];
-      const stats = await benchmark(iterations, payload, chunkSize);
+      const stats = await benchmark(iterations, rowCount, chunkSize);
       console.log(`[rsc-prism perf] chunk=${chunkSize}`);
-      console.log(`[rsc-prism perf] stream-parse+decode avg=${formatMs(stats.avgTotalMs)}`);
+      console.log(`[rsc-prism perf] row-decode avg=${formatMs(stats.avgTotalMs)}`);
       console.log(`[rsc-prism perf] root-scan count=${stats.avgRootScanCount.toFixed(2)}`);
       console.log(`[rsc-prism perf] root-scan avg=${formatMs(stats.avgRootScanMs)}`);
       console.log(`[rsc-prism perf] decode avg=${formatMs(stats.avgDecodeMs)}`);

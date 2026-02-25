@@ -196,7 +196,7 @@ function isServerReference(value: unknown): value is { $$typeof: symbol; $$id: s
   return candidate.$$typeof === SERVER_REFERENCE_SYMBOL && typeof candidate.$$id === "string";
 }
 
-function encodeType(value: unknown): JsonObject {
+export function encodeType(value: unknown): JsonObject {
   if (typeof value === "string") {
     return { $t: "host", v: value };
   }
@@ -851,24 +851,33 @@ export function createLazyChunkWrapper<Chunk>(
   };
 }
 
+export interface EncodeWireOptions {
+  /** When true (worker/postMessage path), pass through Date, bigint, -0, NaN, Infinity for structured clone */
+  useRawForCloneableTypes?: boolean;
+}
+
 function encodeWireValueImpl(
   value: unknown,
   emitBinaryRow: EmitBinaryRow | null,
   seen: WeakSet<object>,
+  options: EncodeWireOptions = {},
 ): unknown {
+  const useRaw = options.useRawForCloneableTypes === true;
   if (value === undefined) {
-    return { $t: "undef" };
+    return useRaw ? undefined : { $t: "undef" };
   }
   if (
     typeof value === "string" ||
-    typeof value === "number" ||
     typeof value === "boolean" ||
     value == null
   ) {
     return value;
   }
+  if (typeof value === "number") {
+    return value;
+  }
   if (typeof value === "bigint") {
-    return { $t: "bigint", v: value.toString() };
+    return useRaw ? value : { $t: "bigint", v: value.toString() };
   }
   if (typeof value === "symbol") {
     throw new Error("Symbols are not supported by the minimal Flight runtime.");
@@ -889,7 +898,7 @@ function encodeWireValueImpl(
   seen.add(value as object);
 
   if (value instanceof Date) {
-    return { $t: "date", v: value.toISOString() };
+    return useRaw ? value : { $t: "date", v: value.toISOString() };
   }
   if (value instanceof URLSearchParams) {
     return { $t: "search", v: value.toString() };
@@ -905,23 +914,31 @@ function encodeWireValueImpl(
           "File and Blob FormData values are not supported by the minimal Flight runtime.",
         );
       }
-      entries.push([key, encodeWireValueImpl(item, emitBinaryRow, seen)]);
+      entries.push([key, encodeWireValueImpl(item, emitBinaryRow, seen, options)]);
     }
     return { $t: "formdata", v: entries };
   }
   if (value instanceof Map) {
+    if (options?.useRawForCloneableTypes === true) {
+      return value;
+    }
     return {
       $t: "map",
       v: Array.from(value.entries()).map(([key, item]) => [
-        encodeWireValueImpl(key, emitBinaryRow, seen),
-        encodeWireValueImpl(item, emitBinaryRow, seen),
+        encodeWireValueImpl(key, emitBinaryRow, seen, options),
+        encodeWireValueImpl(item, emitBinaryRow, seen, options),
       ]),
     };
   }
   if (value instanceof Set) {
+    if (options?.useRawForCloneableTypes === true) {
+      return value;
+    }
     return {
       $t: "set",
-      v: Array.from(value.values()).map((item) => encodeWireValueImpl(item, emitBinaryRow, seen)),
+      v: Array.from(value.values()).map((item) =>
+        encodeWireValueImpl(item, emitBinaryRow, seen, options),
+      ),
     };
   }
   if (value instanceof ArrayBuffer) {
@@ -942,13 +959,13 @@ function encodeWireValueImpl(
     );
   }
   if (Array.isArray(value)) {
-    return value.map((item) => encodeWireValueImpl(item, emitBinaryRow, seen));
+    return value.map((item) => encodeWireValueImpl(item, emitBinaryRow, seen, options));
   }
   if (isReactElementLike(value)) {
     return {
       $t: "element",
       ty: encodeType(value.type),
-      props: encodeWireValueImpl(value.props, emitBinaryRow, seen),
+      props: encodeWireValueImpl(value.props, emitBinaryRow, seen, options),
       key: value.key,
     };
   }
@@ -964,21 +981,22 @@ function encodeWireValueImpl(
 
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    result[key] = encodeWireValueImpl(item, emitBinaryRow, seen);
+    result[key] = encodeWireValueImpl(item, emitBinaryRow, seen, options);
   }
   return result;
 }
 
 export function encodeWireValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
-  return encodeWireValueImpl(value, null, seen);
+  return encodeWireValueImpl(value, null, seen, {});
 }
 
 export function encodeWireValueWithBinaryRows(
   value: unknown,
   emitBinaryRow: EmitBinaryRow,
   seen: WeakSet<object> = new WeakSet(),
+  options?: EncodeWireOptions,
 ): unknown {
-  return encodeWireValueImpl(value, emitBinaryRow, seen);
+  return encodeWireValueImpl(value, emitBinaryRow, seen, options ?? {});
 }
 
 export function decodeBinaryWireRow(tag: string, bytes: Uint8Array): unknown {
@@ -1131,7 +1149,7 @@ export function flightErrorRow(message: string): FlightRowMessage {
 export function decodeWireValue(
   value: unknown,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference?: (id: string) => unknown,
+  resolveRowReference?: (id: number | string) => unknown,
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
   traceOptions?: {
     traceContext?: RSCTraceContext;
@@ -1155,7 +1173,7 @@ export function decodeWireValue(
 function decodeWireValueInternal(
   value: unknown,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1163,6 +1181,9 @@ function decodeWireValueInternal(
   currentRowId: number | undefined,
 ): unknown {
   if (typeof value !== "object" || value == null) {
+    return value;
+  }
+  if (value instanceof Date || typeof value === "bigint") {
     return value;
   }
   if (Array.isArray(value)) {
@@ -1208,7 +1229,7 @@ function decodeWireValueInternal(
 function decodeWireArrayValue(
   value: unknown[],
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1232,7 +1253,7 @@ function decodeWireArrayValue(
 function decodeWirePlainObjectValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1260,7 +1281,7 @@ function decodeWirePlainObjectValue(
 function decodeWireRowReferenceValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1270,11 +1291,12 @@ function decodeWireRowReferenceValue(
   if (resolveRowReference == null) {
     throw new Error('Unknown wire tag "rowRef"');
   }
-  const rowId = String(value.id);
-  if (visitingRowRefs.has(rowId)) {
-    throw new Error(`[rsc-prism] Circular row reference "${rowId}" in Flight payload.`);
+  const rowId = value.id as number | string;
+  const rowIdKey = String(rowId);
+  if (visitingRowRefs.has(rowIdKey)) {
+    throw new Error(`[rsc-prism] Circular row reference "${rowIdKey}" in Flight payload.`);
   }
-  visitingRowRefs.add(rowId);
+  visitingRowRefs.add(rowIdKey);
   try {
     const rowValue = resolveRowReference(rowId);
     if (rowValue == null) {
@@ -1285,6 +1307,9 @@ function decodeWireRowReferenceValue(
       rowValue instanceof ArrayBuffer ||
       ArrayBuffer.isView(rowValue)
     ) {
+      return rowValue;
+    }
+    if ((rowValue as { $$typeof?: unknown }).$$typeof === REACT_LAZY_SYMBOL) {
       return rowValue;
     }
     return decodeWireValueInternal(
@@ -1298,14 +1323,14 @@ function decodeWireRowReferenceValue(
       currentRowId,
     );
   } finally {
-    visitingRowRefs.delete(rowId);
+    visitingRowRefs.delete(rowIdKey);
   }
 }
 
 function decodeWireMapValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1348,7 +1373,7 @@ function decodeWireMapValue(
 function decodeWireSetValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1380,7 +1405,7 @@ function decodeWireSetValue(
 function decodeWireFormDataValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1417,7 +1442,7 @@ function decodeWireFormDataValue(
 function decodeWireElementValue(
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
@@ -1455,7 +1480,7 @@ function decodeTaggedWireValue(
   tag: string,
   value: Record<string, unknown>,
   resolveClientReference: (id: string) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
+  resolveRowReference: ((id: number | string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   traceContext: RSCTraceContext | undefined,
