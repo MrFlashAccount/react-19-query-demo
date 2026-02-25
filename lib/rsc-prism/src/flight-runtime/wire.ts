@@ -678,11 +678,7 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
   const keys = Object.keys(source);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    source[key] = reviveModelValueTreeWithReviveValuesInternal(
-      context,
-      reviveValues,
-      source[key],
-    );
+    source[key] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, source[key]);
   }
   return source;
 }
@@ -1003,7 +999,10 @@ function encodeWireValueImpl(
     );
   }
   if (Array.isArray(value)) {
-    return value.map((item) => encodeWireValueImpl(item, emitBinaryRow, seen));
+    for (let i = 0; i < value.length; i += 1) {
+      value[i] = encodeWireValueImpl(value[i], emitBinaryRow, seen);
+    }
+    return value;
   }
   if (isReactElementLike(value)) {
     return {

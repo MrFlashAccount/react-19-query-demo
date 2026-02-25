@@ -90,7 +90,10 @@ function expandTemplateShape(
     return node;
   }
   if (Array.isArray(node)) {
-    return node.map((entry) => expandTemplateShape(entry, slots, templatesById));
+    for (let i = 0; i < node.length; i += 1) {
+      node[i] = expandTemplateShape(node[i], slots, templatesById);
+    }
+    return node;
   }
   const objectNode = node as Record<string, unknown>;
   if (typeof objectNode[TEMPLATE_SLOT_KEY] === "number") {

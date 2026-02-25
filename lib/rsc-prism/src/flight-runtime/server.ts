@@ -204,6 +204,33 @@ function compareStructureAndCollectDiffPaths(
   return true;
 }
 
+function buildStructureSignature(value: unknown): string {
+  if (value == null) {
+    return "null";
+  }
+  const type = typeof value;
+  if (type !== "object") {
+    return type;
+  }
+  if (Array.isArray(value)) {
+    const parts = new Array(value.length);
+    for (let i = 0; i < value.length; i += 1) {
+      parts[i] = buildStructureSignature(value[i]);
+    }
+    return `[${parts.join(",")}]`;
+  }
+  if (!isPlainObject(value)) {
+    return `{${Object.prototype.toString.call(value)}}`;
+  }
+  const keys = Object.keys(value);
+  const parts = new Array(keys.length);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    parts[i] = `${key}:${buildStructureSignature(value[key])}`;
+  }
+  return `{${parts.join(",")}}`;
+}
+
 function getValueAtPath(root: unknown, path: (string | number)[]): unknown {
   let current = root;
   for (let i = 0; i < path.length; i += 1) {
@@ -276,18 +303,22 @@ function cloneWithSlotMarkers(
   return out;
 }
 
-function tryCompactArrayWithTemplate(items: unknown[], templateId: number): {
+function tryCompactArrayWithTemplate(
+  items: unknown[],
+  indices: number[],
+  templateId: number,
+): {
   template: FlightTemplateRowShape;
-  refs: unknown[];
+  replacements: Array<{ index: number; value: unknown }>;
   bytesSaved: number;
 } | null {
-  if (items.length < TEMPLATE_MIN_ARRAY_ITEMS) {
+  if (indices.length < TEMPLATE_MIN_ARRAY_ITEMS) {
     return null;
   }
-  const base = items[0];
+  const base = items[indices[0]];
   const varyingPaths = new Set<string>();
-  for (let i = 1; i < items.length; i += 1) {
-    if (!compareStructureAndCollectDiffPaths(base, items[i], [], varyingPaths)) {
+  for (let i = 1; i < indices.length; i += 1) {
+    if (!compareStructureAndCollectDiffPaths(base, items[indices[i]], [], varyingPaths)) {
       return null;
     }
   }
@@ -305,19 +336,28 @@ function tryCompactArrayWithTemplate(items: unknown[], templateId: number): {
     return null;
   }
 
-  const refs: unknown[] = [];
-  for (let i = 0; i < items.length; i += 1) {
+  const replacements: Array<{ index: number; value: unknown }> = [];
+  for (let i = 0; i < indices.length; i += 1) {
+    const itemIndex = indices[i];
     const slots: unknown[] = [];
-    cloneWithSlotMarkers(items[i], [], varyingPaths, pathToSlot, slots);
-    refs.push({ [TEMPLATE_REF_KEY]: templateId, [TEMPLATE_VALUES_KEY]: slots });
+    cloneWithSlotMarkers(items[itemIndex], [], varyingPaths, pathToSlot, slots);
+    replacements.push({
+      index: itemIndex,
+      value: { [TEMPLATE_REF_KEY]: templateId, [TEMPLATE_VALUES_KEY]: slots },
+    });
   }
 
-  const beforeSize = JSON.stringify(items).length;
+  let beforeSize = 0;
+  let refsSize = 0;
+  for (let i = 0; i < indices.length; i += 1) {
+    beforeSize += JSON.stringify(items[indices[i]]).length;
+    refsSize += JSON.stringify(replacements[i].value).length;
+  }
   if (beforeSize < TEMPLATE_MIN_INPUT_BYTES) {
     return null;
   }
   const metadataSize = JSON.stringify([{ id: templateId, shape }]).length;
-  const afterSize = metadataSize + JSON.stringify(refs).length;
+  const afterSize = metadataSize + refsSize;
   const bytesSaved = beforeSize - afterSize;
   if (
     bytesSaved < TEMPLATE_MIN_BYTES_SAVED ||
@@ -328,7 +368,7 @@ function tryCompactArrayWithTemplate(items: unknown[], templateId: number): {
 
   return {
     template: { id: templateId, shape },
-    refs,
+    replacements,
     bytesSaved,
   };
 }
@@ -351,15 +391,48 @@ function compactRowValueTemplates(value: unknown): {
     if (!Array.isArray(node)) {
       continue;
     }
-    const compacted = tryCompactArrayWithTemplate(node, nextTemplateId);
-    if (compacted == null) {
+    const groups = new Map<string, number[]>();
+    for (let j = 0; j < node.length; j += 1) {
+      const signature = buildStructureSignature(node[j]);
+      const group = groups.get(signature);
+      if (group == null) {
+        groups.set(signature, [j]);
+      } else {
+        group.push(j);
+      }
+    }
+
+    const groupEntries = Array.from(groups.values()).sort((a, b) => b.length - a.length);
+    const working = node.slice();
+    let mutated = false;
+
+    for (let g = 0; g < groupEntries.length; g += 1) {
+      if (templates.length >= TEMPLATE_MAX_TEMPLATES_PER_ROW) {
+        break;
+      }
+      const indices = groupEntries[g];
+      if (indices.length < TEMPLATE_MIN_ARRAY_ITEMS) {
+        continue;
+      }
+      const compacted = tryCompactArrayWithTemplate(node, indices, nextTemplateId);
+      if (compacted == null) {
+        continue;
+      }
+      for (let r = 0; r < compacted.replacements.length; r += 1) {
+        const { index, value: replacementValue } = compacted.replacements[r];
+        working[index] = replacementValue;
+      }
+      templates.push(compacted.template);
+      nextTemplateId += 1;
+      mutated = true;
+    }
+
+    if (!mutated) {
       continue;
     }
-    if (!setValueAtPath(value, candidatePath, compacted.refs)) {
+    if (!setValueAtPath(value, candidatePath, working)) {
       continue;
     }
-    templates.push(compacted.template);
-    nextTemplateId += 1;
   }
 
   return { value, templates };
