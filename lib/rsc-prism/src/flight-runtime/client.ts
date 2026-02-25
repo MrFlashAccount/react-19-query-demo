@@ -199,9 +199,8 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     createLazyChunkWrapper: (c: unknown) => {
       const cached = response.lazyWrapperCache.get(c as FlightChunk);
       if (cached !== undefined) return cached;
-      const wrapper = createLazyChunkWrapper(
-        c,
-        (payload) => readChunk(response, payload as FlightChunk),
+      const wrapper = createLazyChunkWrapper(c, (payload) =>
+        readChunk(response, payload as FlightChunk),
       );
       response.lazyWrapperCache.set(c as FlightChunk, wrapper);
       return wrapper;
@@ -213,8 +212,7 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     getCurrentRowId: () => response.currentRowId,
   };
   const revivePaths = response.revivePathsByRowId.get(chunk.id);
-  const parsed =
-    fromStream && typeof model === "string" ? JSON.parse(model) : model;
+  const parsed = fromStream && typeof model === "string" ? JSON.parse(model) : model;
   try {
     let revived: T;
     if (revivePaths != null && revivePaths.length > 0) {
@@ -266,7 +264,7 @@ function readChunk<T>(response: FlightResponse, chunk: FlightChunk<T>): T {
 function resolveModelChunk(
   response: FlightResponse,
   id: number,
-  model: string | unknown,
+  model: unknown,
   fromStream?: boolean,
 ): void {
   const chunk = getChunk(response, id);
@@ -383,9 +381,8 @@ function createFlightResponse(
     createLazyChunkWrapper: (chunk) => {
       let wrapper = lazyWrapperCache.get(chunk as FlightChunk);
       if (wrapper === undefined) {
-        wrapper = createLazyChunkWrapper(
-          chunk,
-          (payload) => readChunk(response, payload as FlightChunk),
+        wrapper = createLazyChunkWrapper(chunk, (payload) =>
+          readChunk(response, payload as FlightChunk),
         );
         lazyWrapperCache.set(chunk as FlightChunk, wrapper);
       }
@@ -404,15 +401,33 @@ function attachRootResolution(
   response: FlightResponse,
   resolve: (value: unknown) => void,
   reject: (reason: unknown) => void,
+  state: { subscribedThenable: PromiseLike<unknown> | null },
+  scheduleRetry: () => void,
 ): void {
   const rootChunk = getChunk(response, 0);
   try {
-    resolve(readChunk(response, rootChunk));
+    const resolvedValue = readChunk(response, rootChunk);
+    state.subscribedThenable = null;
+    resolve(resolvedValue);
   } catch (error) {
     if (isThenable(error)) {
+      if (state.subscribedThenable === error) {
+        return;
+      }
+      state.subscribedThenable = error;
       error.then(
-        () => attachRootResolution(response, resolve, reject),
-        (reason) => reject(reason),
+        () => {
+          if (state.subscribedThenable === error) {
+            state.subscribedThenable = null;
+          }
+          scheduleRetry();
+        },
+        (reason) => {
+          if (state.subscribedThenable === error) {
+            state.subscribedThenable = null;
+          }
+          reject(reason);
+        },
       );
       return;
     }
@@ -455,10 +470,11 @@ async function materializeLazyValueRecursive(value: unknown): Promise<unknown> {
   }
   if (value instanceof Map) {
     const entries = await Promise.all(
-      Array.from(value.entries(), async ([k, v]) => [
-        await materializeLazyValueRecursive(k),
-        await materializeLazyValueRecursive(v),
-      ] as const),
+      Array.from(
+        value.entries(),
+        async ([k, v]) =>
+          [await materializeLazyValueRecursive(k), await materializeLazyValueRecursive(v)] as const,
+      ),
     );
     return new Map(entries);
   }
@@ -679,6 +695,23 @@ export async function createFromReadableStream<T>(
   const response = createFlightResponse(resolveClientReference, options?.callServer, options);
   return await new Promise<T>((resolve, reject) => {
     let rootSettled = false;
+    const rootResolutionState: {
+      subscribedThenable: PromiseLike<unknown> | null;
+      retryQueued: boolean;
+    } = {
+      subscribedThenable: null,
+      retryQueued: false,
+    };
+    const scheduleRootRetry = (): void => {
+      if (rootSettled || rootResolutionState.retryQueued) {
+        return;
+      }
+      rootResolutionState.retryQueued = true;
+      queueMicrotask(() => {
+        rootResolutionState.retryQueued = false;
+        settleRoot();
+      });
+    };
     const settleRoot = (): void => {
       if (rootSettled) {
         return;
@@ -707,9 +740,11 @@ export async function createFromReadableStream<T>(
           rootSettled = true;
           reject(reason);
         },
+        rootResolutionState,
+        scheduleRootRetry,
       );
     };
-    void consumeFlightStream(stream, response, settleRoot).catch((error) => {
+    void consumeFlightStream(stream, response, scheduleRootRetry).catch((error) => {
       closeResponseWithError(response, error);
       if (!rootSettled) {
         rootSettled = true;
@@ -728,6 +763,13 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   const response = createFlightResponse(resolveClientReference, options?.callServer, options);
   let hasAnyRow = false;
   let rootSettled = false;
+  const rootResolutionState: {
+    subscribedThenable: PromiseLike<unknown> | null;
+    retryQueued: boolean;
+  } = {
+    subscribedThenable: null,
+    retryQueued: false,
+  };
 
   let resolveResult!: (value: T) => void;
   let rejectResult!: (reason: unknown) => void;
@@ -735,6 +777,16 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
     resolveResult = resolve;
     rejectResult = reject;
   });
+  const scheduleRootRetry = (): void => {
+    if (rootSettled || rootResolutionState.retryQueued) {
+      return;
+    }
+    rootResolutionState.retryQueued = true;
+    queueMicrotask(() => {
+      rootResolutionState.retryQueued = false;
+      settleRoot();
+    });
+  };
 
   const settleRoot = (): void => {
     if (rootSettled) {
@@ -764,6 +816,8 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
         rootSettled = true;
         rejectResult(reason);
       },
+      rootResolutionState,
+      scheduleRootRetry,
     );
   };
 
@@ -775,27 +829,27 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
             response.revivePathsByRowId.set(row.id, row.revivePaths);
           }
           hasAnyRow = true;
-          settleRoot();
+          scheduleRootRetry();
           return;
         case ROW_MODEL:
           response.currentRowId = row.id;
           resolveModelChunk(response, row.id, row.v);
           response.currentRowId = undefined;
           hasAnyRow = true;
-          settleRoot();
+          scheduleRootRetry();
           return;
         case ROW_BINARY: {
           const payload = decodeBinaryWireRow(row.t, new Uint8Array(row.v));
           resolveInitializedChunk(response, row.id, payload);
           hasAnyRow = true;
-          settleRoot();
+          scheduleRootRetry();
           return;
         }
         case ROW_DONE:
           if (!hasAnyRow) {
             resolveInitializedChunk(response, 0, null);
           }
-          settleRoot();
+          scheduleRootRetry();
           return;
         case ROW_ERROR: {
           const error = new Error(row.v);
