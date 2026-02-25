@@ -126,7 +126,10 @@ import { tracer, tracePromise } from "@lib/tracing";
 
 const span = tracer.startSpan("products.load", { page: 1 }, { color: "secondary" });
 
-const products = await tracePromise(fetch("/api/products").then((r) => r.json()), span);
+const products = await tracePromise(
+  fetch("/api/products").then((r) => r.json()),
+  span,
+);
 ```
 
 `tracePromise` will mark `success`/`error` for you.
@@ -147,17 +150,20 @@ const chargeCard = traced(
   { name: "payment.charge", meta: { color: "tertiary" } },
 );
 
-await runInSpan(async (parent) => {
-  await chargeCard("order-123");
+await runInSpan(
+  async (parent) => {
+    await chargeCard("order-123");
 
-  const finalize = parent.child({ name: "order.finalize", payload: { id: "order-123" } });
-  try {
-    // ...work
-    finalize.success();
-  } catch (error) {
-    finalize.error(error);
-  }
-}, { name: "checkout.request", payload: { route: "/checkout" } });
+    const finalize = parent.child({ name: "order.finalize", payload: { id: "order-123" } });
+    try {
+      // ...work
+      finalize.success();
+    } catch (error) {
+      finalize.error(error);
+    }
+  },
+  { name: "checkout.request", payload: { route: "/checkout" } },
+);
 ```
 
 ## Use-case 3: Node async context propagation
@@ -170,15 +176,21 @@ import { runInSpan, traced, getCurrentSpan } from "@lib/tracing/node";
 
 setupTracer(new Tracer());
 
-const loadUser = traced(async (id: string) => {
-  const parent = getCurrentSpan();
-  parent?.event("db.lookup", { id });
-  return { id, name: "Ada" };
-}, { name: "user.load" });
+const loadUser = traced(
+  async (id: string) => {
+    const parent = getCurrentSpan();
+    parent?.event("db.lookup", { id });
+    return { id, name: "Ada" };
+  },
+  { name: "user.load" },
+);
 
-await runInSpan(async () => {
-  await loadUser("42");
-}, { name: "http.request", payload: { method: "GET", path: "/users/42" } });
+await runInSpan(
+  async () => {
+    await loadUser("42");
+  },
+  { name: "http.request", payload: { method: "GET", path: "/users/42" } },
+);
 ```
 
 Notes:

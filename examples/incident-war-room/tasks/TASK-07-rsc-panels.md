@@ -1,12 +1,15 @@
 # TASK-07: Build RSC Panels (Read Models)
 
 ## Size
+
 M
 
 ## Goal
+
 Render war-room panels from worker-side read models.
 
 ## Depends On
+
 - TASK-06
 
 ## Files To Create

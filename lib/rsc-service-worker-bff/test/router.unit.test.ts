@@ -55,7 +55,9 @@ describe("router", () => {
   });
 
   it("matches route and decodes params", () => {
-    const compiled = [compileRoute({ method: "GET", path: "/users/:id", handler: () => new Response() })];
+    const compiled = [
+      compileRoute({ method: "GET", path: "/users/:id", handler: () => new Response() }),
+    ];
 
     const match = matchRoute("/users/alice%20smith", "GET", compiled);
 
@@ -63,7 +65,9 @@ describe("router", () => {
   });
 
   it("returns null for non matching method or path", () => {
-    const compiled = [compileRoute({ method: "POST", path: "/users/:id", handler: () => new Response() })];
+    const compiled = [
+      compileRoute({ method: "POST", path: "/users/:id", handler: () => new Response() }),
+    ];
 
     expect(matchRoute("/users/1", "GET", compiled)).toBeNull();
     expect(matchRoute("/teams/1", "POST", compiled)).toBeNull();

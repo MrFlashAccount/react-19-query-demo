@@ -20,9 +20,7 @@ import {
 } from "./tracing";
 import type { ComponentReference, EncodedActionArgs } from "./types";
 import type { RSCTraceContext } from "./tracing";
-import { createFetchTransport, type RSCTransport } from "./transport";
-
-const defaultFetchTransport = createFetchTransport();
+import type { RSCTransport } from "./transport";
 const MISSING_TRANSPORT_ERROR_MESSAGE =
   '[rsc-prism] Missing RSC transport. Call bootstrapWorkerRuntime() from "@lib/rsc-prism/client-only" first, or pass options.transport explicitly.';
 
@@ -342,7 +340,7 @@ export function createCallServer(
   actionEndpoint: string,
   options?: Omit<RequestInit, "method" | "body"> & RSCRequestOptions,
 ): (actionId: string, args: unknown[]) => Promise<unknown> {
-  const transport = options?.transport ?? defaultFetchTransport;
+  const transport = resolveTransport(options?.transport);
   const { transport: _transport, parentSpan, ...requestInit } = options ?? {};
   const callServer = async (actionId: string, args: unknown[]): Promise<unknown> => {
     const requestId = createTraceRequestId("callserver");
@@ -418,7 +416,10 @@ export function createCallServer(
 
     if (!response.ok) {
       const message = await readActionErrorMessage(response);
-      finishTraceSpanError(callSpan, new Error(message ?? `Action request failed: ${response.status}`));
+      finishTraceSpanError(
+        callSpan,
+        new Error(message ?? `Action request failed: ${response.status}`),
+      );
       throw new Error(message ?? `Action request failed: ${response.status}`);
     }
 
@@ -481,8 +482,13 @@ export async function fetchRSC(
     options?.parentSpan,
   );
   const transport = resolveTransport(options?.transport);
-  const { callServer, props, transport: _transport, parentSpan: _parentSpan, ...restOptions } =
-    options ?? {};
+  const {
+    callServer,
+    props,
+    transport: _transport,
+    parentSpan: _parentSpan,
+    ...restOptions
+  } = options ?? {};
   const traceContext: RSCTraceContext = {
     requestId,
     parentSpan: rootSpan,
@@ -675,7 +681,10 @@ export async function callAction<T = void>(
 
   if (!response.ok) {
     const message = await readActionErrorMessage(response);
-    finishTraceSpanError(actionSpan, new Error(message ?? `Action '${actionId}' failed: ${response.status}`));
+    finishTraceSpanError(
+      actionSpan,
+      new Error(message ?? `Action '${actionId}' failed: ${response.status}`),
+    );
     throw new Error(message ?? `Action '${actionId}' failed: ${response.status}`);
   }
 

@@ -6,7 +6,7 @@ import {
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
   setInvalidateRSC,
 } from "../src/runtime-globals";
-import { createFunctionTransport } from "../src/transport";
+import { createMockWorkerTransport } from "./utils/mock-worker-transport";
 
 const initialWorkerBootstrap = (globalThis as typeof globalThis & Record<string, unknown>)[
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY
@@ -38,8 +38,8 @@ describe("client-only browser workflows", () => {
     expect(clientOnlyApi.registerClientModule).toBeUndefined();
     expect(clientOnlyApi.createWorkerTransport).toBeUndefined();
 
-    const transport = createFunctionTransport(async (request) => {
-      if (request.method === "GET") {
+    const transport = createMockWorkerTransport(async (request) => {
+      if (request.operation === "fetch") {
         return flightValueResponse("fetch-ok");
       }
       return flightValueResponse("action-ok");
@@ -57,13 +57,13 @@ describe("client-only browser workflows", () => {
   });
 
   it("bootstraps worker runtime and uses the bootstrapped runtime transport", async () => {
-    const seenRequests: Array<{ method: string; actionId: string | null }> = [];
-    const transport = createFunctionTransport(async (request) => {
+    const seenRequests: Array<{ operation: string; actionId: string | null }> = [];
+    const transport = createMockWorkerTransport(async (request) => {
       seenRequests.push({
-        method: request.method,
-        actionId: request.headers.get("x-rsc-action"),
+        operation: request.operation,
+        actionId: request.actionId ?? null,
       });
-      if (request.method === "GET") {
+      if (request.operation === "fetch") {
         return flightValueResponse("default-fetch-ok");
       }
       return flightValueResponse("default-action-ok");
@@ -93,8 +93,8 @@ describe("client-only browser workflows", () => {
       clientOnly.callAction<string>(runActionRef, [1], { parseResponse: true }),
     ).resolves.toBe("default-action-ok");
     expect(seenRequests).toEqual([
-      { method: "GET", actionId: null },
-      { method: "POST", actionId: "todo-actions.ts#run" },
+      { operation: "fetch", actionId: null },
+      { operation: "action", actionId: "todo-actions.ts#run" },
     ]);
 
     bootstrapped.dispose();

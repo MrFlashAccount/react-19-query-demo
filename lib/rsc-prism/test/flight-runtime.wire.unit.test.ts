@@ -70,10 +70,14 @@ describe("flight wire decode correctness", () => {
       expect(encodeSpans.length).toBeGreaterThan(0);
       expect(decodeSpans.length).toBeGreaterThan(0);
       expect(
-        encodeSpans.some((span) => span.payload.componentKind === "host" && span.payload.hostTag === "div"),
+        encodeSpans.some(
+          (span) => span.payload.componentKind === "host" && span.payload.hostTag === "div",
+        ),
       ).toBe(true);
       expect(
-        decodeSpans.some((span) => span.payload.componentKind === "host" && span.payload.hostTag === "div"),
+        decodeSpans.some(
+          (span) => span.payload.componentKind === "host" && span.payload.hostTag === "div",
+        ),
       ).toBe(true);
       expect([...encodeSpans, ...decodeSpans].every((span) => (span.duration ?? -1) >= 0)).toBe(
         true,
@@ -320,7 +324,9 @@ describe("flight wire compact stream format", () => {
       callServer,
     };
 
-    const action = parseModelString(context, "$F1") as ((...args: unknown[]) => Promise<unknown>) & {
+    const action = parseModelString(context, "$F1") as ((
+      ...args: unknown[]
+    ) => Promise<unknown>) & {
       $$typeof: symbol;
       $$id: string;
       $$bound: null;

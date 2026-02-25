@@ -1,12 +1,15 @@
 # TASK-08: Analytics Compute Worker
 
 ## Size
+
 M
 
 ## Goal
+
 Implement second compute core for heavy risk analytics.
 
 ## Depends On
+
 - TASK-04
 
 ## Files To Create

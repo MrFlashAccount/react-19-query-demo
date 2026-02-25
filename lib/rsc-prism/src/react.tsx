@@ -254,7 +254,12 @@ function applyBatchInternal(batch: RSCRefreshBatch, cause?: InvalidateCause): vo
       entry.error != null
         ? toRejectedPromise(new Error(entry.error))
         : Array.isArray(entry.rows)
-          ? createPromiseFromRows(entry.rows, resolvedCause, target.componentName, target.componentId)
+          ? createPromiseFromRows(
+              entry.rows,
+              resolvedCause,
+              target.componentName,
+              target.componentId,
+            )
           : toRejectedPromise(new Error(`Missing rows for "${entry.targetKey}"`));
     for (const consumer of target.consumers) {
       consumer.store.cache.delete(consumer.cacheKey);
@@ -491,7 +496,11 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
     const subscriber = subscriberRef.current;
     let fetchParentSpan = pendingCause?.cause.parentSpan;
     let rerenderSpan = undefined;
-    if (pendingCause != null && subscriber != null && !pendingCause.seenSubscribers.has(subscriber)) {
+    if (
+      pendingCause != null &&
+      subscriber != null &&
+      !pendingCause.seenSubscribers.has(subscriber)
+    ) {
       pendingCause.seenSubscribers.add(subscriber);
       pendingCause.remaining -= 1;
       rerenderSpan = startTraceSpan(

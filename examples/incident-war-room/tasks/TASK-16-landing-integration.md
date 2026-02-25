@@ -1,12 +1,15 @@
 # TASK-16: Add App To Landing And Root Index
 
 ## Size
+
 S
 
 ## Goal
+
 Expose new example entrypoint in both navigators.
 
 ## Depends On
+
 - TASK-01
 
 ## Files To Modify

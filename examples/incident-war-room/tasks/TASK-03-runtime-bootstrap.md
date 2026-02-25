@@ -1,12 +1,15 @@
 # TASK-03: Runtime Bootstrap And Provider Integration
 
 ## Size
+
 S
 
 ## Goal
+
 Guarantee worker transport bootstraps before first RSC request.
 
 ## Depends On
+
 - TASK-02
 
 ## Files To Modify

@@ -1,12 +1,15 @@
 # TASK-15: Vitest Browser-Runtime Integration Tests
 
 ## Size
+
 S
 
 ## Goal
+
 Add deterministic browser-runtime tests for RSC render/action contracts.
 
 ## Depends On
+
 - TASK-07
 
 ## Files To Create

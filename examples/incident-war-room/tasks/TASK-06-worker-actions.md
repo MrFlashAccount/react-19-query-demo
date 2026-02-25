@@ -1,12 +1,15 @@
 # TASK-06: Implement Worker Actions (`use worker`)
 
 ## Size
+
 M
 
 ## Goal
+
 Create mutation actions for incident lifecycle and operator workflow.
 
 ## Depends On
+
 - TASK-05
 
 ## Files To Create

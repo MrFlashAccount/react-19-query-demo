@@ -109,8 +109,8 @@
     "test:e2e:ui": "pnpm exec playwright test -c test/integration/TodoMVC/playwright.config.ts --ui"
   },
   "dependencies": {
-    "@lib/tracing": "workspace:*",
     "@babel/parser": "^7.29.0",
+    "@lib/tracing": "workspace:*",
     "web-streams-polyfill": "catalog:"
   },
   "devDependencies": {

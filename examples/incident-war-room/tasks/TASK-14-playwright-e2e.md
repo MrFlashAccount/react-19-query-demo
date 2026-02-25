@@ -1,12 +1,15 @@
 # TASK-14: Playwright Browser Workflow Tests
 
 ## Size
+
 M
 
 ## Goal
+
 Validate real user flows and transport stability in browser runtime.
 
 ## Depends On
+
 - TASK-11
 - TASK-13
 

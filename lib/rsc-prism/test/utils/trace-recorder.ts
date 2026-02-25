@@ -80,7 +80,9 @@ export class TraceRecorder {
   }
 
   getSpans(): RecordedSpan[] {
-    return Array.from(this.spansById.values()).sort((left, right) => left.startTime - right.startTime);
+    return Array.from(this.spansById.values()).sort(
+      (left, right) => left.startTime - right.startTime,
+    );
   }
 
   getSpansByName(name: string): RecordedSpan[] {

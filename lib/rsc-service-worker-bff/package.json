@@ -54,9 +54,9 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@typescript/native-preview": "catalog:",
     "@vitest/browser-playwright": "4.0.9",
     "@vitest/coverage-istanbul": "4.0.9",
-    "@typescript/native-preview": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",

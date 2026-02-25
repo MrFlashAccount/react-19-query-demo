@@ -1,12 +1,15 @@
 # TASK-05: Worker Authoritative State Store
 
 ## Size
+
 M
 
 ## Goal
+
 Implement deterministic worker-side store with serialized mutation queue.
 
 ## Depends On
+
 - TASK-04
 
 ## Files To Create

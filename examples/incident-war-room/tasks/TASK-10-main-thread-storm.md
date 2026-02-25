@@ -1,12 +1,15 @@
 # TASK-10: Deterministic Main-Thread CPU Storm Harness
 
 ## Size
+
 S
 
 ## Goal
+
 Create reproducible UI stress load on main thread.
 
 ## Depends On
+
 - TASK-01
 
 ## Files To Create

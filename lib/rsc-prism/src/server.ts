@@ -283,14 +283,18 @@ export async function handleAction(
       ...traceContext,
       parentSpan: span,
     });
-    const stream = await defaultFlightProtocolAdapter.renderStream(result as ReactNode, ctx.manifest, {
-      onError: options?.onError,
-      signal: options?.signal,
-      traceContext: {
-        ...traceContext,
-        parentSpan: span,
+    const stream = await defaultFlightProtocolAdapter.renderStream(
+      result as ReactNode,
+      ctx.manifest,
+      {
+        onError: options?.onError,
+        signal: options?.signal,
+        traceContext: {
+          ...traceContext,
+          parentSpan: span,
+        },
       },
-    });
+    );
     finishTraceSpanSuccess(span);
     return stream;
   } catch (error) {

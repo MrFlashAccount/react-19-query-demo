@@ -67,7 +67,10 @@ async function installTraceRecorder(page: Page): Promise<void> {
           spanId: String(traceEvent.span.spanId),
           parentSpanId:
             traceEvent.parentSpan == null ? undefined : String(traceEvent.parentSpan.spanId),
-          name: traceEvent.kind === "start" ? traceEvent.name ?? traceEvent.span.name : traceEvent.span.name,
+          name:
+            traceEvent.kind === "start"
+              ? (traceEvent.name ?? traceEvent.span.name)
+              : traceEvent.span.name,
           payload: traceEvent.payload,
           status: traceEvent.status,
           timestamp: traceEvent.timestamp,

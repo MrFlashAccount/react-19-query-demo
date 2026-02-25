@@ -226,7 +226,11 @@ export function A() { return null; }
     const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-bootstrap-test-"));
     tempRoots.push(root);
     await mkdir(path.join(root, "src"), { recursive: true });
-    await writeFile(path.join(root, "src", "client-a.tsx"), '"use main"; export const A = 1;', "utf8");
+    await writeFile(
+      path.join(root, "src", "client-a.tsx"),
+      '"use main"; export const A = 1;',
+      "utf8",
+    );
 
     const plugin = rscPrism({
       workerRuntime: {
@@ -245,7 +249,11 @@ export function A() { return null; }
     const root = await mkdtemp(path.join(os.tmpdir(), "rsc-prism-vite-main-no-bootstrap-test-"));
     tempRoots.push(root);
     await mkdir(path.join(root, "src"), { recursive: true });
-    await writeFile(path.join(root, "src", "client-a.tsx"), '"use main"; export const A = 1;', "utf8");
+    await writeFile(
+      path.join(root, "src", "client-a.tsx"),
+      '"use main"; export const A = 1;',
+      "utf8",
+    );
 
     const plugin = rscPrism({
       workerRuntime: {
@@ -799,7 +807,9 @@ function TodoItemRow() {
     const transformedCode =
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain('__rscPrismCreateLocalWorkerRef("/src/main.tsx#@local:TodoViewRSC"');
+    expect(transformedCode).toContain(
+      '__rscPrismCreateLocalWorkerRef("/src/main.tsx#@local:TodoViewRSC"',
+    );
     expect(transformedCode).toContain(
       "export { TodoItemRow as __rscPrismLocalClient_TodoItemRow };",
     );

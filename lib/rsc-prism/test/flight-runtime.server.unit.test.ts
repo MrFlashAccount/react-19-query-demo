@@ -101,12 +101,16 @@ describe("flight runtime server stream behavior", () => {
         props: {},
       } as ReactNode;
 
-      const stream = await renderToReadableStream(root, {}, {
-        traceContext: {
-          requestId: "server-trace-1",
-          source: "server",
+      const stream = await renderToReadableStream(
+        root,
+        {},
+        {
+          traceContext: {
+            requestId: "server-trace-1",
+            source: "server",
+          },
         },
-      });
+      );
       await new Response(stream).text();
 
       const renderSpans = traceRecorder.getSpansByName("rsc.component.render");

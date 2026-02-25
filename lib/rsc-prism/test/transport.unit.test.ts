@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setInvalidateRSC, setRSCRefreshRuntime } from "../src/runtime-globals";
 
 import {
-  createFunctionTransport,
   createWorkerRowTransport,
   createWorkerRowTransportMessageHandler,
   createWorkerTransport,
@@ -77,58 +76,6 @@ describe("transport", () => {
       collectTargets: () => [],
       applyBatch: () => {},
       legacyInvalidate: () => {},
-    });
-  });
-
-  it("function transport maps action and fetch requests", async () => {
-    const handler = vi.fn(async (request) => {
-      if (request.method === "POST") {
-        expect(request.url).toBe("/rsc");
-        expect(request.headers.get("x-rsc-action")).toBe("run");
-        expect(request.headers.get("content-type")).toBe("text/plain");
-        expect(request.body).toBe("[1]");
-        return new Response("action-ok", { status: 201 });
-      }
-
-      expect(request.method).toBe("GET");
-      expect(request.headers.get("accept")).toBe("text/x-component");
-      return new Response("fetch-ok", { status: 200 });
-    });
-
-    const transport = createFunctionTransport(handler);
-    const actionResponse = await transport.sendAction({
-      endpoint: "/rsc",
-      actionId: "run",
-      body: "[1]",
-      contentType: "text/plain",
-    });
-    const fetchResponse = await transport.fetchRSC?.({ url: "/rsc" });
-
-    expect(actionResponse.status).toBe(201);
-    await expect(actionResponse.text()).resolves.toBe("action-ok");
-    expect(fetchResponse?.status).toBe(200);
-    await expect(fetchResponse?.text()).resolves.toBe("fetch-ok");
-  });
-
-  it("function transport propagates action invalidate cause metadata", async () => {
-    const invalidateSpy = vi.fn();
-    setInvalidateRSC(invalidateSpy);
-    const transport = createFunctionTransport(async () => new Response("ok", { status: 200 }));
-
-    await transport.sendAction({
-      endpoint: "/rsc",
-      actionId: "run",
-      body: "[]",
-      contentType: "text/plain",
-    });
-
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
-    expect(invalidateSpy.mock.calls[0]?.[0]).toMatchObject({
-      causeType: "action-legacy-invalidate",
-      actionId: "run",
-      requestId: expect.any(String),
-      generation: expect.any(Number),
-      dispatchedAt: expect.any(Number),
     });
   });
 
@@ -514,7 +461,7 @@ describe("transport", () => {
     setRSCRefreshRuntime({
       collectTargets: () => [
         {
-          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
           componentId: "worker-view.tsx#TodoWorkerView",
           componentProps: { filter: "all" },
         },
@@ -528,7 +475,7 @@ describe("transport", () => {
       expect(request.refreshBatchSeq).toBe(1);
       expect(request.refreshTargets).toEqual([
         {
-          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
           componentId: "worker-view.tsx#TodoWorkerView",
           componentProps: { filter: "all" },
         },
@@ -598,7 +545,7 @@ describe("transport", () => {
     setRSCRefreshRuntime({
       collectTargets: () => [
         {
-          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
           componentId: "worker-view.tsx#TodoWorkerView",
           componentProps: { filter: "all" },
         },
@@ -617,7 +564,7 @@ describe("transport", () => {
           seq: request.refreshBatchSeq ?? 0,
           entries: [
             {
-              targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+              targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
               rows: [flightModelRow(0, "batched"), flightDoneRow()],
             },
           ],
@@ -642,7 +589,7 @@ describe("transport", () => {
       seq: 1,
       entries: [
         {
-          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
           rows: [flightModelRow(0, "batched"), flightDoneRow()],
           error: undefined,
         },
@@ -665,7 +612,7 @@ describe("transport", () => {
     setRSCRefreshRuntime({
       collectTargets: () => [
         {
-          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
           componentId: "worker-view.tsx#TodoWorkerView",
           componentProps: { filter: "all" },
         },
@@ -685,7 +632,7 @@ describe("transport", () => {
             seq: request.refreshBatchSeq ?? 0,
             entries: [
               {
-                targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+                targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
                 rows: [flightModelRow(0, request.actionId), flightDoneRow()],
               },
             ],
@@ -724,7 +671,7 @@ describe("transport", () => {
       seq: 2,
       entries: [
         {
-          targetKey: "worker-view.tsx#TodoWorkerView|props:{\"filter\":\"all\"}",
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
           rows: [flightModelRow(0, "second"), flightDoneRow()],
           error: undefined,
         },
@@ -909,7 +856,9 @@ describe("transport", () => {
     const onMessage = createWorkerRowTransportMessageHandler(async (_request, emit, controls) => {
       controls.setActionRefreshBatch({
         seq: 7,
-        entries: [{ targetKey: "mod#Comp|props:{}", rows: [flightModelRow(0, "next"), flightDoneRow()] }],
+        entries: [
+          { targetKey: "mod#Comp|props:{}", rows: [flightModelRow(0, "next"), flightDoneRow()] },
+        ],
       });
       emit(flightModelRow(0, "ok"));
       emit(flightDoneRow());

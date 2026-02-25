@@ -1,12 +1,15 @@
 # TASK-09: Analytics Bridge, Cache, And In-Flight Dedupe
 
 ## Size
+
 M
 
 ## Goal
+
 Connect state snapshots to analytics worker with versioned caching.
 
 ## Depends On
+
 - TASK-05
 - TASK-08
 

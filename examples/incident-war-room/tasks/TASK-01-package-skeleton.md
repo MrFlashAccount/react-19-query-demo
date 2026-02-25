@@ -1,9 +1,11 @@
 # TASK-01: Create Example Package Skeleton
 
 ## Size
+
 S
 
 ## Goal
+
 Create a standalone app package at `examples/incident-war-room` that compiles and runs.
 
 ## Files To Create

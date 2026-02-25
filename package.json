@@ -1,7 +1,6 @@
 {
   "name": "react-vite-ts",
   "version": "0.0.0",
-  "packageManager": "pnpm@9.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -36,8 +35,8 @@
     "release": "changeset publish --provenance --access public"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.5",
     "@babel/core": "catalog:",
+    "@changesets/cli": "^2.29.5",
     "@rollup/plugin-babel": "catalog:",
     "@tailwindcss/vite": "catalog:",
     "@testing-library/dom": "catalog:",
@@ -57,12 +56,13 @@
     "react": "catalog:",
     "react-dom": "catalog:",
     "tailwindcss": "catalog:",
-    "turbo": "^2.3.3",
     "tsdown": "catalog:",
+    "turbo": "^2.3.3",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"
   },
+  "packageManager": "pnpm@9.5.0",
   "pnpm": {
     "overrides": {
       "chartgpu-react>chartgpu": "0.2.1"

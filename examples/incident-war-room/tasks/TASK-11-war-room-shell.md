@@ -1,12 +1,15 @@
 # TASK-11: Build Single-Route War Room Shell
 
 ## Size
+
 M
 
 ## Goal
+
 Compose all panels and controls into one operator command view.
 
 ## Depends On
+
 - TASK-07
 - TASK-10
 

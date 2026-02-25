@@ -1,12 +1,15 @@
 # TASK-02: Wire Vite With rsc-prism Dual-Core Runtime
 
 ## Size
+
 S
 
 ## Goal
+
 Enable plugin-managed worker runtime and experimental batch refresh.
 
 ## Depends On
+
 - TASK-01
 
 ## Files To Modify

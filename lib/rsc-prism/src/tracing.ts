@@ -335,7 +335,11 @@ function resolveTraceDisplayName(name: string, payload: Record<string, unknown>)
       resolveComponentName(readStringField(payload, "componentId")) ??
       readStringField(payload, "hostTag");
     const phase =
-      name === "rsc.component.render" ? "Render" : name === "rsc.component.encode" ? "Encode" : "Decode";
+      name === "rsc.component.render"
+        ? "Render"
+        : name === "rsc.component.encode"
+          ? "Encode"
+          : "Decode";
     const componentSeq = payload.componentSeq;
     const parentComponentSeq = payload.parentComponentSeq;
     const orderPrefix =
@@ -370,7 +374,9 @@ function resolveTraceDisplayName(name: string, payload: Record<string, unknown>)
     return actionLabel != null ? `Action Send Transport: ${actionLabel}` : "Action Send Transport";
   }
   if (name === "rsc.react.rerender.fetch") {
-    return componentLabel != null ? `Rerender Send Fetch: ${componentLabel}` : "Rerender Send Fetch";
+    return componentLabel != null
+      ? `Rerender Send Fetch: ${componentLabel}`
+      : "Rerender Send Fetch";
   }
   if (name === "rsc.client.fetchRSC") {
     return componentLabel != null ? `Render Send Fetch: ${componentLabel}` : "Render Send Fetch";
@@ -586,11 +592,7 @@ function summarizeString(value: string): string {
   return `${value.slice(0, TRACE_MAX_STRING_LENGTH)}…`;
 }
 
-function summarizeTraceValue(
-  value: unknown,
-  depth: number,
-  seen: WeakSet<object>,
-): unknown {
+function summarizeTraceValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
   if (value == null || typeof value === "boolean") {
     return value;
   }

@@ -1,12 +1,15 @@
 # TASK-18: README And Architecture Note
 
 ## Size
+
 S
 
 ## Goal
+
 Document runbook for humans and LLM follow-up implementers.
 
 ## Depends On
+
 - TASK-17
 
 ## Files To Create

@@ -1,12 +1,15 @@
 # TASK-17: Integrate Into Single-Project Vercel Build
 
 ## Size
+
 S
 
 ## Goal
+
 Include new app in root build script and rewrite map.
 
 ## Depends On
+
 - TASK-01
 - TASK-16
 

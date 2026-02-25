@@ -84,10 +84,7 @@ async function readEncodedActionArgs(request: Request): Promise<EncodedActionArg
     : { type: "string", data: await request.text() };
 }
 
-function requestTraceContext(
-  request: Request,
-  parentSpan?: ISpan,
-): RSCTraceContext {
+function requestTraceContext(request: Request, parentSpan?: ISpan): RSCTraceContext {
   return {
     requestId: request.headers.get("x-rsc-request-id") ?? createTraceRequestId("response"),
     actionId: getActionIdFromRequest(request) ?? undefined,

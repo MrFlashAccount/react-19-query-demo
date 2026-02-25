@@ -5,7 +5,13 @@ import {
   type WorkerTransportRequestMessage,
 } from "./transport";
 import type { ReactNode } from "react";
-import { flightDoneRow, flightErrorRow, ROW_DONE, ROW_ERROR, type FlightRowMessage } from "./flight-runtime/wire";
+import {
+  flightDoneRow,
+  flightErrorRow,
+  ROW_DONE,
+  ROW_ERROR,
+  type FlightRowMessage,
+} from "./flight-runtime/wire";
 import { finishTraceSpanError, finishTraceSpanSuccess, startTraceSpan } from "./tracing";
 
 interface WorkerRuntimeModuleConfig {

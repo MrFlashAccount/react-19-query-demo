@@ -1,10 +1,4 @@
-import {
-  setupWorker,
-  http,
-  json,
-  error,
-  noContent,
-} from "@lib/rsc-service-worker-bff";
+import { setupWorker, http, json, error, noContent } from "@lib/rsc-service-worker-bff";
 import { createClientModule } from "@lib/rsc-prism";
 import { createFlightResponse } from "@lib/rsc-prism/flight-serializer";
 import { getDB, setLastMetricTime } from "@/db/index";
@@ -461,35 +455,38 @@ const getServerRSC = http.get("/rsc/server", async ({ url }) => {
 // Setup Worker
 // ─────────────────────────────────────────────────────────────────────────────
 
-setupWorker([
-  // RSC
-  getServerRSC,
-  // Servers
-  getServers,
-  getServer,
-  createServer,
-  updateServer,
-  deleteServer,
-  // Metrics
-  getMetrics,
-  getLatestMetrics,
-  // Logs
-  getLogs,
-  getLog,
-  // Alerts
-  getAlerts,
-  getAlert,
-  createAlert,
-  updateAlert,
-  deleteAlert,
-  // Incidents
-  getIncidents,
-  acknowledgeIncident,
-  resolveIncident,
-  // Stats
-  getStats,
-  // Simulation
-  recordMetricTime,
-], {
-  basePath: self.location.pathname.replace(/\/sw\.js$/, ""),
-});
+setupWorker(
+  [
+    // RSC
+    getServerRSC,
+    // Servers
+    getServers,
+    getServer,
+    createServer,
+    updateServer,
+    deleteServer,
+    // Metrics
+    getMetrics,
+    getLatestMetrics,
+    // Logs
+    getLogs,
+    getLog,
+    // Alerts
+    getAlerts,
+    getAlert,
+    createAlert,
+    updateAlert,
+    deleteAlert,
+    // Incidents
+    getIncidents,
+    acknowledgeIncident,
+    resolveIncident,
+    // Stats
+    getStats,
+    // Simulation
+    recordMetricTime,
+  ],
+  {
+    basePath: self.location.pathname.replace(/\/sw\.js$/, ""),
+  },
+);

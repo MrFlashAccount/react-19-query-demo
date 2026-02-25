@@ -229,7 +229,9 @@ describe("worker", () => {
     });
 
     const worker = createWorker("/sw.js");
-    await expect(worker.start()).rejects.toThrow("Service Workers are not supported in this browser");
+    await expect(worker.start()).rejects.toThrow(
+      "Service Workers are not supported in this browser",
+    );
 
     Object.defineProperty(globalThis, "navigator", {
       value: originalNavigator,

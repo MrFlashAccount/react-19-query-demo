@@ -8,7 +8,7 @@ import {
   fetchRSC,
 } from "../src/client";
 import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
-import { createFunctionTransport } from "../src/transport";
+import { createMockWorkerTransport } from "./utils/mock-worker-transport";
 import { setAutoClientManifest } from "../src/runtime/client-manifest";
 import { createFromRowEmitter } from "../src/flight-runtime/client";
 import { TraceRecorder } from "./utils/trace-recorder";
@@ -84,7 +84,9 @@ describe("rsc client browser workflows", () => {
       const decodeSpans = traceRecorder.getSpansByName("rsc.component.decode");
       expect(decodeSpans.length).toBeGreaterThan(0);
       expect(
-        decodeSpans.some((span) => span.payload.componentKind === "host" && span.payload.hostTag === "div"),
+        decodeSpans.some(
+          (span) => span.payload.componentKind === "host" && span.payload.hostTag === "div",
+        ),
       ).toBe(true);
       expect(decodeSpans.every((span) => (span.duration ?? -1) >= 0)).toBe(true);
     } finally {
@@ -246,20 +248,22 @@ describe("rsc client browser workflows", () => {
     }
 
     const seenRequests: Array<{
-      method: string;
-      url: string;
+      operation: string;
+      endpoint: string;
       accept: string | null;
       actionId: string | null;
     }> = [];
-    const transport = createFunctionTransport(async (request) => {
+    const transport = createMockWorkerTransport(async (request) => {
+      const headers = request.headers ?? [];
+      const headersMap = new Map(headers);
       seenRequests.push({
-        method: request.method,
-        url: request.url,
-        accept: request.headers.get("accept"),
-        actionId: request.headers.get("x-rsc-action"),
+        operation: request.operation,
+        endpoint: request.endpoint,
+        accept: headersMap.get("accept") ?? null,
+        actionId: request.actionId ?? headersMap.get("x-rsc-action") ?? null,
       });
 
-      if (request.method === "GET") {
+      if (request.operation === "fetch") {
         return flightValueResponse("fetch-ok");
       }
 
@@ -277,14 +281,14 @@ describe("rsc client browser workflows", () => {
     ).resolves.toBe("action-ok");
 
     expect(seenRequests[0]).toEqual({
-      method: "GET",
-      url: "/rsc/view",
+      operation: "fetch",
+      endpoint: "/rsc/view",
       accept: "text/x-component",
       actionId: null,
     });
     expect(seenRequests[1]).toEqual({
-      method: "POST",
-      url: "/rsc/action",
+      operation: "action",
+      endpoint: "/rsc/action",
       accept: null,
       actionId: "todo-actions.ts#run",
     });
@@ -314,8 +318,8 @@ describe("rsc client browser workflows", () => {
 
   it("creates callServer function that posts action request", async () => {
     const seenActionIds: string[] = [];
-    const transport = createFunctionTransport(async (request) => {
-      seenActionIds.push(request.headers.get("x-rsc-action") ?? "");
+    const transport = createMockWorkerTransport(async (request) => {
+      seenActionIds.push(request.actionId ?? "");
       return flightValueResponse("call-server-ok");
     });
 
@@ -325,8 +329,8 @@ describe("rsc client browser workflows", () => {
   });
 
   it("surfaces flight-streamed action errors", async () => {
-    const transport = createFunctionTransport(async (request) => {
-      if (request.method === "POST") {
+    const transport = createMockWorkerTransport(async (request) => {
+      if (request.operation === "action") {
         return flightErrorResponse("Action exploded", 500);
       }
       return flightValueResponse("ok");

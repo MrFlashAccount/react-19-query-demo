@@ -1,12 +1,15 @@
 # TASK-12: Visual System (High-Contrast Ops Glass)
 
 ## Size
+
 M
 
 ## Goal
+
 Deliver distinctive flagship visuals, not boilerplate dashboard styling.
 
 ## Depends On
+
 - TASK-11
 
 ## Files To Modify

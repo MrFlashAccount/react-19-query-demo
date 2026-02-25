@@ -1,12 +1,15 @@
 # TASK-13: Stress And Tracing HUD
 
 ## Size
+
 S
 
 ## Goal
+
 Expose runtime proof that RSC flow stays usable under stress.
 
 ## Depends On
+
 - TASK-10
 - TASK-11
 
