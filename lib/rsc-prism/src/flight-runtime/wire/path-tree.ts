@@ -13,15 +13,23 @@ import { isFlightWireString } from "./shared";
 export type RevivePathTree = [string | number, RevivePathTree | true][];
 
 /** Merges consecutive numeric keys with identical subtrees into REVIVE_PATH_WILDCARD. */
-function compactRevivePathTree(tree: RevivePathTree): RevivePathTree {
-  const compactedChildren: RevivePathTree = tree.map(([key, child]) => [
-    key,
-    child === true ? true : compactRevivePathTree(child),
-  ]);
+function compactRevivePathTree(
+  tree: RevivePathTree,
+  cache: Map<RevivePathTree, RevivePathTree>,
+): RevivePathTree {
+  const cached = cache.get(tree);
+  if (cached) return cached;
+
+  for (let i = 0; i < tree.length; i += 1) {
+    const child = tree[i][1];
+    if (child !== true) {
+      tree[i][1] = compactRevivePathTree(child, cache);
+    }
+  }
 
   const numericChildren: RevivePathTree = [];
   const otherChildren: RevivePathTree = [];
-  for (const entry of compactedChildren) {
+  for (const entry of tree) {
     const [key] = entry;
     if (typeof key === "number" && key >= 0) {
       numericChildren.push(entry);
@@ -31,17 +39,21 @@ function compactRevivePathTree(tree: RevivePathTree): RevivePathTree {
   }
 
   if (numericChildren.length < 2) {
-    return compactedChildren;
+    cache.set(tree, tree);
+    return tree;
   }
 
-  const firstChild = JSON.stringify(numericChildren[0][1]);
+  // mapToArray deduplicates subtrees, so identical structure => same ref; use === not JSON.stringify
+  const firstSubtree = numericChildren[0][1];
   for (let i = 1; i < numericChildren.length; i += 1) {
-    if (JSON.stringify(numericChildren[i][1]) !== firstChild) {
-      return compactedChildren;
+    if (numericChildren[i][1] !== firstSubtree) {
+      cache.set(tree, tree);
+      return tree;
     }
   }
 
-  otherChildren.push([REVIVE_PATH_WILDCARD, numericChildren[0][1]]);
+  otherChildren.push([REVIVE_PATH_WILDCARD, firstSubtree]);
+  cache.set(tree, otherChildren);
   return otherChildren;
 }
 
@@ -78,7 +90,8 @@ export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePa
     subtreeCache.set(key, out);
     return out;
   }
-  return compactRevivePathTree(mapToArray(root));
+  const compactCache = new Map<RevivePathTree, RevivePathTree>();
+  return compactRevivePathTree(mapToArray(root), compactCache);
 }
 
 function isRevivePathTree(value: unknown): value is RevivePathTree {
