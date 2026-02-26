@@ -58,18 +58,12 @@ describe("rsc client browser workflows", () => {
 
     const seenRequests: Array<{
       operation: string;
-      endpoint: string;
-      accept: string | null;
       actionId: string | null;
     }> = [];
     const transport = createMockWorkerTransport(async (request) => {
-      const headers = request.headers ?? [];
-      const headersMap = new Map(headers);
       seenRequests.push({
         operation: request.operation,
-        endpoint: request.endpoint,
-        accept: headersMap.get("accept") ?? null,
-        actionId: request.actionId ?? headersMap.get("x-rsc-action") ?? null,
+        actionId: request.actionId ?? null,
       });
 
       if (request.operation === "fetch") {
@@ -89,14 +83,10 @@ describe("rsc client browser workflows", () => {
 
     expect(seenRequests[0]).toEqual({
       operation: "fetch",
-      endpoint: "/rsc/view",
-      accept: "text/x-component",
       actionId: null,
     });
     expect(seenRequests[1]).toEqual({
       operation: "action",
-      endpoint: "/rsc/action",
-      accept: null,
       actionId: "todo-actions.ts#run",
     });
   });
@@ -130,7 +120,7 @@ describe("rsc client browser workflows", () => {
       return "call-server-ok";
     });
 
-    const callServer = createCallServer("/rsc/action", { transport });
+    const callServer = createCallServer({ transport });
     await expect(callServer("increment", [1])).resolves.toBe("call-server-ok");
     expect(seenActionIds).toEqual(["increment"]);
   });

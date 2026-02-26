@@ -8,7 +8,6 @@
 import type { ReactNode } from "react";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import { buildClientManifestBaseUrl } from "./runtime/module-registry";
-import { polyfillReady } from "./polyfill";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
 import { registerActions } from "./actions";
 import { defaultFlightProtocolAdapter } from "./actions/adapter";
@@ -145,7 +144,6 @@ export async function createWorkerRowHandler(options: CreateWorkerRowHandlerOpti
   );
   const ctx = createRSCContext(options.manifest);
   const ready = (async () => {
-    await polyfillReady;
     if (options.actions) {
       await registerActions(ctx, options.actions);
     }

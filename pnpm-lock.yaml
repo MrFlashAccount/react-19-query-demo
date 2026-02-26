@@ -78,9 +78,6 @@ catalogs:
     vitest:
       specifier: 4.0.9
       version: 4.0.9
-    web-streams-polyfill:
-      specifier: ^4.1.0
-      version: 4.2.0
 
 overrides:
   chartgpu-react>chartgpu: 0.2.1
@@ -493,9 +490,6 @@ importers:
       '@babel/parser':
         specifier: ^7.29.0
         version: 7.29.0
-      web-streams-polyfill:
-        specifier: 'catalog:'
-        version: 4.2.0
     devDependencies:
       '@playwright/test':
         specifier: 'catalog:'
@@ -3684,10 +3678,6 @@ packages:
         optional: true
       jsdom:
         optional: true
-
-  web-streams-polyfill@4.2.0:
-    resolution: {integrity: sha512-0rYDzGOh9EZpig92umN5g5D/9A1Kff7k0/mzPSSCY8jEQeYkgRMoY7LhbXtUCWzLCMX0TUE9aoHkjFNB7D9pfA==}
-    engines: {node: '>= 8'}
 
   webidl-conversions@7.0.0:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
@@ -7273,8 +7263,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-
-  web-streams-polyfill@4.2.0: {}
 
   webidl-conversions@7.0.0:
     optional: true

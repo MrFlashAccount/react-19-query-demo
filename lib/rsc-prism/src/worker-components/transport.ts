@@ -10,7 +10,7 @@ import { DEFAULT_REQUEST_TYPE, DEFAULT_ROW_RESPONSE_TYPE } from "./constants";
 import { createWorkerRequestEnvelope } from "./encode";
 import { getWorkerEndpointState } from "./endpoint";
 import { normalizeWorkerRowMessage } from "./decode";
-import { nextRequestId, toHeaderTuples } from "./shared";
+import { nextRequestId } from "./shared";
 import type {
   RSCTransport,
   SendActionInput,
@@ -130,16 +130,9 @@ export function createWorkerRowTransport(
 
   return {
     fetchRSCDirect<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T> {
-      const requestId = nextRequestId();
-      const headers = new Headers(input.headers);
-      headers.set("accept", "text/x-component");
-      headers.set("x-rsc-request-id", requestId);
       return sendRowRequest<T>(
         {
           operation: "fetch",
-          endpoint: input.url,
-          headers: toHeaderTuples(headers),
-          requestInit: input.requestInit,
           componentId: input.componentId,
           componentProps: input.componentProps,
         },
@@ -157,18 +150,12 @@ export function createWorkerRowTransport(
           ? ++actionRefreshDispatchSeq
           : undefined;
       let sawBatchMetadata = false;
-      const requestId = nextRequestId();
-      const headers = new Headers(input.headers);
-      headers.set("x-rsc-request-id", requestId);
       return sendRowRequest<T>(
         {
           operation: "action",
-          endpoint: input.endpoint,
           actionId: input.actionId,
           contentType: input.contentType,
-          headers: toHeaderTuples(headers),
           body: input.body,
-          requestInit: input.requestInit,
           refreshTargets: refreshTargets.length > 0 ? refreshTargets : undefined,
           refreshBatchSeq,
         },

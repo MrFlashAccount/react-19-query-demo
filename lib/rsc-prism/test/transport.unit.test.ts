@@ -55,12 +55,9 @@ const CANONICAL_WORKER_REQUEST_KEYS = [
   "type",
   "id",
   "operation",
-  "endpoint",
   "actionId",
   "contentType",
-  "headers",
   "body",
-  "requestInit",
   "componentId",
   "componentProps",
   "refreshTargets",
@@ -97,13 +94,11 @@ describe("transport", () => {
 
     const transport = createWorkerRowTransport(endpoint);
     await transport.sendActionDirect?.({
-      endpoint: "/rsc/action",
       actionId: "save",
       body: "[]",
       contentType: "text/plain",
     });
     await transport.fetchRSCDirect?.({
-      url: "/rsc/view",
       componentId: "mod#Comp",
       componentProps: { id: 1 },
     });
@@ -135,7 +130,7 @@ describe("transport", () => {
     const transport = createWorkerRowTransport(endpoint);
     await expect(
       transport.fetchRSCDirect?.<string>({
-        url: "/rsc",
+        componentId: "mod#Comp",
       }),
     ).resolves.toBe("ok");
   });
@@ -161,7 +156,7 @@ describe("transport", () => {
     const transport = createWorkerRowTransport(endpoint);
     await expect(
       transport.fetchRSCDirect?.<string>({
-        url: "/rsc",
+        componentId: "mod#Comp",
       }),
     ).resolves.toBe("ok");
 
@@ -207,7 +202,6 @@ describe("transport", () => {
     });
     await expect(
       transport.sendActionDirect?.<string>({
-        endpoint: "/rsc/action",
         actionId: "actions#save",
         body: "[]",
         contentType: "text/plain",
@@ -292,7 +286,6 @@ describe("transport", () => {
     });
     await expect(
       transport.sendActionDirect?.<string>({
-        endpoint: "/rsc/action",
         actionId: "actions#save",
         body: "[]",
         contentType: "text/plain",
@@ -360,13 +353,11 @@ describe("transport", () => {
 
     await Promise.all([
       transport.sendActionDirect?.<string>({
-        endpoint: "/rsc/action",
         actionId: "first",
         body: "[]",
         contentType: "text/plain",
       }),
       transport.sendActionDirect?.<string>({
-        endpoint: "/rsc/action",
         actionId: "second",
         body: "[]",
         contentType: "text/plain",
@@ -413,7 +404,7 @@ describe("transport", () => {
 
     const transport = createWorkerRowTransport(endpoint);
     const value = await transport.fetchRSCDirect?.<Uint8Array>({
-      url: "/rsc",
+      componentId: "mod#Comp",
     });
     expect(Array.from(value ?? [])).toEqual([1, 2, 3]);
   });
@@ -444,7 +435,7 @@ describe("transport", () => {
     const transport = createWorkerRowTransport(endpoint);
     await expect(
       transport.fetchRSCDirect?.<string>({
-        url: "/rsc",
+        componentId: "mod#Comp",
       }),
     ).resolves.toBe("ready");
   });
@@ -479,7 +470,7 @@ describe("transport", () => {
 
     const transport = createWorkerRowTransport(endpoint);
     const value = await transport.fetchRSCDirect?.<{ first: unknown }>({
-      url: "/rsc",
+      componentId: "mod#Comp",
     });
 
     const lazy = value?.first as {
@@ -516,7 +507,7 @@ describe("transport", () => {
 
     await expect(
       transport.fetchRSCDirect?.({
-        url: "/rsc",
+        componentId: "mod#Comp",
       }),
     ).rejects.toThrow("Worker transport timed out");
   });
@@ -570,7 +561,7 @@ describe("transport", () => {
         type: "rsc.transport.request",
         id: "abc",
         operation: "action",
-        endpoint: "/rsc/action",
+        actionId: "mod#save",
       },
       currentTarget: { postMessage },
     } as unknown as MessageEvent<unknown>);

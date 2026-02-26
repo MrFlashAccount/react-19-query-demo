@@ -7,11 +7,7 @@
  * createWorkerRowTransportMessageHandler, createWorkerRuntime.
  */
 
-export {
-  DEFAULT_REQUEST_TYPE,
-  DEFAULT_ROW_RESPONSE_TYPE,
-  WORKER_STREAM_CHUNK_BATCH_BYTES,
-} from "./constants";
+export { DEFAULT_REQUEST_TYPE, DEFAULT_ROW_RESPONSE_TYPE } from "./constants";
 export type {
   SendActionInput,
   FetchRSCInput,

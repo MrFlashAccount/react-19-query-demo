@@ -11,7 +11,6 @@ import {
 } from "vite";
 import { build as viteBuild } from "vite";
 import react from "@vitejs/plugin-react";
-import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "./actions/constants";
 import {
   MAIN_THREAD_MODULES_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
@@ -124,7 +123,6 @@ interface WorkerRuntimeModuleEntry extends MainThreadModuleEntry {
 
 export interface RscPrismWorkerRuntimeOptions {
   enabled?: boolean;
-  endpoint?: string;
   outDir?: string;
   aliases?: NonNullable<UserConfig["resolve"]>["alias"];
 }
@@ -1550,10 +1548,7 @@ function buildWorkerComponentRegistryCode(
   return { code: `${lines.join("\n")}\n`, actionShortIdMap };
 }
 
-function buildGeneratedWorkerEntryCode(
-  _endpoint: string,
-  experimentalActionBatchRefresh: boolean,
-): string {
+function buildGeneratedWorkerEntryCode(experimentalActionBatchRefresh: boolean): string {
   return `
 import { createWorkerRowHandler } from "@lib/rsc-prism/server";
 import { encodedArgsFromMessage } from "@lib/rsc-prism/actions";
@@ -1962,8 +1957,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     options.experimental?.componentLevelDirectives === true;
   const experimentalActionBatchRefresh = options.experimental?.actionBatchRefresh === true;
   const workerRuntimeEnabled = options.mode === "main" && options.workerRuntime?.enabled === true;
-  const workerEndpoint = options.workerRuntime?.endpoint ?? DEFAULT_VIEW_ENDPOINT;
-
   let config: ResolvedConfig | null = null;
   const parsedDirectiveModules = new Map<string, ParsedDirectiveModule>();
   let generatedWorkerOutDir: string | null = null;
@@ -2687,7 +2680,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     await writeFile(registryPath, registryCode, "utf8");
     await writeFile(
       entryPath,
-      buildGeneratedWorkerEntryCode(workerEndpoint, experimentalActionBatchRefresh),
+      buildGeneratedWorkerEntryCode(experimentalActionBatchRefresh),
       "utf8",
     );
 
@@ -3339,7 +3332,6 @@ export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
     workerRuntime: {
       ...options.workerRuntime,
       enabled: options.workerRuntime?.enabled ?? true,
-      endpoint: options.workerRuntime?.endpoint ?? DEFAULT_VIEW_ENDPOINT,
       outDir: options.workerRuntime?.outDir ?? ".vite/rsc-prism-worker-runtime",
       aliases: options.workerRuntime?.aliases ?? [],
     },

@@ -6,7 +6,6 @@ import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
-import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "./actions/constants";
 import { defaultFlightProtocolAdapter } from "./actions/adapter";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import { WORKER_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL } from "./module-references/constants";
@@ -199,13 +198,12 @@ export async function encodeActionArgs(args: unknown[]): Promise<EncodedActionAr
  *
  * @example
  * ```ts
- * const callServer = createCallServer('/rsc/action');
+ * const callServer = createCallServer();
  * const element = await fetchRSC(componentRef, { callServer });
  * ```
  */
 export function createCallServer(
-  actionEndpoint: string,
-  options?: Omit<RequestInit, "method" | "body"> & RSCTransportOptions,
+  options?: RSCTransportOptions,
 ): (actionId: string, args: unknown[]) => Promise<unknown> {
   const transport = resolveTransport(options?.transport);
   if (transport.sendActionDirect == null) {
@@ -213,19 +211,15 @@ export function createCallServer(
       "[rsc-prism] Transport must support sendActionDirect. Use worker row transport.",
     );
   }
-  const { transport: _transport, ...requestInit } = options ?? {};
   const callServer = async (actionId: string, args: unknown[]): Promise<unknown> => {
     const encodedArgs = await encodeActionArgs(args);
     const contentType = getEncodedActionArgsContentType(encodedArgs);
     const manifest = resolveClientManifestOrThrow();
     return transport.sendActionDirect!(
       {
-        endpoint: actionEndpoint,
         actionId,
         body: encodedArgs.data,
         contentType,
-        headers: requestInit.headers,
-        requestInit,
       },
       { manifest, callServer },
     );
@@ -254,9 +248,8 @@ export async function fetchRSC(
   const workerComponentCandidate = typeof target === "string" ? null : target;
   const transport = resolveTransport(options?.transport);
   const { callServer, props, transport: _transport } = options ?? {};
-  const resolvedCallServer = callServer ?? createCallServer(DEFAULT_ACTION_ENDPOINT, { transport });
+  const resolvedCallServer = callServer ?? createCallServer({ transport });
   const workerComponent = workerComponentCandidate;
-  const url = DEFAULT_VIEW_ENDPOINT;
 
   if (workerComponent != null && !isWorkerComponentReference(workerComponent)) {
     throw new Error(
@@ -270,7 +263,6 @@ export async function fetchRSC(
   const manifest = resolveClientManifestOrThrow();
   return transport.fetchRSCDirect(
     {
-      url,
       componentId: workerComponent?.$$id,
       componentProps: props,
     },
@@ -281,9 +273,8 @@ export async function fetchRSC(
 /**
  * Options for calling a server action
  */
-export interface CallActionOptions extends Omit<RequestInit, "method" | "body"> {
+export interface CallActionOptions {
   transport?: RSCTransport;
-  endpoint?: string;
 }
 
 /**
@@ -321,14 +312,12 @@ export async function callAction<T = void>(
 
   const actionId = action.$$id;
   const transport = resolveTransport(options?.transport);
-  const endpoint = options.endpoint ?? DEFAULT_ACTION_ENDPOINT;
   const encodedArgs = await encodeActionArgs(args);
   const contentType = getEncodedActionArgsContentType(encodedArgs);
 
   const manifest = resolveClientManifestOrThrow();
   return transport.sendActionDirect<T>(
     {
-      endpoint,
       actionId,
       body: encodedArgs.data,
       contentType,

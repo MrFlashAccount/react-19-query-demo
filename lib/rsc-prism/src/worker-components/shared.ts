@@ -9,10 +9,6 @@ export function nextRequestId(): string {
   return `rsc-${Date.now()}-${requestCounter}`;
 }
 
-export function toHeaderTuples(headers?: HeadersInit): [string, string][] {
-  return [...new Headers(headers).entries()];
-}
-
 export function transferListForChunk(chunk: Uint8Array): Transferable[] | undefined {
   if (chunk.byteLength === 0) return undefined;
   const buffer = chunk.buffer;

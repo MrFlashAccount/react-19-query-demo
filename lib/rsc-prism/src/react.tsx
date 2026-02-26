@@ -1,5 +1,4 @@
 import { startTransition, use, useEffect, useRef, useState } from "react";
-import { DEFAULT_ACTION_ENDPOINT } from "./actions/constants";
 import { bootstrapWorkerRuntime, createCallServer, fetchRSC } from "./client";
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightRowMessage } from "./flight-runtime/wire";
@@ -82,10 +81,8 @@ function createPromiseFromRows(rows: FlightRowMessage[]): Promise<React.ReactNod
       | undefined;
     const callServer =
       runtime != null && runtime.transport != null
-        ? createCallServer(DEFAULT_ACTION_ENDPOINT, {
-            transport: runtime.transport as any,
-          })
-        : createCallServer(DEFAULT_ACTION_ENDPOINT);
+        ? createCallServer({ transport: runtime.transport as any })
+        : createCallServer();
     const emitter = createFromRowEmitter<React.ReactNode>({
       callServer,
     });

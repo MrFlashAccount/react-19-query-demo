@@ -34,7 +34,6 @@ export default defineConfig(({ mode }) => ({
     ],
   },
   optimizeDeps: {
-    include: ["web-streams-polyfill"],
     exclude: ["react", "react/jsx-runtime", "react/jsx-dev-runtime", "react-dom"],
   },
   test: {

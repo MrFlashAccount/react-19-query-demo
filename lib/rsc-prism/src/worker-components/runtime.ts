@@ -5,7 +5,6 @@
  * generates equivalent inline code. PostMessage-only, no Request/Response.
  */
 
-import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "../actions/constants";
 import { encodedArgsFromMessage } from "../actions";
 import { createWorkerRowHandler } from "../server";
 import { createWorkerRowTransportMessageHandler } from "./handler";
@@ -28,9 +27,6 @@ interface WorkerRuntimeModuleConfig {
 }
 
 export interface CreateWorkerRuntimeOptions {
-  endpoint?: string;
-  actionEndpoint?: string;
-  workerOrigin?: string;
   componentModules: WorkerRuntimeModuleConfig[];
   actionModules?: WorkerRuntimeModuleConfig[];
   actionBatchRefresh?: boolean;
@@ -52,9 +48,6 @@ function buildComponentRegistry(
 }
 
 export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): Promise<void> {
-  const endpoint = options.endpoint ?? DEFAULT_VIEW_ENDPOINT;
-  const actionEndpoint = options.actionEndpoint ?? DEFAULT_ACTION_ENDPOINT;
-  const workerOrigin = options.workerOrigin ?? "https://rsc.prism.local";
   const componentRegistry = buildComponentRegistry(options.componentModules);
   const actionBatchRefreshEnabled = options.actionBatchRefresh === true;
   const handler = await createWorkerRowHandler({
@@ -90,14 +83,7 @@ export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): 
     "message",
     createWorkerRowTransportMessageHandler(
       async (request: WorkerTransportRequestMessage, emit, controls) => {
-        const target = new URL(request.endpoint, workerOrigin);
-
         if (request.operation === "fetch") {
-          if (target.pathname !== endpoint) {
-            emit(flightErrorRow(`Unknown endpoint: ${target.pathname}`));
-            return;
-          }
-
           const component = componentRegistry.get(request.componentId ?? "");
           if (component == null) {
             emit(flightErrorRow("Missing or unknown worker component reference."));
@@ -109,11 +95,6 @@ export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): 
         }
 
         if (request.operation === "action") {
-          if (target.pathname !== actionEndpoint) {
-            emit(flightErrorRow(`Unknown endpoint: ${target.pathname}`));
-            return;
-          }
-
           const refreshTargets = request.refreshTargets ?? [];
           const actionId = request.actionId;
           const encodedArgs = encodedArgsFromMessage(request);
