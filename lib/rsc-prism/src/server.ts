@@ -1,87 +1,23 @@
 /**
  * RSC Server Module - For Service Worker
  *
- * Provides utilities for rendering React Server Components
- * and handling server actions within a service worker.
- *
+ * Provides utilities for rendering React Server Components within a service worker.
+ * Action registration and execution live in the actions module.
  */
 
 import type { ReactNode } from "react";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
-import { registerServerReference } from "./flight-runtime/server";
-import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
+import { registerActions } from "./actions";
+import { defaultFlightProtocolAdapter } from "./actions/adapter";
 import { createClientModuleProxy } from "./flight-runtime/references";
 import type { FlightRowEmit } from "./flight-runtime/server";
 
 /**
- * Create an RSC context for rendering
+ * Create an RSC context for rendering.
  */
 export function createRSCContext(manifest?: ClientManifest): RSCContext {
   return { manifest: resolveClientManifestOrThrow(manifest), actions: new Map() };
-}
-
-/**
- * Register a server action in the RSC context
- *
- * @example
- * ```ts
- * const ctx = createRSCContext(manifest);
- * await registerAction(ctx, 'incrementCount', async (count: number) => count + 1);
- * ```
- */
-export async function registerAction(
-  ctx: RSCContext,
-  id: string,
-  fn: (...args: unknown[]) => unknown,
-): Promise<void> {
-  const registeredFn = registerServerReference(fn, id, id);
-  ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
-}
-
-/**
- * Register multiple server actions at once
- */
-export async function registerActions(
-  ctx: RSCContext,
-  actions: Record<string, (...args: unknown[]) => unknown>,
-): Promise<void> {
-  for (const [id, fn] of Object.entries(actions)) {
-    const registeredFn = registerServerReference(fn, id, id);
-    ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
-  }
-}
-
-/**
- * Build action IDs from a module namespace.
- * Each function export becomes `${moduleId}#${exportName}`.
- */
-export function createActionModuleMap(
-  moduleId: string,
-  moduleExports: Record<string, unknown>,
-): Record<string, (...args: unknown[]) => unknown> {
-  const actions: Record<string, (...args: unknown[]) => unknown> = {};
-  for (const [exportName, value] of Object.entries(moduleExports)) {
-    if (typeof value !== "function") {
-      continue;
-    }
-    if (exportName.startsWith("__rscPrism")) {
-      continue;
-    }
-    actions[`${moduleId}#${exportName}`] = value as (...args: unknown[]) => unknown;
-  }
-  return actions;
-}
-
-/**
- * Register all function exports from a module namespace as actions.
- */
-export async function registerActionModule(
-  ctx: RSCContext,
-  moduleId: string,
-  moduleExports: Record<string, unknown>,
-): Promise<void> {
-  await registerActions(ctx, createActionModuleMap(moduleId, moduleExports));
 }
 
 /**
@@ -117,59 +53,6 @@ export async function renderRSCRows(
       }),
     signal: options?.signal,
   });
-}
-
-/**
- * Decode encoded action arguments back to JavaScript values
- */
-export async function decodeActionArgs(encoded: EncodedActionArgs): Promise<unknown[]> {
-  const manifest = resolveClientManifestOrThrow();
-  const decoded = await defaultFlightProtocolAdapter.decodeActionArgs(encoded, manifest);
-  return Array.isArray(decoded) ? decoded : [decoded];
-}
-
-export async function executeAction(
-  ctx: RSCContext,
-  actionId: string,
-  encodedArgs: EncodedActionArgs,
-): Promise<unknown> {
-  const action = ctx.actions.get(actionId);
-  if (!action) {
-    const available = Array.from(ctx.actions.keys()).join(", ") || "(none)";
-    throw new Error(`Action "${actionId}" not found. Available: ${available}`);
-  }
-
-  const args = await decodeActionArgs(encodedArgs);
-  return action.fn(...args);
-}
-
-export async function handleActionRows(
-  ctx: RSCContext,
-  actionId: string,
-  encodedArgs: EncodedActionArgs,
-  emit: FlightRowEmit,
-  options?: RSCRenderOptions,
-): Promise<void> {
-  const result = await executeAction(ctx, actionId, encodedArgs);
-  await renderRSCRows(result as ReactNode, ctx, emit, {
-    onError: options?.onError,
-    signal: options?.signal,
-  });
-}
-
-/**
- * Extract action ID from request headers (React convention)
- */
-export function getActionIdFromRequest(request: Request): string | null {
-  // React sends action ID in various headers
-  return request.headers.get("rsc-action") ?? request.headers.get("x-rsc-action") ?? null;
-}
-
-/**
- * Check if a request is an RSC action request
- */
-export function isActionRequest(request: Request): boolean {
-  return getActionIdFromRequest(request) !== null;
 }
 
 /**
@@ -219,21 +102,15 @@ export interface CreateRSCResult<TComponents> {
 export async function createRSC<TComponents extends Record<string, unknown>>(
   config: CreateRSCConfig<TComponents>,
 ): Promise<CreateRSCResult<TComponents>> {
-  // Build manifest from component names
   const slashIndex = config.moduleId.lastIndexOf("/");
   const manifest: ClientManifest =
     slashIndex === -1 ? "/" : config.moduleId.slice(0, slashIndex + 1);
 
-  // Create context
   const ctx = createRSCContext(manifest);
   const Client = createClientModuleProxy(config.moduleId) as TComponents;
 
-  // Register actions if provided
   if (config.actions) {
-    for (const [id, fn] of Object.entries(config.actions)) {
-      const registeredFn = registerServerReference(fn, id, id);
-      ctx.actions.set(id, { fn: registeredFn as (...args: unknown[]) => unknown, id });
-    }
+    await registerActions(ctx, config.actions);
   }
 
   const ready = Promise.resolve();
@@ -241,5 +118,4 @@ export async function createRSC<TComponents extends Record<string, unknown>>(
   return { ctx, Client, ready };
 }
 
-// Re-export types for convenience
 export type { ClientManifest, RSCContext, RSCRenderOptions, EncodedActionArgs };

@@ -69,8 +69,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "tsdown": "catalog:"
   },
   "engines": {
     "node": ">=20"

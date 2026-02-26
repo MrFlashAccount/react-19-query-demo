@@ -8,6 +8,7 @@
 // Client utilities (fetch RSC via worker row transport)
 export {
   bootstrapWorkerRuntime,
+  consumeRSCResponse,
   encodeActionArgs,
   createCallServer,
   fetchRSC,

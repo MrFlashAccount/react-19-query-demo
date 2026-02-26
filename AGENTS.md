@@ -18,3 +18,7 @@
 8. Do not store critical UI invalidation callbacks only in `WeakRef`; for deterministic refresh behavior, keep strong callback references and remove them explicitly on component unmount.
 9. Suspense data loaders must not rely only on per-instance `useRef` caches for in-flight request deduplication; keep a stable cache outside component instance state (keyed by request identity) so pre-commit Suspense retries reuse the same promise and do not trigger infinite refetch loops.
 10. Worker runtime bootstrap must not resolve before receiving explicit `rsc.prism.worker.ready` (or worker error/timeout); do not use short fallback timers that mark runtime ready early, because initial requests can be lost and later fail with transport timeouts.
+
+## TypeScript
+
+1. Use `@typescript/native-preview` and never `typescript` in package.json and pnpm catalog. All packages must depend on `@typescript/native-preview` for type checking and build tooling.

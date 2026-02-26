@@ -306,12 +306,10 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
   };
   loaderStores.add(store);
 
-  const referenceCandidate = reference as unknown as { $$id?: unknown };
-  const componentId = typeof referenceCandidate.$$id === "string" ? referenceCandidate.$$id : null;
+  const referenceCandidate = reference as unknown as { $$id?: string; $$name?: string };
+  const componentId = referenceCandidate.$$id ?? null;
   const componentName =
-    (typeof (referenceCandidate as { $$name?: unknown }).$$name === "string"
-      ? ((referenceCandidate as { $$name?: string }).$$name ?? undefined)
-      : undefined) ??
+    referenceCandidate.$$name ??
     (componentId != null ? resolveComponentName(componentId) : undefined) ??
     (typeof reference === "function" && reference.name.length > 0 ? reference.name : undefined);
 

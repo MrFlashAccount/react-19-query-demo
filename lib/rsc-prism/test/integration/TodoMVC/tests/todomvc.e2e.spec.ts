@@ -126,5 +126,4 @@ test.describe("TodoMVC integration", () => {
     await expect(page.getByText(activeTodo)).toBeVisible();
     await expect(page.getByText(completedTodo)).toBeVisible();
   });
-
 });

@@ -1,13 +1,18 @@
+/**
+ * Default Flight protocol adapter: wires low-level flight-runtime with action encode/decode.
+ */
+
 import type { ReactNode } from "react";
 import type { ClientManifest, EncodedActionArgs, RSCRenderOptions } from "../types";
-import { createFromReadableStream, createFromRowEmitter, encodeReply } from "./client";
+import type { FlightRowMessage } from "../flight-runtime/wire";
+import { createFromReadableStream, createFromRowEmitter } from "../flight-runtime/client";
 import {
-  decodeReply,
   renderToReadableStream,
   renderToRowEmitter,
   type FlightRowEmit,
-} from "./server";
-import type { FlightRowMessage } from "./wire";
+} from "../flight-runtime/server";
+import { encodeReply } from "./encode-reply";
+import { decodeReply } from "./decode-reply";
 
 export interface FlightConsumeOptions {
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;

@@ -2,14 +2,12 @@ import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
 import {
   applyDirectPathReplacements,
-  binaryWireTagFromKind,
   createLazyChunkWrapper,
   createModelReviver,
   decodeBinaryWireRow,
   type FlightRowMessage,
   type FlightTemplateRowShape,
   type RevivePathTree,
-  encodeWireValueWithBinaryRows,
   isBinaryWireRowTag,
   reviveModelValueTree,
   ROW_BINARY,
@@ -983,27 +981,4 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
     },
     result,
   };
-}
-
-export async function encodeReply(value: unknown): Promise<FormData | string> {
-  let nextBinaryPartId = 1;
-  let formData: FormData | null = null;
-  const encoded = encodeWireValueWithBinaryRows(value, (kind, bytes) => {
-    const id = nextBinaryPartId;
-    nextBinaryPartId += 1;
-    const tag = binaryWireTagFromKind(kind);
-    if (formData == null) {
-      formData = new FormData();
-    }
-    const binaryPart = new Uint8Array(bytes.byteLength);
-    binaryPart.set(bytes);
-    formData.append(`${id}:${tag}`, new Blob([binaryPart]));
-    return `${id}:${tag}`;
-  });
-
-  if (formData == null) {
-    return JSON.stringify(encoded);
-  }
-  (formData as FormData).append("0", JSON.stringify(encoded));
-  return formData as FormData;
 }

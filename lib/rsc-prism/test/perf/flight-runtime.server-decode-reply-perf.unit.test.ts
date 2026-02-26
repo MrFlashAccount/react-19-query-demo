@@ -1,7 +1,6 @@
 import { describe, it } from "vitest";
 
-import { encodeReply } from "../../src/flight-runtime/client";
-import { decodeReply } from "../../src/flight-runtime/server";
+import { encodeReply, decodeReply } from "../../src/actions";
 
 function readEnvNumber(name: string, fallback: number): number {
   const raw = process.env[name];

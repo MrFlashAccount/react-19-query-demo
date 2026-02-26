@@ -3,6 +3,8 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: [
     "src/index.ts",
+    "src/actions/index.ts",
+    "src/worker-components/index.ts",
     "src/react.tsx",
     "src/client-only.ts",
     "src/client.ts",

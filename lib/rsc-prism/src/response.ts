@@ -6,16 +6,16 @@
 
 import type { ReactNode } from "react";
 import { polyfillReady } from "./polyfill";
+import { renderRSCRows, createRSCContext } from "./server";
 import {
-  renderRSCRows,
   handleActionRows,
   executeAction as executeServerAction,
   getActionIdFromRequest,
-  createRSCContext,
   registerActions,
   registerActionModule,
-} from "./server";
-import type { ClientManifest, EncodedActionArgs, RSCResponseOptions, RSCContext } from "./types";
+  readEncodedActionArgs,
+} from "./actions";
+import type { ClientManifest, RSCResponseOptions, RSCContext } from "./types";
 import type { FlightRowEmit } from "./flight-runtime/server";
 import { flightErrorRow } from "./flight-runtime/wire";
 
@@ -36,13 +36,6 @@ async function createFlightErrorRows(
     status: 500,
   } as unknown as ReactNode;
   await renderRSCRows(errorRecord, ctx, emit, { onError: options?.onError });
-}
-
-async function readEncodedActionArgs(request: Request): Promise<EncodedActionArgs> {
-  const contentType = request.headers.get("Content-Type") ?? "";
-  return contentType.includes("form")
-    ? { type: "formdata", data: await request.formData() }
-    : { type: "string", data: await request.text() };
 }
 
 /**
@@ -114,6 +107,13 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
     }
   })();
 
+  const renderRowsFn = (
+    element: ReactNode,
+    c: RSCContext,
+    emit: FlightRowEmit,
+    opts?: RSCResponseOptions,
+  ) => renderRSCRows(element, c, emit, { onError: opts?.onError ?? options.onError });
+
   return {
     ctx,
 
@@ -144,7 +144,7 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
       const encodedArgs = await readEncodedActionArgs(request);
 
       try {
-        await handleActionRows(ctx, actionId, encodedArgs, emit, {
+        await handleActionRows(ctx, actionId, encodedArgs, renderRowsFn, emit, {
           onError: options.onError,
         });
       } catch (err) {
@@ -174,6 +174,6 @@ export function createRSCHandler(options: CreateRSCHandlerOptions): {
   };
 }
 
-// Re-export for convenience
-export { createRSCContext, registerActions } from "./server";
+export { createRSCContext } from "./server";
+export { registerActions } from "./actions";
 export type { RSCContext, RSCResponseOptions, ClientManifest };

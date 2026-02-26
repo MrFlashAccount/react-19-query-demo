@@ -1513,12 +1513,8 @@ function buildWorkerComponentRegistryCode(
         const fullId = `${entry.moduleId}#${exportName}`;
         const shortId = getShortId(fullId);
         lines.push(`if (typeof ${accessExpression} === "function") {`);
-        lines.push(
-          `  actionRegistry.set(${JSON.stringify(shortId)}, ${accessExpression});`,
-        );
-        lines.push(
-          `  workerActions[${JSON.stringify(shortId)}] = ${accessExpression};`,
-        );
+        lines.push(`  actionRegistry.set(${JSON.stringify(shortId)}, ${accessExpression});`);
+        lines.push(`  workerActions[${JSON.stringify(shortId)}] = ${accessExpression};`);
         lines.push("}");
       } else if (entry.isWorkerDirectiveModule || componentExports.has(exportName)) {
         lines.push(

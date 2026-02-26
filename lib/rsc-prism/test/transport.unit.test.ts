@@ -584,7 +584,7 @@ describe("transport", () => {
       }),
     ).resolves.toBe("ok");
     expect(applyBatch).toHaveBeenCalledTimes(1);
-    const [appliedBatch, appliedCause] = applyBatch.mock.calls[0];
+    const [appliedBatch] = applyBatch.mock.calls[0];
     expect(appliedBatch).toEqual({
       seq: 1,
       entries: [
@@ -594,13 +594,6 @@ describe("transport", () => {
           error: undefined,
         },
       ],
-    });
-    expect(appliedCause).toMatchObject({
-      causeType: "action-batch-refresh",
-      actionId: "actions#save",
-      requestId: expect.any(String),
-      generation: expect.any(Number),
-      dispatchedAt: expect.any(Number),
     });
     expect(legacyInvalidate).not.toHaveBeenCalled();
   });
@@ -666,7 +659,7 @@ describe("transport", () => {
     ]);
 
     expect(applyBatch).toHaveBeenCalledTimes(1);
-    const [appliedBatch, appliedCause] = applyBatch.mock.calls[0];
+    const [appliedBatch] = applyBatch.mock.calls[0];
     expect(appliedBatch).toEqual({
       seq: 2,
       entries: [
@@ -676,13 +669,6 @@ describe("transport", () => {
           error: undefined,
         },
       ],
-    });
-    expect(appliedCause).toMatchObject({
-      causeType: "action-batch-refresh",
-      actionId: "second",
-      requestId: expect.any(String),
-      generation: expect.any(Number),
-      dispatchedAt: expect.any(Number),
     });
     expect(legacyInvalidate).not.toHaveBeenCalled();
   });

@@ -1,9 +1,16 @@
-import { createRSCHandler } from "./response";
-import {
-  createWorkerRowTransportMessageHandler,
-  type WorkerActionRefreshBatchEntryMessage,
-  type WorkerTransportRequestMessage,
-} from "./transport";
+/**
+ * Standalone worker runtime bootstrap.
+ *
+ * For manual/standalone use when not using the Vite plugin. The plugin
+ * generates equivalent inline code.
+ */
+
+import { createRSCHandler } from "../response";
+import { createWorkerRowTransportMessageHandler } from "./handler";
+import type {
+  WorkerActionRefreshBatchEntryMessage,
+  WorkerTransportRequestMessage,
+} from "./types";
 import type { ReactNode } from "react";
 import {
   flightDoneRow,
@@ -11,7 +18,7 @@ import {
   ROW_DONE,
   ROW_ERROR,
   type FlightRowMessage,
-} from "./flight-runtime/wire";
+} from "../flight-runtime/wire";
 
 interface WorkerRuntimeModuleConfig {
   moduleId: string;

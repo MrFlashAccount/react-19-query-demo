@@ -4,13 +4,7 @@
  * Context interfaces are intentionally minimal to keep hot-path overhead low;
  * optional callbacks use explicit undefined checks rather than optional chaining.
  */
-import {
-  ROW_BINARY,
-  ROW_DONE,
-  ROW_ERROR,
-  ROW_METADATA,
-  ROW_MODEL,
-} from "./constants";
+import { ROW_BINARY, ROW_DONE, ROW_ERROR, ROW_METADATA, ROW_MODEL } from "./constants";
 import type { RevivePathTree } from "./path-tree";
 
 export type JsonObject = Record<string, unknown>;

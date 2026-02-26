@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
 
-import { encodeReply } from "../src/flight-runtime/client";
-import {
-  decodeReply,
-  renderToReadableStream,
-  renderToRowEmitter,
-} from "../src/flight-runtime/server";
+import { encodeReply, decodeReply } from "../src/actions";
+import { renderToReadableStream, renderToRowEmitter } from "../src/flight-runtime/server";
 import { ROW_METADATA, ROW_MODEL } from "../src/flight-runtime/wire";
 describe("flight runtime server stream behavior", () => {
   it("returns stream before server render resolves and emits deferred rows", async () => {
@@ -181,7 +177,13 @@ describe("flight runtime server stream behavior", () => {
       props: { children: items },
     } as ReactNode;
 
-    const rows: { k: number; id?: number; revivePaths?: unknown; templates?: unknown; v?: unknown }[] = [];
+    const rows: {
+      k: number;
+      id?: number;
+      revivePaths?: unknown;
+      templates?: unknown;
+      v?: unknown;
+    }[] = [];
     await renderToRowEmitter(root, null, (row) => {
       rows.push(row as (typeof rows)[0]);
     });
@@ -194,8 +196,8 @@ describe("flight runtime server stream behavior", () => {
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
     expect(modelRow).toBeDefined();
     const json = JSON.stringify(modelRow?.v);
-    expect(json).toContain("\"$tpl\":0");
-    expect(json).toContain("\"$v\":");
+    expect(json).toContain('"$tpl":0');
+    expect(json).toContain('"$v":');
   });
 
   it("skips template metadata for small repeated payloads", async () => {
@@ -213,7 +215,13 @@ describe("flight runtime server stream behavior", () => {
       props: { children: items },
     } as ReactNode;
 
-    const rows: { k: number; id?: number; revivePaths?: unknown; templates?: unknown; v?: unknown }[] = [];
+    const rows: {
+      k: number;
+      id?: number;
+      revivePaths?: unknown;
+      templates?: unknown;
+      v?: unknown;
+    }[] = [];
     await renderToRowEmitter(root, null, (row) => {
       rows.push(row as (typeof rows)[0]);
     });
@@ -223,7 +231,7 @@ describe("flight runtime server stream behavior", () => {
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
     expect(modelRow).toBeDefined();
     const json = JSON.stringify(modelRow?.v);
-    expect(json).not.toContain("\"$tpl\":");
+    expect(json).not.toContain('"$tpl":');
   });
 
   it("compacts dominant repeated sub-shapes in mixed arrays", async () => {
@@ -280,7 +288,13 @@ describe("flight runtime server stream behavior", () => {
       props: { children: items },
     } as ReactNode;
 
-    const rows: { k: number; id?: number; revivePaths?: unknown; templates?: unknown; v?: unknown }[] = [];
+    const rows: {
+      k: number;
+      id?: number;
+      revivePaths?: unknown;
+      templates?: unknown;
+      v?: unknown;
+    }[] = [];
     await renderToRowEmitter(root, null, (row) => {
       rows.push(row as (typeof rows)[0]);
     });
@@ -293,7 +307,7 @@ describe("flight runtime server stream behavior", () => {
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
     expect(modelRow).toBeDefined();
     const json = JSON.stringify(modelRow?.v);
-    expect(json).toContain("\"$tpl\":");
+    expect(json).toContain('"$tpl":');
   });
 
   it("renders with trace context", async () => {

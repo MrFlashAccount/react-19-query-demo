@@ -66,8 +66,7 @@
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
-    "tsdown": "catalog:",
-    "typescript": "catalog:"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "react": "^19.0.0",

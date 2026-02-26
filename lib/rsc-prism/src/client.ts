@@ -6,7 +6,7 @@ import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
-import { defaultFlightProtocolAdapter } from "./flight-runtime/adapter";
+import { defaultFlightProtocolAdapter } from "./actions/adapter";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ComponentReference, EncodedActionArgs } from "./types";
 import type { RSCTransport } from "./transport";
@@ -208,6 +208,22 @@ async function readActionErrorMessage(response: Response): Promise<string | null
  */
 export async function encodeActionArgs(args: unknown[]): Promise<EncodedActionArgs> {
   return defaultFlightProtocolAdapter.encodeActionArgs(args);
+}
+
+/**
+ * Consume an RSC Response (stream or static) and return the decoded result.
+ */
+export async function consumeRSCResponse<T = unknown>(
+  response: Response,
+  options?: ConsumeRSCOptions,
+): Promise<T> {
+  if (response.body == null) {
+    throw new Error("[rsc-prism] Response has no body");
+  }
+  const manifest = resolveClientManifestOrThrow();
+  return defaultFlightProtocolAdapter.consumeStream(response.body, manifest, {
+    callServer: options?.callServer,
+  }) as Promise<T>;
 }
 
 /**

@@ -293,11 +293,7 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
   const keys = Object.keys(source);
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
-    source[key] = reviveModelValueTreeWithReviveValuesInternal(
-      context,
-      reviveValues,
-      source[key],
-    );
+    source[key] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, source[key]);
   }
   return source;
 }
@@ -381,9 +377,7 @@ export function applyDirectPathReplacements<Chunk>(
   revivePathsOrTree: import("./path-tree").RevivePathTree | ReadonlyArray<(string | number)[]>,
   context: StreamDecodeContext<Chunk>,
 ): void {
-  applyPathTreeReplacements(root, revivePathsOrTree, (raw) =>
-    parseModelString(context, raw),
-  );
+  applyPathTreeReplacements(root, revivePathsOrTree, (raw) => parseModelString(context, raw));
 }
 
 /**
