@@ -7,10 +7,17 @@
 import type {
   FlightRowMessage,
   FlightTemplateRowShape,
+  MutablePathTree,
   RevivePathTree,
   StreamEncodeContext,
 } from "./wire";
-import { binaryWireTagFromKind, pathsToTree, encodeStreamType, encodeStreamValue } from "./wire";
+import {
+  binaryWireTagFromKind,
+  finalizePathTree,
+  pushPathToTree,
+  encodeStreamType,
+  encodeStreamValue,
+} from "./wire";
 import { REACT_FRAGMENT_SYMBOL } from "./wire/constants";
 import { isClientReference, isPlainObject, isReactElementLike } from "./wire/shared";
 
@@ -24,6 +31,19 @@ const TEMPLATE_MIN_SAVINGS_RATIO = 0.12;
 const TEMPLATE_MAX_SLOT_COUNT = 64;
 const TEMPLATE_MAX_TEMPLATES_PER_ROW = 8;
 const TEMPLATE_MAX_VISITED_NODES = 6000;
+
+const PATH_KEY_SEP = "\x00";
+
+/** Cheap path key; avoids JSON.stringify for (string|number)[]. */
+function pathToKey(path: ReadonlyArray<string | number>): string {
+  if (path.length === 0) return "";
+  if (path.length === 1) return String(path[0]);
+  let out = String(path[0]);
+  for (let i = 1; i < path.length; i += 1) {
+    out += PATH_KEY_SEP + String(path[i]);
+  }
+  return out;
+}
 
 const FLIGHT_ROW_ENCODER = new TextEncoder();
 
@@ -57,10 +77,15 @@ export interface RenderSink {
   emitModelRow: (id: number, value: unknown) => void;
   emitMetadataRow?: (
     id: number,
-    revivePathTree: RevivePathTree,
+    revivePaths: RevivePathTree | ReadonlyArray<(string | number)[]>,
     templates?: FlightTemplateRowShape[],
   ) => void;
   emitBinaryRow: (id: number, kind: string, bytes: Uint8Array) => void;
+}
+
+export interface CreateEncodeContextOptions {
+  /** When true (default), skip template compaction and path tree for faster encode. */
+  fastMode?: boolean;
 }
 
 export interface EncodeContext {
@@ -73,10 +98,11 @@ export interface EncodeContext {
   preparePathsForEncode: () => void;
 }
 
-function collectTemplateCandidatePaths(
+/** Single-pass traversal: collects candidate arrays as (path, node) to avoid getValueAtPath. */
+function collectTemplateCandidates(
   node: unknown,
   path: (string | number)[],
-  out: (string | number)[][],
+  out: Array<{ path: (string | number)[]; node: unknown[] }>,
   limits: { visitedNodes: number },
 ): void {
   limits.visitedNodes += 1;
@@ -96,11 +122,11 @@ function collectTemplateCandidatePaths(
       first[0] === "$" &&
       node.every((entry) => Array.isArray(entry) && entry.length === 4 && entry[0] === "$")
     ) {
-      out.push([...path]);
+      out.push({ path: [...path], node });
     }
     for (let i = 0; i < node.length; i += 1) {
       path.push(i);
-      collectTemplateCandidatePaths(node[i], path, out, limits);
+      collectTemplateCandidates(node[i], path, out, limits);
       path.pop();
     }
     return;
@@ -112,7 +138,7 @@ function collectTemplateCandidatePaths(
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
     path.push(key);
-    collectTemplateCandidatePaths(node[key], path, out, limits);
+    collectTemplateCandidates(node[key], path, out, limits);
     path.pop();
   }
 }
@@ -128,7 +154,7 @@ function compareStructureAndCollectDiffPaths(
   }
   if (base == null || value == null || typeof base !== "object") {
     if (!Object.is(base, value)) {
-      varying.add(JSON.stringify(path));
+      varying.add(pathToKey(path));
     }
     return true;
   }
@@ -165,31 +191,82 @@ function compareStructureAndCollectDiffPaths(
   return true;
 }
 
-function buildStructureSignature(value: unknown): string {
-  if (value == null) {
-    return "null";
-  }
-  const type = typeof value;
-  if (type !== "object") {
-    return type;
-  }
-  if (Array.isArray(value)) {
-    const parts = Array.from({ length: value.length });
-    for (let i = 0; i < value.length; i += 1) {
-      parts[i] = buildStructureSignature(value[i]);
+type SigFrame =
+  | { k: "val"; v: unknown }
+  | { k: "arr"; a: unknown[]; r: string[] }
+  | { k: "obj"; o: Record<string, unknown>; keys: string[]; r: string[] };
+
+/** Iterative structure signature to avoid deep recursion; used for template grouping. */
+function buildStructureSignature(
+  value: unknown,
+  scratch?: { stack: SigFrame[]; out: string[] },
+): string {
+  const stack = scratch?.stack ?? [];
+  const out = scratch?.out ?? [];
+  stack.length = 0;
+  out.length = 0;
+  stack.push({ k: "val", v: value });
+
+  while (stack.length > 0) {
+    const f = stack.pop()!;
+    if (f.k === "val") {
+      const v = f.v;
+      if (v == null) {
+        out.push("null");
+        continue;
+      }
+      const t = typeof v;
+      if (t !== "object") {
+        out.push(t);
+        continue;
+      }
+      if (Array.isArray(v)) {
+        if (v.length === 0) {
+          out.push("[]");
+          continue;
+        }
+        stack.push({ k: "arr", a: v, r: [] });
+        for (let i = v.length - 1; i >= 0; i -= 1) {
+          stack.push({ k: "val", v: v[i] });
+        }
+        continue;
+      }
+      if (!isPlainObject(v)) {
+        out.push(`{${Object.prototype.toString.call(v)}}`);
+        continue;
+      }
+      const keys = Object.keys(v);
+      if (keys.length === 0) {
+        out.push("{}");
+        continue;
+      }
+      stack.push({ k: "obj", o: v as Record<string, unknown>, keys, r: [] });
+      for (let i = keys.length - 1; i >= 0; i -= 1) {
+        stack.push({ k: "val", v: (v as Record<string, unknown>)[keys[i]] });
+      }
+      continue;
     }
-    return `[${parts.join(",")}]`;
+    if (f.k === "arr") {
+      const n = f.a.length;
+      for (let i = 0; i < n; i += 1) {
+        f.r.push(out.pop()!);
+      }
+      f.r.reverse();
+      out.push(`[${f.r.join(",")}]`);
+      continue;
+    }
+    const n = f.keys.length;
+    for (let i = 0; i < n; i += 1) {
+      f.r.push(out.pop()!);
+    }
+    f.r.reverse();
+    const pairs: string[] = [];
+    for (let i = 0; i < n; i += 1) {
+      pairs.push(`${f.keys[i]}:${f.r[i]}`);
+    }
+    out.push(`{${pairs.join(",")}}`);
   }
-  if (!isPlainObject(value)) {
-    return `{${Object.prototype.toString.call(value)}}`;
-  }
-  const keys = Object.keys(value);
-  const parts = Array.from({ length: keys.length });
-  for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-    parts[i] = `${key}:${buildStructureSignature(value[key])}`;
-  }
-  return `{${parts.join(",")}}`;
+  return out[0] ?? "null";
 }
 
 /** Approximate serialized byte size without JSON.stringify. */
@@ -218,18 +295,6 @@ function estimateSerializedSize(value: unknown): number {
   return 8;
 }
 
-function getValueAtPath(root: unknown, path: (string | number)[]): unknown {
-  let current = root;
-  for (let i = 0; i < path.length; i += 1) {
-    const seg = path[i];
-    if (current == null || typeof current !== "object") {
-      return undefined;
-    }
-    current = (current as Record<string, unknown>)[String(seg)];
-  }
-  return current;
-}
-
 function cloneWithSlotMarkers(
   node: unknown,
   path: (string | number)[],
@@ -237,7 +302,7 @@ function cloneWithSlotMarkers(
   pathToSlot: Map<string, number>,
   slots: unknown[],
 ): unknown {
-  const pathKey = JSON.stringify(path);
+  const pathKey = pathToKey(path);
   if (varying.has(pathKey)) {
     let idx = pathToSlot.get(pathKey);
     if (idx == null) {
@@ -347,23 +412,20 @@ function compactRowValueTemplates(value: unknown): {
   value: unknown;
   templates: FlightTemplateRowShape[];
 } {
-  const candidatePaths: (string | number)[][] = [];
-  collectTemplateCandidatePaths(value, [], candidatePaths, { visitedNodes: 0 });
-  if (candidatePaths.length === 0) {
+  const candidates: Array<{ path: (string | number)[]; node: unknown[] }> = [];
+  collectTemplateCandidates(value, [], candidates, { visitedNodes: 0 });
+  if (candidates.length === 0) {
     return { value, templates: [] };
   }
 
   let nextTemplateId = 0;
   const templates: FlightTemplateRowShape[] = [];
-  for (let i = 0; i < candidatePaths.length; i += 1) {
-    const candidatePath = candidatePaths[i];
-    const node = getValueAtPath(value, candidatePath);
-    if (!Array.isArray(node)) {
-      continue;
-    }
+  const sigScratch = { stack: [] as SigFrame[], out: [] as string[] };
+  for (let i = 0; i < candidates.length; i += 1) {
+    const { node } = candidates[i];
     const groups = new Map<string, number[]>();
     for (let j = 0; j < node.length; j += 1) {
-      const signature = buildStructureSignature(node[j]);
+      const signature = buildStructureSignature(node[j], sigScratch);
       const group = groups.get(signature);
       if (group == null) {
         groups.set(signature, [j]);
@@ -535,9 +597,12 @@ function outlineValueKey(value: unknown): string {
 export function createEncodeContext(
   sink: RenderSink,
   queueDeferred: (task: Promise<void>) => void,
+  options: CreateEncodeContextOptions,
 ): EncodeContext {
+  const fastMode = options.fastMode || true;
   let nextRowId = 1;
   const outlinedByValue = new Map<string, number>();
+  const currentRevivePathTreeRef: { current: MutablePathTree } = { current: new Map() };
   const currentRevivePathsRef: { current: (string | number)[][] } = { current: [] };
   const context: EncodeContext = {
     queueDeferred,
@@ -548,13 +613,24 @@ export function createEncodeContext(
     },
     emitRow: (id, value) => {
       if (sink.settled) return;
-      const compacted = compactRowValueTemplates(value);
-      const paths = currentRevivePathsRef.current;
-      if ((paths.length > 0 || compacted.templates.length > 0) && sink.emitMetadataRow) {
-        sink.emitMetadataRow(id, pathsToTree(paths), compacted.templates);
+      if (fastMode) {
+        const paths = currentRevivePathsRef.current;
+        const hasPaths = paths.length > 0;
+        if (hasPaths && sink.emitMetadataRow) {
+          sink.emitMetadataRow(id, paths);
+        }
+        sink.emitModelRow(id, value);
+        currentRevivePathsRef.current = [];
+      } else {
+        const compacted = compactRowValueTemplates(value);
+        const tree = currentRevivePathTreeRef.current;
+        const hasPaths = tree.size > 0;
+        if ((hasPaths || compacted.templates.length > 0) && sink.emitMetadataRow) {
+          sink.emitMetadataRow(id, finalizePathTree(tree), compacted.templates);
+        }
+        sink.emitModelRow(id, compacted.value);
+        currentRevivePathTreeRef.current = new Map();
       }
-      sink.emitModelRow(id, compacted.value);
-      currentRevivePathsRef.current = [];
     },
     emitBinaryRow: (kind, bytes) => {
       const id = nextRowId;
@@ -590,11 +666,19 @@ export function createEncodeContext(
       seen: new WeakSet<object>(),
       currentRowId: undefined,
       pushReviveValue: (_encoded, path) => {
-        currentRevivePathsRef.current.push([...path]);
+        if (fastMode) {
+          currentRevivePathsRef.current.push(path);
+        } else {
+          pushPathToTree(currentRevivePathTreeRef.current, path);
+        }
       },
     },
     preparePathsForEncode: () => {
-      currentRevivePathsRef.current = [];
+      if (fastMode) {
+        currentRevivePathsRef.current = [];
+      } else {
+        currentRevivePathTreeRef.current = new Map();
+      }
     },
   };
   return context;

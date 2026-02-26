@@ -48,7 +48,7 @@ interface FlightChunk<T = unknown> {
 
 interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
-  revivePathsByRowId: Map<number, RevivePathTree>;
+  revivePathsByRowId: Map<number, RevivePathTree | ReadonlyArray<(string | number)[]>>;
   templatesByRowId: Map<number, FlightTemplateRowShape[]>;
   resolveClientReference: (id: string) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;

@@ -121,7 +121,7 @@ describe("flight runtime server row emitter behavior", () => {
     expect(metadataIdx).toBeLessThan(modelIdx);
   });
 
-  it("emits template metadata for repeated element arrays by default", async () => {
+  it("skips template metadata in fast mode (default)", async () => {
     const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
     const items = Array.from({ length: 10 }, (_, i) => ({
       $$typeof: REACT_ELEMENT_SYMBOL,
@@ -168,16 +168,10 @@ describe("flight runtime server row emitter behavior", () => {
       rows.push(row as (typeof rows)[0]);
     });
 
-    const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0);
-    expect(metadataRow).toBeDefined();
-    expect(Array.isArray(metadataRow?.templates)).toBe(true);
-    expect((metadataRow?.templates as unknown[]).length).toBeGreaterThan(0);
-
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
     expect(modelRow).toBeDefined();
     const json = JSON.stringify(modelRow?.v);
-    expect(json).toContain('"$tpl":0');
-    expect(json).toContain('"$v":');
+    expect(json).not.toContain('"$tpl":');
   });
 
   it("skips template metadata for small repeated payloads", async () => {
@@ -277,7 +271,7 @@ describe("flight runtime server row emitter behavior", () => {
     }[] = [];
     await renderToRowEmitter(root, null, (row) => {
       rows.push(row as (typeof rows)[0]);
-    });
+    }, { fastMode: false });
 
     const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0);
     expect(metadataRow).toBeDefined();

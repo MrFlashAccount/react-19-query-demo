@@ -57,41 +57,62 @@ function compactRevivePathTree(
   return otherChildren;
 }
 
+export type MutablePathTree = Map<string | number, MutablePathTree | true>;
+
+/** Inserts a path into a mutable tree; use during encode to avoid building from flat list later. */
+export function pushPathToTree(root: MutablePathTree, path: ReadonlyArray<string | number>): void {
+  let current = root;
+  for (let i = 0; i < path.length; i += 1) {
+    const seg = path[i];
+    const isLast = i === path.length - 1;
+    if (isLast) {
+      current.set(seg, true);
+      return;
+    }
+    let next = current.get(seg);
+    if (next === undefined || next === true) {
+      next = new Map();
+      current.set(seg, next);
+    }
+    current = next as MutablePathTree;
+  }
+}
+
+function pathTreeToKey(t: RevivePathTree): string {
+  if (t.length === 0) return "[]";
+  const parts: string[] = [];
+  for (const [k, v] of t) {
+    parts.push(String(k) + ":" + (v === true ? "1" : pathTreeToKey(v)));
+  }
+  return "[" + parts.join(",") + "]";
+}
+
+function mapToArray(m: MutablePathTree, subtreeCache: Map<string, RevivePathTree>): RevivePathTree {
+  const out: RevivePathTree = [];
+  for (const [k, v] of m) {
+    out.push([k, v === true ? true : mapToArray(v as MutablePathTree, subtreeCache)]);
+  }
+  const key = pathTreeToKey(out);
+  const cached = subtreeCache.get(key);
+  if (cached) return cached;
+  subtreeCache.set(key, out);
+  return out;
+}
+
+/** Converts mutable tree to compact RevivePathTree; call after encode when paths are done. */
+export function finalizePathTree(root: MutablePathTree): RevivePathTree {
+  const subtreeCache = new Map<string, RevivePathTree>();
+  const compactCache = new Map<RevivePathTree, RevivePathTree>();
+  return compactRevivePathTree(mapToArray(root, subtreeCache), compactCache);
+}
+
 /** Builds a compact tree from flat path list; deduplicates identical subtrees via cache. */
 export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePathTree {
-  type Node = Map<string | number, Node | true>;
-  const root: Node = new Map();
+  const root: MutablePathTree = new Map();
   for (const path of paths) {
-    let current = root;
-    for (let i = 0; i < path.length; i += 1) {
-      const seg = path[i];
-      const isLast = i === path.length - 1;
-      if (isLast) {
-        current.set(seg, true);
-      } else {
-        let next = current.get(seg);
-        if (next === undefined || next === true) {
-          next = new Map();
-          current.set(seg, next);
-        }
-        current = next;
-      }
-    }
+    pushPathToTree(root, path);
   }
-  const subtreeCache = new Map<string, RevivePathTree>();
-  function mapToArray(m: Node): RevivePathTree {
-    const out: RevivePathTree = [];
-    for (const [k, v] of m) {
-      out.push([k, v === true ? true : mapToArray(v)]);
-    }
-    const key = JSON.stringify(out);
-    const cached = subtreeCache.get(key);
-    if (cached) return cached;
-    subtreeCache.set(key, out);
-    return out;
-  }
-  const compactCache = new Map<RevivePathTree, RevivePathTree>();
-  return compactRevivePathTree(mapToArray(root), compactCache);
+  return finalizePathTree(root);
 }
 
 function isRevivePathTree(value: unknown): value is RevivePathTree {

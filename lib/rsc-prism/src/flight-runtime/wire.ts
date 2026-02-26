@@ -32,6 +32,8 @@ export {
   applyDirectPathReplacements,
   decodeWireValue,
   pathsToTree,
+  pushPathToTree,
+  finalizePathTree,
   flightModelRow,
   flightMetadataRow,
   flightBinaryRow,
@@ -40,6 +42,7 @@ export {
 } from "./wire/index";
 export type {
   RevivePathTree,
+  MutablePathTree,
   StreamEncodeContext,
   StreamDecodeContext,
   FlightRowMessage,

@@ -28,12 +28,12 @@ export function flightModelRow(id: number, value: unknown): FlightRowMessage {
 
 export function flightMetadataRow(
   id: number,
-  revivePathTree: RevivePathTree,
+  revivePaths: RevivePathTree | ReadonlyArray<(string | number)[]>,
   templates?: FlightTemplateRowShape[],
 ): FlightRowMessage {
   return templates != null && templates.length > 0
-    ? { k: ROW_METADATA, id, revivePaths: revivePathTree, templates }
-    : { k: ROW_METADATA, id, revivePaths: revivePathTree };
+    ? { k: ROW_METADATA, id, revivePaths, templates }
+    : { k: ROW_METADATA, id, revivePaths };
 }
 
 /** Returns row + transfer list; caller must pass transfer to postMessage for zero-copy. */

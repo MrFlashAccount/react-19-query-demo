@@ -39,8 +39,8 @@ export {
   applyDirectPathReplacements,
   decodeWireValue,
 } from "./decode";
-export { pathsToTree } from "./path-tree";
-export type { RevivePathTree } from "./path-tree";
+export { pathsToTree, pushPathToTree, finalizePathTree } from "./path-tree";
+export type { RevivePathTree, MutablePathTree } from "./path-tree";
 export {
   flightModelRow,
   flightMetadataRow,
