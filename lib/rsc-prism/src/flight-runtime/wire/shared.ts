@@ -5,7 +5,6 @@
  * references can be functions; isPlainObject excludes arrays/class instances
  * to match JSON-serializable shape.
  */
-import { isValidElement } from "react";
 import {
   CHR,
   CLIENT_REFERENCE_SYMBOL,
@@ -116,9 +115,6 @@ export function isReactElementLike(value: unknown): value is {
   key: string | null;
   props: Record<string, unknown>;
 } {
-  if (!isValidElement(value)) {
-    return false;
-  }
   const candidate = value as { $$typeof?: unknown };
   return (
     candidate.$$typeof === REACT_ELEMENT_SYMBOL ||

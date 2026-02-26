@@ -82,7 +82,7 @@ function pathTreeToKey(t: RevivePathTree): string {
   if (t.length === 0) return "[]";
   const parts: string[] = [];
   for (const [k, v] of t) {
-    parts.push(String(k) + ":" + (v === true ? "1" : pathTreeToKey(v)));
+    parts.push(String(k) + ":" + (v === true ? true : pathTreeToKey(v)));
   }
   return "[" + parts.join(",") + "]";
 }
@@ -196,15 +196,31 @@ function applyPathTreeReplacements(
   }
 }
 
+function applyFlatPathReplacements(
+  root: unknown,
+  paths: ReadonlyArray<(string | number)[]>,
+  reviver: (raw: string) => unknown,
+): void {
+  for (const path of paths) {
+    if (path.length === 0) continue;
+    const raw = getValueAtPath(root, path);
+    if (typeof raw === "string" && isFlightWireString(raw)) {
+      setValueAtPath(root, path, reviver(raw));
+    }
+  }
+}
+
 /** Walks the tree and revives only $X strings at leaf paths; skips the rest of the model. */
 export function applyDirectPathReplacements(
   root: unknown,
   revivePathsOrTree: RevivePathTree | ReadonlyArray<(string | number)[]>,
   reviver: (raw: string) => unknown,
 ): void {
-  const tree = isRevivePathTree(revivePathsOrTree)
-    ? revivePathsOrTree
-    : pathsToTree(revivePathsOrTree);
-  if (tree.length === 0) return;
-  applyPathTreeReplacements(root, tree, [], reviver);
+  if (isRevivePathTree(revivePathsOrTree)) {
+    if (revivePathsOrTree.length === 0) return;
+    applyPathTreeReplacements(root, revivePathsOrTree, [], reviver);
+  } else {
+    if (revivePathsOrTree.length === 0) return;
+    applyFlatPathReplacements(root, revivePathsOrTree, reviver);
+  }
 }

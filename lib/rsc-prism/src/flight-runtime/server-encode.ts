@@ -493,11 +493,8 @@ function encodeServerNode(
   }
 
   if (!isReactElementLike(value)) {
-    const streamCtx = {
-      ...context.streamEncodeContext,
-      _path: path,
-    };
-    return encodeStreamValue(value, streamCtx);
+    context.streamEncodeContext._path = path;
+    return encodeStreamValue(value, context.streamEncodeContext);
   }
 
   const type = value.type;
@@ -514,7 +511,12 @@ function encodeServerNode(
     return encodeServerNode(renderedValue, context, path);
   }
   if (type === REACT_FRAGMENT_SYMBOL) {
-    return encodeServerNode(value.props.children, context, [...path, 3, "children"]);
+    path.push(3);
+    path.push("children");
+    const children = encodeServerNode(value.props.children, context, path);
+    path.pop();
+    path.pop();
+    return children;
   }
 
   return encodeServerElement(value, context, path);
@@ -549,19 +551,23 @@ function encodeServerElement(
   const len = propKeys.length;
   const encoded: unknown[] = Array.from({ length: len });
   let hasAsync = false;
-  const propsPath = [...path, 3];
+  path.push(3);
+  const propsPath = path;
 
   for (let i = 0; i < len; i += 1) {
-    const v = encodeServerNode(value.props[propKeys[i]], context, [...propsPath, propKeys[i]]);
+    propsPath.push(propKeys[i]);
+    const v = encodeServerNode(value.props[propKeys[i]], context, propsPath);
     encoded[i] = v;
     if (!hasAsync && isThenable(v)) hasAsync = true;
+    path.pop();
   }
 
-  const typeCtx = {
-    ...context.streamEncodeContext,
-    _path: [...path, 1],
-  };
-  const type = encodeStreamType(value.type, typeCtx);
+  path.pop();
+  path.push(1);
+
+  context.streamEncodeContext._path = path;
+  const type = encodeStreamType(value.type, context.streamEncodeContext);
+  path.pop();
   const key = value.key == null ? null : String(value.key);
 
   const buildRow = (vals: unknown[]) => {

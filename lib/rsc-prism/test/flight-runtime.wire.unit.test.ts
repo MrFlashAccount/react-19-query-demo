@@ -429,6 +429,52 @@ describe("flight wire compact stream format", () => {
     expect(revived.props.children[1].props.onClick).toBe("client:mod#Button");
   });
 
+  it("applies flat revive paths directly without tree conversion", () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
+    const clientRef = {
+      $$typeof: CLIENT_REFERENCE_SYMBOL,
+      $$id: "mod#Button",
+    };
+    const element = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: {
+        onClick: clientRef,
+        children: "hello",
+      },
+    };
+
+    const revivePaths: (string | number)[][] = [];
+    const encoded = encodeStreamValue(element, {
+      seen: new WeakSet<object>(),
+      emitBinaryRow: () => 1,
+      outlineValue: () => 1,
+      _path: [],
+      pushReviveValue: (_v, path) => revivePaths.push([...path]),
+    });
+
+    expect(revivePaths.length).toBeGreaterThan(0);
+    const context = {
+      getChunk: () => null,
+      readChunk: () => null,
+      createLazyChunkWrapper: () => null,
+      resolveClientReference: (id: string) => `client:${id}`,
+    };
+
+    applyDirectPathReplacements(encoded, revivePaths, context);
+    const revived = traverseElementTuplesOnly(context, encoded) as {
+      type: string;
+      props: { onClick: unknown; children: string };
+    };
+
+    expect(revived).toBeDefined();
+    expect(revived.type).toBe("div");
+    expect(revived.props.onClick).toBe("client:mod#Button");
+    expect(revived.props.children).toBe("hello");
+  });
+
   it("expands template metadata before model revival", async () => {
     const emitter = createFromRowEmitter<Array<{ type: string; props: { children: string } }>>();
     emitter.push({
