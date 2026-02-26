@@ -269,9 +269,14 @@ describe("flight runtime server row emitter behavior", () => {
       templates?: unknown;
       v?: unknown;
     }[] = [];
-    await renderToRowEmitter(root, null, (row) => {
-      rows.push(row as (typeof rows)[0]);
-    }, { fastMode: false });
+    await renderToRowEmitter(
+      root,
+      null,
+      (row) => {
+        rows.push(row as (typeof rows)[0]);
+      },
+      { fastMode: false },
+    );
 
     const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0);
     expect(metadataRow).toBeDefined();
