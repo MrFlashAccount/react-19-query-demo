@@ -6,9 +6,15 @@ import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
+import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "./actions/constants";
 import { defaultFlightProtocolAdapter } from "./actions/adapter";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
-import type { ComponentReference, EncodedActionArgs } from "./types";
+import { WORKER_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL } from "./module-references/constants";
+import {
+  type ComponentReference,
+  type EncodedActionArgs,
+  getEncodedActionArgsContentType,
+} from "./types";
 import type { RSCTransport } from "./transport";
 const MISSING_TRANSPORT_ERROR_MESSAGE =
   '[rsc-prism] Missing RSC transport. Call bootstrapWorkerRuntime() from "@lib/rsc-prism/client-only" first, or pass options.transport explicitly.';
@@ -127,10 +133,6 @@ export interface RSCRequestOptions {
   transport?: RSCTransport | null | undefined;
 }
 
-const WORKER_COMPONENT_REFERENCE = Symbol.for("rsc.worker.reference");
-const SERVER_ACTION_REFERENCE = Symbol.for("react.server.reference");
-const DEFAULT_ACTION_ENDPOINT = "/rsc/action";
-
 export interface WorkerComponentReference<Props = unknown, Result = unknown> {
   $$typeof: symbol;
   $$id: string;
@@ -168,7 +170,7 @@ function isWorkerComponentReference(value: unknown): value is WorkerComponentRef
   }
 
   const candidate = value as Partial<WorkerComponentReference>;
-  return candidate.$$typeof === WORKER_COMPONENT_REFERENCE && typeof candidate.$$id === "string";
+  return candidate.$$typeof === WORKER_REFERENCE_SYMBOL && typeof candidate.$$id === "string";
 }
 
 function isWorkerActionReference(value: unknown): value is WorkerActionReference {
@@ -176,7 +178,7 @@ function isWorkerActionReference(value: unknown): value is WorkerActionReference
     return false;
   }
   const candidate = value as Partial<WorkerActionReference>;
-  return candidate.$$typeof === SERVER_ACTION_REFERENCE && typeof candidate.$$id === "string";
+  return candidate.$$typeof === SERVER_REFERENCE_SYMBOL && typeof candidate.$$id === "string";
 }
 
 async function readActionErrorMessage(response: Response): Promise<string | null> {
@@ -248,7 +250,7 @@ export function createCallServer(
   const { transport: _transport, ...requestInit } = options ?? {};
   const callServer = async (actionId: string, args: unknown[]): Promise<unknown> => {
     const encodedArgs = await encodeActionArgs(args);
-    const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
+    const contentType = getEncodedActionArgsContentType(encodedArgs);
     const manifest = resolveClientManifestOrThrow();
     return transport.sendActionDirect!(
       {
@@ -290,7 +292,7 @@ export async function fetchRSC(
   const { callServer, props, transport: _transport } = options ?? {};
   const resolvedCallServer = callServer ?? createCallServer(DEFAULT_ACTION_ENDPOINT, { transport });
   const workerComponent = workerComponentCandidate;
-  const url = "/rsc/view";
+  const url = DEFAULT_VIEW_ENDPOINT;
 
   if (workerComponent != null && !isWorkerComponentReference(workerComponent)) {
     throw new Error(
@@ -365,7 +367,7 @@ export async function callAction<T = void>(
   const endpoint = options.endpoint ?? DEFAULT_ACTION_ENDPOINT;
   const { parseResponse = true } = options;
   const encodedArgs = await encodeActionArgs(args);
-  const contentType = encodedArgs.type === "formdata" ? undefined : "text/plain";
+  const contentType = getEncodedActionArgsContentType(encodedArgs);
 
   if (parseResponse) {
     if (transport.sendActionDirect == null) {

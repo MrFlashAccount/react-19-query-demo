@@ -7,6 +7,7 @@
 
 import type { ReactNode } from "react";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
+import { buildClientManifestBaseUrl } from "./runtime/module-registry";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
 import { registerActions } from "./actions";
 import { defaultFlightProtocolAdapter } from "./actions/adapter";
@@ -102,9 +103,7 @@ export interface CreateRSCResult<TComponents> {
 export async function createRSC<TComponents extends Record<string, unknown>>(
   config: CreateRSCConfig<TComponents>,
 ): Promise<CreateRSCResult<TComponents>> {
-  const slashIndex = config.moduleId.lastIndexOf("/");
-  const manifest: ClientManifest =
-    slashIndex === -1 ? "/" : config.moduleId.slice(0, slashIndex + 1);
+  const manifest: ClientManifest = buildClientManifestBaseUrl(config.moduleId);
 
   const ctx = createRSCContext(manifest);
   const Client = createClientModuleProxy(config.moduleId) as TComponents;

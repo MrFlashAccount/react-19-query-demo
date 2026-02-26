@@ -4,6 +4,7 @@
  * @see ./wire/index.ts
  */
 export {
+  REACT_LAZY_SYMBOL,
   REVIVE_PATH_WILDCARD,
   ROW_BINARY,
   ROW_DONE,

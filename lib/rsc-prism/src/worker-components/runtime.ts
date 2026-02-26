@@ -5,6 +5,7 @@
  * generates equivalent inline code.
  */
 
+import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "../actions/constants";
 import { createRSCHandler } from "../response";
 import { createWorkerRowTransportMessageHandler } from "./handler";
 import type {
@@ -67,8 +68,8 @@ function toActionRequest(message: WorkerTransportRequestMessage, endpoint: URL):
 }
 
 export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
-  const endpoint = options.endpoint ?? "/rsc/view";
-  const actionEndpoint = options.actionEndpoint ?? "/rsc/action";
+  const endpoint = options.endpoint ?? DEFAULT_VIEW_ENDPOINT;
+  const actionEndpoint = options.actionEndpoint ?? DEFAULT_ACTION_ENDPOINT;
   const workerOrigin = options.workerOrigin ?? "https://rsc.prism.local";
   const componentRegistry = buildComponentRegistry(options.componentModules);
   const actionBatchRefreshEnabled = options.actionBatchRefresh === true;

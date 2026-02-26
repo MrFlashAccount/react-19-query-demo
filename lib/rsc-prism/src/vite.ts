@@ -11,6 +11,8 @@ import {
 } from "vite";
 import { build as viteBuild } from "vite";
 import react from "@vitejs/plugin-react";
+import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "./actions/constants";
+import { REFERENCE_SYMBOL_KEYS } from "./module-references/constants";
 import {
   MAIN_THREAD_MODULES_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
@@ -1170,8 +1172,8 @@ function buildMainWorkerReferenceModuleCode(
     actionShortIdMap.get(`${moduleId}#${name}`) ?? `${moduleId}#${name}`;
   lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
   lines.push("");
-  lines.push('const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");');
-  lines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
+  lines.push(`const __rscPrismWorkerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.worker)});`);
+  lines.push(`const __rscPrismServerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.server)});`);
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push("const __rscPrismWorkerReferenceMap = {};");
   lines.push("const __rscPrismActionReferenceMap = {};");
@@ -1247,7 +1249,7 @@ function buildMainWorkerActionReferenceModuleCode(
   }
   lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
   lines.push("");
-  lines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
+  lines.push(`const __rscPrismServerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.server)});`);
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push(
     `const __rscPrismActionIdMap = ${JSON.stringify(Object.fromEntries(Array.from(actionExports).map((name) => [name, getActionId(name)])))};`,
@@ -1294,8 +1296,8 @@ function buildMainWorkerDirectiveReferenceModuleCode(
   lines.push('import { callAction as __rscPrismCallAction } from "@lib/rsc-prism/client-only";');
   lines.push(`import * as __rscPrismSourceModule from ${JSON.stringify(sourceImportPath)};`);
   lines.push("");
-  lines.push('const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");');
-  lines.push('const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");');
+  lines.push(`const __rscPrismWorkerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.worker)});`);
+  lines.push(`const __rscPrismServerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.server)});`);
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push("const __rscPrismWorkerReferenceMap = {};");
   lines.push("const __rscPrismActionReferenceMap = {};");
@@ -1567,7 +1569,7 @@ import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport
 import { resolveWorkerComponent, workerActions } from "./worker-component-registry";
 
 const WORKER_ORIGIN = "https://rsc.prism.local";
-const ACTION_ENDPOINT = "/rsc/action";
+const ACTION_ENDPOINT = ${JSON.stringify(DEFAULT_ACTION_ENDPOINT)};
 const ACTION_BATCH_REFRESH = ${experimentalActionBatchRefresh ? "true" : "false"};
 const handler = createRSCHandler({ actions: workerActions });
 
@@ -1991,7 +1993,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     options.experimental?.componentLevelDirectives === true;
   const experimentalActionBatchRefresh = options.experimental?.actionBatchRefresh === true;
   const workerRuntimeEnabled = options.mode === "main" && options.workerRuntime?.enabled === true;
-  const workerEndpoint = options.workerRuntime?.endpoint ?? "/rsc/view";
+  const workerEndpoint = options.workerRuntime?.endpoint ?? DEFAULT_VIEW_ENDPOINT;
 
   let config: ResolvedConfig | null = null;
   const parsedDirectiveModules = new Map<string, ParsedDirectiveModule>();
@@ -2164,7 +2166,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       (localName) => `export { ${localName} as ${buildLocalMainComponentExportName(localName)} };`,
     );
     const helper = [
-      'const __rscPrismWorkerReferenceSymbol = Symbol.for("rsc.worker.reference");',
+      `const __rscPrismWorkerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.worker)});`,
       "const __rscPrismCreateLocalWorkerRef = (componentId, moduleId, name) => {",
       "  const ref = function() {",
       '    throw new Error("[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...).");',
@@ -2532,7 +2534,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     const helperLines: string[] = [];
     if (actionRefLines.length > 0) {
       helperLines.push(
-        'const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");',
+        `const __rscPrismServerReferenceSymbol = Symbol.for(${JSON.stringify(REFERENCE_SYMBOL_KEYS.server)});`,
       );
       helperLines.push(
         'const __rscPrismCreateActionRef = (id) => { const ref = function() { throw new Error("[rsc-prism] Worker action references cannot execute within worker component extraction directly."); }; ref.$$typeof = __rscPrismServerReferenceSymbol; ref.$$id = id; ref.$$bound = null; return ref; };',
@@ -3382,7 +3384,7 @@ export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
     workerRuntime: {
       ...options.workerRuntime,
       enabled: options.workerRuntime?.enabled ?? true,
-      endpoint: options.workerRuntime?.endpoint ?? "/rsc/view",
+      endpoint: options.workerRuntime?.endpoint ?? DEFAULT_VIEW_ENDPOINT,
       outDir: options.workerRuntime?.outDir ?? ".vite/rsc-prism-worker-runtime",
       aliases: options.workerRuntime?.aliases ?? [],
     },

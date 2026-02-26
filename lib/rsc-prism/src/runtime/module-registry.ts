@@ -45,12 +45,19 @@ export function getModule<T = unknown>(moduleId: string): T {
 }
 
 /**
- * Build an ESM manifest base URL from a module id.
+ * Derive manifest base URL from module id (path up to last slash, or "/" if none).
  */
-export function buildClientManifest(moduleId: string, _exportNames: string[]): ClientManifest {
+export function buildClientManifestBaseUrl(moduleId: string): string {
   const normalizedModuleId = moduleId.split("#", 1)[0]!;
   const slashIndex = normalizedModuleId.lastIndexOf("/");
   return slashIndex === -1 ? "/" : normalizedModuleId.slice(0, slashIndex + 1);
+}
+
+/**
+ * Build an ESM manifest base URL from a module id.
+ */
+export function buildClientManifest(moduleId: string, _exportNames: string[]): ClientManifest {
+  return buildClientManifestBaseUrl(moduleId);
 }
 
 /**

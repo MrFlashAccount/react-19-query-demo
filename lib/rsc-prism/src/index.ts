@@ -14,6 +14,7 @@ export type {
   RSCHandlerOptions,
   RSCResponseOptions,
 } from "./types";
+export { getEncodedActionArgsContentType } from "./types";
 
 export type { CreateRSCConfig, CreateRSCResult } from "./server";
 export type { CreateRSCHandlerOptions } from "./response";

@@ -14,4 +14,8 @@ export {
   annotateServerReference,
   createClientModuleProxy,
 } from "./annotate";
-export { CLIENT_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL } from "./constants";
+export {
+  CLIENT_REFERENCE_SYMBOL,
+  SERVER_REFERENCE_SYMBOL,
+  WORKER_REFERENCE_SYMBOL,
+} from "./constants";

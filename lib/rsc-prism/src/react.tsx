@@ -1,4 +1,5 @@
 import { startTransition, use, useEffect, useRef, useState } from "react";
+import { DEFAULT_ACTION_ENDPOINT } from "./actions/constants";
 import { bootstrapWorkerRuntime, createCallServer, fetchRSC } from "./client";
 import { createFromRowEmitter } from "./flight-runtime/client";
 import type { FlightRowMessage } from "./flight-runtime/wire";
@@ -57,7 +58,6 @@ interface ActiveTarget {
   consumers: Set<ActiveTargetConsumer>;
 }
 
-const DEFAULT_ACTION_ENDPOINT = "/rsc/action";
 const loaderStores = new Set<LoaderStore>();
 const activeTargets = new Map<string, ActiveTarget>();
 

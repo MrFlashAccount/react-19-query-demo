@@ -10,6 +10,7 @@ import {
   type RevivePathTree,
   isBinaryWireRowTag,
   reviveModelValueTree,
+  REACT_LAZY_SYMBOL,
   ROW_BINARY,
   ROW_DONE,
   ROW_ERROR,
@@ -59,7 +60,6 @@ interface FlightResponse {
   lazyWrapperCache: Map<FlightChunk, unknown>;
 }
 
-const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
 const TEMPLATE_SLOT_KEY = "$slot";
 const TEMPLATE_REF_KEY = "$tpl";
 const TEMPLATE_VALUES_KEY = "$v";

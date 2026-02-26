@@ -47,6 +47,11 @@ export type EncodedActionArgs =
   | { type: "formdata"; data: FormData | string }
   | { type: "string"; data: string };
 
+/** Content-Type for action request body; undefined for FormData (multipart). */
+export function getEncodedActionArgsContentType(encoded: EncodedActionArgs): string | undefined {
+  return encoded.type === "formdata" ? undefined : "text/plain";
+}
+
 /**
  * Server module exports - what a server component module provides
  */
