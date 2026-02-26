@@ -88,6 +88,10 @@
     "./runtime/module-registry": {
       "types": "./dist/runtime/module-registry.d.ts",
       "default": "./dist/runtime/module-registry.js"
+    },
+    "./module-references/create-client-ref": {
+      "types": "./dist/module-references/create-client-ref.d.ts",
+      "default": "./dist/module-references/create-client-ref.js"
     }
   },
   "publishConfig": {

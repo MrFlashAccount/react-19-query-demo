@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createClientModuleProxy } from "../src/flight-runtime/references";
+import { createClientModuleProxy } from "../src/module-references";
 
 describe("flight runtime references", () => {
   it("memoizes proxy export lookups by export name", () => {

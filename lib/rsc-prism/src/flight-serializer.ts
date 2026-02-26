@@ -3,7 +3,7 @@
  */
 
 import { registerServerReference } from "./flight-runtime/server";
-import { annotateServerReference as annotateRuntimeServerReference } from "./flight-runtime/references";
+import { annotateServerReference as annotateRuntimeServerReference } from "./module-references";
 
 const DEFAULT_SERVER_ACTION_REGISTRY_LIMIT = 1024;
 

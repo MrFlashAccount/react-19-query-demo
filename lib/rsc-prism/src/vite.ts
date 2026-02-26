@@ -1096,22 +1096,18 @@ function collectReferencedTopLevelMainComponentNames(
 
 function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleExports): string {
   const lines: string[] = [];
-  lines.push('const __rscPrismClientReferenceSymbol = Symbol.for("react.client.reference");');
-  lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
-  lines.push(
-    "const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id });",
-  );
+  lines.push('import { createClientRef } from "@lib/rsc-prism/module-references/create-client-ref";');
   lines.push("");
   if (exportsInfo.hasDefault) {
     lines.push(
-      `const __rscPrismDefault = __rscPrismCreateClientRef(${JSON.stringify(`${moduleId}#default`)});`,
+      `const __rscPrismDefault = createClientRef(${JSON.stringify(`${moduleId}#default`)});`,
     );
     lines.push("export default __rscPrismDefault;");
   }
   exportsInfo.named.forEach((name, index) => {
     const localName = `__rscPrismExport${index}`;
     lines.push(
-      `const ${localName} = __rscPrismCreateClientRef(${JSON.stringify(`${moduleId}#${name}`)});`,
+      `const ${localName} = createClientRef(${JSON.stringify(`${moduleId}#${name}`)});`,
     );
     lines.push(`export { ${localName} as ${name} };`);
   });
@@ -2419,7 +2415,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       inferredClientModules.add(normalizePath(absolutePath));
       for (const localName of localMainComponentNames) {
         clientRefLines.push(
-          `const ${localName} = __rscPrismCreateClientRef(${JSON.stringify(
+          `const ${localName} = createClientRef(${JSON.stringify(
             `${moduleId}#${buildLocalMainComponentExportName(localName)}`,
           )});`,
         );
@@ -2465,7 +2461,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           inferredClientModules.add(normalizePath(importBinding.resolvedAbsolutePath));
         }
         clientRefLines.push(
-          `const ${importBinding.localName} = __rscPrismCreateClientRef(${JSON.stringify(
+          `const ${importBinding.localName} = createClientRef(${JSON.stringify(
             `${importedModuleId}#${importBinding.importedName}`,
           )});`,
         );
@@ -2503,6 +2499,11 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     }
 
     const importLines: string[] = [];
+    if (clientRefLines.length > 0) {
+      importLines.push(
+        'import { createClientRef } from "@lib/rsc-prism/module-references/create-client-ref";',
+      );
+    }
     for (const [sourceSpecifier, fragments] of realImportsBySource) {
       const defaultImport = fragments.find(
         (fragment) => !fragment.startsWith("{") && !fragment.startsWith("* as "),
@@ -2529,15 +2530,6 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     }
 
     const helperLines: string[] = [];
-    if (clientRefLines.length > 0) {
-      helperLines.push(
-        'const __rscPrismClientReferenceSymbol = Symbol.for("react.client.reference");',
-      );
-      helperLines.push(
-        "const __rscPrismCreateClientRef = (id) => ({ $$typeof: __rscPrismClientReferenceSymbol, $$id: id });",
-      );
-      helperLines.push("");
-    }
     if (actionRefLines.length > 0) {
       helperLines.push(
         'const __rscPrismServerReferenceSymbol = Symbol.for("react.server.reference");',

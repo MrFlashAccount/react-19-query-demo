@@ -4,6 +4,11 @@
  * Uses numeric char codes instead of string comparisons in hot paths to avoid
  * V8 deoptimization from polymorphic string operations.
  */
+import {
+  CLIENT_REFERENCE_SYMBOL,
+  SERVER_REFERENCE_SYMBOL,
+} from "../../module-references/constants";
+
 /** ASCII char codes for Flight wire format prefixes ($X) */
 export const CHR = {
   DOLLAR: 36, // '$'
@@ -15,9 +20,7 @@ export const CHR = {
   L: 76, // 'L' - lazy chunk
 } as const;
 
-/** React's well-known symbols; must match server/client for reference resolution. */
-export const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
-export const SERVER_REFERENCE_SYMBOL = Symbol.for("react.server.reference");
+export { CLIENT_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL };
 export const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
 export const LEGACY_REACT_ELEMENT_SYMBOL = Symbol.for("react.element");
 export const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");

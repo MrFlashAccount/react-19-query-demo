@@ -62,8 +62,8 @@ export const Button = () => null;
     const transformedCode =
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain('Symbol.for("react.client.reference")');
-    expect(transformedCode).toContain('__rscPrismModuleId = "/src/client-components.tsx"');
+    expect(transformedCode).toContain("@lib/rsc-prism/module-references/create-client-ref");
+    expect(transformedCode).toContain('createClientRef');
     expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
     expect(transformedCode).toContain('"/src/client-components.tsx#Button"');
     expect(transformedCode).toContain('"/src/client-components.tsx#default"');
@@ -139,7 +139,7 @@ export function Counter() { return null; }
     const transformedCode =
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain('Symbol.for("react.client.reference")');
+    expect(transformedCode).toContain("@lib/rsc-prism/module-references/create-client-ref");
     expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
   });
 
@@ -541,9 +541,8 @@ export function TodoComposer() { return null; }
     const loaded = await callHook(plugin.load, undefined, resolved as string);
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
 
-    expect(loadedCode).toContain('Symbol.for("react.client.reference")');
-    expect(loadedCode).toContain("$$id");
-    expect(loadedCode).toContain('"/src/client-components.tsx#TodoComposer"');
+    expect(loadedCode).toContain("@lib/rsc-prism/module-references/create-client-ref");
+    expect(loadedCode).toContain('createClientRef("/src/client-components.tsx#TodoComposer")');
   });
 
   it("does not redirect worker imports of use worker modules", async () => {

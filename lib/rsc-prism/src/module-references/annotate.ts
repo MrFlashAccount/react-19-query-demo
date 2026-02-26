@@ -1,46 +1,28 @@
-const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
-const SERVER_REFERENCE_SYMBOL = Symbol.for("react.server.reference");
+/**
+ * Annotate values with React Flight reference metadata.
+ * Used by server encode, decode-reply, and createClientModuleProxy.
+ */
+import { CLIENT_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL } from "./constants";
 
 export function annotateClientReference<T extends object>(
   reference: T,
   id: string,
-): T & {
-  $$typeof: symbol;
-  $$id: string;
-} {
-  const value = reference as T & {
-    $$typeof?: symbol;
-    $$id?: string;
-  };
+): T & { $$typeof: symbol; $$id: string } {
+  const value = reference as T & { $$typeof?: symbol; $$id?: string };
   value.$$typeof = CLIENT_REFERENCE_SYMBOL;
   value.$$id = id;
-  return value as T & {
-    $$typeof: symbol;
-    $$id: string;
-  };
+  return value as T & { $$typeof: symbol; $$id: string };
 }
 
 export function annotateServerReference<T extends (...args: any[]) => any>(
   reference: T,
   id: string,
-): T & {
-  $$typeof: symbol;
-  $$id: string;
-  $$bound: null;
-} {
-  const value = reference as T & {
-    $$typeof?: symbol;
-    $$id?: string;
-    $$bound?: null;
-  };
+): T & { $$typeof: symbol; $$id: string; $$bound: null } {
+  const value = reference as T & { $$typeof?: symbol; $$id?: string; $$bound?: null };
   value.$$typeof = SERVER_REFERENCE_SYMBOL;
   value.$$id = id;
   value.$$bound = null;
-  return value as T & {
-    $$typeof: symbol;
-    $$id: string;
-    $$bound: null;
-  };
+  return value as T & { $$typeof: symbol; $$id: string; $$bound: null };
 }
 
 export function createClientModuleProxy(moduleId: string): Record<string, unknown> {

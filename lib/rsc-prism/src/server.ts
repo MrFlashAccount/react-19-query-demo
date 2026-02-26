@@ -10,7 +10,7 @@ import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
 import { registerActions } from "./actions";
 import { defaultFlightProtocolAdapter } from "./actions/adapter";
-import { createClientModuleProxy } from "./flight-runtime/references";
+import { createClientModuleProxy } from "./module-references";
 import type { FlightRowEmit } from "./flight-runtime/server";
 
 /**

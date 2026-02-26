@@ -17,6 +17,8 @@ export default defineConfig({
     "src/types.ts",
     "src/vite.ts",
     "src/runtime/module-registry.ts",
+    "src/module-references/index.ts",
+    "src/module-references/create-client-ref.ts",
   ],
   outDir: "dist",
   format: "esm",

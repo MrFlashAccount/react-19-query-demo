@@ -23,4 +23,4 @@ export {
   createClientRefs,
   createClientModule,
   type ClientReference,
-} from "./client-reference";
+} from "./module-references/client-reference";

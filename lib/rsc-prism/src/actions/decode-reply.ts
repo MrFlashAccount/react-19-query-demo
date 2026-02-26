@@ -4,7 +4,7 @@
  */
 
 import { decodeBinaryWireRow, decodeWireValue } from "../flight-runtime/wire";
-import { createClientModuleProxy } from "../flight-runtime/references";
+import { createClientModuleProxy } from "../module-references";
 
 export async function decodeReply(
   body: FormData | string,

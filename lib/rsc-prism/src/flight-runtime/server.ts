@@ -5,7 +5,7 @@
  * Keeps registerServerReference here (references bridge).
  */
 
-import { annotateServerReference } from "./references";
+import { annotateServerReference } from "../module-references";
 import { renderToReadableStream, renderToRowEmitter } from "./server-render";
 import type { FlightRowEmit } from "./server-encode";
 
