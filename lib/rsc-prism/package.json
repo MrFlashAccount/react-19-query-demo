@@ -84,6 +84,22 @@
     "./module-references/create-client-ref": {
       "types": "./dist/module-references/create-client-ref.d.ts",
       "default": "./dist/module-references/create-client-ref.js"
+    },
+    "./module-references/create-worker-ref": {
+      "types": "./dist/module-references/create-worker-ref.d.ts",
+      "default": "./dist/module-references/create-worker-ref.js"
+    },
+    "./module-references/create-action-ref": {
+      "types": "./dist/module-references/create-action-ref.d.ts",
+      "default": "./dist/module-references/create-action-ref.js"
+    },
+    "./module-references/create-action-ref-stub": {
+      "types": "./dist/module-references/create-action-ref-stub.d.ts",
+      "default": "./dist/module-references/create-action-ref-stub.js"
+    },
+    "./flight-runtime/wire": {
+      "types": "./dist/flight-runtime/wire.d.ts",
+      "default": "./dist/flight-runtime/wire.js"
     }
   },
   "publishConfig": {

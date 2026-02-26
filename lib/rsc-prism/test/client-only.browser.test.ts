@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { ComponentReference } from "../src/types";
 import * as clientOnly from "../src/client-only";
 import { WORKER_REFERENCE_SYMBOL } from "../src/module-references/constants";
 import {
@@ -12,7 +13,6 @@ import { createMockWorkerTransport } from "./utils/mock-worker-transport";
 const initialWorkerBootstrap = (globalThis as typeof globalThis & Record<string, unknown>)[
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY
 ];
-
 
 describe("client-only browser workflows", () => {
   beforeEach(() => {
@@ -51,7 +51,9 @@ describe("client-only browser workflows", () => {
       $$bound: null,
     };
 
-    await expect(clientOnly.fetchRSC(todoViewRef, { transport })).resolves.toBe("fetch-ok");
+    await expect(
+      clientOnly.fetchRSC(todoViewRef as unknown as ComponentReference<unknown>, { transport }),
+    ).resolves.toBe("fetch-ok");
     await expect(clientOnly.callAction<string>(runActionRef, [1], { transport })).resolves.toBe(
       "action-ok",
     );
@@ -95,7 +97,9 @@ describe("client-only browser workflows", () => {
       $$moduleId: "components.tsx",
       $$name: "TodoView",
     };
-    await expect(clientOnly.fetchRSC(todoViewRef)).resolves.toBe("default-fetch-ok");
+    await expect(
+      clientOnly.fetchRSC(todoViewRef as unknown as ComponentReference<unknown>),
+    ).resolves.toBe("default-fetch-ok");
     await expect(clientOnly.callAction<string>(runActionRef, [1])).resolves.toBe(
       "default-action-ok",
     );
@@ -106,7 +110,9 @@ describe("client-only browser workflows", () => {
 
     bootstrapped.dispose();
     expect(dispose).toHaveBeenCalledTimes(1);
-    await expect(clientOnly.fetchRSC(todoViewRef)).rejects.toThrow("Missing RSC transport");
+    await expect(
+      clientOnly.fetchRSC(todoViewRef as unknown as ComponentReference<unknown>),
+    ).rejects.toThrow("Missing RSC transport");
   });
 
   it("throws when worker runtime bootstrap hook is unavailable", async () => {

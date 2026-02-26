@@ -18,7 +18,11 @@ describe("flight runtime server row emitter behavior", () => {
     queueMicrotask(() => state.resolveRendered?.());
     await renderPromise;
 
-    const modelRows = rows.filter((r) => r.k === ROW_MODEL) as { k: number; id: number; v: unknown }[];
+    const modelRows = rows.filter((r) => r.k === ROW_MODEL) as {
+      k: number;
+      id: number;
+      v: unknown;
+    }[];
     expect(modelRows.some((r) => r.id === 0 && r.v === "$1")).toBe(true);
     expect(modelRows.some((r) => r.id === 1 && r.v === "ready")).toBe(true);
     expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
@@ -30,7 +34,12 @@ describe("flight runtime server row emitter behavior", () => {
     await renderToRowEmitter(bytes.buffer as unknown as ReactNode, null, (row) => rows.push(row));
 
     const modelRows = rows.filter((r) => r.k === ROW_MODEL);
-    const binaryRows = rows.filter((r) => r.k === ROW_BINARY) as { k: number; id: number; t: string; v: ArrayBuffer }[];
+    const binaryRows = rows.filter((r) => r.k === ROW_BINARY) as {
+      k: number;
+      id: number;
+      t: string;
+      v: ArrayBuffer;
+    }[];
     expect(modelRows.length).toBeGreaterThan(0);
     expect(binaryRows.length).toBeGreaterThan(0);
     const binaryPayload = binaryRows.find((r) => r.t === "A");
@@ -70,7 +79,9 @@ describe("flight runtime server row emitter behavior", () => {
     const rows: FlightRowMessage[] = [];
     await renderToRowEmitter(root, null, (row) => rows.push(row));
 
-    const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0) as { revivePaths?: unknown[] };
+    const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0) as {
+      revivePaths?: unknown[];
+    };
     expect(metadataRow).toBeDefined();
     expect(Array.isArray(metadataRow?.revivePaths)).toBe(true);
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);

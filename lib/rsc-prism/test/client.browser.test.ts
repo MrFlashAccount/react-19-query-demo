@@ -1,15 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import {
-  callAction,
-  createCallServer,
-  encodeActionArgs,
-  fetchRSC,
-} from "../src/client";
+import type { ComponentReference } from "../src/types";
+import { callAction, createCallServer, encodeActionArgs, fetchRSC } from "../src/client";
 import { WORKER_REFERENCE_SYMBOL } from "../src/module-references/constants";
 import { DEFAULT_WORKER_RUNTIME_GLOBAL_KEY, setInvalidateRSC } from "../src/runtime-globals";
 import { createMockWorkerTransport } from "./utils/mock-worker-transport";
-import { setAutoClientManifest, resolveClientManifestOrThrow } from "../src/runtime/client-manifest";
+import {
+  setAutoClientManifest,
+  resolveClientManifestOrThrow,
+} from "../src/runtime/client-manifest";
 import { createFromRowEmitter } from "../src/flight-runtime/client";
 function clearDefaultWorkerRuntimeGlobals() {
   const globalState = globalThis as typeof globalThis & Record<string, unknown>;
@@ -85,7 +84,9 @@ describe("rsc client browser workflows", () => {
       $$id: "todo-actions.ts#run",
       $$bound: null,
     };
-    await expect(fetchRSC(todoViewRef, { transport })).resolves.toBe("fetch-ok");
+    await expect(
+      fetchRSC(todoViewRef as unknown as ComponentReference<unknown>, { transport }),
+    ).resolves.toBe("fetch-ok");
     await expect(callAction<string>(runActionRef, [1], { transport })).resolves.toBe("action-ok");
 
     expect(seenRequests[0]).toEqual({
@@ -112,7 +113,9 @@ describe("rsc client browser workflows", () => {
       $$moduleId: "components.tsx",
       $$name: "TodoView",
     };
-    await expect(fetchRSC(todoViewRef)).rejects.toThrow("Missing RSC transport");
+    await expect(fetchRSC(todoViewRef as unknown as ComponentReference<unknown>)).rejects.toThrow(
+      "Missing RSC transport",
+    );
   });
 
   it("throws when callAction has no explicit or bootstrapped transport", async () => {
@@ -189,6 +192,8 @@ describe("rsc client browser workflows", () => {
       $$moduleId: "/alias/view",
       $$name: "TodoClientView",
     };
-    await expect(fetchRSC(viewRef, { transport })).resolves.toBe("client-view-ok");
+    await expect(
+      fetchRSC(viewRef as unknown as ComponentReference<unknown>, { transport }),
+    ).resolves.toBe("client-view-ok");
   });
 });

@@ -139,9 +139,8 @@ export async function createWorkerRowHandler(options: CreateWorkerRowHandlerOpti
   ) => Promise<void>;
   executeAction: (actionId: string, encodedArgs: EncodedActionArgs) => Promise<unknown>;
 }> {
-  const { handleActionRows: handleActionRowsCore, executeAction: executeActionCore } = await import(
-    "./actions"
-  );
+  const { handleActionRows: handleActionRowsCore, executeAction: executeActionCore } =
+    await import("./actions");
   const ctx = createRSCContext(options.manifest);
   const ready = (async () => {
     if (options.actions) {

@@ -1095,7 +1095,9 @@ function collectReferencedTopLevelMainComponentNames(
 
 function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleExports): string {
   const lines: string[] = [];
-  lines.push('import { createClientRef } from "@lib/rsc-prism/module-references/create-client-ref";');
+  lines.push(
+    'import { createClientRef } from "@lib/rsc-prism/module-references/create-client-ref";',
+  );
   lines.push("");
   if (exportsInfo.hasDefault) {
     lines.push(
@@ -1105,9 +1107,7 @@ function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleE
   }
   exportsInfo.named.forEach((name, index) => {
     const localName = `__rscPrismExport${index}`;
-    lines.push(
-      `const ${localName} = createClientRef(${JSON.stringify(`${moduleId}#${name}`)});`,
-    );
+    lines.push(`const ${localName} = createClientRef(${JSON.stringify(`${moduleId}#${name}`)});`);
     lines.push(`export { ${localName} as ${name} };`);
   });
   if (!exportsInfo.hasDefault && exportsInfo.named.length === 0) {
@@ -1175,8 +1175,12 @@ function buildMainWorkerReferenceModuleCode(
   const getActionId = (name: string) =>
     actionShortIdMap.get(`${moduleId}#${name}`) ?? `${moduleId}#${name}`;
   const actionIdMap = buildActionIdMap(actionExports, getActionId);
-  lines.push('import { createWorkerRef } from "@lib/rsc-prism/module-references/create-worker-ref";');
-  lines.push('import { createActionRef } from "@lib/rsc-prism/module-references/create-action-ref";');
+  lines.push(
+    'import { createWorkerRef } from "@lib/rsc-prism/module-references/create-worker-ref";',
+  );
+  lines.push(
+    'import { createActionRef } from "@lib/rsc-prism/module-references/create-action-ref";',
+  );
   lines.push("");
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push("const __rscPrismWorkerReferenceMap = {};");
@@ -1245,7 +1249,9 @@ function buildMainWorkerActionReferenceModuleCode(
     );
   }
   const actionIdMap = buildActionIdMap(actionExports, getActionId);
-  lines.push('import { createActionRef } from "@lib/rsc-prism/module-references/create-action-ref";');
+  lines.push(
+    'import { createActionRef } from "@lib/rsc-prism/module-references/create-action-ref";',
+  );
   lines.push("");
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);
   lines.push(`const __rscPrismActionIdMap = ${JSON.stringify(actionIdMap)};`);
@@ -1290,8 +1296,12 @@ function buildMainWorkerDirectiveReferenceModuleCode(
   const getActionId = (name: string) =>
     actionShortIdMap.get(`${moduleId}#${name}`) ?? `${moduleId}#${name}`;
   const actionIdMap = buildActionIdMap(actionExports, getActionId);
-  lines.push('import { createWorkerRef } from "@lib/rsc-prism/module-references/create-worker-ref";');
-  lines.push('import { createActionRef } from "@lib/rsc-prism/module-references/create-action-ref";');
+  lines.push(
+    'import { createWorkerRef } from "@lib/rsc-prism/module-references/create-worker-ref";',
+  );
+  lines.push(
+    'import { createActionRef } from "@lib/rsc-prism/module-references/create-action-ref";',
+  );
   lines.push(`import * as __rscPrismSourceModule from ${JSON.stringify(sourceImportPath)};`);
   lines.push("");
   lines.push(`const __rscPrismModuleId = ${JSON.stringify(moduleId)};`);

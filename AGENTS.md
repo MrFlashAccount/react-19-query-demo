@@ -21,3 +21,7 @@
 ## TypeScript
 
 1. Use `@typescript/native-preview` and never `typescript` in package.json and pnpm catalog. All packages must depend on `@typescript/native-preview` for type checking and build tooling.
+
+## Verification
+
+1. Before claiming work complete, run `pnpm run check` (lint, type, build) and `pnpm run test` to verify.

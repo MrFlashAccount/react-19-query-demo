@@ -63,7 +63,7 @@ export const Button = () => null;
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain("@lib/rsc-prism/module-references/create-client-ref");
-    expect(transformedCode).toContain('createClientRef');
+    expect(transformedCode).toContain("createClientRef");
     expect(transformedCode).toContain('"/src/client-components.tsx#Counter"');
     expect(transformedCode).toContain('"/src/client-components.tsx#Button"');
     expect(transformedCode).toContain('"/src/client-components.tsx#default"');
@@ -806,9 +806,7 @@ function TodoItemRow() {
     const transformedCode =
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain(
-      'createWorkerRef("/src/main.tsx#@local:TodoViewRSC"',
-    );
+    expect(transformedCode).toContain('createWorkerRef("/src/main.tsx#@local:TodoViewRSC"');
     expect(transformedCode).toContain(
       "export { TodoItemRow as __rscPrismLocalClient_TodoItemRow };",
     );

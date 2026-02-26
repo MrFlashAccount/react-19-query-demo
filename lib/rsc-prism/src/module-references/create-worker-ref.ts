@@ -10,12 +10,15 @@ export function createWorkerRef(componentId: string, moduleId: string, name: str
       "[rsc-prism] Worker component references cannot render on the main thread. Pass the imported symbol to fetchRSC(...).",
     );
   };
-  (ref as { $$typeof: symbol; $$id: string; $$moduleId: string; $$name: string }).$$typeof =
-    WORKER_REFERENCE_SYMBOL;
-  (ref as { $$typeof: symbol; $$id: string; $$moduleId: string; $$name: string }).$$id =
-    componentId;
-  (ref as { $$typeof: symbol; $$id: string; $$moduleId: string; $$name: string }).$$moduleId =
-    moduleId;
-  (ref as { $$typeof: symbol; $$id: string; $$moduleId: string; $$name: string }).$$name = name;
+  const tagged = ref as unknown as {
+    $$typeof: symbol;
+    $$id: string;
+    $$moduleId: string;
+    $$name: string;
+  };
+  tagged.$$typeof = WORKER_REFERENCE_SYMBOL;
+  tagged.$$id = componentId;
+  tagged.$$moduleId = moduleId;
+  tagged.$$name = name;
   return ref;
 }

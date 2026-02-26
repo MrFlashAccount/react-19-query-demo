@@ -17,6 +17,7 @@ export default defineConfig({
     "src/runtime/module-registry.ts",
     "src/module-references/index.ts",
     "src/module-references/create-client-ref.ts",
+    "src/flight-runtime/wire.ts",
   ],
   outDir: "dist",
   format: "esm",
@@ -25,12 +26,5 @@ export default defineConfig({
   unbundle: true,
   skipNodeModulesBundle: true,
   dts: false,
-  external: [
-    "react",
-    "@babel/parser",
-    "vite",
-    "path",
-    "fs/promises",
-    /^@lib\//,
-  ],
+  external: ["react", "@babel/parser", "vite", "path", "fs/promises", /^@lib\//],
 });

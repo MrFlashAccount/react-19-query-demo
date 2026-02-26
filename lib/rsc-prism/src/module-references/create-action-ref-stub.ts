@@ -10,8 +10,9 @@ export function createActionRefStub(id: string) {
       "[rsc-prism] Worker action references cannot execute within worker component extraction directly.",
     );
   };
-  (ref as { $$typeof: symbol; $$id: string; $$bound: null }).$$typeof = SERVER_REFERENCE_SYMBOL;
-  (ref as { $$typeof: symbol; $$id: string; $$bound: null }).$$id = id;
-  (ref as { $$typeof: symbol; $$id: string; $$bound: null }).$$bound = null;
+  const tagged = ref as unknown as { $$typeof: symbol; $$id: string; $$bound: null };
+  tagged.$$typeof = SERVER_REFERENCE_SYMBOL;
+  tagged.$$id = id;
+  tagged.$$bound = null;
   return ref;
 }

@@ -97,9 +97,9 @@ describe("react rsc invalidation", () => {
     mocks.bootstrapWorkerRuntime.mockResolvedValue({
       worker: {} as Worker,
       transport: {
-      sendActionDirect: vi.fn(async () => null),
-      fetchRSCDirect: vi.fn(async () => null),
-    },
+        sendActionDirect: vi.fn(async () => null),
+        fetchRSCDirect: vi.fn(async () => null),
+      },
       dispose: vi.fn(),
     });
     mocks.createCallServer.mockReset();

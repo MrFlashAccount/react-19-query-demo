@@ -8,7 +8,6 @@ import {
   type FlightRowMessage,
   type FlightTemplateRowShape,
   type RevivePathTree,
-  isBinaryWireRowTag,
   reviveModelValueTree,
   REACT_LAZY_SYMBOL,
   ROW_BINARY,
