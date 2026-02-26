@@ -2,68 +2,40 @@ import { describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
 
 import { encodeReply, decodeReply } from "../src/actions";
-import { renderToReadableStream, renderToRowEmitter } from "../src/flight-runtime/server";
-import { ROW_METADATA, ROW_MODEL } from "../src/flight-runtime/wire";
-describe("flight runtime server stream behavior", () => {
-  it("returns stream before server render resolves and emits deferred rows", async () => {
+import { renderToRowEmitter } from "../src/flight-runtime/server";
+import { ROW_BINARY, ROW_DONE, ROW_METADATA, ROW_MODEL } from "../src/flight-runtime/wire";
+import type { FlightRowMessage } from "../src/flight-runtime/wire";
+
+describe("flight runtime server row emitter behavior", () => {
+  it("emits deferred rows and resolves", async () => {
     const state: { resolveRendered?: () => void } = {};
     const rendered = new Promise<unknown>((resolve) => {
       state.resolveRendered = () => resolve("ready");
     });
 
-    const streamPromise = renderToReadableStream(rendered as any, {});
-    const raced = await Promise.race([
-      streamPromise.then(() => "resolved"),
-      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
-    ]);
-    expect(raced).toBe("resolved");
+    const rows: FlightRowMessage[] = [];
+    const renderPromise = renderToRowEmitter(rendered as ReactNode, null, (row) => rows.push(row));
+    queueMicrotask(() => state.resolveRendered?.());
+    await renderPromise;
 
-    const stream = await streamPromise;
-    const reader = stream.getReader();
-    const first = await reader.read();
-    const secondPending = reader.read();
-
-    const pendingState = await Promise.race([
-      secondPending.then(() => "resolved"),
-      new Promise<"pending">((resolve) => setTimeout(() => resolve("pending"), 20)),
-    ]);
-    expect(pendingState).toBe("pending");
-
-    if (state.resolveRendered != null) {
-      state.resolveRendered();
-    }
-    const second = await secondPending;
-    const third = await reader.read();
-
-    const row0 = new TextDecoder().decode(first.value);
-    const row1 = new TextDecoder().decode(second.value);
-    expect(row0).toBe(`0:${JSON.stringify("$1")}\n`);
-    expect(row1).toBe(`1:${JSON.stringify("ready")}\n`);
-    expect(third.done).toBe(true);
+    const modelRows = rows.filter((r) => r.k === ROW_MODEL) as { k: number; id: number; v: unknown }[];
+    expect(modelRows.some((r) => r.id === 0 && r.v === "$1")).toBe(true);
+    expect(modelRows.some((r) => r.id === 1 && r.v === "ready")).toBe(true);
+    expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
   });
 
   it("emits binary rows for ArrayBuffer payloads", async () => {
     const bytes = Uint8Array.from([1, 2, 3, 4]);
-    const stream = await renderToReadableStream(bytes.buffer as unknown as ReactNode, {});
-    const reader = stream.getReader();
-    const rows: Uint8Array[] = [];
-    while (true) {
-      const next = await reader.read();
-      if (next.done) {
-        break;
-      }
-      rows.push(next.value);
-    }
+    const rows: FlightRowMessage[] = [];
+    await renderToRowEmitter(bytes.buffer as unknown as ReactNode, null, (row) => rows.push(row));
 
-    const fullText = rows.map((r) => new TextDecoder().decode(r)).join("");
-    const expectedBinary = new Uint8Array([49, 58, 65, 52, 44, 1, 2, 3, 4, 10]); // "1:A4," + bytes + "\n"
-    expect(fullText.includes(`0:"$1"`) || fullText.includes(`0:{"__r":0}`)).toBe(true);
-    expect(
-      rows.some(
-        (row) =>
-          row.length === expectedBinary.length && row.every((b, i) => b === expectedBinary[i]),
-      ),
-    ).toBe(true);
+    const modelRows = rows.filter((r) => r.k === ROW_MODEL);
+    const binaryRows = rows.filter((r) => r.k === ROW_BINARY) as { k: number; id: number; t: string; v: ArrayBuffer }[];
+    expect(modelRows.length).toBeGreaterThan(0);
+    expect(binaryRows.length).toBeGreaterThan(0);
+    const binaryPayload = binaryRows.find((r) => r.t === "A");
+    expect(binaryPayload).toBeDefined();
+    expect(Array.from(new Uint8Array(binaryPayload!.v))).toEqual([1, 2, 3, 4]);
   });
 
   it("round-trips action/reply binary payloads without base64", async () => {
@@ -81,7 +53,7 @@ describe("flight runtime server stream behavior", () => {
     expect(Array.from(new Uint8Array(decoded.buf))).toEqual([1, 2, 3]);
   });
 
-  it("emits metadata row M{id} before model row when payload has revive paths", async () => {
+  it("emits metadata row before model row when payload has revive paths", async () => {
     const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
     const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
     const clientRef = {
@@ -95,18 +67,15 @@ describe("flight runtime server stream behavior", () => {
       props: { onClick: clientRef, children: "hi" },
     } as ReactNode;
 
-    const stream = await renderToReadableStream(root, {});
-    const reader = stream.getReader();
-    const chunks: string[] = [];
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      chunks.push(new TextDecoder().decode(next.value));
-    }
+    const rows: FlightRowMessage[] = [];
+    await renderToRowEmitter(root, null, (row) => rows.push(row));
 
-    const fullText = chunks.join("");
-    expect(fullText).toMatch(/M0:\{"revivePaths":\[\[/);
-    expect(fullText).toContain(`0:["$","div",null,`);
+    const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0) as { revivePaths?: unknown[] };
+    expect(metadataRow).toBeDefined();
+    expect(Array.isArray(metadataRow?.revivePaths)).toBe(true);
+    const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
+    expect(modelRow).toBeDefined();
+    expect(JSON.stringify((modelRow as { v: unknown }).v)).toContain('"$","div"');
   });
 
   it("emits metadata row before model row when using renderToRowEmitter", async () => {
@@ -326,8 +295,9 @@ describe("flight runtime server stream behavior", () => {
       props: {},
     } as ReactNode;
 
-    const stream = await renderToReadableStream(root, {}, {});
-    const text = await new Response(stream).text();
-    expect(text).toBeTruthy();
+    const rows: FlightRowMessage[] = [];
+    await renderToRowEmitter(root, null, (row) => rows.push(row), {});
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
   });
 });

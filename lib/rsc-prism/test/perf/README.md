@@ -4,9 +4,6 @@ This folder contains runtime perf harnesses for `@lib/rsc-prism`.
 
 ## What is measured
 
-- `flight-runtime.client-stream-perf.unit.test.ts`
-  - stream parse + decode over row payloads
-  - reports root-scan and decode sub-metrics
 - `flight-runtime.decode-perf.unit.test.ts`
   - wire decode on synthetic object-heavy and binary-heavy payloads
 - `flight-runtime.server-decode-reply-perf.unit.test.ts`
@@ -17,7 +14,7 @@ This folder contains runtime perf harnesses for `@lib/rsc-prism`.
 From repo root:
 
 ```bash
-RSC_PERF=1 pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.client-stream-perf.unit.test.ts test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts
+RSC_PERF=1 pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts
 ```
 
 `RSC_PERF=1` is required. without it, perf tests are skipped.
@@ -37,7 +34,7 @@ RSC_PERF_BINARY_ROW_COUNT=600 \
 RSC_PERF_BINARY_ROW_BYTES=256 \
 RSC_PERF_SERVER_ITEM_COUNT=500 \
 RSC_PERF_SERVER_ITEM_BYTES=256 \
-pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.client-stream-perf.unit.test.ts test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts
+pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts
 ```
 
 ### Stress profile (regression guardrail)
@@ -51,7 +48,7 @@ RSC_PERF_BINARY_ROW_COUNT=4000 \
 RSC_PERF_BINARY_ROW_BYTES=384 \
 RSC_PERF_SERVER_ITEM_COUNT=1800 \
 RSC_PERF_SERVER_ITEM_BYTES=384 \
-pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.client-stream-perf.unit.test.ts test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts
+pnpm --filter @lib/rsc-prism exec vitest run --project unit test/perf/flight-runtime.decode-perf.unit.test.ts test/perf/flight-runtime.server-decode-reply-perf.unit.test.ts
 ```
 
 ## Env vars

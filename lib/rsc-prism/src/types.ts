@@ -102,18 +102,6 @@ export interface RSCHandlerOptions {
   actions?: Record<string, (...args: unknown[]) => unknown>;
 }
 
-/**
- * RSC stream response options
- */
-export interface RSCResponseOptions {
-  /** HTTP status code */
-  status?: number;
-  /** Custom headers */
-  headers?: HeadersInit;
-  /** Called when an error occurs */
-  onError?: (error: unknown) => string | void;
-}
-
 export type ComponentReference<Props = unknown> = (
   props: Props,
 ) =>

@@ -12,7 +12,6 @@ export type {
   ServerActionEntry,
   RSCContext,
   RSCHandlerOptions,
-  RSCResponseOptions,
 } from "./types";
 export { getEncodedActionArgsContentType } from "./types";
 

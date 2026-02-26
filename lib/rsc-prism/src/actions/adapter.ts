@@ -1,16 +1,13 @@
 /**
  * Default Flight protocol adapter: wires low-level flight-runtime with action encode/decode.
+ * PostMessage-only: row emitter for render, row consumer for decode.
  */
 
 import type { ReactNode } from "react";
 import type { ClientManifest, EncodedActionArgs, RSCRenderOptions } from "../types";
 import type { FlightRowMessage } from "../flight-runtime/wire";
-import { createFromReadableStream, createFromRowEmitter } from "../flight-runtime/client";
-import {
-  renderToReadableStream,
-  renderToRowEmitter,
-  type FlightRowEmit,
-} from "../flight-runtime/server";
+import { createFromRowEmitter } from "../flight-runtime/client";
+import { renderToRowEmitter, type FlightRowEmit } from "../flight-runtime/server";
 import { encodeReply } from "./encode-reply";
 import { decodeReply } from "./decode-reply";
 
@@ -19,23 +16,13 @@ export interface FlightConsumeOptions {
 }
 
 export interface FlightProtocolAdapter {
-  renderStream(
-    element: ReactNode,
-    manifest: ClientManifest,
-    options?: RSCRenderOptions,
-  ): Promise<ReadableStream<Uint8Array>>;
-  consumeStream<T = unknown>(
-    stream: ReadableStream<Uint8Array>,
-    manifest: ClientManifest,
-    options?: FlightConsumeOptions,
-  ): Promise<T>;
-  renderRows?(
+  renderRows(
     element: ReactNode,
     manifest: ClientManifest,
     emit: FlightRowEmit,
     options?: RSCRenderOptions,
   ): Promise<void>;
-  consumeRows?<T = unknown>(
+  consumeRows<T = unknown>(
     manifest: ClientManifest,
     options?: FlightConsumeOptions,
   ): {
@@ -47,17 +34,6 @@ export interface FlightProtocolAdapter {
 }
 
 export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
-  renderStream(element, manifest, options) {
-    return renderToReadableStream(element, manifest, options);
-  },
-
-  consumeStream(stream, manifest, options) {
-    return createFromReadableStream(stream, {
-      manifest,
-      callServer: options?.callServer,
-    });
-  },
-
   renderRows(element, manifest, emit, options) {
     return renderToRowEmitter(element, manifest, emit, options);
   },

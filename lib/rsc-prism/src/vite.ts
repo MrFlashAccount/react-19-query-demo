@@ -1551,7 +1551,7 @@ function buildWorkerComponentRegistryCode(
 }
 
 function buildGeneratedWorkerEntryCode(
-  endpoint: string,
+  _endpoint: string,
   experimentalActionBatchRefresh: boolean,
 ): string {
   return `
@@ -1561,8 +1561,6 @@ import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport
 import { flightErrorRow } from "@lib/rsc-prism/flight-runtime/wire";
 import { resolveWorkerComponent, workerActions } from "./worker-component-registry";
 
-const WORKER_ORIGIN = "https://rsc.prism.local";
-const ACTION_ENDPOINT = ${JSON.stringify(DEFAULT_ACTION_ENDPOINT)};
 const ACTION_BATCH_REFRESH = ${experimentalActionBatchRefresh ? "true" : "false"};
 const handler = await createWorkerRowHandler({ actions: workerActions });
 
@@ -1591,14 +1589,7 @@ function splitTerminalRow(rows) {
 self.addEventListener(
   "message",
   createWorkerRowTransportMessageHandler(async (request, emit, controls) => {
-    const target = new URL(request.endpoint, WORKER_ORIGIN);
-
     if (request.operation === "fetch") {
-      if (target.pathname !== ${JSON.stringify(endpoint)}) {
-        emit(flightErrorRow("Unknown endpoint: " + target.pathname));
-        return;
-      }
-
       const component = resolveWorkerComponent(request.componentId);
       if (component == null) {
         emit(flightErrorRow("Missing or unknown worker component reference."));
@@ -1610,10 +1601,6 @@ self.addEventListener(
     }
 
     if (request.operation === "action") {
-      if (target.pathname !== ACTION_ENDPOINT) {
-        emit(flightErrorRow("Unknown endpoint: " + target.pathname));
-        return;
-      }
       const actionId = request.actionId;
       const encodedArgs = encodedArgsFromMessage(request);
       if (!actionId) {

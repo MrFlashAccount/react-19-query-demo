@@ -129,7 +129,7 @@ export interface ConsumeRSCOptions {
 /**
  * Transport-aware request options.
  */
-export interface RSCRequestOptions {
+export interface RSCTransportOptions {
   transport?: RSCTransport | null | undefined;
 }
 
@@ -156,7 +156,7 @@ export interface WorkerActionReference<Args extends unknown[] = unknown[], Resul
   readonly __resultType__?: Result;
 }
 
-export interface FetchRSCOptions extends ConsumeRSCOptions, RSCRequestOptions {
+export interface FetchRSCOptions extends ConsumeRSCOptions, RSCTransportOptions {
   props?: unknown;
 }
 
@@ -187,31 +187,11 @@ function isWorkerActionReference(value: unknown): value is WorkerActionReference
  * @example
  * ```ts
  * const encoded = await encodeActionArgs([count, { increment: true }]);
- * const response = await fetch('/rsc/action', {
- *   method: 'POST',
- *   body: encoded.data,
- *   headers: { 'x-rsc-action': 'incrementCount' }
- * });
+ * const result = await transport.sendActionDirect({ endpoint, actionId, body: encoded.data, ... });
  * ```
  */
 export async function encodeActionArgs(args: unknown[]): Promise<EncodedActionArgs> {
   return defaultFlightProtocolAdapter.encodeActionArgs(args);
-}
-
-/**
- * Consume an RSC Response (stream or static) and return the decoded result.
- */
-export async function consumeRSCResponse<T = unknown>(
-  response: Response,
-  options?: ConsumeRSCOptions,
-): Promise<T> {
-  if (response.body == null) {
-    throw new Error("[rsc-prism] Response has no body");
-  }
-  const manifest = resolveClientManifestOrThrow();
-  return defaultFlightProtocolAdapter.consumeStream(response.body, manifest, {
-    callServer: options?.callServer,
-  }) as Promise<T>;
 }
 
 /**
@@ -225,7 +205,7 @@ export async function consumeRSCResponse<T = unknown>(
  */
 export function createCallServer(
   actionEndpoint: string,
-  options?: Omit<RequestInit, "method" | "body"> & RSCRequestOptions,
+  options?: Omit<RequestInit, "method" | "body"> & RSCTransportOptions,
 ): (actionId: string, args: unknown[]) => Promise<unknown> {
   const transport = resolveTransport(options?.transport);
   if (transport.sendActionDirect == null) {
@@ -254,9 +234,7 @@ export function createCallServer(
 }
 
 /**
- * Fetch and consume an RSC endpoint
- *
- * Automatically waits for the service worker to be controlling the page.
+ * Fetch RSC via worker postMessage transport.
  *
  * @example
  * ```ts
@@ -309,9 +287,7 @@ export interface CallActionOptions extends Omit<RequestInit, "method" | "body"> 
 }
 
 /**
- * Call a server action from the client
- *
- * Automatically waits for the service worker to be controlling the page.
+ * Call a server action via worker postMessage transport.
  *
  * @example
  * ```ts

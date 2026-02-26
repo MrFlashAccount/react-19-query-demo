@@ -6,11 +6,11 @@
  */
 
 import { annotateServerReference } from "../module-references";
-import { renderToReadableStream, renderToRowEmitter } from "./server-render";
+import { renderToRowEmitter } from "./server-render";
 import type { FlightRowEmit } from "./server-encode";
 
 export type { FlightRowEmit };
-export { renderToReadableStream, renderToRowEmitter };
+export { renderToRowEmitter };
 
 export function registerServerReference<T extends (...args: any[]) => any>(
   fn: T,

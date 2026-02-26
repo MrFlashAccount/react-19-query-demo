@@ -42,10 +42,6 @@ export async function renderRSCRows(
   emit: FlightRowEmit,
   options?: RSCRenderOptions,
 ): Promise<void> {
-  if (defaultFlightProtocolAdapter.renderRows == null) {
-    throw new Error("[rsc-prism] Active Flight protocol adapter does not support row rendering.");
-  }
-
   await defaultFlightProtocolAdapter.renderRows(element, ctx.manifest, emit, {
     onError:
       options?.onError ??

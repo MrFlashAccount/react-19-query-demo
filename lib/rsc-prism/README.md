@@ -4,7 +4,7 @@ Environment-agnostic React Server Components primitives for browser-first runtim
 
 This package focuses on:
 
-- Streaming RSC payload transport
+- PostMessage-only RSC payload transport (row emitter, no Request/Response streaming)
 - Worker/message-based request handling
 - Client/server action wiring for browser runtimes
 - Vite transforms for `"use main"` / `"use client"` module proxying
@@ -40,7 +40,7 @@ Current known gaps:
 
 Performance notes:
 
-- Transport is stream-first (`head -> next* -> done`) and client parsing is incremental.
+- Transport is postMessage row-based (`head -> next* -> done`) and client parsing is incremental.
 - Deferred row resolution is optimized to avoid full root graph re-checks for unrelated rows, but this is still a custom resolver path.
 - Perf harness commands and profiles: [`test/perf/README.md`](./test/perf/README.md).
 
@@ -88,8 +88,8 @@ The following micro apps are intentionally TodoMVC-scale (or smaller), determini
 
 For all micro apps, keep the integration contract identical:
 
-1. Read endpoint: `GET /rsc/view`
-2. Action endpoint: `POST /rsc/action`
+1. View operation: postMessage `fetch` with component target
+2. Action operation: postMessage `action` with actionId
 3. Fixed in-memory seed data only
 4. Stable deterministic output order
 5. Small action names (`inc`, `addTodo`, `setSort`, etc.)
@@ -110,7 +110,7 @@ Use browser-runtime workflow tests for RSC behavior.
 
 1. Render path: `fetchRSC("/rsc/view")` returns expected initial tree from seed data.
 2. Mutation path: `callAction("/rsc/action", actionId, args)` updates state; next render reflects change.
-3. Streaming path: worker transport produces `head -> next* -> done`.
+3. Row path: worker transport produces `head -> next* -> done` via postMessage.
 4. Error path: unknown action ID returns controlled error response.
 5. Timeout path: transport timeout surfaces deterministic failure state.
 6. Responsiveness path: synthetic heavy worker compute does not block UI interaction.
