@@ -15,7 +15,7 @@ import {
 
 /** True if string starts with '$' — Flight uses this to distinguish plain strings from revivable refs. */
 export function isFlightWireString(str: string): boolean {
-  return str.length > 0 && str.charCodeAt(0) === CHR.DOLLAR;
+  return str.length > 0 && str.charCodeAt(0) === CHR.ELEMENT_PREFIX;
 }
 
 /** Excludes arrays and class instances; needed because Map/Set/etc have Object in their prototype chain. */

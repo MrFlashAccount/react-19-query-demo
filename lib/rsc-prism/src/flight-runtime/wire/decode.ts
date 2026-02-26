@@ -118,7 +118,7 @@ export function parseModelString<Chunk>(
     return value;
   }
   switch (value.charCodeAt(1)) {
-    case CHR.DOLLAR:
+    case CHR.ELEMENT_PREFIX:
       return value.slice(1);
     case CHR.P:
       return new URLSearchParams(value.slice(2));
@@ -143,7 +143,7 @@ export function parseModelString<Chunk>(
 }
 
 function maybeDecodeElementTuple(value: unknown): unknown {
-  if (!Array.isArray(value) || value.length !== 4 || value[0] !== "$") {
+  if (!Array.isArray(value) || value.length !== 4 || value[0] !== CHR.ELEMENT_PREFIX) {
     return value;
   }
   const key = value[2];
@@ -250,16 +250,6 @@ function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
   if (value instanceof Date || typeof value === "bigint") {
     return value;
   }
-  if (
-    value != null &&
-    typeof value === "object" &&
-    "__r" in value &&
-    !Array.isArray(value) &&
-    typeof (value as { __r?: unknown }).__r === "number"
-  ) {
-    const idx = (value as { __r: number }).__r;
-    return parseModelString(context, reviveValues[idx]);
-  }
   if (typeof value === "string") {
     return parseModelString(context, value);
   }
@@ -325,7 +315,7 @@ function traverseElementTuplesOnlyInternal<Chunk>(
   if (!Array.isArray(value)) {
     return value;
   }
-  if (value.length === 4 && value[0] === "$") {
+  if (value.length === 4 && value[0] === CHR.ELEMENT_PREFIX) {
     let type = value[1];
     if (typeof type === "string" && isFlightWireString(type)) {
       type = parseModelString(context, type);
@@ -336,7 +326,7 @@ function traverseElementTuplesOnlyInternal<Chunk>(
     if (children !== undefined) {
       props.children = traverseElementTuplesOnlyInternal(children, context);
     }
-    return maybeDecodeElementTuple(["$", type, key, props]);
+    return maybeDecodeElementTuple([CHR.ELEMENT_PREFIX, type, key, props]);
   }
   for (let i = 0; i < value.length; i += 1) {
     value[i] = traverseElementTuplesOnlyInternal(value[i], context);

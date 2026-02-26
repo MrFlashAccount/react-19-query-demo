@@ -11,7 +11,7 @@ import {
 
 /** ASCII char codes for Flight wire format prefixes ($X) */
 export const CHR = {
-  DOLLAR: 36, // '$'
+  ELEMENT_PREFIX: 36, // '$'
   P: 80, // 'P' - URLSearchParams
   S: 83, // 'S' - Symbol
   C: 67, // 'C' - client reference
