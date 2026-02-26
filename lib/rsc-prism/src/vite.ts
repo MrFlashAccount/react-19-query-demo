@@ -1689,7 +1689,7 @@ async function initializeWorkerRuntime() {
         settled = true;
         cleanup();
         reject(new Error("Worker runtime failed to initialize."));
-      }, 1500);
+      }, 10000);
       const cleanup = () => {
         clearTimeout(timeout);
         worker.removeEventListener("message", onMessage);
@@ -2747,6 +2747,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         write: true,
         outDir,
         emptyOutDir: true,
+        modulePreload: false,
         rollupOptions: {
           input: entryPath,
           preserveEntrySignatures: "strict",
@@ -3100,7 +3101,13 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           return;
         }
 
-        const requestPath = (req.url ?? "").split("?", 1)[0]!;
+        const rawPath = (req.url ?? "").split("?", 1)[0]!;
+        let requestPath: string;
+        try {
+          requestPath = decodeURIComponent(rawPath);
+        } catch {
+          requestPath = rawPath;
+        }
         let targetFile: string | null = null;
         if (requestPath === generatedWorkerServePublicPath && generatedWorkerServeFile != null) {
           targetFile = generatedWorkerServeFile;
