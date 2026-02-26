@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as clientOnly from "../src/client-only";
+import { WORKER_REFERENCE_SYMBOL } from "../src/module-references/constants";
 import {
   DEFAULT_WORKER_RUNTIME_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
@@ -38,13 +39,19 @@ describe("client-only browser workflows", () => {
       }
       return "action-ok";
     });
+    const todoViewRef = {
+      $$typeof: WORKER_REFERENCE_SYMBOL,
+      $$id: "components.tsx#TodoView",
+      $$moduleId: "components.tsx",
+      $$name: "TodoView",
+    };
     const runActionRef = {
       $$typeof: Symbol.for("react.server.reference"),
       $$id: "todo-actions.ts#run",
       $$bound: null,
     };
 
-    await expect(clientOnly.fetchRSC("/rsc" as any, { transport })).resolves.toBe("fetch-ok");
+    await expect(clientOnly.fetchRSC(todoViewRef, { transport })).resolves.toBe("fetch-ok");
     await expect(clientOnly.callAction<string>(runActionRef, [1], { transport })).resolves.toBe(
       "action-ok",
     );
@@ -82,7 +89,13 @@ describe("client-only browser workflows", () => {
     expect(bootstrapped).toBe(runtime);
     expect(bootstrap).toHaveBeenCalledTimes(1);
 
-    await expect(clientOnly.fetchRSC("/rsc" as any)).resolves.toBe("default-fetch-ok");
+    const todoViewRef = {
+      $$typeof: WORKER_REFERENCE_SYMBOL,
+      $$id: "components.tsx#TodoView",
+      $$moduleId: "components.tsx",
+      $$name: "TodoView",
+    };
+    await expect(clientOnly.fetchRSC(todoViewRef)).resolves.toBe("default-fetch-ok");
     await expect(clientOnly.callAction<string>(runActionRef, [1])).resolves.toBe(
       "default-action-ok",
     );
@@ -93,7 +106,7 @@ describe("client-only browser workflows", () => {
 
     bootstrapped.dispose();
     expect(dispose).toHaveBeenCalledTimes(1);
-    await expect(clientOnly.fetchRSC("/rsc" as any)).rejects.toThrow("Missing RSC transport");
+    await expect(clientOnly.fetchRSC(todoViewRef)).rejects.toThrow("Missing RSC transport");
   });
 
   it("throws when worker runtime bootstrap hook is unavailable", async () => {

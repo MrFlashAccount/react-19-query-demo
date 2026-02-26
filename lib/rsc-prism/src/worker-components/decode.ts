@@ -104,8 +104,7 @@ export function normalizeIncomingWorkerTransportRequest(
     id: message.id,
     operation,
     actionId: typeof message.actionId === "string" ? message.actionId : undefined,
-    contentType: typeof message.contentType === "string" ? message.contentType : undefined,
-    body: (message.body as BodyInit | undefined) ?? undefined,
+    body: (message.body as FormData | string | undefined) ?? undefined,
     componentId: typeof message.componentId === "string" ? message.componentId : undefined,
     componentProps: message.componentProps,
     refreshTargets: Array.isArray(message.refreshTargets)

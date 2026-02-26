@@ -92,8 +92,8 @@ export interface CreateRSCResult<TComponents> {
  *   },
  * });
  *
- * // Use in routes:
- * ...http.rscRoutes("/rsc", () => <Client.Counter count={0} />, ctx, { ready })
+ * // Use with worker row handler (postMessage):
+ * handler.renderRows(<Client.Counter count={0} />, emit);
  * ```
  */
 export async function createRSC<TComponents extends Record<string, unknown>>(
@@ -128,7 +128,7 @@ export interface CreateWorkerRowHandlerOptions {
 
 /**
  * Create a worker row handler for postMessage-only transport.
- * Replaces createRSCHandler; uses actionId/encodedArgs directly, no Request.
+ * Uses actionId/encodedArgs via postMessage.
  */
 export async function createWorkerRowHandler(options: CreateWorkerRowHandlerOptions): Promise<{
   renderRows: (element: ReactNode, emit: FlightRowEmit) => Promise<void>;

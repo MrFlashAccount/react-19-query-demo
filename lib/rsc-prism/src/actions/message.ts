@@ -6,7 +6,7 @@ import type { EncodedActionArgs } from "../types";
 import type { WorkerTransportRequestMessage } from "../worker-components/types";
 
 /**
- * Derive EncodedActionArgs from a worker transport message (body + contentType).
+ * Derive EncodedActionArgs from a worker transport message (body).
  */
 export function encodedArgsFromMessage(
   message: WorkerTransportRequestMessage,

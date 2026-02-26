@@ -20,7 +20,7 @@ pnpm --filter @lib/rsc-prism exec vite build --config test/integration/TodoMVC/v
 
 ## Contract
 
-- Read endpoint: `GET /rsc/view`
+- Worker postMessage fetch with component ref
 - Worker runtime bootstrap: `bootstrapWorkerRuntime()` from `@lib/rsc-prism/client-only`
 - Worker runtime build + transport wiring are plugin-generated in this scenario
 - No custom worker entry file is used; runtime modules are discovered from local `"use worker"` exports

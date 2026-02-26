@@ -14,7 +14,6 @@ export function createWorkerRequestEnvelope(
     id,
     operation: request.operation,
     actionId: request.actionId ?? undefined,
-    contentType: request.contentType ?? undefined,
     body: request.body ?? undefined,
     componentId: request.componentId ?? undefined,
     componentProps: request.componentProps,

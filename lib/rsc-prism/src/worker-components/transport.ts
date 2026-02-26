@@ -154,7 +154,6 @@ export function createWorkerRowTransport(
         {
           operation: "action",
           actionId: input.actionId,
-          contentType: input.contentType,
           body: input.body,
           refreshTargets: refreshTargets.length > 0 ? refreshTargets : undefined,
           refreshBatchSeq,

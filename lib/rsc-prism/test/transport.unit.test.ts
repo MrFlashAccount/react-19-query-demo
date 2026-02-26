@@ -56,7 +56,6 @@ const CANONICAL_WORKER_REQUEST_KEYS = [
   "id",
   "operation",
   "actionId",
-  "contentType",
   "body",
   "componentId",
   "componentProps",
@@ -96,7 +95,6 @@ describe("transport", () => {
     await transport.sendActionDirect?.({
       actionId: "save",
       body: "[]",
-      contentType: "text/plain",
     });
     await transport.fetchRSCDirect?.({
       componentId: "mod#Comp",
@@ -204,7 +202,6 @@ describe("transport", () => {
       transport.sendActionDirect?.<string>({
         actionId: "actions#save",
         body: "[]",
-        contentType: "text/plain",
       }),
     ).resolves.toBe("ok");
     expect(applyBatch).not.toHaveBeenCalled();
@@ -237,10 +234,8 @@ describe("transport", () => {
     });
     await expect(
       transport.sendActionDirect?.<string>({
-        endpoint: "/rsc/action",
         actionId: "actions#save",
         body: "[]",
-        contentType: "text/plain",
       }),
     ).resolves.toBe("ok");
     expect(applyBatch).not.toHaveBeenCalled();
@@ -288,7 +283,6 @@ describe("transport", () => {
       transport.sendActionDirect?.<string>({
         actionId: "actions#save",
         body: "[]",
-        contentType: "text/plain",
       }),
     ).resolves.toBe("ok");
     expect(applyBatch).toHaveBeenCalledTimes(1);
@@ -355,12 +349,10 @@ describe("transport", () => {
       transport.sendActionDirect?.<string>({
         actionId: "first",
         body: "[]",
-        contentType: "text/plain",
       }),
       transport.sendActionDirect?.<string>({
         actionId: "second",
         body: "[]",
-        contentType: "text/plain",
       }),
     ]);
 
@@ -527,7 +519,7 @@ describe("transport", () => {
         type: "rsc.transport.request",
         id: "abc",
         operation: "fetch",
-        endpoint: "/rsc",
+        componentId: "mod#Comp",
       },
       currentTarget: { postMessage },
     } as unknown as MessageEvent<unknown>);
@@ -594,7 +586,7 @@ describe("transport", () => {
         type: "rsc.transport.request",
         id: "abc",
         operation: "fetch",
-        endpoint: "/rsc",
+        componentId: "mod#Comp",
       },
       currentTarget: { postMessage },
     } as unknown as MessageEvent<unknown>);

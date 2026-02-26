@@ -108,8 +108,8 @@ Use plugin-managed worker runtime wiring:
 
 Use browser-runtime workflow tests for RSC behavior.
 
-1. Render path: `fetchRSC("/rsc/view")` returns expected initial tree from seed data.
-2. Mutation path: `callAction("/rsc/action", actionId, args)` updates state; next render reflects change.
+1. Render path: `fetchRSC(componentRef, { props })` returns expected initial tree from seed data.
+2. Mutation path: `callAction(actionRef, args)` updates state; next render reflects change.
 3. Row path: worker transport produces `head -> next* -> done` via postMessage.
 4. Error path: unknown action ID returns controlled error response.
 5. Timeout path: transport timeout surfaces deterministic failure state.
@@ -122,6 +122,7 @@ Use browser-runtime workflow tests for RSC behavior.
 import { defineConfig } from "vite";
 import { rscPrism } from "@lib/rsc-prism/vite";
 import { bootstrapWorkerRuntime, fetchRSC, callAction } from "@lib/rsc-prism/client-only";
+import { TodoView } from "./todo-view";
 import { increment } from "./todo-actions";
 
 export default defineConfig({
@@ -136,7 +137,7 @@ export default defineConfig({
 
 // Main thread app code
 await bootstrapWorkerRuntime();
-const tree = await fetchRSC("/rsc/view");
+const tree = await fetchRSC(TodoView, { props: { filter: "all" } });
 await callAction(increment, []);
 ```
 

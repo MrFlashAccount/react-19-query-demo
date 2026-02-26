@@ -47,11 +47,6 @@ export type EncodedActionArgs =
   | { type: "formdata"; data: FormData | string }
   | { type: "string"; data: string };
 
-/** Content-Type for action request body; undefined for FormData (multipart). */
-export function getEncodedActionArgsContentType(encoded: EncodedActionArgs): string | undefined {
-  return encoded.type === "formdata" ? undefined : "text/plain";
-}
-
 /**
  * Server module exports - what a server component module provides
  */
@@ -90,16 +85,6 @@ export interface RSCContext {
   manifest: ClientManifest;
   /** Registered server actions */
   actions: Map<string, ServerActionEntry>;
-}
-
-/**
- * Options for creating an RSC handler
- */
-export interface RSCHandlerOptions {
-  /** Client manifest */
-  manifest: ClientManifest;
-  /** Server actions to register */
-  actions?: Record<string, (...args: unknown[]) => unknown>;
 }
 
 export type ComponentReference<Props = unknown> = (

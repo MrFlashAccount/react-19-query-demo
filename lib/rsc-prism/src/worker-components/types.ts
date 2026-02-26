@@ -7,8 +7,7 @@ import type { FlightClientOptions } from "../flight-runtime/types";
 
 export interface SendActionInput {
   actionId: string;
-  body: BodyInit;
-  contentType?: string;
+  body: FormData | string;
 }
 
 export interface FetchRSCInput {
@@ -34,8 +33,7 @@ export interface WorkerTransportRequestMessage {
   id: string;
   operation: "action" | "fetch";
   actionId?: string;
-  contentType?: string;
-  body?: BodyInit;
+  body?: FormData | string;
   componentId?: string;
   componentProps?: unknown;
   refreshTargets?: WorkerRefreshTargetMessage[];

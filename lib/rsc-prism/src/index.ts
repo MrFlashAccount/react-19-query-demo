@@ -11,10 +11,7 @@ export type {
   RSCRenderOptions,
   ServerActionEntry,
   RSCContext,
-  RSCHandlerOptions,
 } from "./types";
-export { getEncodedActionArgsContentType } from "./types";
-
 export type { CreateRSCConfig, CreateRSCResult, CreateWorkerRowHandlerOptions } from "./server";
 
 export {

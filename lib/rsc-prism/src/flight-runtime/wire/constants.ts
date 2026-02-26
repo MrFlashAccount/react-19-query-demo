@@ -30,14 +30,14 @@ export const REACT_LAZY_SYMBOL = Symbol.for("react.lazy");
  * Special path key meaning "all array indices at this level".
  * Used when many array elements share the same revive subtree to avoid O(n) path entries.
  */
-export const REVIVE_PATH_WILDCARD = -1 as const;
+export const REVIVE_PATH_WILDCARD = -1;
 
 /** Shared empty array to avoid allocations in decode hot paths. */
-export const EMPTY_ARRAY: unknown[] = [];
+export const EMPTY_ARRAY = [] as const;
 
 /** Flight row kind discriminants; numeric for compact wire format and fast switch dispatch. */
-export const ROW_MODEL = 0 as const;
-export const ROW_BINARY = 1 as const;
-export const ROW_DONE = 2 as const;
-export const ROW_ERROR = 3 as const;
-export const ROW_METADATA = 4 as const;
+export const ROW_MODEL = 0;
+export const ROW_BINARY = 1;
+export const ROW_DONE = 2;
+export const ROW_ERROR = 3;
+export const ROW_METADATA = 4;
