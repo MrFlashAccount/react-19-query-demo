@@ -118,9 +118,9 @@ export function WorkerPanel() { return null; }
     const transformedCode =
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain('Symbol.for("rsc.worker.reference")');
-    expect(transformedCode).toContain('__rscPrismCreateWorkerRef("default")');
-    expect(transformedCode).toContain('__rscPrismCreateWorkerRef("WorkerPanel")');
+    expect(transformedCode).toContain("@lib/rsc-prism/module-references/create-worker-ref");
+    expect(transformedCode).toContain('createWorkerRef(__rscPrismModuleId + "#default"');
+    expect(transformedCode).toContain('createWorkerRef(__rscPrismModuleId + "#WorkerPanel"');
   });
 
   it("transforms modules when use directive is no longer a Babel directive", async () => {
@@ -621,9 +621,9 @@ export function WorkerView() { return null; }
     const loaded = await callHook(plugin.load, undefined, resolved as string);
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
 
-    expect(loadedCode).toContain('Symbol.for("rsc.worker.reference")');
-    expect(loadedCode).toContain('__rscPrismCreateWorkerRef("default")');
-    expect(loadedCode).toContain('__rscPrismCreateWorkerRef("WorkerView")');
+    expect(loadedCode).toContain("@lib/rsc-prism/module-references/create-worker-ref");
+    expect(loadedCode).toContain('createWorkerRef(__rscPrismModuleId + "#default"');
+    expect(loadedCode).toContain('createWorkerRef(__rscPrismModuleId + "#WorkerView"');
     expect(loadedCode).toContain("export { __rscPrismWorkerReferenceMap };");
   });
 
@@ -704,8 +704,8 @@ export function addTodo() {
 
     const loaded = await callHook(plugin.load, undefined, resolved as string);
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
-    expect(loadedCode).toContain('Symbol.for("react.server.reference")');
-    expect(loadedCode).toContain('__rscPrismCreateActionRef("addTodo")');
+    expect(loadedCode).toContain("@lib/rsc-prism/module-references/create-action-ref");
+    expect(loadedCode).toContain('createActionRef(__rscPrismActionIdMap["addTodo"]');
   });
 
   it("requires use worker to be first statement inside exported functions", async () => {
@@ -771,10 +771,10 @@ export const metadata = { stable: true };
     const transformedCode =
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
-    expect(transformedCode).toContain('Symbol.for("rsc.worker.reference")');
-    expect(transformedCode).toContain('Symbol.for("react.server.reference")');
-    expect(transformedCode).toContain('__rscPrismCreateWorkerRef("WorkerPanel")');
-    expect(transformedCode).toContain('__rscPrismCreateActionRef("addTodo")');
+    expect(transformedCode).toContain("@lib/rsc-prism/module-references/create-worker-ref");
+    expect(transformedCode).toContain("@lib/rsc-prism/module-references/create-action-ref");
+    expect(transformedCode).toContain('createWorkerRef(__rscPrismModuleId + "#WorkerPanel"');
+    expect(transformedCode).toContain('createActionRef(__rscPrismActionIdMap["addTodo"]');
     expect(transformedCode).toContain("metadata");
     expect(transformedCode).toContain("rsc-prism-original");
   });
@@ -807,7 +807,7 @@ function TodoItemRow() {
       transformed != null && typeof transformed === "object" ? transformed.code : null;
 
     expect(transformedCode).toContain(
-      '__rscPrismCreateLocalWorkerRef("/src/main.tsx#@local:TodoViewRSC"',
+      'createWorkerRef("/src/main.tsx#@local:TodoViewRSC"',
     );
     expect(transformedCode).toContain(
       "export { TodoItemRow as __rscPrismLocalClient_TodoItemRow };",
@@ -867,8 +867,8 @@ export const metadata = { stable: true };
 
     const loaded = await callHook(plugin.load, undefined, resolved as string);
     const loadedCode = typeof loaded === "string" ? loaded : loaded?.code;
-    expect(loadedCode).toContain('__rscPrismCreateWorkerRef("WorkerPanel")');
-    expect(loadedCode).toContain('__rscPrismCreateActionRef("addTodo")');
+    expect(loadedCode).toContain('createWorkerRef(__rscPrismModuleId + "#WorkerPanel"');
+    expect(loadedCode).toContain('createActionRef(__rscPrismActionIdMap["addTodo"]');
     expect(loadedCode).toContain("metadata");
     expect(loadedCode).toContain("rsc-prism-original");
   });
