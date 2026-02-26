@@ -2,11 +2,12 @@
  * Standalone worker runtime bootstrap.
  *
  * For manual/standalone use when not using the Vite plugin. The plugin
- * generates equivalent inline code.
+ * generates equivalent inline code. PostMessage-only, no Request/Response.
  */
 
 import { DEFAULT_ACTION_ENDPOINT, DEFAULT_VIEW_ENDPOINT } from "../actions/constants";
-import { createRSCHandler } from "../response";
+import { encodedArgsFromMessage } from "../actions";
+import { createWorkerRowHandler } from "../server";
 import { createWorkerRowTransportMessageHandler } from "./handler";
 import type {
   WorkerActionRefreshBatchEntryMessage,
@@ -50,30 +51,13 @@ function buildComponentRegistry(
   return registry;
 }
 
-function toActionRequest(message: WorkerTransportRequestMessage, endpoint: URL): Request {
-  const headers = new Headers(message.headers ?? []);
-  if (message.actionId != null) {
-    headers.set("x-rsc-action", message.actionId);
-  }
-  if (message.contentType != null) {
-    headers.set("content-type", message.contentType);
-  }
-
-  return new Request(endpoint.toString(), {
-    ...message.requestInit,
-    method: "POST",
-    headers,
-    body: message.body ?? "",
-  });
-}
-
-export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
+export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): Promise<void> {
   const endpoint = options.endpoint ?? DEFAULT_VIEW_ENDPOINT;
   const actionEndpoint = options.actionEndpoint ?? DEFAULT_ACTION_ENDPOINT;
   const workerOrigin = options.workerOrigin ?? "https://rsc.prism.local";
   const componentRegistry = buildComponentRegistry(options.componentModules);
   const actionBatchRefreshEnabled = options.actionBatchRefresh === true;
-  const handler = createRSCHandler({
+  const handler = await createWorkerRowHandler({
     actionModules: options.actionModules ?? [],
   });
 
@@ -131,15 +115,19 @@ export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): void {
           }
 
           const refreshTargets = request.refreshTargets ?? [];
+          const actionId = request.actionId;
+          const encodedArgs = encodedArgsFromMessage(request);
+          if (!actionId) {
+            emit(flightErrorRow("Missing action ID"));
+            return;
+          }
           if (!actionBatchRefreshEnabled || refreshTargets.length === 0) {
-            await handler.actionRows(toActionRequest(request, target), emit, {
-              status: 200,
-            });
+            await handler.handleActionRows(actionId, encodedArgs, emit);
             return;
           }
 
           try {
-            const actionValue = await handler.executeAction(toActionRequest(request, target));
+            const actionValue = await handler.executeAction(actionId, encodedArgs);
             const actionRows = await renderRowsToArray(actionValue as ReactNode);
             const { contentRows, terminalRow } = splitTerminalRow(actionRows);
 

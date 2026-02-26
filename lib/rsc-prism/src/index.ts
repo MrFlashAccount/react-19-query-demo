@@ -16,8 +16,7 @@ export type {
 } from "./types";
 export { getEncodedActionArgsContentType } from "./types";
 
-export type { CreateRSCConfig, CreateRSCResult } from "./server";
-export type { CreateRSCHandlerOptions } from "./response";
+export type { CreateRSCConfig, CreateRSCResult, CreateWorkerRowHandlerOptions } from "./server";
 
 export {
   clientRef,

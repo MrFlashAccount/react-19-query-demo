@@ -1,5 +1,5 @@
 /**
- * Worker transport creation (client-side).
+ * Worker transport creation (client-side). PostMessage-only, no Request/Response streaming.
  */
 
 import { getInvalidateRSC, getRSCRefreshRuntimeOrNull } from "../runtime-globals";
@@ -10,7 +10,7 @@ import { DEFAULT_REQUEST_TYPE, DEFAULT_ROW_RESPONSE_TYPE } from "./constants";
 import { createWorkerRequestEnvelope } from "./encode";
 import { getWorkerEndpointState } from "./endpoint";
 import { normalizeWorkerRowMessage } from "./decode";
-import { nextRequestId, toHeaderTuples } from "./send";
+import { nextRequestId, toHeaderTuples } from "./shared";
 import type {
   RSCTransport,
   SendActionInput,
@@ -20,64 +20,11 @@ import type {
   WorkerTransportOptions,
   WorkerActionRefreshBatchMessage,
 } from "./types";
-import { sendWorkerRequest } from "./send";
-
-export function createWorkerTransport(
-  endpoint: WorkerMessageEndpoint,
-  options: WorkerTransportOptions = {},
-): RSCTransport {
-  return {
-    async sendAction(input): Promise<Response> {
-      const invalidateRSC = getInvalidateRSC();
-      const requestId = nextRequestId();
-      const headers = new Headers(input.headers);
-      headers.set("x-rsc-request-id", requestId);
-
-      return sendWorkerRequest(
-        endpoint,
-        {
-          operation: "action",
-          endpoint: input.endpoint,
-          actionId: input.actionId,
-          contentType: input.contentType,
-          headers: toHeaderTuples(headers),
-          body: input.body,
-          requestInit: input.requestInit,
-        },
-        options,
-        requestId,
-      ).finally(() => {
-        invalidateRSC();
-      });
-    },
-
-    async fetchRSC(input): Promise<Response> {
-      const requestId = nextRequestId();
-      const headers = new Headers(input.headers);
-      headers.set("accept", "text/x-component");
-      headers.set("x-rsc-request-id", requestId);
-      return sendWorkerRequest(
-        endpoint,
-        {
-          operation: "fetch",
-          endpoint: input.url,
-          headers: toHeaderTuples(headers),
-          requestInit: input.requestInit,
-          componentId: input.componentId,
-          componentProps: input.componentProps,
-        },
-        options,
-        requestId,
-      );
-    },
-  };
-}
 
 export function createWorkerRowTransport(
   endpoint: WorkerMessageEndpoint,
   options: WorkerTransportOptions = {},
 ): RSCTransport {
-  const baseTransport = createWorkerTransport(endpoint, options);
   const requestType = options.requestType ?? DEFAULT_REQUEST_TYPE;
   const rowResponseType = options.responseType ?? DEFAULT_ROW_RESPONSE_TYPE;
   const timeoutMs = options.timeoutMs ?? 10000;
@@ -182,7 +129,6 @@ export function createWorkerRowTransport(
   }
 
   return {
-    ...baseTransport,
     fetchRSCDirect<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T> {
       const requestId = nextRequestId();
       const headers = new Headers(input.headers);

@@ -12,12 +12,11 @@
 2. The corrective rule must be specific, actionable, and tied to the failure mode that occurred.
 3. After changing test/runtime config, the agent must validate direct package test execution with `pnpm --filter <pkg> exec vitest run` (without extra env flags), not only `package.json` script wrappers.
 4. Default Vitest test suites must not include files that require server-only React conditions to import; such behavior must be covered through browser-runtime workflow tests instead.
-5. When using `createWorkerTransportMessageHandler`, do not return `204`/`205`/`304` responses from worker handlers; use a `200` response for successful action acknowledgements because worker transport reconstructs a streamed `Response` body on the client.
-6. Scenario/example apps used for browser integration coverage must be self-contained per scenario (own app + worker implementation) and must not rely on a shared generic app-shell abstraction.
-7. When introducing library-managed runtime state consumed by both plugin-generated bootstrap modules and app imports, store the active runtime/transport on `globalThis` (not module-local variables) so behavior remains consistent even if Vite creates multiple module instances.
-8. Do not store critical UI invalidation callbacks only in `WeakRef`; for deterministic refresh behavior, keep strong callback references and remove them explicitly on component unmount.
-9. Suspense data loaders must not rely only on per-instance `useRef` caches for in-flight request deduplication; keep a stable cache outside component instance state (keyed by request identity) so pre-commit Suspense retries reuse the same promise and do not trigger infinite refetch loops.
-10. Worker runtime bootstrap must not resolve before receiving explicit `rsc.prism.worker.ready` (or worker error/timeout); do not use short fallback timers that mark runtime ready early, because initial requests can be lost and later fail with transport timeouts.
+5. Scenario/example apps used for browser integration coverage must be self-contained per scenario (own app + worker implementation) and must not rely on a shared generic app-shell abstraction.
+6. When introducing library-managed runtime state consumed by both plugin-generated bootstrap modules and app imports, store the active runtime/transport on `globalThis` (not module-local variables) so behavior remains consistent even if Vite creates multiple module instances.
+7. Do not store critical UI invalidation callbacks only in `WeakRef`; for deterministic refresh behavior, keep strong callback references and remove them explicitly on component unmount.
+8. Suspense data loaders must not rely only on per-instance `useRef` caches for in-flight request deduplication; keep a stable cache outside component instance state (keyed by request identity) so pre-commit Suspense retries reuse the same promise and do not trigger infinite refetch loops.
+9. Worker runtime bootstrap must not resolve before receiving explicit `rsc.prism.worker.ready` (or worker error/timeout); do not use short fallback timers that mark runtime ready early, because initial requests can be lost and later fail with transport timeouts.
 
 ## TypeScript
 

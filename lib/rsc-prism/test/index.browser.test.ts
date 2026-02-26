@@ -7,7 +7,7 @@ describe("root entrypoint browser workflows", () => {
     const rootApi = rsc as unknown as Record<string, unknown>;
     expect(rootApi.fetchRSC).toBeUndefined();
     expect(rootApi.callAction).toBeUndefined();
-    expect(rootApi.createWorkerTransport).toBeUndefined();
+    expect(rootApi.createWorkerRowTransport).toBeUndefined();
 
     const ref = rsc.clientRef<{ count: number }>("client", "Counter");
     expect(ref.$$id).toBe("client#Counter");

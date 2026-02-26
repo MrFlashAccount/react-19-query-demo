@@ -1,8 +1,5 @@
 /**
- * Worker transport re-export.
- *
- * Public API preserved for backward compatibility. Implementation lives in
- * worker-components.
+ * Worker transport re-export. PostMessage-only, no Request/Response streaming.
  */
 
 export type {
@@ -11,24 +8,12 @@ export type {
   RSCTransport,
   WorkerMessageEndpoint,
   WorkerTransportRequestMessage,
-  WorkerTransportResponseMessage,
-  WorkerTransportResponseHeadMessage,
-  WorkerTransportResponseNextMessage,
-  WorkerTransportResponseDoneMessage,
-  WorkerTransportResponseErrorMessage,
   WorkerRowResponseMessage,
   WorkerTransportOptions,
   WorkerRefreshTargetMessage,
   WorkerActionRefreshBatchEntryMessage,
   WorkerActionRefreshBatchMessage,
 } from "./worker-components";
-export {
-  createWorkerTransport,
-  createWorkerRowTransport,
-  createWorkerTransportMessageHandler,
-  createWorkerRowTransportMessageHandler,
-} from "./worker-components";
-export type {
-  WorkerTransportRequestHandler,
-  WorkerRowTransportRequestHandler,
-} from "./worker-components";
+export { createWorkerRowTransport } from "./worker-components";
+export type { WorkerRowTransportRequestHandler } from "./worker-components";
+export { createWorkerRowTransportMessageHandler } from "./worker-components";

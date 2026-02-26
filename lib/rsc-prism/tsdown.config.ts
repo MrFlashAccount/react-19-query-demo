@@ -11,7 +11,6 @@ export default defineConfig({
     "src/client-reference.ts",
     "src/flight-serializer.ts",
     "src/polyfill.ts",
-    "src/response.ts",
     "src/server.ts",
     "src/transport.ts",
     "src/types.ts",

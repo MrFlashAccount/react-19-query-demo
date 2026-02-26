@@ -11,7 +11,7 @@ export {
   createActionModuleMap,
   registerActionModule,
 } from "./registry";
-export { getActionIdFromRequest, isActionRequest, readEncodedActionArgs } from "./request";
+export { encodedArgsFromMessage } from "./message";
 export { decodeActionArgs } from "./decode";
 export { executeAction, handleActionRows } from "./execute";
 export { encodeReply } from "./encode-reply";

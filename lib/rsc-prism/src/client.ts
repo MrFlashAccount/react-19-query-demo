@@ -49,7 +49,7 @@ function isRSCTransport(value: unknown): value is RSCTransport {
   return (
     typeof value === "object" &&
     value != null &&
-    typeof (value as Partial<RSCTransport>).sendAction === "function"
+    typeof (value as Partial<RSCTransport>).sendActionDirect === "function"
   );
 }
 
@@ -181,20 +181,6 @@ function isWorkerActionReference(value: unknown): value is WorkerActionReference
   return candidate.$$typeof === SERVER_REFERENCE_SYMBOL && typeof candidate.$$id === "string";
 }
 
-async function readActionErrorMessage(response: Response): Promise<string | null> {
-  if (response.body == null) {
-    return null;
-  }
-  try {
-    const json = (await response.clone().json()) as Record<string, unknown>;
-    if (typeof json?.error === "string" && json.error.length > 0) return json.error;
-    if (typeof json?.message === "string" && json.message.length > 0) return json.message;
-  } catch {
-    // Ignore parsing errors; caller will fallback to HTTP status.
-  }
-  return null;
-}
-
 /**
  * Encode action arguments for sending to the server
  *
@@ -318,11 +304,6 @@ export async function fetchRSC(
  * Options for calling a server action
  */
 export interface CallActionOptions extends Omit<RequestInit, "method" | "body"> {
-  /**
-   * If true, the response will be parsed as RSC and returned
-   * If false, only success/failure is checked
-   */
-  parseResponse?: boolean;
   transport?: RSCTransport;
   endpoint?: string;
 }
@@ -365,38 +346,19 @@ export async function callAction<T = void>(
   const actionId = action.$$id;
   const transport = resolveTransport(options?.transport);
   const endpoint = options.endpoint ?? DEFAULT_ACTION_ENDPOINT;
-  const { parseResponse = true } = options;
   const encodedArgs = await encodeActionArgs(args);
   const contentType = getEncodedActionArgsContentType(encodedArgs);
 
-  if (parseResponse) {
-    if (transport.sendActionDirect == null) {
-      throw new Error(
-        "[rsc-prism] Transport must support sendActionDirect for parseResponse. Use worker row transport.",
-      );
-    }
-    const manifest = resolveClientManifestOrThrow();
-    return transport.sendActionDirect<T>(
-      {
-        endpoint,
-        actionId,
-        body: encodedArgs.data,
-        contentType,
-      },
-      { manifest },
-    );
-  }
-  const response = await transport.sendAction({
-    endpoint,
-    actionId,
-    body: encodedArgs.data,
-    contentType,
-  });
-  if (!response.ok) {
-    const message = await readActionErrorMessage(response);
-    throw new Error(message ?? `Action '${actionId}' failed: ${response.status}`);
-  }
-  return response.body as T;
+  const manifest = resolveClientManifestOrThrow();
+  return transport.sendActionDirect<T>(
+    {
+      endpoint,
+      actionId,
+      body: encodedArgs.data,
+      contentType,
+    },
+    { manifest },
+  );
 }
 
 // Re-export types

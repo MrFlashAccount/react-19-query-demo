@@ -235,10 +235,10 @@ describe("rsc client browser workflows", () => {
       });
 
       if (request.operation === "fetch") {
-        return flightValueResponse("fetch-ok");
+        return "fetch-ok";
       }
 
-      return flightValueResponse("action-ok");
+      return "action-ok";
     });
 
     const runActionRef = {
@@ -247,9 +247,7 @@ describe("rsc client browser workflows", () => {
       $$bound: null,
     };
     await expect(fetchRSC("/rsc", { transport })).resolves.toBe("fetch-ok");
-    await expect(
-      callAction<string>(runActionRef, [1], { transport, parseResponse: true }),
-    ).resolves.toBe("action-ok");
+    await expect(callAction<string>(runActionRef, [1], { transport })).resolves.toBe("action-ok");
 
     expect(seenRequests[0]).toEqual({
       operation: "fetch",
@@ -291,7 +289,7 @@ describe("rsc client browser workflows", () => {
     const seenActionIds: string[] = [];
     const transport = createMockWorkerTransport(async (request) => {
       seenActionIds.push(request.actionId ?? "");
-      return flightValueResponse("call-server-ok");
+      return "call-server-ok";
     });
 
     const callServer = createCallServer("/rsc/action", { transport });
@@ -302,9 +300,9 @@ describe("rsc client browser workflows", () => {
   it("surfaces flight-streamed action errors", async () => {
     const transport = createMockWorkerTransport(async (request) => {
       if (request.operation === "action") {
-        return flightErrorResponse("Action exploded", 500);
+        throw new Error("Action exploded");
       }
-      return flightValueResponse("ok");
+      return "ok";
     });
 
     const runActionRef = {

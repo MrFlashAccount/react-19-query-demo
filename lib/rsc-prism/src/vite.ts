@@ -1555,30 +1555,16 @@ function buildGeneratedWorkerEntryCode(
   experimentalActionBatchRefresh: boolean,
 ): string {
   return `
-import { createRSCHandler } from "@lib/rsc-prism/response";
+import { createWorkerRowHandler } from "@lib/rsc-prism/server";
+import { encodedArgsFromMessage } from "@lib/rsc-prism/actions";
 import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport";
+import { flightErrorRow } from "@lib/rsc-prism/flight-runtime/wire";
 import { resolveWorkerComponent, workerActions } from "./worker-component-registry";
 
 const WORKER_ORIGIN = "https://rsc.prism.local";
 const ACTION_ENDPOINT = ${JSON.stringify(DEFAULT_ACTION_ENDPOINT)};
 const ACTION_BATCH_REFRESH = ${experimentalActionBatchRefresh ? "true" : "false"};
-const handler = createRSCHandler({ actions: workerActions });
-
-function toActionRequest(message, endpoint) {
-  const headers = new Headers(message.headers ?? []);
-  if (message.actionId != null) {
-    headers.set("x-rsc-action", message.actionId);
-  }
-  if (message.contentType != null) {
-    headers.set("content-type", message.contentType);
-  }
-  return new Request(endpoint.toString(), {
-    ...message.requestInit,
-    method: "POST",
-    headers,
-    body: message.body ?? "",
-  });
-}
+const handler = await createWorkerRowHandler({ actions: workerActions });
 
 async function renderRowsToArray(element) {
   const rows = [];
@@ -1609,12 +1595,14 @@ self.addEventListener(
 
     if (request.operation === "fetch") {
       if (target.pathname !== ${JSON.stringify(endpoint)}) {
-        throw new Error("Unknown endpoint: " + target.pathname);
+        emit(flightErrorRow("Unknown endpoint: " + target.pathname));
+        return;
       }
 
       const component = resolveWorkerComponent(request.componentId);
       if (component == null) {
-        throw new Error("Missing or unknown worker component reference.");
+        emit(flightErrorRow("Missing or unknown worker component reference."));
+        return;
       }
 
       await handler.renderRows(component(request.componentProps ?? {}), emit);
@@ -1623,19 +1611,22 @@ self.addEventListener(
 
     if (request.operation === "action") {
       if (target.pathname !== ACTION_ENDPOINT) {
-        throw new Error("Unknown endpoint: " + target.pathname);
+        emit(flightErrorRow("Unknown endpoint: " + target.pathname));
+        return;
+      }
+      const actionId = request.actionId;
+      const encodedArgs = encodedArgsFromMessage(request);
+      if (!actionId) {
+        emit(flightErrorRow("Missing action ID"));
+        return;
       }
       const refreshTargets = Array.isArray(request.refreshTargets) ? request.refreshTargets : [];
       if (!ACTION_BATCH_REFRESH || refreshTargets.length === 0) {
-        const actionRequest = toActionRequest(request, target);
-        await handler.actionRows(actionRequest, emit, {
-          status: 200,
-        });
+        await handler.handleActionRows(actionId, encodedArgs, emit);
         return;
       }
 
-      const actionRequest = toActionRequest(request, target);
-      const actionValue = await handler.executeAction(actionRequest);
+      const actionValue = await handler.executeAction(actionId, encodedArgs);
       const actionRows = await renderRowsToArray(actionValue);
       const { contentRows, terminalRow } = splitTerminalRow(actionRows);
 

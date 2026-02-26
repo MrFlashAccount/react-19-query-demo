@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   createCallServer: vi.fn(() => vi.fn(async () => null)),
   bootstrapWorkerRuntime: vi.fn(async () => ({
     worker: {} as Worker,
-    transport: { sendAction: vi.fn() },
+    transport: {
+      sendActionDirect: vi.fn(async () => null),
+      fetchRSCDirect: vi.fn(async () => null),
+    },
     dispose: vi.fn(),
   })),
   stateSetter: vi.fn(),
@@ -93,7 +96,10 @@ describe("react rsc invalidation", () => {
     mocks.bootstrapWorkerRuntime.mockReset();
     mocks.bootstrapWorkerRuntime.mockResolvedValue({
       worker: {} as Worker,
-      transport: { sendAction: vi.fn() },
+      transport: {
+      sendActionDirect: vi.fn(async () => null),
+      fetchRSCDirect: vi.fn(async () => null),
+    },
       dispose: vi.fn(),
     });
     mocks.createCallServer.mockReset();

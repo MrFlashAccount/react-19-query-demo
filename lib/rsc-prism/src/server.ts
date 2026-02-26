@@ -8,6 +8,7 @@
 import type { ReactNode } from "react";
 import { resolveClientManifestOrThrow } from "./runtime/client-manifest";
 import { buildClientManifestBaseUrl } from "./runtime/module-registry";
+import { polyfillReady } from "./polyfill";
 import type { ClientManifest, EncodedActionArgs, RSCContext, RSCRenderOptions } from "./types";
 import { registerActions } from "./actions";
 import { defaultFlightProtocolAdapter } from "./actions/adapter";
@@ -115,6 +116,79 @@ export async function createRSC<TComponents extends Record<string, unknown>>(
   const ready = Promise.resolve();
 
   return { ctx, Client, ready };
+}
+
+/**
+ * Options for creating a worker row handler (postMessage-only, no Request/Response).
+ */
+export interface CreateWorkerRowHandlerOptions {
+  manifest?: ClientManifest;
+  actions?: Record<string, (...args: unknown[]) => unknown>;
+  actionModules?: Array<{
+    moduleId: string;
+    moduleExports: Record<string, unknown>;
+  }>;
+  onError?: (error: unknown) => string | void;
+}
+
+/**
+ * Create a worker row handler for postMessage-only transport.
+ * Replaces createRSCHandler; uses actionId/encodedArgs directly, no Request.
+ */
+export async function createWorkerRowHandler(options: CreateWorkerRowHandlerOptions): Promise<{
+  renderRows: (element: ReactNode, emit: FlightRowEmit) => Promise<void>;
+  handleActionRows: (
+    actionId: string,
+    encodedArgs: EncodedActionArgs,
+    emit: FlightRowEmit,
+  ) => Promise<void>;
+  executeAction: (actionId: string, encodedArgs: EncodedActionArgs) => Promise<unknown>;
+}> {
+  const { handleActionRows: handleActionRowsCore, executeAction: executeActionCore } = await import(
+    "./actions"
+  );
+  const ctx = createRSCContext(options.manifest);
+  const ready = (async () => {
+    await polyfillReady;
+    if (options.actions) {
+      await registerActions(ctx, options.actions);
+    }
+    if (options.actionModules) {
+      const { registerActionModule } = await import("./actions");
+      for (const mod of options.actionModules) {
+        await registerActionModule(ctx, mod.moduleId, mod.moduleExports);
+      }
+    }
+  })();
+  await ready;
+
+  const renderRowsFn = (
+    element: ReactNode,
+    c: RSCContext,
+    emit: FlightRowEmit,
+    opts?: RSCRenderOptions,
+  ) =>
+    renderRSCRows(element, c, emit, {
+      onError: opts?.onError ?? options.onError,
+    });
+
+  return {
+    async renderRows(element: ReactNode, emit: FlightRowEmit): Promise<void> {
+      await renderRowsFn(element, ctx, emit);
+    },
+    async handleActionRows(
+      actionId: string,
+      encodedArgs: EncodedActionArgs,
+      emit: FlightRowEmit,
+    ): Promise<void> {
+      await handleActionRowsCore(ctx, actionId, encodedArgs, renderRowsFn, emit, {
+        onError: options.onError,
+      });
+    },
+    async executeAction(actionId: string, encodedArgs: EncodedActionArgs): Promise<unknown> {
+      return executeActionCore(ctx, actionId, encodedArgs);
+    },
+  };
 }
 
 export type { ClientManifest, RSCContext, RSCRenderOptions, EncodedActionArgs };

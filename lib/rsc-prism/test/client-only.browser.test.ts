@@ -12,12 +12,6 @@ const initialWorkerBootstrap = (globalThis as typeof globalThis & Record<string,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY
 ];
 
-function flightValueResponse(value: unknown): Response {
-  return new Response(`0:${JSON.stringify(value)}\n`, {
-    status: 200,
-    headers: { "content-type": "text/x-component" },
-  });
-}
 
 describe("client-only browser workflows", () => {
   beforeEach(() => {
@@ -36,13 +30,13 @@ describe("client-only browser workflows", () => {
   it("runs fetch/action flows from the narrowed client-only surface", async () => {
     const clientOnlyApi = clientOnly as unknown as Record<string, unknown>;
     expect(clientOnlyApi.registerClientModule).toBeUndefined();
-    expect(clientOnlyApi.createWorkerTransport).toBeUndefined();
+    expect(clientOnlyApi.createWorkerRowTransport).toBeUndefined();
 
     const transport = createMockWorkerTransport(async (request) => {
       if (request.operation === "fetch") {
-        return flightValueResponse("fetch-ok");
+        return "fetch-ok";
       }
-      return flightValueResponse("action-ok");
+      return "action-ok";
     });
     const runActionRef = {
       $$typeof: Symbol.for("react.server.reference"),
@@ -51,9 +45,9 @@ describe("client-only browser workflows", () => {
     };
 
     await expect(clientOnly.fetchRSC("/rsc" as any, { transport })).resolves.toBe("fetch-ok");
-    await expect(
-      clientOnly.callAction<string>(runActionRef, [1], { transport, parseResponse: true }),
-    ).resolves.toBe("action-ok");
+    await expect(clientOnly.callAction<string>(runActionRef, [1], { transport })).resolves.toBe(
+      "action-ok",
+    );
   });
 
   it("bootstraps worker runtime and uses the bootstrapped runtime transport", async () => {
@@ -64,9 +58,9 @@ describe("client-only browser workflows", () => {
         actionId: request.actionId ?? null,
       });
       if (request.operation === "fetch") {
-        return flightValueResponse("default-fetch-ok");
+        return "default-fetch-ok";
       }
-      return flightValueResponse("default-action-ok");
+      return "default-action-ok";
     });
     const runActionRef = {
       $$typeof: Symbol.for("react.server.reference"),
@@ -89,9 +83,9 @@ describe("client-only browser workflows", () => {
     expect(bootstrap).toHaveBeenCalledTimes(1);
 
     await expect(clientOnly.fetchRSC("/rsc" as any)).resolves.toBe("default-fetch-ok");
-    await expect(
-      clientOnly.callAction<string>(runActionRef, [1], { parseResponse: true }),
-    ).resolves.toBe("default-action-ok");
+    await expect(clientOnly.callAction<string>(runActionRef, [1])).resolves.toBe(
+      "default-action-ok",
+    );
     expect(seenRequests).toEqual([
       { operation: "fetch", actionId: null },
       { operation: "action", actionId: "todo-actions.ts#run" },

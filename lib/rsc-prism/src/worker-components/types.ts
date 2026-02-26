@@ -23,10 +23,8 @@ export interface FetchRSCInput {
 }
 
 export interface RSCTransport {
-  sendAction(input: SendActionInput): Promise<Response>;
-  fetchRSC?(input: FetchRSCInput): Promise<Response>;
-  fetchRSCDirect?<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T>;
-  sendActionDirect?<T>(input: SendActionInput, clientOptions?: FlightClientOptions): Promise<T>;
+  fetchRSCDirect<T>(input: FetchRSCInput, clientOptions?: FlightClientOptions): Promise<T>;
+  sendActionDirect<T>(input: SendActionInput, clientOptions?: FlightClientOptions): Promise<T>;
 }
 
 export type MessageEventListener = (event: MessageEvent<unknown>) => void;
