@@ -192,6 +192,32 @@ function buildStructureSignature(value: unknown): string {
   return `{${parts.join(",")}}`;
 }
 
+/** Approximate serialized byte size without JSON.stringify. */
+function estimateSerializedSize(value: unknown): number {
+  if (value === null) return 4;
+  if (value === undefined) return 9;
+  const t = typeof value;
+  if (t === "string") return (value as string).length + 2;
+  if (t === "number" || t === "boolean") return 12;
+  if (Array.isArray(value)) {
+    let n = 2;
+    for (let i = 0; i < value.length; i += 1) {
+      n += estimateSerializedSize(value[i]) + 1;
+    }
+    return n;
+  }
+  if (value !== null && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    let n = 2;
+    for (let i = 0; i < keys.length; i += 1) {
+      n += keys[i].length + 4 + estimateSerializedSize(obj[keys[i]]);
+    }
+    return n;
+  }
+  return 8;
+}
+
 function getValueAtPath(root: unknown, path: (string | number)[]): unknown {
   let current = root;
   for (let i = 0; i < path.length; i += 1) {
@@ -202,23 +228,6 @@ function getValueAtPath(root: unknown, path: (string | number)[]): unknown {
     current = (current as Record<string, unknown>)[String(seg)];
   }
   return current;
-}
-
-function setValueAtPath(root: unknown, path: (string | number)[], value: unknown): boolean {
-  if (path.length === 0) return false;
-  let current = root;
-  for (let i = 0; i < path.length - 1; i += 1) {
-    const seg = path[i];
-    if (current == null || typeof current !== "object") {
-      return false;
-    }
-    current = (current as Record<string, unknown>)[String(seg)];
-  }
-  if (current == null || typeof current !== "object") {
-    return false;
-  }
-  (current as Record<string, unknown>)[String(path[path.length - 1])] = value;
-  return true;
 }
 
 function cloneWithSlotMarkers(
@@ -311,13 +320,13 @@ function tryCompactArrayWithTemplate(
   let beforeSize = 0;
   let refsSize = 0;
   for (let i = 0; i < indices.length; i += 1) {
-    beforeSize += JSON.stringify(items[indices[i]]).length;
-    refsSize += JSON.stringify(replacements[i].value).length;
+    beforeSize += estimateSerializedSize(items[indices[i]]);
+    refsSize += estimateSerializedSize(replacements[i].value);
   }
   if (beforeSize < TEMPLATE_MIN_INPUT_BYTES) {
     return null;
   }
-  const metadataSize = JSON.stringify([{ id: templateId, shape }]).length;
+  const metadataSize = estimateSerializedSize([{ id: templateId, shape }]);
   const afterSize = metadataSize + refsSize;
   const bytesSaved = beforeSize - afterSize;
   if (
@@ -364,7 +373,6 @@ function compactRowValueTemplates(value: unknown): {
     }
 
     const groupEntries = Array.from(groups.values()).sort((a, b) => b.length - a.length);
-    const working = node.slice();
     let mutated = false;
 
     for (let g = 0; g < groupEntries.length; g += 1) {
@@ -381,7 +389,7 @@ function compactRowValueTemplates(value: unknown): {
       }
       for (let r = 0; r < compacted.replacements.length; r += 1) {
         const { index, value: replacementValue } = compacted.replacements[r];
-        working[index] = replacementValue;
+        node[index] = replacementValue;
       }
       templates.push(compacted.template);
       nextTemplateId += 1;
@@ -389,9 +397,6 @@ function compactRowValueTemplates(value: unknown): {
     }
 
     if (!mutated) {
-      continue;
-    }
-    if (!setValueAtPath(value, candidatePath, working)) {
       continue;
     }
   }
@@ -515,6 +520,18 @@ function encodeServerElement(
   return buildRow(encoded);
 }
 
+/** Structural key for outlineValue deduplication; avoids JSON.stringify for server ref shape. */
+function outlineValueKey(value: unknown): string {
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 1 && keys[0] === "id") {
+      return `\x00id:${String(obj.id)}`;
+    }
+  }
+  return JSON.stringify(value);
+}
+
 export function createEncodeContext(
   sink: RenderSink,
   queueDeferred: (task: Promise<void>) => void,
@@ -548,7 +565,7 @@ export function createEncodeContext(
       return id;
     },
     outlineValue: (value) => {
-      const key = JSON.stringify(value);
+      const key = outlineValueKey(value);
       const existing = outlinedByValue.get(key);
       if (existing != null) return existing;
       const id = nextRowId;

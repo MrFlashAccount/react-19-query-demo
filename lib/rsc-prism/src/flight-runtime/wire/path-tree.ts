@@ -41,7 +41,8 @@ function compactRevivePathTree(tree: RevivePathTree): RevivePathTree {
     }
   }
 
-  return [...otherChildren, [REVIVE_PATH_WILDCARD, numericChildren[0][1]]];
+  otherChildren.push([REVIVE_PATH_WILDCARD, numericChildren[0][1]]);
+  return otherChildren;
 }
 
 /** Builds a compact tree from flat path list; deduplicates identical subtrees via cache. */
@@ -134,28 +135,30 @@ function applyPathTreeReplacements(
         continue;
       }
       for (let i = 0; i < target.length; i += 1) {
-        const childPath = [...path, i];
+        path.push(i);
         if (child === true) {
           const raw = target[i];
           if (typeof raw === "string" && isFlightWireString(raw)) {
             target[i] = reviver(raw);
           }
-          continue;
+        } else {
+          applyPathTreeReplacements(root, child, path, reviver);
         }
-        applyPathTreeReplacements(root, child, childPath, reviver);
+        path.pop();
       }
       continue;
     }
 
-    const childPath = [...path, key];
+    path.push(key);
     if (child === true) {
-      const raw = getValueAtPath(root, childPath);
+      const raw = getValueAtPath(root, path);
       if (typeof raw === "string" && isFlightWireString(raw)) {
-        setValueAtPath(root, childPath, reviver(raw));
+        setValueAtPath(root, path, reviver(raw));
       }
     } else {
-      applyPathTreeReplacements(root, child, childPath, reviver);
+      applyPathTreeReplacements(root, child, path, reviver);
     }
+    path.pop();
   }
 }
 

@@ -8,10 +8,7 @@
 import { encodedArgsFromMessage } from "../actions";
 import { createWorkerRowHandler } from "../server";
 import { createWorkerRowTransportMessageHandler } from "./handler";
-import type {
-  WorkerActionRefreshBatchEntryMessage,
-  WorkerTransportRequestMessage,
-} from "./types";
+import type { WorkerActionRefreshBatchEntryMessage, WorkerTransportRequestMessage } from "./types";
 import type { ReactNode } from "react";
 import {
   flightDoneRow,
@@ -84,7 +81,12 @@ export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): 
     createWorkerRowTransportMessageHandler(
       async (request: WorkerTransportRequestMessage, emit, controls) => {
         if (request.operation === "fetch") {
-          const component = componentRegistry.get(request.componentId ?? "");
+          if (!request.componentId) {
+            emit(flightErrorRow("Missing component ID"));
+            return;
+          }
+          const component = componentRegistry.get(request.componentId);
+
           if (component == null) {
             emit(flightErrorRow("Missing or unknown worker component reference."));
             return;

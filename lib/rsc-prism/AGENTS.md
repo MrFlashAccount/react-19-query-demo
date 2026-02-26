@@ -10,6 +10,10 @@
 5. Preserve monomorphic shapes: avoid optional fields in internal APIs (public API may use them); avoid optional callbacks—prefer a noop function as default so call sites never need optional chaining; eliminate optional chaining as much as possible.
 6. Avoid object shape changes and the `delete` keyword so V8 hidden classes remain stable.
 
+## Allocations / Cloning
+
+1. Avoid cloning; prefer in-place mutation. Do not use `JSON.stringify`/`JSON.parse` for deep cloning or as a structural key when a cheaper alternative exists. Wire-format serialization (Flight protocol) is exempt.
+
 ## Transport / Worker
 
 1. When introducing library-managed runtime state consumed by both plugin-generated bootstrap modules and app imports, store the active runtime/transport on `globalThis` (not module-local variables) so behavior remains consistent even if Vite creates multiple module instances.
