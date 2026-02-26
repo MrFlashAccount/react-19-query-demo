@@ -1,0 +1,173 @@
+/**
+ * Revive path tree: compact representation of which paths in a model need revival.
+ *
+ * Instead of storing every path like [[0,0],[0,1],[0,2],...] for array elements,
+ * we use REVIVE_PATH_WILDCARD to mean "all indices at this level" when they
+ * share the same subtree. Compaction reduces metadata size for large lists.
+ */
+import { REVIVE_PATH_WILDCARD } from "./constants";
+import { isFlightWireString } from "./shared";
+
+/** Tree: [key, subtree][] where subtree is true (leaf) or nested [key, subtree][]. */
+/** REVIVE_PATH_WILDCARD (-1) means "all array indexes at this level". */
+export type RevivePathTree = [string | number, RevivePathTree | true][];
+
+/** Merges consecutive numeric keys with identical subtrees into REVIVE_PATH_WILDCARD. */
+function compactRevivePathTree(tree: RevivePathTree): RevivePathTree {
+  const compactedChildren: RevivePathTree = tree.map(([key, child]) => [
+    key,
+    child === true ? true : compactRevivePathTree(child),
+  ]);
+
+  const numericChildren: RevivePathTree = [];
+  const otherChildren: RevivePathTree = [];
+  for (const entry of compactedChildren) {
+    const [key] = entry;
+    if (typeof key === "number" && key >= 0) {
+      numericChildren.push(entry);
+      continue;
+    }
+    otherChildren.push(entry);
+  }
+
+  if (numericChildren.length < 2) {
+    return compactedChildren;
+  }
+
+  const firstChild = JSON.stringify(numericChildren[0][1]);
+  for (let i = 1; i < numericChildren.length; i += 1) {
+    if (JSON.stringify(numericChildren[i][1]) !== firstChild) {
+      return compactedChildren;
+    }
+  }
+
+  return [...otherChildren, [REVIVE_PATH_WILDCARD, numericChildren[0][1]]];
+}
+
+/** Builds a compact tree from flat path list; deduplicates identical subtrees via cache. */
+export function pathsToTree(paths: ReadonlyArray<(string | number)[]>): RevivePathTree {
+  type Node = Map<string | number, Node | true>;
+  const root: Node = new Map();
+  for (const path of paths) {
+    let current = root;
+    for (let i = 0; i < path.length; i += 1) {
+      const seg = path[i];
+      const isLast = i === path.length - 1;
+      if (isLast) {
+        current.set(seg, true);
+      } else {
+        let next = current.get(seg);
+        if (next === undefined || next === true) {
+          next = new Map();
+          current.set(seg, next);
+        }
+        current = next;
+      }
+    }
+  }
+  const subtreeCache = new Map<string, RevivePathTree>();
+  function mapToArray(m: Node): RevivePathTree {
+    const out: RevivePathTree = [];
+    for (const [k, v] of m) {
+      out.push([k, v === true ? true : mapToArray(v)]);
+    }
+    const key = JSON.stringify(out);
+    const cached = subtreeCache.get(key);
+    if (cached) return cached;
+    subtreeCache.set(key, out);
+    return out;
+  }
+  return compactRevivePathTree(mapToArray(root));
+}
+
+function isRevivePathTree(value: unknown): value is RevivePathTree {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    Array.isArray(value[0]) &&
+    value[0].length === 2 &&
+    (value[0][1] === true || Array.isArray(value[0][1]))
+  );
+}
+
+function getValueAtPath(root: unknown, path: (string | number)[]): unknown {
+  let current: unknown = root;
+  for (let i = 0; i < path.length; i += 1) {
+    const segment = path[i];
+    if (current == null || typeof current !== "object") {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[String(segment)];
+  }
+  return current;
+}
+
+function setValueAtPath(root: unknown, path: (string | number)[], value: unknown): void {
+  if (path.length === 0) {
+    return;
+  }
+  let current: unknown = root;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const segment = path[i];
+    if (current == null || typeof current !== "object") {
+      return;
+    }
+    current = (current as Record<string, unknown>)[String(segment)];
+  }
+  if (current == null || typeof current !== "object") {
+    return;
+  }
+  const last = path[path.length - 1];
+  (current as Record<string, unknown>)[String(last)] = value;
+}
+
+function applyPathTreeReplacements(
+  root: unknown,
+  tree: RevivePathTree,
+  path: (string | number)[],
+  reviver: (raw: string) => unknown,
+): void {
+  for (const [key, child] of tree) {
+    if (key === REVIVE_PATH_WILDCARD) {
+      const target = path.length === 0 ? root : getValueAtPath(root, path);
+      if (!Array.isArray(target)) {
+        continue;
+      }
+      for (let i = 0; i < target.length; i += 1) {
+        const childPath = [...path, i];
+        if (child === true) {
+          const raw = target[i];
+          if (typeof raw === "string" && isFlightWireString(raw)) {
+            target[i] = reviver(raw);
+          }
+          continue;
+        }
+        applyPathTreeReplacements(root, child, childPath, reviver);
+      }
+      continue;
+    }
+
+    const childPath = [...path, key];
+    if (child === true) {
+      const raw = getValueAtPath(root, childPath);
+      if (typeof raw === "string" && isFlightWireString(raw)) {
+        setValueAtPath(root, childPath, reviver(raw));
+      }
+    } else {
+      applyPathTreeReplacements(root, child, childPath, reviver);
+    }
+  }
+}
+
+/** Walks the tree and revives only $X strings at leaf paths; skips the rest of the model. */
+export function applyDirectPathReplacements(
+  root: unknown,
+  revivePathsOrTree: RevivePathTree | ReadonlyArray<(string | number)[]>,
+  reviver: (raw: string) => unknown,
+): void {
+  const tree = isRevivePathTree(revivePathsOrTree)
+    ? revivePathsOrTree
+    : pathsToTree(revivePathsOrTree);
+  if (tree.length === 0) return;
+  applyPathTreeReplacements(root, tree, [], reviver);
+}

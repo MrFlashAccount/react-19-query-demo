@@ -18,37 +18,15 @@ import {
   encodeStreamValue,
   type StreamEncodeContext,
 } from "./wire";
+import { REACT_FRAGMENT_SYMBOL } from "./wire/constants";
+import {
+  isClientReference,
+  isPlainObject,
+  isReactElementLike,
+} from "./wire/shared";
 import { createClientModuleProxy } from "./references";
 
-const CLIENT_REFERENCE_SYMBOL = Symbol.for("react.client.reference");
-const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
-const LEGACY_REACT_ELEMENT_SYMBOL = Symbol.for("react.element");
-const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");
 const FLIGHT_ROW_ENCODER = new TextEncoder();
-
-function isClientReference(value: unknown): value is { $$typeof: symbol; $$id: string } {
-  if (typeof value !== "function" && (typeof value !== "object" || value == null)) {
-    return false;
-  }
-  const candidate = value as { $$typeof?: unknown; $$id?: unknown };
-  return candidate.$$typeof === CLIENT_REFERENCE_SYMBOL && typeof candidate.$$id === "string";
-}
-
-function isReactElementLike(value: unknown): value is {
-  $$typeof: symbol;
-  type: unknown;
-  key: string | null;
-  props: Record<string, unknown>;
-} {
-  if (typeof value !== "object" || value == null) {
-    return false;
-  }
-  const candidate = value as { $$typeof?: unknown };
-  return (
-    candidate.$$typeof === REACT_ELEMENT_SYMBOL ||
-    candidate.$$typeof === LEGACY_REACT_ELEMENT_SYMBOL
-  );
-}
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   if ((typeof value !== "object" && typeof value !== "function") || value == null) {
@@ -106,14 +84,6 @@ const TEMPLATE_MIN_SAVINGS_RATIO = 0.12;
 const TEMPLATE_MAX_SLOT_COUNT = 64;
 const TEMPLATE_MAX_TEMPLATES_PER_ROW = 8;
 const TEMPLATE_MAX_VISITED_NODES = 6000;
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value == null || Array.isArray(value)) {
-    return false;
-  }
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-}
 
 function collectTemplateCandidatePaths(
   node: unknown,

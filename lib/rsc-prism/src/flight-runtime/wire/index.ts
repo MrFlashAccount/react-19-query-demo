@@ -1,7 +1,8 @@
 /**
- * Wire encode/decode API — re-exports from wire/ for backward compatibility.
- * New code should import from "./wire" or "./wire/index" directly.
- * @see ./wire/index.ts
+ * Flight wire encode/decode API.
+ *
+ * Public surface for the wire module. Internal structure: constants, types,
+ * shared, binary, encode, decode, path-tree, rows.
  */
 export {
   REVIVE_PATH_WILDCARD,
@@ -10,16 +11,22 @@ export {
   ROW_ERROR,
   ROW_METADATA,
   ROW_MODEL,
+} from "./constants";
+export {
   rehydrateArrayBuffer,
   rehydrateTypedArray,
   decodeBinaryWireRow,
   binaryWireTagFromKind,
   isBinaryWireRowTag,
+} from "./binary";
+export {
   escapeStringValue,
   encodeStreamType,
   encodeStreamValue,
   encodeWireValue,
   encodeWireValueWithBinaryRows,
+} from "./encode";
+export {
   parseModelString,
   createModelReviver,
   createModelReviverWithReviveValues,
@@ -30,17 +37,19 @@ export {
   createServerReference,
   applyDirectPathReplacements,
   decodeWireValue,
-  pathsToTree,
+} from "./decode";
+export { pathsToTree } from "./path-tree";
+export type { RevivePathTree } from "./path-tree";
+export {
   flightModelRow,
   flightMetadataRow,
   flightBinaryRow,
   flightDoneRow,
   flightErrorRow,
-} from "./wire/index";
+} from "./rows";
 export type {
-  RevivePathTree,
   StreamEncodeContext,
   StreamDecodeContext,
   FlightRowMessage,
   FlightTemplateRowShape,
-} from "./wire/index";
+} from "./types";
