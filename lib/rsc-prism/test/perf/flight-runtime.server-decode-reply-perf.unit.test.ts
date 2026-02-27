@@ -52,10 +52,7 @@ function buildLargeBinaryReplyPayload(itemCount: number, itemBytes: number): unk
   };
 }
 
-async function benchmarkDecodeReply(
-  iterations: number,
-  body: unknown,
-): Promise<{ avgMs: number }> {
+async function benchmarkDecodeReply(iterations: number, body: unknown): Promise<{ avgMs: number }> {
   for (let i = 0; i < 2; i += 1) {
     await decodeReply(body, null, undefined);
   }

@@ -213,7 +213,7 @@ export function createCallServer(
     return transport.sendActionDirect!(
       {
         actionId,
-        body: encodedArgs.data,
+        body: encodedArgs.data as string | FormData,
       },
       { manifest, callServer },
     );
@@ -304,7 +304,7 @@ export async function callAction<T = void>(
   return transport.sendActionDirect<T>(
     {
       actionId,
-      body: encodedArgs.data,
+      body: encodedArgs.data as string | FormData,
     },
     { manifest },
   );

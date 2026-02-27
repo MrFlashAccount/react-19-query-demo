@@ -228,11 +228,13 @@ function buildSyntheticBinaryWirePayload(
     }
     payload.push({ idx: i, bytes, floats, raw: bytes.buffer.slice(0) });
   }
-  const encoded = encodeWireValueWithBinaryRows(payload, (kind, bytes) => {
-    const id = String(rowsById.size + 1);
-    const tag = binaryWireTagFromKind(kind);
-    rowsById.set(id, decodeBinaryWireRow(tag, bytes));
-    return id;
+  const encoded = encodeWireValueWithBinaryRows(payload, {
+    emitBinaryRow: (kind: string, bytes: Uint8Array) => {
+      const id = String(rowsById.size + 1);
+      const tag = binaryWireTagFromKind(kind);
+      rowsById.set(id, decodeBinaryWireRow(tag, bytes));
+      return id;
+    },
   });
   return { encoded, rowsById };
 }

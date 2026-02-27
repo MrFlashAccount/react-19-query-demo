@@ -6,10 +6,12 @@
 
 import { encodeWireValue } from "../flight-runtime/wire";
 
-export async function encodeReply(value: unknown): Promise<unknown> {
+export async function encodeReply(
+  value: unknown,
+): Promise<FormData | string | { v: unknown; p: (string | number)[][] }> {
   const revivePaths: (string | number)[][] = [];
-  const encoded = encodeWireValue(value, new WeakSet(), {
-    pushRevivePath: (path) => revivePaths.push([...path]),
+  const encoded = encodeWireValue(value, {
+    pushRevivePath: (path: (string | number)[]) => revivePaths.push([...path]),
   });
-  return revivePaths.length > 0 ? { v: encoded, p: revivePaths } : encoded;
+  return revivePaths.length > 0 ? { v: encoded, p: revivePaths } : (encoded as FormData | string);
 }

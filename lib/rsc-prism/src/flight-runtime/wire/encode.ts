@@ -209,6 +209,8 @@ export function encodeStreamValue(value: unknown, context: StreamEncodeContext):
 
 export type WireEncodeOptions = {
   pushRevivePath?: (path: (string | number)[]) => void;
+  /** Callback for binary values; returns id string to use as ref. Required for encodeWireValueWithBinaryRows. */
+  emitBinaryRow?: (kind: string, bytes: Uint8Array) => string | number;
 };
 
 function emitTaggedAndRecordPath(
@@ -229,6 +231,7 @@ function encodeWireValueImpl(
   value: unknown,
   path: (string | number)[],
   pushRevivePath?: (path: (string | number)[]) => void,
+  emitBinaryRow?: (kind: string, bytes: Uint8Array) => string | number,
 ): unknown {
   if (value === undefined) {
     return undefined;
@@ -285,8 +288,8 @@ function encodeWireValueImpl(
     let i = 0;
     for (const [key, item] of value.entries()) {
       mapped.set(
-        encodeWireValueImpl(key, [...path, 2, i, 0], pushRevivePath),
-        encodeWireValueImpl(item, [...path, 2, i, 1], pushRevivePath),
+        encodeWireValueImpl(key, [...path, 2, i, 0], pushRevivePath, emitBinaryRow),
+        encodeWireValueImpl(item, [...path, 2, i, 1], pushRevivePath, emitBinaryRow),
       );
       i += 1;
     }
@@ -297,25 +300,33 @@ function encodeWireValueImpl(
     const decoded = new Set<unknown>();
     let i = 0;
     for (const item of value.values()) {
-      decoded.add(encodeWireValueImpl(item, [...path, 2, i], pushRevivePath));
+      decoded.add(encodeWireValueImpl(item, [...path, 2, i], pushRevivePath, emitBinaryRow));
       i += 1;
     }
     return decoded;
   }
 
   if (value instanceof ArrayBuffer) {
+    if (emitBinaryRow != null) {
+      const id = emitBinaryRow("ArrayBuffer", new Uint8Array(value));
+      return [WIRE_TAG_SENTINEL, WIRE_TAG.ROW_REF, String(id)];
+    }
     return value;
   }
 
   const typed = normalizeTypedArray(value);
 
   if (typed != null) {
+    if (emitBinaryRow != null) {
+      const id = emitBinaryRow(typed.kind, typed.bytes);
+      return [WIRE_TAG_SENTINEL, WIRE_TAG.ROW_REF, String(id)];
+    }
     return value;
   }
 
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i += 1) {
-      value[i] = encodeWireValueImpl(value[i], [...path, i], pushRevivePath);
+      value[i] = encodeWireValueImpl(value[i], [...path, i], pushRevivePath, emitBinaryRow);
     }
     return value;
   }
@@ -325,7 +336,7 @@ function encodeWireValueImpl(
         WIRE_TAG_SENTINEL,
         WIRE_TAG.ELEMENT,
         encodeWireType(value.type),
-        encodeWireValueImpl(value.props, [...path, 2, "props"], pushRevivePath),
+        encodeWireValueImpl(value.props, [...path, 2, "props"], pushRevivePath, emitBinaryRow),
         value.key,
       ],
       path,
@@ -352,13 +363,13 @@ function encodeWireValueImpl(
 
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    result[key] = encodeWireValueImpl(item, [...path, key], pushRevivePath);
+    result[key] = encodeWireValueImpl(item, [...path, key], pushRevivePath, emitBinaryRow);
   }
   return result;
 }
 
 export function encodeWireValue(value: unknown, options?: WireEncodeOptions): unknown {
-  return encodeWireValueImpl(value, [], options?.pushRevivePath);
+  return encodeWireValueImpl(value, [], options?.pushRevivePath, undefined);
 }
 
 /** Same as encodeWireValue but allows ArrayBuffer/TypedArray via emitBinaryRow callback. */
@@ -366,5 +377,5 @@ export function encodeWireValueWithBinaryRows(
   value: unknown,
   options?: WireEncodeOptions,
 ): unknown {
-  return encodeWireValueImpl(value, [], options?.pushRevivePath);
+  return encodeWireValueImpl(value, [], options?.pushRevivePath, options?.emitBinaryRow);
 }

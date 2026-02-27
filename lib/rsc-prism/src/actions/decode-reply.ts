@@ -14,12 +14,17 @@ export async function decodeReply(
     refTable?: unknown[];
   },
 ): Promise<unknown> {
-  const parsed =
-    typeof body === "string" ? (JSON.parse(body) as { v?: unknown; p?: (string | number)[][] }) : body;
+  type EncodedWithPaths = { v: unknown; p: (string | number)[][] };
+  const parsed: unknown = body;
   const refTable = options?.refTable;
-  const payload = parsed != null && "v" in parsed && Array.isArray(parsed?.p) ? parsed.v : parsed;
-  const revivePaths =
-    parsed != null && "v" in parsed && Array.isArray(parsed?.p) ? parsed.p : undefined;
+  const hasPaths =
+    parsed != null &&
+    typeof parsed === "object" &&
+    "v" in parsed &&
+    "p" in parsed &&
+    Array.isArray((parsed as EncodedWithPaths).p);
+  const payload = hasPaths ? (parsed as EncodedWithPaths).v : parsed;
+  const revivePaths = hasPaths ? (parsed as EncodedWithPaths).p : undefined;
   return decodeWireValue(
     payload,
     (id: number) => {

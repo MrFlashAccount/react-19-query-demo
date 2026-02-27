@@ -157,19 +157,24 @@ describe("flight wire decode correctness", () => {
     const int16View = new Int16Array(backing, 4, 2);
     const dataView = new DataView(backing, 8, 4);
     const binaryRows = new Map<string, unknown>();
-    const encoded = encodeWireValueWithBinaryRows({ int16View, dataView }, (kind, bytes) => {
-      const id = String(binaryRows.size + 1);
-      const tag =
-        kind === "Int16Array"
-          ? "S"
-          : kind === "DataView"
-            ? "V"
-            : (() => {
-                throw new Error(`Unexpected kind ${kind}`);
-              })();
-      binaryRows.set(id, decodeBinaryWireRow(tag, bytes));
-      return id;
-    });
+    const encoded = encodeWireValueWithBinaryRows(
+      { int16View, dataView },
+      {
+        emitBinaryRow: (kind: string, bytes: Uint8Array) => {
+          const id = String(binaryRows.size + 1);
+          const tag =
+            kind === "Int16Array"
+              ? "S"
+              : kind === "DataView"
+                ? "V"
+                : (() => {
+                    throw new Error(`Unexpected kind ${kind}`);
+                  })();
+          binaryRows.set(id, decodeBinaryWireRow(tag, bytes));
+          return id;
+        },
+      },
+    );
     const decoded = decodeWireValue(
       encoded,
       (id) => `client:${id}`,
@@ -186,13 +191,10 @@ describe("flight wire decode correctness", () => {
 
   it("passes through binary values for postMessage structured clone", () => {
     const payload = { bytes: new Uint8Array([5, 6, 7]) };
-    const encoded = encodeWireValueWithBinaryRows(payload, () => "unused") as Record<string, unknown>;
+    const encoded = encodeWireValue(payload) as Record<string, unknown>;
     expect(encoded.bytes).toBeInstanceOf(Uint8Array);
     expect(Array.from(encoded.bytes as Uint8Array)).toEqual([5, 6, 7]);
-    const decoded = decodeWireValue(
-      encoded,
-      (id) => `client:${id}`,
-    ) as { bytes: Uint8Array };
+    const decoded = decodeWireValue(encoded, (id) => `client:${id}`) as { bytes: Uint8Array };
     expect(Array.from(decoded.bytes)).toEqual([5, 6, 7]);
   });
 });
