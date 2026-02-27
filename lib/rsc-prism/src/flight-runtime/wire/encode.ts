@@ -37,8 +37,8 @@ function encodeWireType(value: unknown): unknown[] {
 }
 
 function emitRevivable(context: StreamEncodeContext, encoded: string): string {
-  const path = context._path ?? [];
-  context.pushReviveValue?.(encoded, path);
+  const path = context._path;
+  context.pushReviveValue(encoded, path);
   return encoded;
 }
 
@@ -145,17 +145,21 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return emitRevivable(context, `${CHR.ELEMENT_PREFIX}${id.toString(16)}`);
   }
   if (Array.isArray(value)) {
+    const base = context._path;
     for (let i = 0; i < value.length; i += 1) {
+      context._path = [...base, i];
       value[i] = encodeStreamValueInternal(value[i], context);
+      context._path = base;
     }
     return value;
   }
   if (isReactElementLike(value)) {
-    let type: string;
-    type = encodeStreamType(value.type, context);
+    const base = context._path;
+    context._path = [...base, 1];
+    const type = encodeStreamType(value.type, context);
     const key = value.key;
-    let props: unknown;
-    props = encodeStreamValueInternal(value.props, context);
+    context._path = [...base, 3];
+    const props = encodeStreamValueInternal(value.props, context);
     return [CHR.ELEMENT_PREFIX, type, key, props];
   }
   if (isClientReference(value)) {

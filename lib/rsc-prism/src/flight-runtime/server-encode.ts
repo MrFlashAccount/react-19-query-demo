@@ -44,7 +44,7 @@ export type FlightRowEmit = (row: FlightRowMessage, transfer?: Transferable[]) =
 export interface RenderSink {
   readonly settled: boolean;
   emitModelRow: (id: number, value: unknown) => void;
-  emitMetadataRow?: (
+  emitMetadataRow: (
     id: number,
     revivePaths: RevivePathTree | ReadonlyArray<(string | number)[]>,
     templates?: FlightTemplateRowShape[],
@@ -211,11 +211,12 @@ export function createEncodeContext(
     },
     emitRow: (id, value) => {
       if (sink.settled) return;
+
       const paths = currentRevivePathsRef.current;
-      const hasPaths = paths.length > 0;
-      if (hasPaths && sink.emitMetadataRow) {
+      if (paths.length > 0) {
         sink.emitMetadataRow(id, paths);
       }
+
       sink.emitModelRow(id, value);
       currentRevivePathsRef.current = [];
     },
@@ -255,6 +256,7 @@ export function createEncodeContext(
       pushReviveValue: (_encoded, path) => {
         currentRevivePathsRef.current.push([...path]);
       },
+      _path: [],
     },
     preparePathsForEncode: () => {
       currentRevivePathsRef.current = [];

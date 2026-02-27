@@ -21,10 +21,10 @@ export interface StreamEncodeContext {
   emitBinaryRow: StreamEmitBinaryRow;
   seen: WeakSet<object>;
   currentRowId?: number;
-  /** Optional: collect path for inline revival; client uses paths for direct replacement */
-  pushReviveValue?: (encoded: string, path: (string | number)[]) => void;
+  /** collect path for inline revival; client uses paths for direct replacement */
+  pushReviveValue: (encoded: string, path: (string | number)[]) => void;
   /** Current path (set by caller for path collection) */
-  _path?: (string | number)[];
+  _path: (string | number)[];
 }
 
 /**
