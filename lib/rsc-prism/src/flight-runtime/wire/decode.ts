@@ -373,16 +373,17 @@ function decodeWireArrayValue(
   visitingRowRefs: Set<string>,
   currentRowId: number | undefined,
 ): unknown[] {
-  return Array.from({ length: value.length }, (_, i) =>
-    decodeWireValueInternal(
+  for (let i = 0; i < value.length; i += 1) {
+    value[i] = decodeWireValueInternal(
       value[i],
       resolveClientReference,
       resolveRowReference,
       callServer,
       visitingRowRefs,
       currentRowId,
-    ),
-  );
+    );
+  }
+  return value;
 }
 
 function decodeWirePlainObjectValue(
