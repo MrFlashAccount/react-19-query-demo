@@ -143,7 +143,8 @@ export function parseModelString<Chunk>(
   if (value.length === 1) {
     return value;
   }
-  switch (value.charCodeAt(1)) {
+  const type = value[1];
+  switch (type) {
     case CHR.ELEMENT_PREFIX:
       return value.slice(1);
     case CHR.P:
@@ -170,17 +171,32 @@ export function parseModelString<Chunk>(
   }
 }
 
+/** True if value is a Flight element tuple ["$", type, key, props]. Uses string check since JSON/structured-clone can't serialize symbols. */
+function isElementTuple(value: unknown): value is [string, unknown, unknown, unknown] {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    typeof value[0] === "string" &&
+    value[0].length > 0 &&
+    value[0] === CHR.ELEMENT_PREFIX
+  );
+}
+
 function maybeDecodeElementTuple(value: unknown): unknown {
-  if (!Array.isArray(value) || value.length !== 4 || value[0] !== CHR.ELEMENT_PREFIX) {
+  if (!isElementTuple(value)) {
     return value;
   }
   const key = value[2];
+  const rawProps = value[3];
+  const props = Array.isArray(rawProps)
+    ? ({ children: rawProps } as Record<string, unknown>)
+    : rawProps;
   const decoded = {
     $$typeof: REACT_ELEMENT_SYMBOL,
     type: value[1],
     key: key == null ? null : String(key),
     ref: null,
-    props: value[3] as Record<string, unknown>,
+    props: props as Record<string, unknown>,
   };
   return decoded;
 }
@@ -266,16 +282,22 @@ function traverseElementTuplesOnlyInternal<Chunk>(
   if (!Array.isArray(value)) {
     return value;
   }
-  if (value.length === 4 && value[0] === CHR.ELEMENT_PREFIX) {
+  if (isElementTuple(value)) {
     let type = value[1];
     if (typeof type === "string" && isFlightWireString(type)) {
       type = parseModelString(context, type);
     }
     const key = value[2];
-    const props = value[3] as Record<string, unknown>;
-    const children = props.children;
-    if (children !== undefined) {
-      props.children = traverseElementTuplesOnlyInternal(children, context);
+    const rawProps = value[3];
+    let props: Record<string, unknown>;
+    if (Array.isArray(rawProps)) {
+      props = { children: traverseElementTuplesOnlyInternal(rawProps, context) };
+    } else {
+      props = rawProps as Record<string, unknown>;
+      const children = props.children;
+      if (children !== undefined) {
+        props.children = traverseElementTuplesOnlyInternal(children, context);
+      }
     }
     return maybeDecodeElementTuple([CHR.ELEMENT_PREFIX, type, key, props]);
   }

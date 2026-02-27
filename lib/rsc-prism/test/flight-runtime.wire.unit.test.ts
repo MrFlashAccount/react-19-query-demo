@@ -502,6 +502,46 @@ describe("flight wire compact stream format", () => {
     expect(resolved[0].props.children).toBe("first");
     expect(resolved[1].props.children).toBe("second");
   });
+
+  it("unwraps plain object {children: x} when used as React child", () => {
+    const context = {
+      getChunk: () => null,
+      readChunk: () => null,
+      createLazyChunkWrapper: () => null,
+      resolveClientReference: (id: number) => refTable[id] ?? `client:${id}`,
+    };
+    const encoded = [
+      "$",
+      "div",
+      null,
+      {
+        children: [
+          ["$", "span", null, { children: "first" }],
+          { children: [["$", "span", null, { children: "wrapped" }]] },
+          ["$", "span", null, { children: "third" }],
+        ],
+      },
+    ];
+    const decoded = traverseElementTuplesOnly(context, encoded) as {
+      type: string;
+      props: { children: unknown[] };
+    };
+    expect(decoded.props.children).toHaveLength(3);
+    expect(decoded.props.children[0]).toMatchObject({
+      type: "span",
+      props: { children: "first" },
+    });
+    const second = decoded.props.children[1];
+    const secondEl = Array.isArray(second) ? second[0] : second;
+    expect(secondEl).toMatchObject({
+      type: "span",
+      props: { children: "wrapped" },
+    });
+    expect(decoded.props.children[2]).toMatchObject({
+      type: "span",
+      props: { children: "third" },
+    });
+  });
 });
 
 describe("flight wire decode perf baselines", () => {

@@ -10,7 +10,7 @@ import {
 } from "../../module-references/constants";
 
 /** ASCII char codes for Flight wire format prefixes ($X) */
-export const CHR = {
+export const CHR_CODES = {
   ELEMENT_PREFIX: 36, // '$'
   P: 80, // 'P' - URLSearchParams
   S: 83, // 'S' - Symbol
@@ -18,6 +18,25 @@ export const CHR = {
   K: 75, // 'K' - FormData
   F: 70, // 'F' - server reference
   L: 76, // 'L' - lazy chunk
+} as const;
+
+export const CHR = {
+  ELEMENT_PREFIX: String.fromCharCode(CHR_CODES.ELEMENT_PREFIX),
+  P: String.fromCharCode(CHR_CODES.P),
+  S: String.fromCharCode(CHR_CODES.S),
+  R: String.fromCharCode(CHR_CODES.R),
+  K: String.fromCharCode(CHR_CODES.K),
+  F: String.fromCharCode(CHR_CODES.F),
+  L: String.fromCharCode(CHR_CODES.L),
+} as const;
+
+export const CHR_PREFIXES = {
+  CLIENT_REFERENCE: `${CHR.ELEMENT_PREFIX}${CHR.R}`,
+  SERVER_REFERENCE: `${CHR.ELEMENT_PREFIX}${CHR.F}`,
+  LAZY_CHUNK: `${CHR.ELEMENT_PREFIX}${CHR.L}`,
+  FORM_DATA: `${CHR.ELEMENT_PREFIX}${CHR.K}`,
+  URL_SEARCH_PARAMS: `${CHR.ELEMENT_PREFIX}${CHR.P}`,
+  SYMBOL: `${CHR.ELEMENT_PREFIX}${CHR.S}`,
 } as const;
 
 export { CLIENT_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL };

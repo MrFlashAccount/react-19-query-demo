@@ -18,7 +18,7 @@ import {
   encodeStreamType,
   encodeStreamValue,
 } from "./wire";
-import { REACT_FRAGMENT_SYMBOL } from "./wire/constants";
+import { CHR, REACT_FRAGMENT_SYMBOL } from "./wire/constants";
 import { isClientReference, isPlainObject, isReactElementLike } from "./wire/shared";
 
 const TEMPLATE_SLOT_KEY = "$slot";
@@ -119,8 +119,10 @@ function collectTemplateCandidates(
       node.length >= TEMPLATE_MIN_ARRAY_ITEMS &&
       Array.isArray(first) &&
       first.length === 4 &&
-      first[0] === "$" &&
-      node.every((entry) => Array.isArray(entry) && entry.length === 4 && entry[0] === "$")
+      first[0] === CHR.ELEMENT_PREFIX &&
+      node.every(
+        (entry) => Array.isArray(entry) && entry.length === 4 && entry[0] === CHR.ELEMENT_PREFIX,
+      )
     ) {
       out.push({ path: [...path], node });
     }
@@ -549,6 +551,7 @@ function encodeServerElement(
 ): unknown {
   const propKeys = Object.keys(value.props);
   const len = propKeys.length;
+  const encodedValues: unknown[] = Array.from({ length: len });
   let hasAsync = false;
   path.push(3);
   const propsPath = path;
@@ -556,7 +559,7 @@ function encodeServerElement(
   for (let i = 0; i < len; i += 1) {
     propsPath.push(propKeys[i]);
     const v = encodeServerNode(value.props[propKeys[i]], context, propsPath);
-    propKeys[i] = v as any;
+    encodedValues[i] = v;
     if (!hasAsync && isThenable(v)) hasAsync = true;
     path.pop();
   }
@@ -569,22 +572,30 @@ function encodeServerElement(
   path.pop();
   const key = value.key == null ? null : String(value.key);
 
-  const buildRow = (vals: unknown[]) => {
-    const props: Record<string, unknown> = {};
-    for (let i = 0; i < len; i += 1) props[propKeys[i]] = vals[i];
-    return ["$", type, key, props];
-  };
-
   if (hasAsync) {
-    return Promise.all(propKeys).then(
-      (values) => buildRow(values),
+    return Promise.all(encodedValues).then(
+      (values) => buildRow(values, len, propKeys, type, key),
       (error) => {
         throw error;
       },
     );
   }
 
-  return buildRow(propKeys);
+  return buildRow(encodedValues, len, propKeys, type, key);
+}
+
+function buildRow(
+  vals: unknown[],
+  len: number,
+  propKeys: string[],
+  type: string,
+  key: string | null,
+) {
+  const props: Record<string, unknown> = {};
+  for (let i = 0; i < len; i += 1) {
+    props[propKeys[i]] = vals[i];
+  }
+  return [CHR.ELEMENT_PREFIX, type, key, props];
 }
 
 /** Structural key for outlineValue deduplication; avoids JSON.stringify for server ref shape. */

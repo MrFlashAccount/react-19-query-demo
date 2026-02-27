@@ -15,7 +15,7 @@ import {
   isServerReference,
   normalizeTypedArray,
 } from "./shared";
-import { REACT_FRAGMENT_SYMBOL, WIRE_TAG, WIRE_TAG_SENTINEL } from "./constants";
+import { CHR, CHR_PREFIXES, REACT_FRAGMENT_SYMBOL, WIRE_TAG, WIRE_TAG_SENTINEL } from "./constants";
 
 /** Prefixes '$' to strings that would otherwise be parsed as Flight refs, so they round-trip as plain strings. */
 export function escapeStringValue(str: string): string {
@@ -90,15 +90,18 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     if (key == null) {
       throw new Error("Only global symbols are supported by the minimal Flight runtime.");
     }
-    return emitRevivable(context, `$S${key}`);
+    return emitRevivable(context, `${CHR_PREFIXES.SYMBOL}${key}`);
   }
   if (typeof value === "function") {
     if (isClientReference(value)) {
-      return emitRevivable(context, `$R${value.$$refId.toString(16)}`);
+      return emitRevivable(
+        context,
+        `${CHR_PREFIXES.CLIENT_REFERENCE}${value.$$refId.toString(16)}`,
+      );
     }
     if (isServerReference(value)) {
       const outlinedId = context.outlineValue({ id: value.$$id });
-      return emitRevivable(context, `$F${outlinedId.toString(16)}`);
+      return emitRevivable(context, `${CHR_PREFIXES.SERVER_REFERENCE}${outlinedId.toString(16)}`);
     }
     throw new Error("Functions are not supported by the minimal Flight runtime.");
   }
@@ -107,7 +110,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return value;
   }
   if (value instanceof URLSearchParams) {
-    return emitRevivable(context, `$P${value.toString()}`);
+    return emitRevivable(context, `${CHR_PREFIXES.URL_SEARCH_PARAMS}${value.toString()}`);
   }
   if (value instanceof FormData) {
     const entries: Array<[string, unknown]> = [];
@@ -123,7 +126,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
       entries.push([key, item]);
     }
     const outlinedId = context.outlineValue(entries);
-    return emitRevivable(context, `$K${outlinedId.toString(16)}`);
+    return emitRevivable(context, `${CHR_PREFIXES.FORM_DATA}${outlinedId.toString(16)}`);
   }
   if (value instanceof Map) {
     value.forEach((v, k) => {
@@ -141,12 +144,12 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
   if (value instanceof ArrayBuffer) {
     const id = context.emitBinaryRow("ArrayBuffer", new Uint8Array(value));
-    return emitRevivable(context, `$${id.toString(16)}`);
+    return emitRevivable(context, `${CHR.ELEMENT_PREFIX}${id.toString(16)}`);
   }
   const typed = normalizeTypedArray(value);
   if (typed != null) {
     const id = context.emitBinaryRow(typed.kind, typed.bytes);
-    return emitRevivable(context, `$${id.toString(16)}`);
+    return emitRevivable(context, `${CHR.ELEMENT_PREFIX}${id.toString(16)}`);
   }
   if (Array.isArray(value)) {
     const path = getMutablePath(context);
@@ -177,14 +180,14 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     } finally {
       path.pop();
     }
-    return ["$", type, key, props];
+    return [CHR.ELEMENT_PREFIX, type, key, props];
   }
   if (isClientReference(value)) {
-    return emitRevivable(context, `$R${value.$$refId.toString(16)}`);
+    return emitRevivable(context, `${CHR_PREFIXES.CLIENT_REFERENCE}${value.$$refId.toString(16)}`);
   }
   if (isServerReference(value)) {
     const outlinedId = context.outlineValue({ id: value.$$id });
-    return emitRevivable(context, `$F${outlinedId.toString(16)}`);
+    return emitRevivable(context, `${CHR_PREFIXES.SERVER_REFERENCE}${outlinedId.toString(16)}`);
   }
   if (!isPlainObject(value)) {
     throw new Error("Only plain objects are serializable by the minimal Flight runtime.");
