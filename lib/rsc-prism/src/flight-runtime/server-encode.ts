@@ -549,7 +549,6 @@ function encodeServerElement(
 ): unknown {
   const propKeys = Object.keys(value.props);
   const len = propKeys.length;
-  const encoded: unknown[] = Array.from({ length: len });
   let hasAsync = false;
   path.push(3);
   const propsPath = path;
@@ -557,7 +556,7 @@ function encodeServerElement(
   for (let i = 0; i < len; i += 1) {
     propsPath.push(propKeys[i]);
     const v = encodeServerNode(value.props[propKeys[i]], context, propsPath);
-    encoded[i] = v;
+    propKeys[i] = v as any;
     if (!hasAsync && isThenable(v)) hasAsync = true;
     path.pop();
   }
@@ -577,7 +576,7 @@ function encodeServerElement(
   };
 
   if (hasAsync) {
-    return Promise.all(encoded).then(
+    return Promise.all(propKeys).then(
       (values) => buildRow(values),
       (error) => {
         throw error;
@@ -585,7 +584,7 @@ function encodeServerElement(
     );
   }
 
-  return buildRow(encoded);
+  return buildRow(propKeys);
 }
 
 /** Structural key for outlineValue deduplication; avoids JSON.stringify for server ref shape. */

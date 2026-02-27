@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import type { ClientManifest, EncodedActionArgs, RSCRenderOptions } from "../types";
 import type { FlightRowMessage } from "../flight-runtime/wire";
+import { CLIENT_REF_TABLE_GLOBAL_KEY } from "../runtime-globals";
 import { createFromRowEmitter } from "../flight-runtime/client";
 import { renderToRowEmitter, type FlightRowEmit } from "../flight-runtime/server";
 import { encodeReply } from "./encode-reply";
@@ -73,6 +74,9 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
             })()
         : encoded.data;
 
-    return decodeReply(body, manifest, {});
+    const refTable = (globalThis as Record<string, unknown>)[CLIENT_REF_TABLE_GLOBAL_KEY] as
+      | unknown[]
+      | undefined;
+    return decodeReply(body, manifest, { refTable });
   },
 };

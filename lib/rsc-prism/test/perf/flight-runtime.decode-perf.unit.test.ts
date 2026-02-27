@@ -76,7 +76,7 @@ function decodeFlightTextPayload(payloadText: string): unknown {
       hasFallback = true;
     }
     if (parsed.id == null) {
-      return decodeWireValue(parsed.payload, (id) => `client:${id}`);
+      return decodeWireValue(parsed.payload, (id: number) => `client:${id}`);
     }
     rowsById.set(parsed.id, parsed.payload);
     rawRowsById.set(Number.parseInt(parsed.id, 16), trimmed.slice(trimmed.indexOf(":") + 1));
@@ -125,7 +125,7 @@ function decodeFlightTextPayload(payloadText: string): unknown {
       readChunk,
       createLazyChunkWrapper: (chunk) =>
         createLazyChunkWrapper(chunk, (payload) => readChunk(payload as PerfChunk)),
-      resolveClientReference: (id: string) => `client:${id}`,
+      resolveClientReference: (id: number) => `client:${id}`,
     });
 
     const materialize = (value: unknown): unknown => {
@@ -174,7 +174,7 @@ function decodeFlightTextPayload(payloadText: string): unknown {
   if (hasRoot) {
     return decodeWireValue(
       rowsById.get("0"),
-      (id) => `client:${id}`,
+      (id: number) => `client:${id}`,
       (id) => rowsById.get(id),
     );
   }
@@ -183,7 +183,7 @@ function decodeFlightTextPayload(payloadText: string): unknown {
   }
   return decodeWireValue(
     fallback,
-    (id) => `client:${id}`,
+    (id: number) => `client:${id}`,
     (id) => rowsById.get(id),
   );
 }
@@ -247,7 +247,7 @@ describe("flight decode perf harness", () => {
     const syntheticWire = buildSyntheticWirePayload();
     rows.push(
       benchmark("synthetic-wire-decode", iterations, () =>
-        decodeWireValue(syntheticWire, (id) => `client:${id}`),
+        decodeWireValue(syntheticWire, (id: number) => `client:${id}`),
       ),
     );
 
@@ -258,7 +258,7 @@ describe("flight decode perf harness", () => {
       const payload = JSON.parse(raw);
       rows.push(
         benchmark(`wire-file-decode:${wireFile}`, iterations, () =>
-          decodeWireValue(payload, (id) => `client:${id}`),
+          decodeWireValue(payload, (id: number) => `client:${id}`),
         ),
       );
     }
@@ -273,7 +273,7 @@ describe("flight decode perf harness", () => {
         () =>
           decodeWireValue(
             binaryWire.encoded,
-            (id) => `client:${id}`,
+            (id: number) => `client:${id}`,
             (id) => binaryWire.rowsById.get(id),
           ),
       ),

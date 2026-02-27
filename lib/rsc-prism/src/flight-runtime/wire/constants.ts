@@ -14,7 +14,7 @@ export const CHR = {
   ELEMENT_PREFIX: 36, // '$'
   P: 80, // 'P' - URLSearchParams
   S: 83, // 'S' - Symbol
-  C: 67, // 'C' - client reference
+  R: 82, // 'R' - client reference
   K: 75, // 'K' - FormData
   F: 70, // 'F' - server reference
   L: 76, // 'L' - lazy chunk

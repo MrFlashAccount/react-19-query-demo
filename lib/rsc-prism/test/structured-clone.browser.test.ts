@@ -10,8 +10,8 @@ import {
   flightModelRow,
 } from "../src/flight-runtime/wire";
 
-function createClientRefResolver(): (id: string) => unknown {
-  return (_id: string): unknown => null;
+function createClientRefResolver(): (id: number) => unknown {
+  return (_id: number): unknown => null;
 }
 
 describe("structured clone row transport", () => {

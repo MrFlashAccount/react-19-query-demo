@@ -1,4 +1,4 @@
-import { MAIN_THREAD_MODULES_GLOBAL_KEY } from "../runtime-globals";
+import { CLIENT_REF_TABLE_GLOBAL_KEY } from "../runtime-globals";
 import type { FlightClientOptions } from "./types";
 import {
   applyDirectPathReplacements,
@@ -17,7 +17,6 @@ import {
   ROW_MODEL,
   traverseElementTuplesOnly,
 } from "./wire";
-import type { ClientManifestMap } from "../types";
 
 const CHUNK_PENDING = 0;
 const CHUNK_RESOLVED_MODEL = 1;
@@ -50,7 +49,7 @@ interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
   revivePathsByRowId: Map<number, RevivePathTree | ReadonlyArray<(string | number)[]>>;
   templatesByRowId: Map<number, FlightTemplateRowShape[]>;
-  resolveClientReference: (id: string) => unknown;
+  resolveClientReference: (id: number) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   fromJSON: (this: unknown, key: string, value: unknown) => unknown;
   closed: boolean;
@@ -324,7 +323,7 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
       response.lazyWrapperCache.set(c as FlightChunk, wrapper);
       return wrapper;
     },
-    resolveClientReference: (id: string) => response.resolveClientReference(id),
+    resolveClientReference: (id: number) => response.resolveClientReference(id),
     callServer: response.callServer,
     getCurrentRowId: () => response.currentRowId,
   };
@@ -411,51 +410,28 @@ function closeResponseWithError(response: FlightResponse, reason: unknown): void
   }
 }
 
-function getMainThreadModules(): Record<string, Record<string, unknown>> {
-  const globalState = globalThis as typeof globalThis & Record<string, unknown>;
-  const modules = globalState[MAIN_THREAD_MODULES_GLOBAL_KEY];
-  if (typeof modules !== "object" || modules == null) {
-    return {};
+function resolveClientReferenceById(id: number): unknown {
+  const refTable = (globalThis as Record<string, unknown>)[CLIENT_REF_TABLE_GLOBAL_KEY] as
+    | unknown[]
+    | undefined;
+  if (refTable == null) {
+    throw new Error(
+      `[rsc-prism] Client ref table not initialized. Ensure main-thread bootstrap runs before Flight decode.`,
+    );
   }
-  return modules as Record<string, Record<string, unknown>>;
+  const resolved = refTable[id];
+  if (resolved === undefined) {
+    throw new Error(`[rsc-prism] Unknown client ref id ${id} in minimal Flight runtime.`);
+  }
+  return resolved;
 }
 
-function resolveClientReferenceById(id: string, manifest?: ClientManifestMap | null): unknown {
-  const mapped = manifest?.[id];
-  const resolvedId = mapped == null ? id : `${mapped.id}#${mapped.name}`;
-
-  const hashIndex = resolvedId.lastIndexOf("#");
-  const moduleId = hashIndex === -1 ? resolvedId : resolvedId.slice(0, hashIndex);
-  const exportName = hashIndex === -1 ? "default" : resolvedId.slice(hashIndex + 1);
-  const modules = getMainThreadModules();
-  const moduleExports = modules[moduleId];
-  if (moduleExports == null) {
-    throw new Error(`[rsc-prism] Unknown client module "${moduleId}" in minimal Flight runtime.`);
-  }
-  if (exportName === "*") {
-    return moduleExports;
-  }
-  if (!(exportName in moduleExports)) {
-    throw new Error(`[rsc-prism] Unknown client export "${resolvedId}" in minimal Flight runtime.`);
-  }
-  return moduleExports[exportName];
-}
-
-function toManifestMap(options?: FlightClientOptions): ClientManifestMap | null {
-  const manifest = options?.manifest;
-  if (manifest == null || typeof manifest === "string") {
-    return null;
-  }
-  return manifest;
-}
-
-function createClientReferenceResolver(options?: FlightClientOptions): (id: string) => unknown {
-  const manifest = toManifestMap(options);
-  return (id: string) => resolveClientReferenceById(id, manifest);
+function createClientReferenceResolver(): (id: number) => unknown {
+  return (id: number) => resolveClientReferenceById(id);
 }
 
 function createFlightResponse(
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
 ): FlightResponse {
   const lazyWrapperCache = new Map<FlightChunk, unknown>();
@@ -597,7 +573,7 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
   push: (row: FlightRowMessage) => void;
   result: Promise<T>;
 } {
-  const resolveClientReference = createClientReferenceResolver(options);
+  const resolveClientReference = createClientReferenceResolver();
   const response = createFlightResponse(resolveClientReference, options?.callServer);
   let hasAnyRow = false;
   let rootSettled = false;

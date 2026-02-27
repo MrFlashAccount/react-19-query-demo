@@ -123,12 +123,18 @@ export function isReactElementLike(value: unknown): value is {
 }
 
 /** Client refs can be functions (module exports); check $$typeof before assuming object shape. */
-export function isClientReference(value: unknown): value is { $$typeof: symbol; $$id: string } {
+export function isClientReference(
+  value: unknown,
+): value is { $$typeof: symbol; $$id: string; $$refId: number } {
   if (typeof value !== "function" && (typeof value !== "object" || value == null)) {
     return false;
   }
-  const candidate = value as { $$typeof?: unknown; $$id?: unknown };
-  return candidate.$$typeof === CLIENT_REFERENCE_SYMBOL && typeof candidate.$$id === "string";
+  const candidate = value as { $$typeof?: unknown; $$id?: unknown; $$refId?: unknown };
+  return (
+    candidate.$$typeof === CLIENT_REFERENCE_SYMBOL &&
+    typeof candidate.$$id === "string" &&
+    typeof candidate.$$refId === "number"
+  );
 }
 
 /** Server refs are async functions; same symbol check as client refs. */

@@ -36,7 +36,7 @@ export interface StreamDecodeContext<Chunk = unknown> {
   getChunk: (id: number) => Chunk;
   readChunk: (chunk: Chunk) => unknown;
   createLazyChunkWrapper: (chunk: Chunk) => unknown;
-  resolveClientReference: (id: string) => unknown;
+  resolveClientReference: (id: number) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
   getCurrentRowId?: () => number | undefined;
 }

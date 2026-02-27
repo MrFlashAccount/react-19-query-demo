@@ -68,6 +68,7 @@ describe("flight runtime server row emitter behavior", () => {
     const clientRef = {
       $$typeof: CLIENT_REFERENCE_SYMBOL,
       $$id: "mod#Button",
+      $$refId: 1,
     };
     const root = {
       $$typeof: REACT_ELEMENT_SYMBOL,
@@ -95,6 +96,7 @@ describe("flight runtime server row emitter behavior", () => {
     const clientRef = {
       $$typeof: CLIENT_REFERENCE_SYMBOL,
       $$id: "mod#Button",
+      $$refId: 1,
     };
     const root = {
       $$typeof: REACT_ELEMENT_SYMBOL,

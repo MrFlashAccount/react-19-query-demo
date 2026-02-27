@@ -30,7 +30,7 @@ function encodeType(value: unknown): JsonObject {
     return { $t: "fragment" };
   }
   if (isClientReference(value)) {
-    return { $t: "client", id: value.$$id };
+    return { $t: "client", id: value.$$refId };
   }
   throw new Error("Unsupported element type in minimal runtime.");
 }
@@ -57,7 +57,9 @@ export function encodeStreamType(value: unknown, context?: StreamEncodeContext):
     return context ? emitRevivable(context, "$Sreact.fragment") : "$Sreact.fragment";
   }
   if (isClientReference(value)) {
-    return context ? emitRevivable(context, `$C${value.$$id}`) : `$C${value.$$id}`;
+    return context
+      ? emitRevivable(context, `$R${value.$$refId.toString(16)}`)
+      : `$R${value.$$refId.toString(16)}`;
   }
   throw new Error("Unsupported element type in minimal runtime.");
 }
@@ -91,7 +93,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
   if (typeof value === "function") {
     if (isClientReference(value)) {
-      return emitRevivable(context, `$C${value.$$id}`);
+      return emitRevivable(context, `$R${value.$$refId.toString(16)}`);
     }
     if (isServerReference(value)) {
       const outlinedId = context.outlineValue({ id: value.$$id });
@@ -177,7 +179,7 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return ["$", type, key, props];
   }
   if (isClientReference(value)) {
-    return emitRevivable(context, `$C${value.$$id}`);
+    return emitRevivable(context, `$R${value.$$refId.toString(16)}`);
   }
   if (isServerReference(value)) {
     const outlinedId = context.outlineValue({ id: value.$$id });
@@ -233,7 +235,7 @@ function encodeWireValueImpl(
   }
   if (typeof value === "function") {
     if (isClientReference(value)) {
-      return { $t: "clientRef", id: value.$$id };
+      return { $t: "clientRef", id: value.$$refId };
     }
     if (isServerReference(value)) {
       return { $t: "serverRef", id: value.$$id };
@@ -314,7 +316,7 @@ function encodeWireValueImpl(
     };
   }
   if (isClientReference(value)) {
-    return { $t: "clientRef", id: value.$$id };
+    return { $t: "clientRef", id: value.$$refId };
   }
   if (isServerReference(value)) {
     return { $t: "serverRef", id: value.$$id };

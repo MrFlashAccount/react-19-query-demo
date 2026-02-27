@@ -15,8 +15,9 @@ import {
   REVIVE_PATH_WILDCARD,
   traverseElementTuplesOnly,
 } from "../src/flight-runtime/wire";
+const refTable = ["resolvedModDefault", "client:mod#Button"];
 function decodeWithResolver(value: unknown): unknown {
-  return decodeWireValue(value, (id) => `client:${id}`);
+  return decodeWireValue(value, (id: number) => refTable[id] ?? `client:${id}`);
 }
 
 function measureDecodeMs(value: unknown, iterations = 1): number {
@@ -90,14 +91,14 @@ describe("flight wire decode correctness", () => {
       ),
       set: encodeWireValue(new Set(["a", "b"])),
       formdata: formDataWire,
-      clientRef: { $t: "clientRef", id: "mod#default" },
+      clientRef: { $t: "clientRef", id: 0 },
       serverRef: { $t: "serverRef", id: "actions#run" },
       element: encodedElement,
     };
 
     const decoded = decodeWireValue(
       payload,
-      (id) => `client:${id}`,
+      (id: number) => refTable[id] ?? `client:${id}`,
       (id) => binaryRows.get(id),
     ) as Record<string, unknown>;
 
@@ -118,7 +119,7 @@ describe("flight wire decode correctness", () => {
     expect(decodedForm.get("name")).toBe("demo");
     expect(decodedForm.get("count")).toBe("2");
 
-    expect(decoded.clientRef).toBe("client:mod#default");
+    expect(decoded.clientRef).toBe("resolvedModDefault");
     expect(typeof decoded.serverRef).toBe("function");
     const serverRef = decoded.serverRef as {
       $$typeof: symbol;
@@ -138,6 +139,12 @@ describe("flight wire decode correctness", () => {
     expect(element.props.title).toBe("demo");
     expect(element.props.nested).toBeUndefined();
     expect(element.key).toBe("k1");
+  });
+
+  it("decodes numeric clientRef id with O(1) ref table lookup", () => {
+    const table = ["resolvedComponent"];
+    const decoded = decodeWireValue({ $t: "clientRef", id: 0 }, (id: number) => table[id]);
+    expect(decoded).toBe("resolvedComponent");
   });
 
   it("encodes typed-array and DataView byte ranges without full-buffer expansion", () => {
@@ -260,11 +267,11 @@ describe("flight wire compact stream format", () => {
       readChunk: (chunk: unknown) => (chunk as { value: unknown }).value,
       createLazyChunkWrapper: (chunk: unknown) =>
         createLazyChunkWrapper(chunk, (payload) => (payload as { value: unknown }).value),
-      resolveClientReference: (id: string) => `client:${id}`,
+      resolveClientReference: (id: number) => refTable[id] ?? `client:${id}`,
     };
 
     expect(parseModelString(context, "$$x")).toBe("$x");
-    expect(parseModelString(context, "$Cmod#default")).toBe("client:mod#default");
+    expect(parseModelString(context, "$R0")).toBe("resolvedModDefault");
 
     const lazy = parseModelString(context, "$1") as { $$typeof: symbol };
     expect(lazy.$$typeof).toBe(Symbol.for("react.lazy"));
@@ -285,7 +292,7 @@ describe("flight wire compact stream format", () => {
       getChunk: (id: number) => chunks.get(id),
       readChunk: (chunk: unknown) => (chunk as { value: unknown }).value,
       createLazyChunkWrapper: () => null,
-      resolveClientReference: (id: string) => id,
+      resolveClientReference: (id: number) => refTable[id] ?? id,
       callServer,
     };
 
@@ -309,7 +316,7 @@ describe("flight wire compact stream format", () => {
       getChunk: (_id: number) => null,
       readChunk: () => null,
       createLazyChunkWrapper: () => null,
-      resolveClientReference: (id: string) => id,
+      resolveClientReference: (id: number) => refTable[id] ?? id,
     });
 
     const parsed = JSON.parse(`["$","div",null,{"children":"ok"}]`, reviver) as {
@@ -331,6 +338,7 @@ describe("flight wire compact stream format", () => {
     const clientRef = {
       $$typeof: CLIENT_REFERENCE_SYMBOL,
       $$id: "mod#Button",
+      $$refId: 1,
     };
     const element = {
       $$typeof: REACT_ELEMENT_SYMBOL,
@@ -358,7 +366,7 @@ describe("flight wire compact stream format", () => {
       getChunk: () => null,
       readChunk: () => null,
       createLazyChunkWrapper: () => null,
-      resolveClientReference: (id: string) => `client:${id}`,
+      resolveClientReference: (id: number) => refTable[id] ?? `client:${id}`,
     };
 
     const tree = pathsToTree(revivePaths);
@@ -380,6 +388,7 @@ describe("flight wire compact stream format", () => {
     const clientRef = {
       $$typeof: CLIENT_REFERENCE_SYMBOL,
       $$id: "mod#Button",
+      $$refId: 1,
     };
     const element = {
       $$typeof: REACT_ELEMENT_SYMBOL,
@@ -416,7 +425,7 @@ describe("flight wire compact stream format", () => {
       getChunk: () => null,
       readChunk: () => null,
       createLazyChunkWrapper: () => null,
-      resolveClientReference: (id: string) => `client:${id}`,
+      resolveClientReference: (id: number) => refTable[id] ?? `client:${id}`,
     };
 
     applyDirectPathReplacements(encoded, tree, context);
@@ -435,6 +444,7 @@ describe("flight wire compact stream format", () => {
     const clientRef = {
       $$typeof: CLIENT_REFERENCE_SYMBOL,
       $$id: "mod#Button",
+      $$refId: 1,
     };
     const element = {
       $$typeof: REACT_ELEMENT_SYMBOL,
@@ -460,7 +470,7 @@ describe("flight wire compact stream format", () => {
       getChunk: () => null,
       readChunk: () => null,
       createLazyChunkWrapper: () => null,
-      resolveClientReference: (id: string) => `client:${id}`,
+      resolveClientReference: (id: number) => refTable[id] ?? `client:${id}`,
     };
 
     applyDirectPathReplacements(encoded, revivePaths, context);
@@ -556,7 +566,7 @@ describe("flight wire decode perf baselines", () => {
     for (let i = 0; i < 4; i += 1) {
       decodeWireValue(
         payload,
-        (id) => `client:${id}`,
+        (id: number) => refTable[id] ?? `client:${id}`,
         (id) => binaryRows.get(id),
       );
     }

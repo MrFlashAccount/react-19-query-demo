@@ -4,13 +4,14 @@
  */
 
 import { decodeBinaryWireRow, decodeWireValue } from "../flight-runtime/wire";
-import { createClientModuleProxy } from "../module-references";
 
 export async function decodeReply(
   body: FormData | string,
   _moduleBasePath: unknown,
   options?: {
     currentRowId?: number;
+    /** Ref table for resolving numeric client ref ids. Required when action args may contain client refs. */
+    refTable?: unknown[];
   },
 ): Promise<unknown> {
   let source = "null";
@@ -45,9 +46,21 @@ export async function decodeReply(
     }
   }
   const parsed = JSON.parse(source);
+  const refTable = options?.refTable;
   return decodeWireValue(
     parsed,
-    (id) => createClientModuleProxy(id),
+    (id: number) => {
+      if (refTable == null) {
+        throw new Error(
+          `[rsc-prism] Numeric client ref id ${id} cannot be resolved. Pass refTable in decodeReply options.`,
+        );
+      }
+      const resolved = refTable[id];
+      if (resolved === undefined) {
+        throw new Error(`[rsc-prism] Unknown client ref id ${id} in decodeReply.`);
+      }
+      return resolved;
+    },
     (id) => rowsById.get(id),
     undefined,
     options,

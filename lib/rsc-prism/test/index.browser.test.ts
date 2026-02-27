@@ -9,7 +9,8 @@ describe("root entrypoint browser workflows", () => {
     expect(rootApi.callAction).toBeUndefined();
     expect(rootApi.createWorkerRowTransport).toBeUndefined();
 
-    const ref = rsc.clientRef<{ count: number }>("client", "Counter");
+    const ref = rsc.clientRef<{ count: number }>("client", "Counter", 0);
     expect(ref.$$id).toBe("client#Counter");
+    expect(ref.$$refId).toBe(0);
   });
 });

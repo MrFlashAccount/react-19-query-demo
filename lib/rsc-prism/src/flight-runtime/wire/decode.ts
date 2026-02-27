@@ -18,14 +18,17 @@ import {
 import { isFlightWireString, parseHexChunkId } from "./shared";
 import { applyDirectPathReplacements as applyPathTreeReplacements } from "./path-tree";
 
-function decodeType(value: JsonObject, resolveClientReference: (id: string) => unknown): unknown {
+function decodeType(
+  value: JsonObject,
+  resolveClientReference: (id: number) => unknown,
+): unknown {
   switch (value.$t) {
     case "host":
       return value.v as string;
     case "fragment":
       return Fragment;
     case "client":
-      return resolveClientReference(value.id as string);
+      return resolveClientReference(value.id as number);
     default:
       throw new Error(`Unsupported encoded element type "${String(value.$t)}"`);
   }
@@ -124,8 +127,10 @@ export function parseModelString<Chunk>(
       return new URLSearchParams(value.slice(2));
     case CHR.S:
       return Symbol.for(value.slice(2));
-    case CHR.C:
-      return context.resolveClientReference(value.slice(2));
+    case CHR.R: {
+      const refId = parseHexChunkId(value.slice(2));
+      return context.resolveClientReference(refId);
+    }
     case CHR.K:
       return decodeFormDataFromChunk(context, value);
     case CHR.F:
@@ -377,7 +382,7 @@ export function applyDirectPathReplacements<Chunk>(
  */
 export function decodeWireValue(
   value: unknown,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference?: (id: string) => unknown,
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
   traceOptions?: {
@@ -396,7 +401,7 @@ export function decodeWireValue(
 
 function decodeWireValueInternal(
   value: unknown,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -441,7 +446,7 @@ function decodeWireValueInternal(
 
 function decodeWireArrayValue(
   value: unknown[],
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -461,7 +466,7 @@ function decodeWireArrayValue(
 
 function decodeWirePlainObjectValue(
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -485,7 +490,7 @@ function decodeWirePlainObjectValue(
 
 function decodeWireRowReferenceValue(
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -526,7 +531,7 @@ function decodeWireRowReferenceValue(
 
 function decodeWireMapValue(
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -563,7 +568,7 @@ function decodeWireMapValue(
 
 function decodeWireSetValue(
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -591,7 +596,7 @@ function decodeWireSetValue(
 
 function decodeWireFormDataValue(
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -624,7 +629,7 @@ function decodeWireFormDataValue(
 
 function decodeWireElementValue(
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -658,7 +663,7 @@ function decodeWireElementValue(
 function decodeTaggedWireValue(
   tag: string,
   value: Record<string, unknown>,
-  resolveClientReference: (id: string) => unknown,
+  resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
@@ -710,7 +715,7 @@ function decodeTaggedWireValue(
         currentRowId,
       );
     case "clientRef":
-      return resolveClientReference(value.id as string);
+      return resolveClientReference(value.id as number);
     case "serverRef":
       return createServerReference(value.id as string, callServer);
     case "element":

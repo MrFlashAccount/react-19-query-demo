@@ -12,6 +12,7 @@ import {
 import { build as viteBuild } from "vite";
 import react from "@vitejs/plugin-react";
 import {
+  CLIENT_REF_TABLE_GLOBAL_KEY,
   MAIN_THREAD_MODULES_GLOBAL_KEY,
   WORKER_RUNTIME_BOOTSTRAP_GLOBAL_KEY,
 } from "./runtime-globals";
@@ -1093,21 +1094,36 @@ function collectReferencedTopLevelMainComponentNames(
   return [...referencedNames].sort((left, right) => left.localeCompare(right));
 }
 
-function buildWorkerProxyModuleCode(moduleId: string, exportsInfo: ParsedModuleExports): string {
+function buildWorkerProxyModuleCode(
+  moduleId: string,
+  exportsInfo: ParsedModuleExports,
+  refIdMap: Map<string, number>,
+): string {
+  const getRefId = (referenceId: string): number => {
+    const refId = refIdMap.get(referenceId);
+    if (refId == null) {
+      throw new Error(`[rsc-prism] Missing refId for "${referenceId}" in worker proxy. Ensure ref table is built.`);
+    }
+    return refId;
+  };
   const lines: string[] = [];
   lines.push(
     'import { createClientRef } from "@lib/rsc-prism/module-references/create-client-ref";',
   );
   lines.push("");
   if (exportsInfo.hasDefault) {
+    const referenceId = `${moduleId}#default`;
     lines.push(
-      `const __rscPrismDefault = createClientRef(${JSON.stringify(`${moduleId}#default`)});`,
+      `const __rscPrismDefault = createClientRef(${JSON.stringify(referenceId)}, ${getRefId(referenceId)});`,
     );
     lines.push("export default __rscPrismDefault;");
   }
   exportsInfo.named.forEach((name, index) => {
     const localName = `__rscPrismExport${index}`;
-    lines.push(`const ${localName} = createClientRef(${JSON.stringify(`${moduleId}#${name}`)});`);
+    const referenceId = `${moduleId}#${name}`;
+    lines.push(
+      `const ${localName} = createClientRef(${JSON.stringify(referenceId)}, ${getRefId(referenceId)});`,
+    );
     lines.push(`export { ${localName} as ${name} };`);
   });
   if (!exportsInfo.hasDefault && exportsInfo.named.length === 0) {
@@ -1436,8 +1452,14 @@ function buildMainVirtualModuleCode(
     )}] ??= Object.create(null));`,
   );
   lines.push(
+    `const __rscPrismClientRefTable = (__rscPrismGlobalState[${JSON.stringify(
+      CLIENT_REF_TABLE_GLOBAL_KEY,
+    )}] ??= []);`,
+  );
+  lines.push(
     'const __rscPrismClientManifest = (__rscPrismGlobalState["__RSC_PRISM_CLIENT_MANIFEST__"] ??= Object.create(null));',
   );
+  lines.push("__rscPrismClientRefTable.length = 0;");
   lines.push("");
 
   modules.forEach((entry, index) => {
@@ -1451,6 +1473,13 @@ function buildMainVirtualModuleCode(
     exportsList.push("*");
     for (const exportName of exportsList) {
       const referenceId = `${entry.moduleId}#${exportName}`;
+      const accessExpr =
+        exportName === "*"
+          ? importName
+          : exportName === "default"
+            ? `${importName}.default`
+            : `${importName}.${exportName}`;
+      lines.push(`__rscPrismClientRefTable.push(${accessExpr});`);
       lines.push(`__rscPrismClientManifest[${JSON.stringify(referenceId)}] = {`);
       lines.push(`  id: ${JSON.stringify(entry.moduleId)},`);
       lines.push(`  name: ${JSON.stringify(exportName)},`);
@@ -1978,7 +2007,35 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
   let generatedWorkerInlineComponentsDir: string | null = null;
   let inferredClientModulePaths = new Set<string>();
   let actionShortIdMap = new Map<string, string>();
+  let refIdMapCache: Map<string, number> | null = null;
   const workerActionDirectives = new Set([...workerDirectives, WORKER_ACTION_DIRECTIVE]);
+
+  const ensureRefIdMap = async (): Promise<Map<string, number>> => {
+    if (refIdMapCache != null) return refIdMapCache;
+    if (config == null) {
+      throw new Error("[rsc-prism] Config not resolved when building ref id map.");
+    }
+    const modules = await collectMainThreadModules(
+      config.root,
+      includeFilter,
+      mainDirectives,
+      mapModuleId,
+      inferredClientModulePaths,
+    );
+    const map = new Map<string, number>();
+    let refId = 0;
+    for (const entry of modules) {
+      const exportsList = entry.exportsInfo.hasDefault
+        ? ["default", ...entry.exportsInfo.named]
+        : [...entry.exportsInfo.named];
+      exportsList.push("*");
+      for (const exportName of exportsList) {
+        map.set(`${entry.moduleId}#${exportName}`, refId++);
+      }
+    }
+    refIdMapCache = map;
+    return map;
+  };
 
   const mapModuleId = (absolutePath: string): string => {
     if (config == null) {
@@ -2375,13 +2432,19 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     const clientRefLines: string[] = [];
     const actionRefLines: string[] = [];
 
+    const getRefId = (referenceId: string): number => {
+      const refId = refIdMapCache?.get(referenceId);
+      if (refId == null) {
+        throw new Error(`[rsc-prism] Missing refId for "${referenceId}". Ensure ref table is built before transforming server components.`);
+      }
+      return refId;
+    };
     if (localMainComponentNames.length > 0) {
       inferredClientModules.add(normalizePath(absolutePath));
       for (const localName of localMainComponentNames) {
+        const referenceId = `${moduleId}#${buildLocalMainComponentExportName(localName)}`;
         clientRefLines.push(
-          `const ${localName} = createClientRef(${JSON.stringify(
-            `${moduleId}#${buildLocalMainComponentExportName(localName)}`,
-          )});`,
+          `const ${localName} = createClientRef(${JSON.stringify(referenceId)}, ${getRefId(referenceId)});`,
         );
       }
     }
@@ -2424,10 +2487,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         if (importBinding.resolvedAbsolutePath != null) {
           inferredClientModules.add(normalizePath(importBinding.resolvedAbsolutePath));
         }
+        const referenceId = `${importedModuleId}#${importBinding.importedName}`;
         clientRefLines.push(
-          `const ${importBinding.localName} = createClientRef(${JSON.stringify(
-            `${importedModuleId}#${importBinding.importedName}`,
-          )});`,
+          `const ${importBinding.localName} = createClientRef(${JSON.stringify(referenceId)}, ${getRefId(referenceId)});`,
         );
         continue;
       }
@@ -2676,6 +2738,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     await mkdir(sourceDir, { recursive: true });
     await mkdir(inlineComponentsDir, { recursive: true });
 
+    await ensureRefIdMap();
     const workerRuntimeCollection = await collectWorkerModulesForRuntime();
     for (const inlineSource of workerRuntimeCollection.inlineSources) {
       const inlinePath = path.resolve(inlineComponentsDir, inlineSource.fileName);
@@ -2699,6 +2762,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     generatedWorkerRegistryPath = registryPath;
     generatedWorkerInlineComponentsDir = inlineComponentsDir;
     inferredClientModulePaths = workerRuntimeCollection.inferredClientModules;
+    refIdMapCache = null;
 
     return { entryPath, registryPath, outDir };
   };
@@ -2977,7 +3041,8 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           );
         }
         const moduleId = mapModuleId(absolutePath);
-        return buildWorkerProxyModuleCode(moduleId, directiveModule.exportsInfo);
+        const refIdMap = await ensureRefIdMap();
+        return buildWorkerProxyModuleCode(moduleId, directiveModule.exportsInfo, refIdMap);
       }
 
       if (options.mode === "main" && id.startsWith(MAIN_WORKER_REF_VIRTUAL_ID_PREFIX)) {
@@ -3251,7 +3316,8 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       let transformedCode: string | null = null;
 
       if (options.mode === "worker" && directiveType === "main") {
-        transformedCode = buildWorkerProxyModuleCode(moduleId, exportsInfo);
+        const refIdMap = await ensureRefIdMap();
+        transformedCode = buildWorkerProxyModuleCode(moduleId, exportsInfo, refIdMap);
       }
 
       if (options.mode === "main" && directiveType === "worker") {
