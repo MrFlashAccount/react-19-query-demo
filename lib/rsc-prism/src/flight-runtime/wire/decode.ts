@@ -186,19 +186,14 @@ function maybeDecodeElementTuple(value: unknown): unknown {
   if (!isElementTuple(value)) {
     return value;
   }
-  const key = value[2];
-  const rawProps = value[3];
-  const props = Array.isArray(rawProps)
-    ? ({ children: rawProps } as Record<string, unknown>)
-    : rawProps;
-  const decoded = {
+
+  return {
     $$typeof: REACT_ELEMENT_SYMBOL,
     type: value[1],
-    key,
+    key: value[2],
     ref: null,
-    props: props as Record<string, unknown>,
+    props: value[3],
   };
-  return decoded;
 }
 
 /** JSON.parse reviver that revives $X strings and decodes React element tuples. */
