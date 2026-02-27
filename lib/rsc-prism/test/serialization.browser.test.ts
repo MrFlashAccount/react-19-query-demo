@@ -28,7 +28,7 @@ describe("RSC serialization conformance", () => {
     ];
 
     const encoded = await encodeActionArgs(payload);
-    expect(encoded.type === "string" || encoded.type === "formdata").toBe(true);
+    expect(encoded.type).toBe("object");
     expect(encoded.data).toBeTruthy();
   });
 

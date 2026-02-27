@@ -184,29 +184,15 @@ describe("flight wire decode correctness", () => {
     expect(Array.from(new Uint8Array(decoded.dataView.buffer))).toEqual([8, 9, 10, 11]);
   });
 
-  it("encodes binary values as row refs when binary row emitter is provided", () => {
-    const rows: Array<{ kind: string; bytes: Uint8Array }> = [];
-    const encoded = encodeWireValueWithBinaryRows(
-      {
-        bytes: new Uint8Array([5, 6, 7]),
-      },
-      (kind, bytes) => {
-        rows.push({ kind, bytes });
-        return rows.length;
-      },
-    ) as Record<string, unknown>;
-
-    expect(encoded.bytes).toEqual({ $t: "rowRef", id: 1 });
-    expect(rows[0].kind).toBe("Uint8Array");
-    expect(Array.from(rows[0].bytes)).toEqual([5, 6, 7]);
-    const rowPayload = decodeBinaryWireRow("o", rows[0].bytes);
+  it("passes through binary values for postMessage structured clone", () => {
+    const payload = { bytes: new Uint8Array([5, 6, 7]) };
+    const encoded = encodeWireValueWithBinaryRows(payload, () => "unused") as Record<string, unknown>;
+    expect(encoded.bytes).toBeInstanceOf(Uint8Array);
+    expect(Array.from(encoded.bytes as Uint8Array)).toEqual([5, 6, 7]);
     const decoded = decodeWireValue(
       encoded,
       (id) => `client:${id}`,
-      (id) => (id === "1" ? rowPayload : null),
-    ) as {
-      bytes: Uint8Array;
-    };
+    ) as { bytes: Uint8Array };
     expect(Array.from(decoded.bytes)).toEqual([5, 6, 7]);
   });
 });

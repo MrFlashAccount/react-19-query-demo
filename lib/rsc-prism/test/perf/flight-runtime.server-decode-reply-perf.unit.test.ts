@@ -54,7 +54,7 @@ function buildLargeBinaryReplyPayload(itemCount: number, itemBytes: number): unk
 
 async function benchmarkDecodeReply(
   iterations: number,
-  body: FormData | string,
+  body: unknown,
 ): Promise<{ avgMs: number }> {
   for (let i = 0; i < 2; i += 1) {
     await decodeReply(body, null, undefined);
@@ -72,15 +72,12 @@ async function benchmarkDecodeReply(
 const perfIt = process.env.RSC_PERF === "1" ? it : it.skip;
 
 describe("flight runtime server decodeReply perf", () => {
-  perfIt("prints decodeReply timing for large binary FormData", async () => {
+  perfIt("prints decodeReply timing for large binary payload", async () => {
     const iterations = readEnvNumber("RSC_PERF_ITERATIONS", 12);
     const itemCount = readEnvNumber("RSC_PERF_SERVER_ITEM_COUNT", 1400);
     const itemBytes = readEnvNumber("RSC_PERF_SERVER_ITEM_BYTES", 256);
     const payload = buildLargeBinaryReplyPayload(itemCount, itemBytes);
     const body = await encodeReply(payload);
-    if (typeof body === "string") {
-      throw new Error("Expected FormData body for binary decodeReply perf harness.");
-    }
     const stats = await benchmarkDecodeReply(iterations, body);
     console.log(
       `\n[rsc-prism perf] iterations=${iterations} items=${itemCount} itemBytes=${itemBytes}`,

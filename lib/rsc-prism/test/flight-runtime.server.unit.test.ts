@@ -47,14 +47,13 @@ describe("flight runtime server row emitter behavior", () => {
     expect(Array.from(new Uint8Array(binaryPayload!.v))).toEqual([1, 2, 3, 4]);
   });
 
-  it("round-trips action/reply binary payloads without base64", async () => {
+  it("round-trips action/reply binary payloads via structured clone", async () => {
     const payload = {
       typed: new Uint16Array([100, 200, 300]),
       buf: Uint8Array.from([1, 2, 3]).buffer,
     };
     const encoded = await encodeReply(payload);
-    expect(encoded instanceof FormData).toBe(true);
-    const decoded = (await decodeReply(encoded as FormData, {})) as {
+    const decoded = (await decodeReply(encoded, {})) as {
       typed: Uint16Array;
       buf: ArrayBuffer;
     };

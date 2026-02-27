@@ -18,6 +18,10 @@
 8. Suspense data loaders must not rely only on per-instance `useRef` caches for in-flight request deduplication; keep a stable cache outside component instance state (keyed by request identity) so pre-commit Suspense retries reuse the same promise and do not trigger infinite refetch loops.
 9. Worker runtime bootstrap must not resolve before receiving explicit `rsc.prism.worker.ready` (or worker error/timeout); do not use short fallback timers that mark runtime ready early, because initial requests can be lost and later fail with transport timeouts.
 
+## Transport
+
+1. RSC payload transport is postMessage only. Do not add or assume support for HTTP, JSON.stringify, or RSC stream over the network. Structured clone handles Map, Set, Date, etc. natively.
+
 ## TypeScript
 
 1. Use `@typescript/native-preview` and never `typescript` in package.json and pnpm catalog. All packages must depend on `@typescript/native-preview` for type checking and build tooling.

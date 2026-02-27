@@ -14,6 +14,8 @@ import {
   REACT_ELEMENT_SYMBOL,
   REACT_LAZY_SYMBOL,
   SERVER_REFERENCE_SYMBOL,
+  WIRE_TAG,
+  WIRE_TAG_SENTINEL,
 } from "./constants";
 import { isFlightWireString, parseHexChunkId } from "./shared";
 import {
@@ -32,6 +34,27 @@ function decodeType(value: JsonObject, resolveClientReference: (id: number) => u
     default:
       throw new Error(`Unsupported encoded element type "${String(value.$t)}"`);
   }
+}
+
+/** Decodes element type from legacy { $t, v } or compact [sentinel, typeId, ...payload]. */
+function decodeWireType(
+  value: JsonObject | unknown[],
+  resolveClientReference: (id: number) => unknown,
+): unknown {
+  if (Array.isArray(value) && value[0] === WIRE_TAG_SENTINEL) {
+    const typeId = value[1];
+    switch (typeId) {
+      case WIRE_TAG.HOST:
+        return value[2] as string;
+      case WIRE_TAG.FRAGMENT:
+        return Fragment;
+      case WIRE_TAG.CLIENT_REF:
+        return resolveClientReference(value[2] as number);
+      default:
+        throw new Error(`Unsupported compact element type id ${typeId as any}`);
+    }
+  }
+  return decodeType(value as JsonObject, resolveClientReference);
 }
 
 function decodeFromOutlinedEntries<Chunk>(
@@ -299,13 +322,17 @@ export function applyDirectPathReplacements<Chunk>(
   );
 }
 
-function isTaggedWireValue(value: unknown): value is Record<string, unknown> {
+function isCompactWireTagged(value: unknown): value is [string, number, ...unknown[]] {
   return (
-    value != null &&
-    typeof value === "object" &&
-    "$t" in value &&
-    typeof (value as Record<string, unknown>).$t === "string"
+    Array.isArray(value) &&
+    value.length >= 2 &&
+    value[0] === WIRE_TAG_SENTINEL &&
+    typeof value[1] === "number"
   );
+}
+
+function isTaggedWireValue(value: unknown): value is [string, number, ...unknown[]] {
+  return isCompactWireTagged(value);
 }
 
 /**
@@ -330,7 +357,6 @@ export function decodeWireValue(
     const reviver = (v: unknown): unknown => {
       if (!isTaggedWireValue(v)) return v;
       return decodeTaggedWireValue(
-        v.$t as string,
         v,
         resolveClientReference,
         resolveRowReference,
@@ -380,13 +406,50 @@ function decodeWireValueInternal(
       currentRowId,
     );
   }
+  if (value instanceof Map) {
+    const mapped = new Map<unknown, unknown>();
+    for (const [key, item] of value.entries()) {
+      mapped.set(
+        decodeWireValueInternal(
+          key,
+          resolveClientReference,
+          resolveRowReference,
+          callServer,
+          visitingRowRefs,
+          currentRowId,
+        ),
+        decodeWireValueInternal(
+          item,
+          resolveClientReference,
+          resolveRowReference,
+          callServer,
+          visitingRowRefs,
+          currentRowId,
+        ),
+      );
+    }
+    return mapped;
+  }
+  if (value instanceof Set) {
+    const decoded = new Set<unknown>();
+    for (const item of value) {
+      decoded.add(
+        decodeWireValueInternal(
+          item,
+          resolveClientReference,
+          resolveRowReference,
+          callServer,
+          visitingRowRefs,
+          currentRowId,
+        ),
+      );
+    }
+    return decoded;
+  }
 
-  const tagged = value as Record<string, unknown>;
-  const tag = tagged.$t;
-  if (typeof tag === "string") {
+  if (isCompactWireTagged(value)) {
     return decodeTaggedWireValue(
-      tag,
-      tagged,
+      value,
       resolveClientReference,
       resolveRowReference,
       callServer,
@@ -394,14 +457,8 @@ function decodeWireValueInternal(
       currentRowId,
     );
   }
-  return decodeWirePlainObjectValue(
-    tagged,
-    resolveClientReference,
-    resolveRowReference,
-    callServer,
-    visitingRowRefs,
-    currentRowId,
-  );
+
+  return value;
 }
 
 function decodeWireArrayValue(
@@ -423,30 +480,6 @@ function decodeWireArrayValue(
     );
   }
   return value;
-}
-
-function decodeWirePlainObjectValue(
-  value: Record<string, unknown>,
-  resolveClientReference: (id: number) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
-  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
-  visitingRowRefs: Set<string>,
-  currentRowId: number | undefined,
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  const keys = Object.keys(value);
-  for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-    result[key] = decodeWireValueInternal(
-      value[key],
-      resolveClientReference,
-      resolveRowReference,
-      callServer,
-      visitingRowRefs,
-      currentRowId,
-    );
-  }
-  return result;
 }
 
 function decodeWireRowReferenceValue(
@@ -488,71 +521,6 @@ function decodeWireRowReferenceValue(
   } finally {
     visitingRowRefs.delete(rowId);
   }
-}
-
-function decodeWireMapValue(
-  value: Record<string, unknown>,
-  resolveClientReference: (id: number) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
-  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
-  visitingRowRefs: Set<string>,
-  currentRowId: number | undefined,
-): Map<unknown, unknown> {
-  const entries = (value.v as unknown[]) ?? EMPTY_ARRAY;
-  if (!Array.isArray(entries)) {
-    return new Map();
-  }
-  const mapped = new Map<unknown, unknown>();
-  for (let i = 0; i < entries.length; i += 1) {
-    const tuple = entries[i] as unknown[];
-    mapped.set(
-      decodeWireValueInternal(
-        tuple[0],
-        resolveClientReference,
-        resolveRowReference,
-        callServer,
-        visitingRowRefs,
-        currentRowId,
-      ),
-      decodeWireValueInternal(
-        tuple[1],
-        resolveClientReference,
-        resolveRowReference,
-        callServer,
-        visitingRowRefs,
-        currentRowId,
-      ),
-    );
-  }
-  return mapped;
-}
-
-function decodeWireSetValue(
-  value: Record<string, unknown>,
-  resolveClientReference: (id: number) => unknown,
-  resolveRowReference: ((id: string) => unknown) | undefined,
-  callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
-  visitingRowRefs: Set<string>,
-  currentRowId: number | undefined,
-): Set<unknown> {
-  const items = (value.v as unknown[]) ?? EMPTY_ARRAY;
-  if (!Array.isArray(items)) {
-    return new Set();
-  }
-  const decoded = new Set<unknown>();
-  for (let i = 0; i < items.length; i += 1) {
-    decoded.add(
-      decodeWireValueInternal(
-        items[i],
-        resolveClientReference,
-        resolveRowReference,
-        callServer,
-        visitingRowRefs,
-        currentRowId,
-      ),
-    );
-  }
-  return decoded;
 }
 
 function decodeWireFormDataValue(
@@ -602,7 +570,7 @@ function decodeWireElementValue(
   ref: null;
   props: Record<string, unknown>;
 } {
-  const type = decodeType(value.ty as JsonObject, resolveClientReference);
+  const type = decodeWireType(value.ty as JsonObject | unknown[], resolveClientReference);
   const props = decodeWireValueInternal(
     value.props,
     resolveClientReference,
@@ -622,73 +590,60 @@ function decodeWireElementValue(
 }
 
 function decodeTaggedWireValue(
-  tag: string,
-  value: Record<string, unknown>,
+  value: [string, number, ...unknown[]],
   resolveClientReference: (id: number) => unknown,
   resolveRowReference: ((id: string) => unknown) | undefined,
   callServer: ((actionId: string, args: unknown[]) => Promise<unknown>) | undefined,
   visitingRowRefs: Set<string>,
   currentRowId: number | undefined,
 ): unknown {
-  switch (tag) {
-    case "rowRef":
+  const typeId = value[1];
+  const payload = value.slice(2);
+  switch (typeId) {
+    case WIRE_TAG.SEARCH:
+      return new URLSearchParams(payload[0] as string);
+    case WIRE_TAG.ROW_REF: {
+      const rowRef = { $t: "rowRef", id: payload[0] };
       return decodeWireRowReferenceValue(
-        value,
+        rowRef,
         resolveClientReference,
         resolveRowReference,
         callServer,
         visitingRowRefs,
         currentRowId,
       );
-    case "undef":
-      return undefined;
-    case "bigint":
-      return BigInt(value.v as string);
-    case "date":
-      return new Date(value.v as string);
-    case "search":
-      return new URLSearchParams(value.v as string);
-    case "map":
-      return decodeWireMapValue(
-        value,
-        resolveClientReference,
-        resolveRowReference,
-        callServer,
-        visitingRowRefs,
-        currentRowId,
-      );
-    case "set":
-      return decodeWireSetValue(
-        value,
-        resolveClientReference,
-        resolveRowReference,
-        callServer,
-        visitingRowRefs,
-        currentRowId,
-      );
-    case "formdata":
+    }
+    case WIRE_TAG.CLIENT_REF:
+      return resolveClientReference(payload[0] as number);
+    case WIRE_TAG.SERVER_REF:
+      return createServerReference(payload[0] as string, callServer);
+    case WIRE_TAG.FORMDATA: {
+      const formRef = { $t: "formdata", v: payload[0] };
       return decodeWireFormDataValue(
-        value,
+        formRef,
         resolveClientReference,
         resolveRowReference,
         callServer,
         visitingRowRefs,
         currentRowId,
       );
-    case "clientRef":
-      return resolveClientReference(value.id as number);
-    case "serverRef":
-      return createServerReference(value.id as string, callServer);
-    case "element":
+    }
+    case WIRE_TAG.ELEMENT: {
+      const elemRef = {
+        ty: payload[0],
+        props: payload[1],
+        key: payload[2],
+      };
       return decodeWireElementValue(
-        value,
+        elemRef,
         resolveClientReference,
         resolveRowReference,
         callServer,
         visitingRowRefs,
         currentRowId,
       );
+    }
     default:
-      throw new Error(`Unknown wire tag "${tag}"`);
+      throw new Error(`Unknown wire type id ${typeId}`);
   }
 }

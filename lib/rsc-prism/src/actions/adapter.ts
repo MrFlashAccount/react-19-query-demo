@@ -48,35 +48,13 @@ export const defaultFlightProtocolAdapter: FlightProtocolAdapter = {
 
   async encodeActionArgs(args) {
     const encoded = await encodeReply(args);
-    if (encoded instanceof FormData) {
-      return {
-        type: "formdata",
-        data: encoded,
-      };
-    }
-    return {
-      type: "string",
-      data: encoded as string,
-    };
+    return { type: "object", data: encoded };
   },
 
   decodeActionArgs(encoded, manifest) {
-    const body: FormData | string =
-      encoded.type === "formdata"
-        ? encoded.data instanceof FormData
-          ? encoded.data
-          : (() => {
-              const formData = new FormData();
-              for (const [key, value] of new URLSearchParams(encoded.data)) {
-                formData.append(key, value);
-              }
-              return formData;
-            })()
-        : encoded.data;
-
     const refTable = (globalThis as Record<string, unknown>)[CLIENT_REF_TABLE_GLOBAL_KEY] as
       | unknown[]
       | undefined;
-    return decodeReply(body, manifest, { refTable });
+    return decodeReply(encoded.data, manifest, { refTable });
   },
 };

@@ -6,7 +6,7 @@
  * encodeReply-style payloads. We avoid copying where safe to reduce allocations.
  */
 import { Fragment } from "react";
-import type { EmitBinaryRow, JsonObject, StreamEncodeContext } from "./types";
+import type { StreamEncodeContext } from "./types";
 import {
   isClientReference,
   isFlightWireString,
@@ -15,22 +15,23 @@ import {
   isServerReference,
   normalizeTypedArray,
 } from "./shared";
-import { REACT_FRAGMENT_SYMBOL } from "./constants";
+import { REACT_FRAGMENT_SYMBOL, WIRE_TAG, WIRE_TAG_SENTINEL } from "./constants";
 
 /** Prefixes '$' to strings that would otherwise be parsed as Flight refs, so they round-trip as plain strings. */
 export function escapeStringValue(str: string): string {
   return isFlightWireString(str) ? `$${str}` : str;
 }
 
-function encodeType(value: unknown): JsonObject {
+/** Compact wire format for element type (host, fragment, client ref). */
+function encodeWireType(value: unknown): unknown[] {
   if (typeof value === "string") {
-    return { $t: "host", v: value };
+    return [WIRE_TAG_SENTINEL, WIRE_TAG.HOST, value];
   }
   if (value === REACT_FRAGMENT_SYMBOL || value === Fragment) {
-    return { $t: "fragment" };
+    return [WIRE_TAG_SENTINEL, WIRE_TAG.FRAGMENT];
   }
   if (isClientReference(value)) {
-    return { $t: "client", id: value.$$refId };
+    return [WIRE_TAG_SENTINEL, WIRE_TAG.CLIENT_REF, value.$$refId];
   }
   throw new Error("Unsupported element type in minimal runtime.");
 }
@@ -211,10 +212,10 @@ export type WireEncodeOptions = {
 };
 
 function emitTaggedAndRecordPath(
-  tagged: { $t: string; [k: string]: unknown },
+  tagged: unknown[],
   path: (string | number)[],
   pushRevivePath?: (path: (string | number)[]) => void,
-): { $t: string; [k: string]: unknown } {
+): unknown[] {
   pushRevivePath?.(path);
   return tagged;
 }
@@ -226,13 +227,11 @@ function emitTaggedAndRecordPath(
  */
 function encodeWireValueImpl(
   value: unknown,
-  emitBinaryRow: EmitBinaryRow | null,
-  seen: WeakSet<object>,
   path: (string | number)[],
   pushRevivePath?: (path: (string | number)[]) => void,
 ): unknown {
   if (value === undefined) {
-    return emitTaggedAndRecordPath({ $t: "undef" }, path, pushRevivePath);
+    return undefined;
   }
   if (
     typeof value === "string" ||
@@ -243,140 +242,129 @@ function encodeWireValueImpl(
     return value;
   }
   if (typeof value === "bigint") {
-    return emitTaggedAndRecordPath({ $t: "bigint", v: value.toString() }, path, pushRevivePath);
+    return value;
   }
   if (typeof value === "symbol") {
-    throw new Error("Symbols are not supported by the minimal Flight runtime.");
+    throw new Error("Symbols can not be sent as values.");
   }
   if (typeof value === "function") {
     if (isClientReference(value)) {
-      return emitTaggedAndRecordPath({ $t: "clientRef", id: value.$$refId }, path, pushRevivePath);
+      return emitTaggedAndRecordPath(
+        [WIRE_TAG_SENTINEL, WIRE_TAG.CLIENT_REF, value.$$refId],
+        path,
+        pushRevivePath,
+      );
     }
     if (isServerReference(value)) {
-      return emitTaggedAndRecordPath({ $t: "serverRef", id: value.$$id }, path, pushRevivePath);
+      return emitTaggedAndRecordPath(
+        [WIRE_TAG_SENTINEL, WIRE_TAG.SERVER_REF, value.$$id],
+        path,
+        pushRevivePath,
+      );
     }
-    throw new Error("Functions are not supported by the minimal Flight runtime.");
-  }
 
-  if (seen.has(value as object)) {
-    throw new Error("Circular structures are not supported by the minimal Flight runtime.");
+    throw new Error(
+      `Only client and server references can be sent. If you want to send a function ${value.name}, you need to mark it either as a client or server reference.`,
+    );
   }
-  seen.add(value as object);
 
   if (value instanceof Date) {
-    return emitTaggedAndRecordPath({ $t: "date", v: value.toISOString() }, path, pushRevivePath);
+    return value;
   }
+
   if (value instanceof URLSearchParams) {
-    return emitTaggedAndRecordPath({ $t: "search", v: value.toString() }, path, pushRevivePath);
+    return value;
   }
+
   if (value instanceof FormData) {
-    const entries: Array<[string, unknown]> = [];
-    for (const [key, item] of value.entries()) {
-      if (
-        (typeof File !== "undefined" && item instanceof File) ||
-        (typeof Blob !== "undefined" && item instanceof Blob)
-      ) {
-        throw new Error(
-          "File and Blob FormData values are not supported by the minimal Flight runtime.",
-        );
-      }
-      entries.push([key, item]);
-    }
-    return emitTaggedAndRecordPath({ $t: "formdata", v: entries }, path, pushRevivePath);
+    return value;
   }
+
   if (value instanceof Map) {
-    const v = Array.from(value.entries()).map(([key, item], i) => [
-      encodeWireValueImpl(key, emitBinaryRow, seen, [...path, "v", i, 0], pushRevivePath),
-      encodeWireValueImpl(item, emitBinaryRow, seen, [...path, "v", i, 1], pushRevivePath),
-    ]);
-    return emitTaggedAndRecordPath({ $t: "map", v }, path, pushRevivePath);
+    const mapped = new Map<unknown, unknown>();
+    let i = 0;
+    for (const [key, item] of value.entries()) {
+      mapped.set(
+        encodeWireValueImpl(key, [...path, 2, i, 0], pushRevivePath),
+        encodeWireValueImpl(item, [...path, 2, i, 1], pushRevivePath),
+      );
+      i += 1;
+    }
+    return mapped;
   }
+
   if (value instanceof Set) {
-    const v = Array.from(value.values()).map((item, i) =>
-      encodeWireValueImpl(item, emitBinaryRow, seen, [...path, "v", i], pushRevivePath),
-    );
-    return emitTaggedAndRecordPath({ $t: "set", v }, path, pushRevivePath);
+    const decoded = new Set<unknown>();
+    let i = 0;
+    for (const item of value.values()) {
+      decoded.add(encodeWireValueImpl(item, [...path, 2, i], pushRevivePath));
+      i += 1;
+    }
+    return decoded;
   }
+
   if (value instanceof ArrayBuffer) {
-    if (emitBinaryRow != null) {
-      return emitTaggedAndRecordPath(
-        { $t: "rowRef", id: emitBinaryRow("ArrayBuffer", new Uint8Array(value)) },
-        path,
-        pushRevivePath,
-      );
-    }
-    throw new Error(
-      "Binary values are not supported in JSON wire mode. Use encodeWireValueWithBinaryRows/encodeReply.",
-    );
+    return value;
   }
+
   const typed = normalizeTypedArray(value);
+
   if (typed != null) {
-    if (emitBinaryRow != null) {
-      return emitTaggedAndRecordPath(
-        { $t: "rowRef", id: emitBinaryRow(typed.kind, typed.bytes) },
-        path,
-        pushRevivePath,
-      );
-    }
-    throw new Error(
-      "Binary values are not supported in JSON wire mode. Use encodeWireValueWithBinaryRows/encodeReply.",
-    );
+    return value;
   }
+
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i += 1) {
-      value[i] = encodeWireValueImpl(value[i], emitBinaryRow, seen, [...path, i], pushRevivePath);
+      value[i] = encodeWireValueImpl(value[i], [...path, i], pushRevivePath);
     }
     return value;
   }
   if (isReactElementLike(value)) {
     return emitTaggedAndRecordPath(
-      {
-        $t: "element",
-        ty: encodeType(value.type),
-        props: encodeWireValueImpl(
-          value.props,
-          emitBinaryRow,
-          seen,
-          [...path, "props"],
-          pushRevivePath,
-        ),
-        key: value.key,
-      },
+      [
+        WIRE_TAG_SENTINEL,
+        WIRE_TAG.ELEMENT,
+        encodeWireType(value.type),
+        encodeWireValueImpl(value.props, [...path, 2, "props"], pushRevivePath),
+        value.key,
+      ],
       path,
       pushRevivePath,
     );
   }
   if (isClientReference(value)) {
-    return emitTaggedAndRecordPath({ $t: "clientRef", id: value.$$refId }, path, pushRevivePath);
+    return emitTaggedAndRecordPath(
+      [WIRE_TAG_SENTINEL, WIRE_TAG.CLIENT_REF, value.$$refId],
+      path,
+      pushRevivePath,
+    );
   }
   if (isServerReference(value)) {
-    return emitTaggedAndRecordPath({ $t: "serverRef", id: value.$$id }, path, pushRevivePath);
+    return emitTaggedAndRecordPath(
+      [WIRE_TAG_SENTINEL, WIRE_TAG.SERVER_REF, value.$$id],
+      path,
+      pushRevivePath,
+    );
   }
   if (!isPlainObject(value)) {
-    throw new Error("Only plain objects are serializable by the minimal Flight runtime.");
+    throw new Error("Only plain objects can be sent as values.");
   }
 
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    result[key] = encodeWireValueImpl(item, emitBinaryRow, seen, [...path, key], pushRevivePath);
+    result[key] = encodeWireValueImpl(item, [...path, key], pushRevivePath);
   }
   return result;
 }
 
-export function encodeWireValue(
-  value: unknown,
-  seen: WeakSet<object> = new WeakSet(),
-  options?: WireEncodeOptions,
-): unknown {
-  return encodeWireValueImpl(value, null, seen, [], options?.pushRevivePath);
+export function encodeWireValue(value: unknown, options?: WireEncodeOptions): unknown {
+  return encodeWireValueImpl(value, [], options?.pushRevivePath);
 }
 
 /** Same as encodeWireValue but allows ArrayBuffer/TypedArray via emitBinaryRow callback. */
 export function encodeWireValueWithBinaryRows(
   value: unknown,
-  emitBinaryRow: EmitBinaryRow,
-  seen: WeakSet<object> = new WeakSet(),
   options?: WireEncodeOptions,
 ): unknown {
-  return encodeWireValueImpl(value, emitBinaryRow, seen, [], options?.pushRevivePath);
+  return encodeWireValueImpl(value, [], options?.pushRevivePath);
 }

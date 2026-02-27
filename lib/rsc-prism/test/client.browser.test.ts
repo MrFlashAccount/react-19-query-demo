@@ -48,13 +48,8 @@ describe("rsc client browser workflows", () => {
 
   it("encodes action args and supports fetch/call workflows", async () => {
     const encoded = await encodeActionArgs([1, "x"]);
-    if (encoded.type === "string") {
-      expect(encoded.data.length).toBeGreaterThan(0);
-    } else if (encoded.data instanceof FormData) {
-      expect(Array.from(encoded.data.entries()).length).toBeGreaterThan(0);
-    } else {
-      expect(encoded.data.length).toBeGreaterThan(0);
-    }
+    expect(encoded.type).toBe("object");
+    expect(encoded.data).toBeTruthy();
 
     const seenRequests: Array<{
       operation: string;

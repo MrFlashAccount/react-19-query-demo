@@ -40,12 +40,10 @@ export type ClientManifestMap = Record<string, ClientManifestEntry>;
 export type ClientManifest = string | ClientManifestMap;
 
 /**
- * Encoded action arguments for transfer
- * Actions are serialized differently based on whether they contain FormData
+ * Encoded action arguments for postMessage transfer.
+ * Structured-clone payload (Map, Set, Date, etc. pass through natively).
  */
-export type EncodedActionArgs =
-  | { type: "formdata"; data: FormData | string }
-  | { type: "string"; data: string };
+export type EncodedActionArgs = { type: "object"; data: unknown };
 
 /**
  * Server module exports - what a server component module provides

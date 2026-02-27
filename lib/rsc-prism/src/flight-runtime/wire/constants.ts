@@ -35,6 +35,21 @@ export const REVIVE_PATH_WILDCARD = -1;
 /** Shared empty array to avoid allocations in decode hot paths. */
 export const EMPTY_ARRAY = [] as const;
 
+/** Wire tagged value type IDs: compact [typeId, payload] instead of { $t, ... }. */
+export const WIRE_TAG = {
+  SEARCH: 3,
+  FORMDATA: 4,
+  ROW_REF: 7,
+  CLIENT_REF: 8,
+  SERVER_REF: 9,
+  ELEMENT: 10,
+  HOST: 11,
+  FRAGMENT: 12,
+} as const;
+
+/** Sentinel for compact wire format; first element of tagged arrays. Unlikely in normal data. */
+export const WIRE_TAG_SENTINEL = "\0";
+
 /** Flight row kind discriminants; numeric for compact wire format and fast switch dispatch. */
 export const ROW_MODEL = 0;
 export const ROW_BINARY = 1;
