@@ -194,7 +194,7 @@ function maybeDecodeElementTuple(value: unknown): unknown {
   const decoded = {
     $$typeof: REACT_ELEMENT_SYMBOL,
     type: value[1],
-    key: key == null ? null : String(key),
+    key,
     ref: null,
     props: props as Record<string, unknown>,
   };
