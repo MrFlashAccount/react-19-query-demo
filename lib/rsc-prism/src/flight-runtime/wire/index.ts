@@ -27,6 +27,7 @@ export {
   encodeWireValue,
   encodeWireValueWithBinaryRows,
 } from "./encode";
+export type { WireEncodeOptions } from "./encode";
 export {
   parseModelString,
   createModelReviver,

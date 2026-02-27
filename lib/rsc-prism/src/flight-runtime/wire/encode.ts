@@ -206,6 +206,19 @@ export function encodeStreamValue(value: unknown, context: StreamEncodeContext):
   return encodeStreamValueInternal(value, context);
 }
 
+export type WireEncodeOptions = {
+  pushRevivePath?: (path: (string | number)[]) => void;
+};
+
+function emitTaggedAndRecordPath(
+  tagged: { $t: string; [k: string]: unknown },
+  path: (string | number)[],
+  pushRevivePath?: (path: (string | number)[]) => void,
+): { $t: string; [k: string]: unknown } {
+  pushRevivePath?.(path);
+  return tagged;
+}
+
 /**
  * JSON wire encoding: produces { $t, v } tagged objects. Used for encodeReply
  * and action args. Binary requires emitBinaryRow; without it we throw to avoid
@@ -215,9 +228,11 @@ function encodeWireValueImpl(
   value: unknown,
   emitBinaryRow: EmitBinaryRow | null,
   seen: WeakSet<object>,
+  path: (string | number)[],
+  pushRevivePath?: (path: (string | number)[]) => void,
 ): unknown {
   if (value === undefined) {
-    return { $t: "undef" };
+    return emitTaggedAndRecordPath({ $t: "undef" }, path, pushRevivePath);
   }
   if (
     typeof value === "string" ||
@@ -228,17 +243,17 @@ function encodeWireValueImpl(
     return value;
   }
   if (typeof value === "bigint") {
-    return { $t: "bigint", v: value.toString() };
+    return emitTaggedAndRecordPath({ $t: "bigint", v: value.toString() }, path, pushRevivePath);
   }
   if (typeof value === "symbol") {
     throw new Error("Symbols are not supported by the minimal Flight runtime.");
   }
   if (typeof value === "function") {
     if (isClientReference(value)) {
-      return { $t: "clientRef", id: value.$$refId };
+      return emitTaggedAndRecordPath({ $t: "clientRef", id: value.$$refId }, path, pushRevivePath);
     }
     if (isServerReference(value)) {
-      return { $t: "serverRef", id: value.$$id };
+      return emitTaggedAndRecordPath({ $t: "serverRef", id: value.$$id }, path, pushRevivePath);
     }
     throw new Error("Functions are not supported by the minimal Flight runtime.");
   }
@@ -249,10 +264,10 @@ function encodeWireValueImpl(
   seen.add(value as object);
 
   if (value instanceof Date) {
-    return { $t: "date", v: value.toISOString() };
+    return emitTaggedAndRecordPath({ $t: "date", v: value.toISOString() }, path, pushRevivePath);
   }
   if (value instanceof URLSearchParams) {
-    return { $t: "search", v: value.toString() };
+    return emitTaggedAndRecordPath({ $t: "search", v: value.toString() }, path, pushRevivePath);
   }
   if (value instanceof FormData) {
     const entries: Array<[string, unknown]> = [];
@@ -267,26 +282,28 @@ function encodeWireValueImpl(
       }
       entries.push([key, item]);
     }
-    return { $t: "formdata", v: entries };
+    return emitTaggedAndRecordPath({ $t: "formdata", v: entries }, path, pushRevivePath);
   }
   if (value instanceof Map) {
-    return {
-      $t: "map",
-      v: Array.from(value.entries()).map(([key, item]) => [
-        encodeWireValueImpl(key, emitBinaryRow, seen),
-        encodeWireValueImpl(item, emitBinaryRow, seen),
-      ]),
-    };
+    const v = Array.from(value.entries()).map(([key, item], i) => [
+      encodeWireValueImpl(key, emitBinaryRow, seen, [...path, "v", i, 0], pushRevivePath),
+      encodeWireValueImpl(item, emitBinaryRow, seen, [...path, "v", i, 1], pushRevivePath),
+    ]);
+    return emitTaggedAndRecordPath({ $t: "map", v }, path, pushRevivePath);
   }
   if (value instanceof Set) {
-    return {
-      $t: "set",
-      v: Array.from(value.values()).map((item) => encodeWireValueImpl(item, emitBinaryRow, seen)),
-    };
+    const v = Array.from(value.values()).map((item, i) =>
+      encodeWireValueImpl(item, emitBinaryRow, seen, [...path, "v", i], pushRevivePath),
+    );
+    return emitTaggedAndRecordPath({ $t: "set", v }, path, pushRevivePath);
   }
   if (value instanceof ArrayBuffer) {
     if (emitBinaryRow != null) {
-      return { $t: "rowRef", id: emitBinaryRow("ArrayBuffer", new Uint8Array(value)) };
+      return emitTaggedAndRecordPath(
+        { $t: "rowRef", id: emitBinaryRow("ArrayBuffer", new Uint8Array(value)) },
+        path,
+        pushRevivePath,
+      );
     }
     throw new Error(
       "Binary values are not supported in JSON wire mode. Use encodeWireValueWithBinaryRows/encodeReply.",
@@ -295,7 +312,11 @@ function encodeWireValueImpl(
   const typed = normalizeTypedArray(value);
   if (typed != null) {
     if (emitBinaryRow != null) {
-      return { $t: "rowRef", id: emitBinaryRow(typed.kind, typed.bytes) };
+      return emitTaggedAndRecordPath(
+        { $t: "rowRef", id: emitBinaryRow(typed.kind, typed.bytes) },
+        path,
+        pushRevivePath,
+      );
     }
     throw new Error(
       "Binary values are not supported in JSON wire mode. Use encodeWireValueWithBinaryRows/encodeReply.",
@@ -303,23 +324,33 @@ function encodeWireValueImpl(
   }
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i += 1) {
-      value[i] = encodeWireValueImpl(value[i], emitBinaryRow, seen);
+      value[i] = encodeWireValueImpl(value[i], emitBinaryRow, seen, [...path, i], pushRevivePath);
     }
     return value;
   }
   if (isReactElementLike(value)) {
-    return {
-      $t: "element",
-      ty: encodeType(value.type),
-      props: encodeWireValueImpl(value.props, emitBinaryRow, seen),
-      key: value.key,
-    };
+    return emitTaggedAndRecordPath(
+      {
+        $t: "element",
+        ty: encodeType(value.type),
+        props: encodeWireValueImpl(
+          value.props,
+          emitBinaryRow,
+          seen,
+          [...path, "props"],
+          pushRevivePath,
+        ),
+        key: value.key,
+      },
+      path,
+      pushRevivePath,
+    );
   }
   if (isClientReference(value)) {
-    return { $t: "clientRef", id: value.$$refId };
+    return emitTaggedAndRecordPath({ $t: "clientRef", id: value.$$refId }, path, pushRevivePath);
   }
   if (isServerReference(value)) {
-    return { $t: "serverRef", id: value.$$id };
+    return emitTaggedAndRecordPath({ $t: "serverRef", id: value.$$id }, path, pushRevivePath);
   }
   if (!isPlainObject(value)) {
     throw new Error("Only plain objects are serializable by the minimal Flight runtime.");
@@ -327,13 +358,17 @@ function encodeWireValueImpl(
 
   const result: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
-    result[key] = encodeWireValueImpl(item, emitBinaryRow, seen);
+    result[key] = encodeWireValueImpl(item, emitBinaryRow, seen, [...path, key], pushRevivePath);
   }
   return result;
 }
 
-export function encodeWireValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
-  return encodeWireValueImpl(value, null, seen);
+export function encodeWireValue(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+  options?: WireEncodeOptions,
+): unknown {
+  return encodeWireValueImpl(value, null, seen, [], options?.pushRevivePath);
 }
 
 /** Same as encodeWireValue but allows ArrayBuffer/TypedArray via emitBinaryRow callback. */
@@ -341,6 +376,7 @@ export function encodeWireValueWithBinaryRows(
   value: unknown,
   emitBinaryRow: EmitBinaryRow,
   seen: WeakSet<object> = new WeakSet(),
+  options?: WireEncodeOptions,
 ): unknown {
-  return encodeWireValueImpl(value, emitBinaryRow, seen);
+  return encodeWireValueImpl(value, emitBinaryRow, seen, [], options?.pushRevivePath);
 }

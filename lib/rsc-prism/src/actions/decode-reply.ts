@@ -47,8 +47,10 @@ export async function decodeReply(
   }
   const parsed = JSON.parse(source);
   const refTable = options?.refTable;
+  const payload = parsed?.v != null && Array.isArray(parsed?.p) ? parsed.v : parsed;
+  const revivePaths = parsed?.v != null && Array.isArray(parsed?.p) ? parsed.p : undefined;
   return decodeWireValue(
-    parsed,
+    payload,
     (id: number) => {
       if (refTable == null) {
         throw new Error(
@@ -63,6 +65,6 @@ export async function decodeReply(
     },
     (id) => rowsById.get(id),
     undefined,
-    options,
+    { ...options, revivePaths },
   );
 }

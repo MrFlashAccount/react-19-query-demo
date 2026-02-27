@@ -224,3 +224,16 @@ export function applyDirectPathReplacements(
     applyFlatPathReplacements(root, revivePathsOrTree, reviver);
   }
 }
+
+/** Applies reviver at each path; used for wire format tagged value decode. */
+export function applyPathReplacements(
+  root: unknown,
+  paths: ReadonlyArray<(string | number)[]>,
+  reviver: (value: unknown) => unknown,
+): void {
+  for (const path of paths) {
+    if (path.length === 0) continue;
+    const value = getValueAtPath(root, path);
+    setValueAtPath(root, path, reviver(value));
+  }
+}

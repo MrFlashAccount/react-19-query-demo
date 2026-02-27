@@ -16,7 +16,10 @@ import {
   SERVER_REFERENCE_SYMBOL,
 } from "./constants";
 import { isFlightWireString, parseHexChunkId } from "./shared";
-import { applyDirectPathReplacements as applyPathTreeReplacements } from "./path-tree";
+import {
+  applyDirectPathReplacements as applyPathTreeReplacements,
+  applyPathReplacements,
+} from "./path-tree";
 
 function decodeType(value: JsonObject, resolveClientReference: (id: number) => unknown): unknown {
   switch (value.$t) {
@@ -296,10 +299,20 @@ export function applyDirectPathReplacements<Chunk>(
   );
 }
 
+function isTaggedWireValue(value: unknown): value is Record<string, unknown> {
+  return (
+    value != null &&
+    typeof value === "object" &&
+    "$t" in value &&
+    typeof (value as Record<string, unknown>).$t === "string"
+  );
+}
+
 /**
  * Decodes tagged JSON wire format (encodeReply output). resolveRowReference
  * resolves $t: "rowRef" to binary/outlined values. visitingRowRefs prevents
- * circular refs from causing infinite recursion.
+ * circular refs from causing infinite recursion. When revivePaths is provided,
+ * only visits those paths and decodes tagged values (avoids full traversal).
  */
 export function decodeWireValue(
   value: unknown,
@@ -308,8 +321,34 @@ export function decodeWireValue(
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>,
   traceOptions?: {
     currentRowId?: number;
+    revivePaths?: ReadonlyArray<(string | number)[]>;
   },
 ): unknown {
+  const revivePaths = traceOptions?.revivePaths;
+  if (revivePaths != null && revivePaths.length > 0) {
+    const visitingRowRefs = new Set<string>();
+    const reviver = (v: unknown): unknown => {
+      if (!isTaggedWireValue(v)) return v;
+      return decodeTaggedWireValue(
+        v.$t as string,
+        v,
+        resolveClientReference,
+        resolveRowReference,
+        callServer,
+        visitingRowRefs,
+        traceOptions?.currentRowId,
+      );
+    };
+    const hasRootPath = revivePaths.some((p) => p.length === 0);
+    const nonRootPaths = revivePaths.filter((p) => p.length > 0);
+    if (nonRootPaths.length > 0) {
+      applyPathReplacements(value, nonRootPaths, reviver);
+    }
+    if (hasRootPath && isTaggedWireValue(value)) {
+      return reviver(value);
+    }
+    return value;
+  }
   return decodeWireValueInternal(
     value,
     resolveClientReference,
