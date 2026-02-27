@@ -15,6 +15,7 @@ import {
   REVIVE_PATH_WILDCARD,
   traverseElementTuplesOnly,
 } from "../src/flight-runtime/wire";
+import { SERVER_REFERENCE_SYMBOL } from "../src/flight-runtime/wire/constants";
 const refTable = ["resolvedModDefault", "client:mod#Button"];
 function decodeWithResolver(value: unknown): unknown {
   return decodeWireValue(value, (id: number) => refTable[id] ?? `client:${id}`);
@@ -368,6 +369,31 @@ describe("flight wire compact stream format", () => {
     expect(revived.type).toBe("div");
     expect(revived.props.onClick).toBe("client:mod#Button");
     expect(revived.props.children).toBe("hello");
+  });
+
+  it("pushes server ref paths to revivePaths when encoding", () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const serverRef = {
+      $$typeof: SERVER_REFERENCE_SYMBOL,
+      $$id: "worker-actions#updateMovieRating",
+    };
+    const element = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: { onUpdateRating: serverRef, children: "hi" },
+    };
+
+    const revivePaths: (string | number)[][] = [];
+    encodeStreamValue(element, {
+      seen: new WeakSet<object>(),
+      emitBinaryRow: () => 1,
+      outlineValue: () => 1,
+      _path: [],
+      pushReviveValue: (_v, path) => revivePaths.push([...path]),
+    });
+
+    expect(revivePaths.some((p) => p[p.length - 1] === "onUpdateRating")).toBe(true);
   });
 
   it("applies wildcard revive paths across list children", () => {

@@ -42,13 +42,6 @@ function emitRevivable(context: StreamEncodeContext, encoded: string): string {
   return encoded;
 }
 
-function getMutablePath(context: StreamEncodeContext): (string | number)[] {
-  if (context._path == null) {
-    context._path = [];
-  }
-  return context._path;
-}
-
 /** Encodes element type (string, Fragment, client ref) to wire string; used for React element tuples. */
 export function encodeStreamType(value: unknown, context?: StreamEncodeContext): string {
   if (typeof value === "string") {
@@ -152,34 +145,17 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
     return emitRevivable(context, `${CHR.ELEMENT_PREFIX}${id.toString(16)}`);
   }
   if (Array.isArray(value)) {
-    const path = getMutablePath(context);
     for (let i = 0; i < value.length; i += 1) {
-      path.push(i);
-      try {
-        value[i] = encodeStreamValueInternal(value[i], context);
-      } finally {
-        path.pop();
-      }
+      value[i] = encodeStreamValueInternal(value[i], context);
     }
     return value;
   }
   if (isReactElementLike(value)) {
-    const path = getMutablePath(context);
-    path.push(1);
     let type: string;
-    try {
-      type = encodeStreamType(value.type, context);
-    } finally {
-      path.pop();
-    }
-    const key = value.key == null ? null : String(value.key);
-    path.push(3);
+    type = encodeStreamType(value.type, context);
+    const key = value.key;
     let props: unknown;
-    try {
-      props = encodeStreamValueInternal(value.props, context);
-    } finally {
-      path.pop();
-    }
+    props = encodeStreamValueInternal(value.props, context);
     return [CHR.ELEMENT_PREFIX, type, key, props];
   }
   if (isClientReference(value)) {
@@ -194,14 +170,8 @@ function encodeStreamValueInternal(value: unknown, context: StreamEncodeContext)
   }
 
   const result: Record<string, unknown> = {};
-  const path = getMutablePath(context);
   for (const [key, item] of Object.entries(value)) {
-    path.push(key);
-    try {
-      result[key] = encodeStreamValueInternal(item, context);
-    } finally {
-      path.pop();
-    }
+    result[key] = encodeStreamValueInternal(item, context);
   }
   return result;
 }

@@ -169,30 +169,26 @@ function applyPathTreeReplacements(
         continue;
       }
       for (let i = 0; i < target.length; i += 1) {
-        path.push(i);
         if (child === true) {
           const raw = target[i];
           if (typeof raw === "string" && isFlightWireString(raw)) {
             target[i] = reviver(raw);
           }
         } else {
-          applyPathTreeReplacements(root, child, path, reviver);
+          applyPathTreeReplacements(root, child, [...path, i], reviver);
         }
-        path.pop();
       }
       continue;
     }
 
-    path.push(key);
     if (child === true) {
       const raw = getValueAtPath(root, path);
       if (typeof raw === "string" && isFlightWireString(raw)) {
         setValueAtPath(root, path, reviver(raw));
       }
     } else {
-      applyPathTreeReplacements(root, child, path, reviver);
+      applyPathTreeReplacements(root, child, [...path, key], reviver);
     }
-    path.pop();
   }
 }
 

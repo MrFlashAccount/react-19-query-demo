@@ -63,8 +63,6 @@ export interface RSCRenderOptions {
   onError?: (error: unknown) => string | void;
   /** Abort signal for cancellation */
   signal?: AbortSignal;
-  /** When true (default), skip template compaction and path tree for faster encode. */
-  fastMode?: boolean;
 }
 
 /**

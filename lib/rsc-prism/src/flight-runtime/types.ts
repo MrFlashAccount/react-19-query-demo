@@ -11,6 +11,4 @@ export interface FlightClientOptions {
 export interface FlightServerRenderOptions {
   onError?: ((error: unknown) => string | void) | undefined;
   signal?: AbortSignal | undefined;
-  /** When true (default), skip template compaction and path tree building for 5–10x faster encode. */
-  fastMode?: boolean;
 }

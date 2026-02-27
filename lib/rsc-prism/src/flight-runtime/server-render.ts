@@ -63,7 +63,6 @@ export async function renderToRowEmitter(
         },
       },
       queueDeferred,
-      { fastMode: options?.fastMode !== false },
     );
 
     context.preparePathsForEncode();
