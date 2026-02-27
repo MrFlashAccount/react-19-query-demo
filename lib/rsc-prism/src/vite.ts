@@ -1102,7 +1102,9 @@ function buildWorkerProxyModuleCode(
   const getRefId = (referenceId: string): number => {
     const refId = refIdMap.get(referenceId);
     if (refId == null) {
-      throw new Error(`[rsc-prism] Missing refId for "${referenceId}" in worker proxy. Ensure ref table is built.`);
+      throw new Error(
+        `[rsc-prism] Missing refId for "${referenceId}" in worker proxy. Ensure ref table is built.`,
+      );
     }
     return refId;
   };
@@ -2435,7 +2437,9 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     const getRefId = (referenceId: string): number => {
       const refId = refIdMapCache?.get(referenceId);
       if (refId == null) {
-        throw new Error(`[rsc-prism] Missing refId for "${referenceId}". Ensure ref table is built before transforming server components.`);
+        throw new Error(
+          `[rsc-prism] Missing refId for "${referenceId}". Ensure ref table is built before transforming server components.`,
+        );
       }
       return refId;
     };

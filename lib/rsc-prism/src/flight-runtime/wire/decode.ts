@@ -18,10 +18,7 @@ import {
 import { isFlightWireString, parseHexChunkId } from "./shared";
 import { applyDirectPathReplacements as applyPathTreeReplacements } from "./path-tree";
 
-function decodeType(
-  value: JsonObject,
-  resolveClientReference: (id: number) => unknown,
-): unknown {
+function decodeType(value: JsonObject, resolveClientReference: (id: number) => unknown): unknown {
   switch (value.$t) {
     case "host":
       return value.v as string;
@@ -174,29 +171,6 @@ export function createModelReviver<Chunk>(
   };
 }
 
-/** Reviver for inline-revival format: __r index points into reviveValues array instead of inline string. */
-export function createModelReviverWithReviveValues<Chunk>(
-  context: StreamDecodeContext<Chunk>,
-  reviveValues: string[],
-): (this: unknown, key: string, value: unknown) => unknown {
-  return function modelReviver(_key: string, value: unknown): unknown {
-    if (
-      value != null &&
-      typeof value === "object" &&
-      "__r" in value &&
-      !Array.isArray(value) &&
-      typeof (value as { __r?: unknown }).__r === "number"
-    ) {
-      const idx = (value as { __r: number }).__r;
-      return parseModelString(context, reviveValues[idx]);
-    }
-    if (typeof value === "string") {
-      return parseModelString(context, value);
-    }
-    return maybeDecodeElementTuple(value);
-  };
-}
-
 function reviveModelValueTreeInternal<Chunk>(
   context: StreamDecodeContext<Chunk>,
   value: unknown,
@@ -245,60 +219,6 @@ export function reviveModelValueTree<Chunk>(
   parsedValue: unknown,
 ): unknown {
   return reviveModelValueTreeInternal(context, parsedValue);
-}
-
-function reviveModelValueTreeWithReviveValuesInternal<Chunk>(
-  context: StreamDecodeContext<Chunk>,
-  reviveValues: string[],
-  value: unknown,
-): unknown {
-  if (value instanceof Date || typeof value === "bigint") {
-    return value;
-  }
-  if (typeof value === "string") {
-    return parseModelString(context, value);
-  }
-  if (value instanceof Map) {
-    for (const [k, v] of value.entries()) {
-      value.delete(k);
-      value.set(
-        reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, k),
-        reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, v),
-      );
-    }
-    return value;
-  }
-  if (value instanceof Set) {
-    for (const item of value) {
-      value.delete(item);
-      value.add(reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, item));
-    }
-    return value;
-  }
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i += 1) {
-      value[i] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, value[i]);
-    }
-    return maybeDecodeElementTuple(value);
-  }
-  if (typeof value !== "object" || value == null) {
-    return value;
-  }
-  const source = value as Record<string, unknown>;
-  const keys = Object.keys(source);
-  for (let i = 0; i < keys.length; i += 1) {
-    const key = keys[i];
-    source[key] = reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, source[key]);
-  }
-  return source;
-}
-
-export function reviveModelValueTreeWithReviveValues<Chunk>(
-  context: StreamDecodeContext<Chunk>,
-  reviveValues: string[],
-  parsedValue: unknown,
-): unknown {
-  return reviveModelValueTreeWithReviveValuesInternal(context, reviveValues, parsedValue);
 }
 
 function traverseElementTuplesOnlyInternal<Chunk>(
@@ -364,15 +284,16 @@ export function createLazyChunkWrapper<Chunk>(
 
 /**
  * Applies revive paths to a parsed model: only revives strings at the given paths
- * instead of walking the whole tree. Reduces work when server sends a path tree
- * for large payloads with few revivable refs.
+ * instead of walking the whole tree.
  */
 export function applyDirectPathReplacements<Chunk>(
   root: unknown,
   revivePathsOrTree: import("./path-tree").RevivePathTree | ReadonlyArray<(string | number)[]>,
   context: StreamDecodeContext<Chunk>,
 ): void {
-  applyPathTreeReplacements(root, revivePathsOrTree, (raw) => parseModelString(context, raw));
+  applyPathTreeReplacements(root, revivePathsOrTree, (raw) =>
+    parseModelString(context, raw as string),
+  );
 }
 
 /**

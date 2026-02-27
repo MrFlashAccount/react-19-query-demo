@@ -30,9 +30,7 @@ export {
 export {
   parseModelString,
   createModelReviver,
-  createModelReviverWithReviveValues,
   reviveModelValueTree,
-  reviveModelValueTreeWithReviveValues,
   traverseElementTuplesOnly,
   createLazyChunkWrapper,
   createServerReference,
