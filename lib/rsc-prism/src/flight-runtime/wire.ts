@@ -29,9 +29,6 @@ export {
   createServerReference,
   applyDirectPathReplacements,
   decodeWireValue,
-  pathsToTree,
-  pushPathToTree,
-  finalizePathTree,
   flightModelRow,
   flightMetadataRow,
   flightBinaryRow,
@@ -39,8 +36,6 @@ export {
   flightErrorRow,
 } from "./wire/index";
 export type {
-  RevivePathTree,
-  MutablePathTree,
   StreamEncodeContext,
   StreamDecodeContext,
   FlightRowMessage,

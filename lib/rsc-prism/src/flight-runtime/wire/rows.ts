@@ -5,7 +5,6 @@
  * without copying. Other rows are plain objects for JSON serialization.
  */
 import type { FlightRowMessage, FlightTemplateRowShape } from "./types";
-import type { RevivePathTree } from "./path-tree";
 import { ROW_BINARY, ROW_DONE, ROW_ERROR, ROW_METADATA, ROW_MODEL } from "./constants";
 import { binaryWireTagFromKind } from "./binary";
 
@@ -28,7 +27,7 @@ export function flightModelRow(id: number, value: unknown): FlightRowMessage {
 
 export function flightMetadataRow(
   id: number,
-  revivePaths: RevivePathTree | ReadonlyArray<(string | number)[]>,
+  revivePaths: ReadonlyArray<(string | number)[]>,
   templates?: FlightTemplateRowShape[],
 ): FlightRowMessage {
   return templates != null && templates.length > 0

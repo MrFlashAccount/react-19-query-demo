@@ -7,7 +7,6 @@ import {
   decodeBinaryWireRow,
   type FlightRowMessage,
   type FlightTemplateRowShape,
-  type RevivePathTree,
   reviveModelValueTree,
   REACT_LAZY_SYMBOL,
   ROW_BINARY,
@@ -15,7 +14,6 @@ import {
   ROW_ERROR,
   ROW_METADATA,
   ROW_MODEL,
-  traverseElementTuplesOnly,
 } from "./wire";
 
 const CHUNK_PENDING = 0;
@@ -47,7 +45,7 @@ interface FlightChunk<T = unknown> {
 
 interface FlightResponse {
   chunks: Map<number, FlightChunk<any>>;
-  revivePathsByRowId: Map<number, RevivePathTree | ReadonlyArray<(string | number)[]>>;
+  revivePathsByRowId: Map<number, ReadonlyArray<(string | number)[]>>;
   templatesByRowId: Map<number, FlightTemplateRowShape[]>;
   resolveClientReference: (id: number) => unknown;
   callServer?: (actionId: string, args: unknown[]) => Promise<unknown>;
@@ -335,7 +333,7 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     if (revivePaths != null && revivePaths.length > 0) {
       const root = expandedRoot;
       applyDirectPathReplacements(root, revivePaths, decodeContext);
-      revived = traverseElementTuplesOnly(decodeContext, root) as T;
+      revived = root as T;
     } else {
       revived = reviveModelValueTree(decodeContext, expandedRoot) as T;
     }

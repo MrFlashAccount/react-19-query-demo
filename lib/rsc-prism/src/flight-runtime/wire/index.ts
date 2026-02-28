@@ -38,8 +38,6 @@ export {
   applyDirectPathReplacements,
   decodeWireValue,
 } from "./decode";
-export { pathsToTree, pushPathToTree, finalizePathTree } from "./path-tree";
-export type { RevivePathTree, MutablePathTree } from "./path-tree";
 export {
   flightModelRow,
   flightMetadataRow,

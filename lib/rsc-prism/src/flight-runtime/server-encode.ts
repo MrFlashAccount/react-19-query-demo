@@ -4,12 +4,7 @@
  * Handles template compaction, encode context, and server node encoding.
  */
 
-import type {
-  FlightRowMessage,
-  FlightTemplateRowShape,
-  RevivePathTree,
-  StreamEncodeContext,
-} from "./wire";
+import type { FlightRowMessage, FlightTemplateRowShape, StreamEncodeContext } from "./wire";
 import { binaryWireTagFromKind, encodeStreamType, encodeStreamValue } from "./wire";
 import { CHR, REACT_FRAGMENT_SYMBOL } from "./wire/constants";
 import { isClientReference, isReactElementLike } from "./wire/shared";
@@ -46,7 +41,7 @@ export interface RenderSink {
   emitModelRow: (id: number, value: unknown) => void;
   emitMetadataRow: (
     id: number,
-    revivePaths: RevivePathTree | ReadonlyArray<(string | number)[]>,
+    revivePaths: ReadonlyArray<(string | number)[]>,
     templates?: FlightTemplateRowShape[],
   ) => void;
   emitBinaryRow: (id: number, kind: string, bytes: Uint8Array) => void;
@@ -229,24 +224,31 @@ export function createEncodeContext(
       return id;
     },
     outlineValue: (value) => {
+      const callerPath = context.streamEncodeContext._path;
       const key = outlineValueKey(value);
       const existing = outlinedByValue.get(key);
       if (existing != null) return existing;
       const id = nextRowId;
       nextRowId += 1;
       outlinedByValue.set(key, id);
-      queueDeferred(
-        (async () => {
-          context.preparePathsForEncode();
-          const encoded = encodeServerNode(value, context, []);
-          if (isThenable(encoded)) {
-            context.emitRow(id, await encoded);
-            return;
-          }
-          context.emitRow(id, encoded);
-        })(),
-      );
-      return id;
+      try {
+        queueDeferred(
+          (async () => {
+            context.preparePathsForEncode();
+            const encoded = encodeServerNode(value, context, []);
+            if (isThenable(encoded)) {
+              context.emitRow(id, await encoded);
+              return;
+            }
+            context.emitRow(id, encoded);
+          })(),
+        );
+        return id;
+      } finally {
+        // outline row encode can start inline before first await; restore caller path so
+        // current row revive-path collection keeps original nesting.
+        context.streamEncodeContext._path = callerPath;
+      }
     },
     streamEncodeContext: {
       outlineValue: (value) => context.outlineValue(value),

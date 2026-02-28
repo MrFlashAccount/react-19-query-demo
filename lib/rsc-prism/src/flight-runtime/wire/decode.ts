@@ -331,12 +331,10 @@ export function createLazyChunkWrapper<Chunk>(
  */
 export function applyDirectPathReplacements<Chunk>(
   root: unknown,
-  revivePathsOrTree: import("./path-tree").RevivePathTree | ReadonlyArray<(string | number)[]>,
+  revivePaths: ReadonlyArray<(string | number)[]>,
   context: StreamDecodeContext<Chunk>,
 ): void {
-  applyPathTreeReplacements(root, revivePathsOrTree, (raw) =>
-    parseModelString(context, raw as string),
-  );
+  applyPathTreeReplacements(root, revivePaths, (raw) => parseModelString(context, raw));
 }
 
 function isCompactWireTagged(value: unknown): value is [string, number, ...unknown[]] {

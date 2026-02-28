@@ -5,7 +5,6 @@
  * optional callbacks use explicit undefined checks rather than optional chaining.
  */
 import { ROW_BINARY, ROW_DONE, ROW_ERROR, ROW_METADATA, ROW_MODEL } from "./constants";
-import type { RevivePathTree } from "./path-tree";
 
 export type JsonObject = Record<string, unknown>;
 
@@ -56,6 +55,6 @@ export type FlightRowMessage =
   | {
       k: typeof ROW_METADATA;
       id: number;
-      revivePaths: RevivePathTree | ReadonlyArray<(string | number)[]>;
+      revivePaths: ReadonlyArray<(string | number)[]>;
       templates?: FlightTemplateRowShape[];
     };

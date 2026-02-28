@@ -5,7 +5,7 @@ import { encodeReply, decodeReply } from "../src/actions";
 import { renderToRowEmitter } from "../src/flight-runtime/server";
 import { ROW_BINARY, ROW_DONE, ROW_METADATA, ROW_MODEL } from "../src/flight-runtime/wire";
 import type { FlightRowMessage } from "../src/flight-runtime/wire";
-import { CHR } from "../src/flight-runtime/wire/constants";
+import { CHR, SERVER_REFERENCE_SYMBOL } from "../src/flight-runtime/wire/constants";
 
 describe("flight runtime server row emitter behavior", () => {
   it("emits deferred rows and resolves", async () => {
@@ -87,7 +87,7 @@ describe("flight runtime server row emitter behavior", () => {
     expect(Array.isArray(metadataRow?.revivePaths)).toBe(true);
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
     expect(modelRow).toBeDefined();
-    expect(JSON.stringify((modelRow as { v: unknown }).v)).toContain(`${CHR.ELEMENT_PREFIX},"div"`);
+    expect(JSON.stringify((modelRow as { v: unknown }).v)).toContain(`"${CHR.ELEMENT_PREFIX}","div"`);
   });
 
   it("emits metadata row before model row when using renderToRowEmitter", async () => {
@@ -121,6 +121,44 @@ describe("flight runtime server row emitter behavior", () => {
     const metadataIdx = rows.indexOf(metadataRow!);
     const modelIdx = rows.indexOf(modelRow!);
     expect(metadataIdx).toBeLessThan(modelIdx);
+  });
+
+  it("does not record empty revive path for nested server refs", async () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const root = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "section",
+      key: null,
+      props: {
+        children: {
+          $$typeof: REACT_ELEMENT_SYMBOL,
+          type: "button",
+          key: null,
+          props: {
+            onUpdateRating: {
+              $$typeof: SERVER_REFERENCE_SYMBOL,
+              $$id: "movie#update",
+            },
+          },
+        },
+      },
+    } as ReactNode;
+
+    const rows: FlightRowMessage[] = [];
+    await renderToRowEmitter(root, null, (row) => rows.push(row));
+
+    const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 0) as
+      | { revivePaths: (string | number)[][] }
+      | undefined;
+
+    expect(metadataRow).toBeDefined();
+    expect(metadataRow!.revivePaths.length).toBeGreaterThan(0);
+    expect(metadataRow!.revivePaths.some((path) => path.length === 0)).toBe(false);
+    expect(
+      metadataRow!.revivePaths.some(
+        (path) => path.length > 0 && path[path.length - 1] === "onUpdateRating",
+      ),
+    ).toBe(true);
   });
 
   it("skips template metadata in fast mode (default)", async () => {
