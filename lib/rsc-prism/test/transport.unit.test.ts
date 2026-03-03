@@ -535,6 +535,42 @@ describe("transport", () => {
     expect(postMessage.mock.calls[0]?.[1]).toEqual(expect.any(Array));
   });
 
+  it("worker row message handler flushes rows per microtask chunk", async () => {
+    const postMessage = vi.fn();
+    const onMessage = createWorkerRowTransportMessageHandler(async (_request, emit) => {
+      emit(flightModelRow(0, "$1"));
+      await Promise.resolve();
+      emit(flightModelRow(1, "resolved"));
+      emit(flightDoneRow());
+    });
+
+    await onMessage({
+      data: {
+        type: "rsc.transport.request",
+        id: "abc",
+        operation: "fetch",
+        componentId: "mod#Comp",
+      },
+      currentTarget: { postMessage },
+    } as unknown as MessageEvent<unknown>);
+
+    expect(postMessage.mock.calls).toHaveLength(2);
+    expect(postMessage.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        type: "rsc.transport.response.row",
+        id: "abc",
+        rows: [flightModelRow(0, "$1")],
+      }),
+    );
+    expect(postMessage.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        type: "rsc.transport.response.row",
+        id: "abc",
+        rows: [flightModelRow(1, "resolved"), flightDoneRow()],
+      }),
+    );
+  });
+
   it("worker row message handler includes action refresh batch metadata", async () => {
     const postMessage = vi.fn();
     const onMessage = createWorkerRowTransportMessageHandler(async (_request, emit, controls) => {

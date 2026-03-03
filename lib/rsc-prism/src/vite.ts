@@ -1388,8 +1388,11 @@ async function collectMainThreadModules(
   directives: Set<string>,
   mapModuleId: (absolutePath: string) => string,
   additionalModulePaths: Set<string> = new Set<string>(),
+  options: { experimentalComponentLevelDirectives?: boolean } = {},
 ): Promise<MainThreadModuleEntry[]> {
   const collected: MainThreadModuleEntry[] = [];
+  const experimentalComponentLevelDirectives =
+    options.experimentalComponentLevelDirectives === true;
 
   async function visit(directory: string): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true });
@@ -1410,17 +1413,44 @@ async function collectMainThreadModules(
 
       const code = await readFile(absolutePath, "utf8");
       const ast = parseModule(code, absolutePath);
+      const moduleId = mapModuleId(absolutePath);
+      const workerComponents = discoverWorkerComponents(ast, code, moduleId, {
+        experimentalComponentLevelDirectives,
+      });
+      const aggregateWorkerComponentSource = workerComponents
+        .map((component) => code.slice(component.sourceStart, component.sourceEnd))
+        .join("\n");
+      const localMainComponentNames = collectReferencedTopLevelMainComponentNames(
+        ast,
+        workerComponents,
+        aggregateWorkerComponentSource,
+      );
       const shouldIncludeByDirective =
         sourceContainsAnyDirectiveLiteral(code, directives) && hasDirective(ast, directives);
       const shouldIncludeByInference = additionalModulePaths.has(normalizePath(absolutePath));
-      if (!shouldIncludeByDirective && !shouldIncludeByInference) {
+      const shouldIncludeBySyntheticClientExports = localMainComponentNames.length > 0;
+      if (
+        !shouldIncludeByDirective &&
+        !shouldIncludeByInference &&
+        !shouldIncludeBySyntheticClientExports
+      ) {
         continue;
       }
 
+      const exportsInfo = collectRuntimeExports(ast, absolutePath, {
+        experimentalComponentLevelDirectives,
+      });
+      for (const localName of localMainComponentNames) {
+        exportsInfo.named.push(buildLocalMainComponentExportName(localName));
+      }
+      exportsInfo.named = dedupeItems(exportsInfo.named).sort((left, right) =>
+        left.localeCompare(right),
+      );
+
       collected.push({
-        moduleId: mapModuleId(absolutePath),
+        moduleId,
         importPath: `/${normalizePath(path.relative(root, absolutePath))}`,
-        exportsInfo: collectRuntimeExports(ast, absolutePath),
+        exportsInfo,
       });
     }
   }
@@ -2023,6 +2053,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
       mainDirectives,
       mapModuleId,
       inferredClientModulePaths,
+      { experimentalComponentLevelDirectives },
     );
     const map = new Map<string, number>();
     let refId = 0;
@@ -2433,23 +2464,15 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     const realImportsBySource = new Map<string, string[]>();
     const clientRefLines: string[] = [];
     const actionRefLines: string[] = [];
+    const pendingClientRefs: Array<{ localName: string; referenceId: string }> = [];
 
-    const getRefId = (referenceId: string): number => {
-      const refId = refIdMapCache?.get(referenceId);
-      if (refId == null) {
-        throw new Error(
-          `[rsc-prism] Missing refId for "${referenceId}". Ensure ref table is built before transforming server components.`,
-        );
-      }
-      return refId;
-    };
     if (localMainComponentNames.length > 0) {
       inferredClientModules.add(normalizePath(absolutePath));
       for (const localName of localMainComponentNames) {
-        const referenceId = `${moduleId}#${buildLocalMainComponentExportName(localName)}`;
-        clientRefLines.push(
-          `const ${localName} = createClientRef(${JSON.stringify(referenceId)}, ${getRefId(referenceId)});`,
-        );
+        pendingClientRefs.push({
+          localName,
+          referenceId: `${moduleId}#${buildLocalMainComponentExportName(localName)}`,
+        });
       }
     }
 
@@ -2491,10 +2514,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         if (importBinding.resolvedAbsolutePath != null) {
           inferredClientModules.add(normalizePath(importBinding.resolvedAbsolutePath));
         }
-        const referenceId = `${importedModuleId}#${importBinding.importedName}`;
-        clientRefLines.push(
-          `const ${importBinding.localName} = createClientRef(${JSON.stringify(referenceId)}, ${getRefId(referenceId)});`,
-        );
+        pendingClientRefs.push({
+          localName: importBinding.localName,
+          referenceId: `${importedModuleId}#${importBinding.importedName}`,
+        });
         continue;
       }
 
@@ -2526,6 +2549,42 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         importFragments.push(`* as ${importBinding.localName}`);
       }
       realImportsBySource.set(importSource, importFragments);
+    }
+
+    const getRefId = async (referenceId: string): Promise<number> => {
+      let refId = refIdMapCache?.get(referenceId);
+      if (refId != null) {
+        return refId;
+      }
+
+      let hasNewInferredModules = false;
+      for (const inferredModule of inferredClientModules) {
+        if (!inferredClientModulePaths.has(inferredModule)) {
+          inferredClientModulePaths.add(inferredModule);
+          hasNewInferredModules = true;
+        }
+      }
+      if (hasNewInferredModules) {
+        refIdMapCache = null;
+      }
+      if (hasNewInferredModules || refIdMapCache == null) {
+        await ensureRefIdMap();
+      }
+
+      refId = refIdMapCache?.get(referenceId);
+      if (refId == null) {
+        throw new Error(
+          `[rsc-prism] Missing refId for "${referenceId}". Ensure ref table is built before transforming server components.`,
+        );
+      }
+      return refId;
+    };
+
+    for (const pendingClientRef of pendingClientRefs) {
+      const refId = await getRefId(pendingClientRef.referenceId);
+      clientRefLines.push(
+        `const ${pendingClientRef.localName} = createClientRef(${JSON.stringify(pendingClientRef.referenceId)}, ${refId});`,
+      );
     }
 
     const importLines: string[] = [];
@@ -3151,6 +3210,7 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
         mainDirectives,
         mapModuleId,
         inferredClientModulePaths,
+        { experimentalComponentLevelDirectives },
       );
       return buildMainVirtualModuleCode(modules, {
         includeWorkerBootstrapImport: workerRuntimeEnabled,
@@ -3425,9 +3485,7 @@ export function rscPrism(options: RscPrismVitePluginOptions = {}): Plugin {
   });
 }
 
-export function rscPrismWorker(
-  options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {},
-): Plugin {
+function rscPrismWorker(options: Omit<RscPrismVitePluginOptions, "workerRuntime"> = {}): Plugin {
   return createRscPrismPlugin({
     ...options,
     mode: "worker",

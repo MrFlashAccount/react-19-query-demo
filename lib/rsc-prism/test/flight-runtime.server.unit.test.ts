@@ -87,7 +87,9 @@ describe("flight runtime server row emitter behavior", () => {
     expect(Array.isArray(metadataRow?.revivePaths)).toBe(true);
     const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 0);
     expect(modelRow).toBeDefined();
-    expect(JSON.stringify((modelRow as { v: unknown }).v)).toContain(`"${CHR.ELEMENT_PREFIX}","div"`);
+    expect(JSON.stringify((modelRow as { v: unknown }).v)).toContain(
+      `"${CHR.ELEMENT_PREFIX}","div"`,
+    );
   });
 
   it("emits metadata row before model row when using renderToRowEmitter", async () => {
@@ -159,6 +161,44 @@ describe("flight runtime server row emitter behavior", () => {
         (path) => path.length > 0 && path[path.length - 1] === "onUpdateRating",
       ),
     ).toBe(true);
+  });
+
+  it("filters empty root revive path when model row value is not a root string", async () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const root = Promise.resolve({
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: {
+        children: Array.from({ length: 30 }, (_v, i) => ({
+          $$typeof: REACT_ELEMENT_SYMBOL,
+          type: "button",
+          key: String(i),
+          props: {
+            onUpdateRating: {
+              $$typeof: SERVER_REFERENCE_SYMBOL,
+              $$id: "movie#update",
+            },
+            children: "rate",
+          },
+        })),
+      },
+    }) as Promise<ReactNode>;
+
+    const rows: FlightRowMessage[] = [];
+    await renderToRowEmitter(root, null, (row) => rows.push(row));
+
+    const metadataRow = rows.find((r) => r.k === ROW_METADATA && r.id === 1) as
+      | { revivePaths: (string | number)[][] }
+      | undefined;
+    const modelRow = rows.find((r) => r.k === ROW_MODEL && r.id === 1) as
+      | { v: unknown }
+      | undefined;
+
+    expect(metadataRow).toBeDefined();
+    expect(modelRow).toBeDefined();
+    expect(typeof modelRow!.v).not.toBe("string");
+    expect(metadataRow!.revivePaths.some((path) => path.length === 0)).toBe(false);
   });
 
   it("skips template metadata in fast mode (default)", async () => {
@@ -267,6 +307,47 @@ describe("flight runtime server row emitter behavior", () => {
     const rows: FlightRowMessage[] = [];
     await renderToRowEmitter(root, null, (row) => rows.push(row), {});
     expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
+  });
+
+  it("does not inline-await async function component output", async () => {
+    const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
+    const state: { resolve?: (value: ReactNode) => void } = {};
+    const AsyncView = () =>
+      new Promise<ReactNode>((resolve) => {
+        state.resolve = resolve;
+      });
+    const root = {
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: AsyncView,
+      key: null,
+      props: {},
+    } as ReactNode;
+
+    const rows: FlightRowMessage[] = [];
+    const renderPromise = renderToRowEmitter(root, null, (row) => rows.push(row));
+
+    await Promise.resolve();
+    const rootModel = rows.find((r) => r.k === ROW_MODEL && r.id === 0) as
+      | { v: unknown }
+      | undefined;
+    expect(rootModel).toBeDefined();
+    expect(rootModel!.v).toBe("$1");
+
+    state.resolve?.({
+      $$typeof: REACT_ELEMENT_SYMBOL,
+      type: "div",
+      key: null,
+      props: { children: "resolved" },
+    } as ReactNode);
+
+    await renderPromise;
+
+    const deferredModel = rows.find((r) => r.k === ROW_MODEL && r.id === 1) as
+      | { v: unknown }
+      | undefined;
+    expect(deferredModel).toBeDefined();
+    expect(JSON.stringify(deferredModel!.v)).toContain(`"${CHR.ELEMENT_PREFIX}","div"`);
     expect(rows.some((r) => r.k === ROW_DONE)).toBe(true);
   });
 });

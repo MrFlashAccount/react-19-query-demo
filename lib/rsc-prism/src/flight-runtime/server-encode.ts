@@ -93,14 +93,6 @@ function encodeServerNode(
   const type = value.type;
   if (typeof type === "function" && !isClientReference(type)) {
     const renderedValue = type(value.props);
-    if (isThenable(renderedValue)) {
-      return renderedValue.then(
-        (resolvedValue) => encodeServerNode(resolvedValue, context, path),
-        (error) => {
-          throw error;
-        },
-      );
-    }
     return encodeServerNode(renderedValue, context, path);
   }
   if (type === REACT_FRAGMENT_SYMBOL) {
@@ -207,9 +199,18 @@ export function createEncodeContext(
     emitRow: (id, value) => {
       if (sink.settled) return;
 
+      console.log("emitRow", id, value);
+
       const paths = currentRevivePathsRef.current;
       if (paths.length > 0) {
-        sink.emitMetadataRow(id, paths);
+        if (typeof value === "string") {
+          sink.emitMetadataRow(id, paths);
+        } else {
+          const nonRootPaths = paths.filter((path) => path.length > 0);
+          if (nonRootPaths.length > 0) {
+            sink.emitMetadataRow(id, nonRootPaths);
+          }
+        }
       }
 
       sink.emitModelRow(id, value);
@@ -224,31 +225,24 @@ export function createEncodeContext(
       return id;
     },
     outlineValue: (value) => {
-      const callerPath = context.streamEncodeContext._path;
       const key = outlineValueKey(value);
       const existing = outlinedByValue.get(key);
       if (existing != null) return existing;
       const id = nextRowId;
       nextRowId += 1;
       outlinedByValue.set(key, id);
-      try {
-        queueDeferred(
-          (async () => {
-            context.preparePathsForEncode();
-            const encoded = encodeServerNode(value, context, []);
-            if (isThenable(encoded)) {
-              context.emitRow(id, await encoded);
-              return;
-            }
-            context.emitRow(id, encoded);
-          })(),
-        );
-        return id;
-      } finally {
-        // outline row encode can start inline before first await; restore caller path so
-        // current row revive-path collection keeps original nesting.
-        context.streamEncodeContext._path = callerPath;
-      }
+      queueDeferred(
+        Promise.resolve().then(async () => {
+          context.preparePathsForEncode();
+          const encoded = encodeServerNode(value, context, []);
+          if (isThenable(encoded)) {
+            context.emitRow(id, await encoded);
+            return;
+          }
+          context.emitRow(id, encoded);
+        }),
+      );
+      return id;
     },
     streamEncodeContext: {
       outlineValue: (value) => context.outlineValue(value),

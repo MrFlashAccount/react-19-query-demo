@@ -43,6 +43,7 @@ export function createWorkerRowTransportMessageHandler(
     const pendingTransfer: Transferable[] = [];
     let pendingActionRefreshBatch: WorkerActionRefreshBatchMessage | null = null;
     let closed = false;
+    let flushQueued = false;
     const flush = (): void => {
       if (pendingRows.length === 0 && pendingActionRefreshBatch == null) {
         return;
@@ -62,6 +63,16 @@ export function createWorkerRowTransportMessageHandler(
           : pendingTransfer.splice(0, pendingTransfer.length);
       replyTarget.postMessage(message, transfer);
     };
+    const queueFlush = (): void => {
+      if (flushQueued || closed) {
+        return;
+      }
+      flushQueued = true;
+      queueMicrotask(() => {
+        flushQueued = false;
+        flush();
+      });
+    };
     const emit = (row: FlightRowMessage, transfer?: Transferable[]): void => {
       if (closed) {
         return;
@@ -72,11 +83,15 @@ export function createWorkerRowTransportMessageHandler(
       }
       if (row.k === ROW_DONE || row.k === ROW_ERROR) {
         closed = true;
+        flushQueued = false;
         flush();
+        return;
       }
+      queueFlush();
     };
     const setActionRefreshBatch = (batch: WorkerActionRefreshBatchMessage): void => {
       pendingActionRefreshBatch = batch;
+      queueFlush();
     };
 
     try {

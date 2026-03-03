@@ -334,6 +334,11 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
       const root = expandedRoot;
       applyDirectPathReplacements(root, revivePaths, decodeContext);
       revived = root as T;
+      console.log("revived", {
+        revived: revived,
+        root: root,
+        revivePaths,
+      });
     } else {
       revived = reviveModelValueTree(decodeContext, expandedRoot) as T;
     }
@@ -377,6 +382,7 @@ function readChunk<T>(response: FlightResponse, chunk: FlightChunk<T>): T {
 }
 
 function resolveModelChunk(response: FlightResponse, id: number, model: unknown): void {
+  console.log("resolveModelChunk", { id, model });
   const chunk = getChunk(response, id);
   chunk.status = CHUNK_RESOLVED_MODEL;
   chunk.value = model;

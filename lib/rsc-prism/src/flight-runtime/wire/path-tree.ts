@@ -39,6 +39,8 @@ function applyFlatPathReplacements(
     if (path.length === 0) continue;
     setValueAtPath(root, path, reviver);
   }
+
+  console.log("applyFlatPathReplacements", { root, paths });
 }
 
 /** Walks the tree and revives only $X strings at leaf paths; skips the rest of the model. */
