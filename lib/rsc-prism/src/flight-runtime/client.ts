@@ -646,9 +646,6 @@ export function createFromRowEmitter<T>(options?: FlightClientOptions): {
           if (row.revivePaths.length > 0) {
             response.revivePathsByRowId.set(row.id, row.revivePaths);
           }
-          if (Array.isArray(row.templates) && row.templates.length > 0) {
-            response.templatesByRowId.set(row.id, row.templates);
-          }
           hasAnyRow = true;
           scheduleRootRetry();
           return;

@@ -53,8 +53,7 @@ export type FlightRowMessage =
   | { k: typeof ROW_DONE }
   | { k: typeof ROW_ERROR; v: string }
   | {
-      k: typeof ROW_METADATA;
       id: number;
+      k: typeof ROW_METADATA;
       revivePaths: ReadonlyArray<(string | number)[]>;
-      templates?: FlightTemplateRowShape[];
     };

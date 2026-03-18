@@ -10,27 +10,30 @@ import {
 } from "../../module-references/constants";
 
 /** ASCII char codes for Flight wire format prefixes ($X) */
-export const CHR_CODES = {
-  ELEMENT_PREFIX: 36, // '$'
-  P: 80, // 'P' - URLSearchParams
-  S: 83, // 'S' - Symbol
-  R: 82, // 'R' - client reference
-  K: 75, // 'K' - FormData
-  F: 70, // 'F' - server reference
-  L: 76, // 'L' - lazy chunk
-} as const;
+export const enum CHR_CODES {
+  ELEMENT_PREFIX = 36, // '$'
+  P = 80, // 'P' - URLSearchParams
+  S = 83, // 'S' - Symbol
+  R = 82, // 'R' - client reference
+  K = 75, // 'K' - FormData
+  F = 70, // 'F' - server reference
+  L = 76, // 'L' - lazy chunk
+}
 
-export const CHR = {
-  ELEMENT_PREFIX: String.fromCharCode(CHR_CODES.ELEMENT_PREFIX),
-  P: String.fromCharCode(CHR_CODES.P),
-  S: String.fromCharCode(CHR_CODES.S),
-  R: String.fromCharCode(CHR_CODES.R),
-  K: String.fromCharCode(CHR_CODES.K),
-  F: String.fromCharCode(CHR_CODES.F),
-  L: String.fromCharCode(CHR_CODES.L),
-} as const;
+export const enum CHR {
+  ELEMENT_PREFIX = "$",
+  P = "P",
+  S = "S",
+  R = "R",
+  K = "K",
+  F = "F",
+  L = "L",
+}
 
-export const CHR_PREFIXES = {
+export const CHR_PREFIXES: Record<
+  string,
+  `${CHR.ELEMENT_PREFIX}${Exclude<keyof typeof CHR, "ELEMENT_PREFIX">}`
+> = {
   CLIENT_REFERENCE: `${CHR.ELEMENT_PREFIX}${CHR.R}`,
   SERVER_REFERENCE: `${CHR.ELEMENT_PREFIX}${CHR.F}`,
   LAZY_CHUNK: `${CHR.ELEMENT_PREFIX}${CHR.L}`,
@@ -39,7 +42,6 @@ export const CHR_PREFIXES = {
   SYMBOL: `${CHR.ELEMENT_PREFIX}${CHR.S}`,
 } as const;
 
-export { CLIENT_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL };
 export const REACT_ELEMENT_SYMBOL = Symbol.for("react.transitional.element");
 export const LEGACY_REACT_ELEMENT_SYMBOL = Symbol.for("react.element");
 export const REACT_FRAGMENT_SYMBOL = Symbol.for("react.fragment");
@@ -55,16 +57,16 @@ export const REVIVE_PATH_WILDCARD = -1;
 export const EMPTY_ARRAY = [] as const;
 
 /** Wire tagged value type IDs: compact [typeId, payload] instead of { $t, ... }. */
-export const WIRE_TAG = {
-  SEARCH: 3,
-  FORMDATA: 4,
-  ROW_REF: 7,
-  CLIENT_REF: 8,
-  SERVER_REF: 9,
-  ELEMENT: 10,
-  HOST: 11,
-  FRAGMENT: 12,
-} as const;
+export const enum WIRE_TAG {
+  SEARCH = 3,
+  FORMDATA = 4,
+  ROW_REF = 7,
+  CLIENT_REF = 8,
+  SERVER_REF = 9,
+  ELEMENT = 10,
+  HOST = 11,
+  FRAGMENT = 12,
+}
 
 /** Sentinel for compact wire format; first element of tagged arrays. Unlikely in normal data. */
 export const WIRE_TAG_SENTINEL = "\0";
@@ -75,3 +77,5 @@ export const ROW_BINARY = 1;
 export const ROW_DONE = 2;
 export const ROW_ERROR = 3;
 export const ROW_METADATA = 4;
+
+export { CLIENT_REFERENCE_SYMBOL, SERVER_REFERENCE_SYMBOL };
