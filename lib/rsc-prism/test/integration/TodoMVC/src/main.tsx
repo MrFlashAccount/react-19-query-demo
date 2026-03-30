@@ -68,8 +68,8 @@ function App() {
           {isPending ? "Refreshing RSC view..." : ""}
         </p>
 
-        <TodoMetricsRSC filter={filter} />
-        <TodoViewRSC filter={filter} />
+        <TodoMetrics filter={filter} />
+        <TodoView filter={filter} />
       </main>
     </TodoProvider>
   );
@@ -79,7 +79,7 @@ export interface TodoViewProps {
   filter: TodoFilter;
 }
 
-const TodoViewRSC = rsc(async function TodoViewRSC({ filter }: TodoViewProps) {
+const TodoView = rsc(async function TodoView({ filter }: TodoViewProps) {
   "use worker";
 
   const { visibleTodos, totalCount, activeCount, completedCount, allCompleted } =
@@ -121,7 +121,7 @@ const TodoViewRSC = rsc(async function TodoViewRSC({ filter }: TodoViewProps) {
   );
 });
 
-const TodoMetricsRSC = rsc(async function TodoMetricsRSC({ filter }: TodoViewProps) {
+const TodoMetrics = rsc(async function TodoMetrics({ filter }: TodoViewProps) {
   "use worker";
 
   const { totalCount, activeCount, completedCount } = await buildTodoWorkerViewData(filter);

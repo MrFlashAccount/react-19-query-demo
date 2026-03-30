@@ -54,8 +54,8 @@ export async function renderToRowEmitter(
         emitModelRow(id, value) {
           emit(flightModelRow(id, value));
         },
-        emitMetadataRow(id, revivePaths, templates) {
-          emit(flightMetadataRow(id, revivePaths, templates));
+        emitMetadataRow(id, revivePaths) {
+          emit(flightMetadataRow(id, revivePaths));
         },
         emitBinaryRow(id, kind, bytes) {
           const { row, transfer } = flightBinaryRow(id, kind, bytes);

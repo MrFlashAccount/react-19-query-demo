@@ -4,8 +4,14 @@
  * flightBinaryRow returns transfer list so postMessage can transfer ArrayBuffers
  * without copying. Other rows are plain objects for JSON serialization.
  */
-import type { FlightRowMessage, FlightTemplateRowShape } from "./types";
-import { ROW_BINARY, ROW_DONE, ROW_ERROR, ROW_METADATA, ROW_MODEL } from "./constants";
+import type { FlightRowMessage } from "./types";
+import {
+  ROW_BINARY,
+  ROW_DONE,
+  ROW_ERROR,
+  ROW_METADATA,
+  ROW_MODEL,
+} from "./constants";
 import { binaryWireTagFromKind } from "./binary";
 
 /** Ensures buffer is transferable (not a view into SharedArrayBuffer); required for postMessage. */
@@ -28,11 +34,8 @@ export function flightModelRow(id: number, value: unknown): FlightRowMessage {
 export function flightMetadataRow(
   id: number,
   revivePaths: ReadonlyArray<(string | number)[]>,
-  templates?: FlightTemplateRowShape[],
 ): FlightRowMessage {
-  return templates != null && templates.length > 0
-    ? { k: ROW_METADATA, id, revivePaths, templates }
-    : { k: ROW_METADATA, id, revivePaths };
+  return { k: ROW_METADATA, id, revivePaths };
 }
 
 /** Returns row + transfer list; caller must pass transfer to postMessage for zero-copy. */
