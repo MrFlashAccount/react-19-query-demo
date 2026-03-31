@@ -14,6 +14,7 @@ import {
   ROW_ERROR,
   ROW_METADATA,
   ROW_MODEL,
+  traverseElementTuplesOnly,
 } from "./wire";
 
 const CHUNK_PENDING = 0;
@@ -339,12 +340,7 @@ function initializeModelChunk<T>(response: FlightResponse, chunk: FlightChunk<T>
     if (revivePaths != null && revivePaths.length > 0) {
       const root = expandedRoot;
       applyDirectPathReplacements(root, revivePaths, decodeContext);
-      revived = root as T;
-      console.log("revived", {
-        revived: revived,
-        root: root,
-        revivePaths,
-      });
+      revived = traverseElementTuplesOnly(decodeContext, root) as T;
     } else {
       revived = reviveModelValueTree(decodeContext, expandedRoot) as T;
     }

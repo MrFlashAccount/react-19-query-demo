@@ -5,6 +5,7 @@
 import type { ReactNode } from "react";
 import type { EncodedActionArgs, RSCContext, RSCRenderOptions } from "../types";
 import type { FlightRowEmit } from "../flight-runtime/server";
+import { flightDoneRow, flightModelRow } from "../flight-runtime/wire";
 import { decodeActionArgs } from "./decode";
 
 /**
@@ -43,6 +44,11 @@ export async function handleActionRows(
   options?: RSCRenderOptions,
 ): Promise<void> {
   const result = await executeAction(ctx, actionId, encodedArgs);
+  if (result === undefined) {
+    emit(flightModelRow(0, undefined));
+    emit(flightDoneRow());
+    return;
+  }
   await renderRows(result as ReactNode, ctx, emit, {
     onError: options?.onError,
     signal: options?.signal,

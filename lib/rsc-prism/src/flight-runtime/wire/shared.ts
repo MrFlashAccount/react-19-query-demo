@@ -115,6 +115,9 @@ export function isReactElementLike(value: unknown): value is {
   key: string | null;
   props: Record<string, unknown>;
 } {
+  if (typeof value !== "object" || value == null) {
+    return false;
+  }
   const candidate = value as { $$typeof?: unknown };
   return (
     candidate.$$typeof === REACT_ELEMENT_SYMBOL ||

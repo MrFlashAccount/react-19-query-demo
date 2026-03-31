@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import {
   flightDoneRow,
   flightErrorRow,
+  flightModelRow,
   ROW_DONE,
   ROW_ERROR,
   type FlightRowMessage,
@@ -57,6 +58,13 @@ export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): 
       rows.push(row);
     });
     return rows;
+  }
+
+  function resolveActionRows(actionValue: unknown): Promise<FlightRowMessage[]> {
+    if (actionValue === undefined) {
+      return Promise.resolve([flightModelRow(0, undefined), flightDoneRow()]);
+    }
+    return renderRowsToArray(actionValue as ReactNode);
   }
 
   function splitTerminalRow(rows: FlightRowMessage[]): {
@@ -111,7 +119,7 @@ export async function createWorkerRuntime(options: CreateWorkerRuntimeOptions): 
 
           try {
             const actionValue = await handler.executeAction(actionId, encodedArgs);
-            const actionRows = await renderRowsToArray(actionValue as ReactNode);
+            const actionRows = await resolveActionRows(actionValue);
             const { contentRows, terminalRow } = splitTerminalRow(actionRows);
 
             const batchEntries: WorkerActionRefreshBatchEntryMessage[] = [];

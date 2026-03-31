@@ -1526,10 +1526,7 @@ function buildMainVirtualModuleCode(
   return `${lines.join("\n")}\n`;
 }
 
-function buildWorkerComponentRegistryCode(
-  modules: WorkerRuntimeModuleEntry[],
-  componentBindings: WorkerRuntimeComponentBinding[],
-): { code: string; actionShortIdMap: Map<string, string> } {
+function buildWorkerActionShortIdMap(modules: WorkerRuntimeModuleEntry[]): Map<string, string> {
   const actionShortIdMap = new Map<string, string>();
   let shortIdCounter = 0;
   const getShortId = (fullId: string): string => {
@@ -1540,6 +1537,32 @@ function buildWorkerComponentRegistryCode(
     }
     return shortId;
   };
+
+  for (let i = 0; i < modules.length; i += 1) {
+    const entry = modules[i];
+    const actionExports = new Set(entry.exportsInfo.actionExports);
+    const exportNames: string[] = [];
+    if (entry.exportsInfo.hasDefault) {
+      exportNames.push("default");
+    }
+    exportNames.push(...entry.exportsInfo.named);
+    for (let j = 0; j < exportNames.length; j += 1) {
+      const exportName = exportNames[j];
+      if (!actionExports.has(exportName)) {
+        continue;
+      }
+      getShortId(`${entry.moduleId}#${exportName}`);
+    }
+  }
+
+  return actionShortIdMap;
+}
+
+function buildWorkerComponentRegistryCode(
+  modules: WorkerRuntimeModuleEntry[],
+  componentBindings: WorkerRuntimeComponentBinding[],
+): { code: string; actionShortIdMap: Map<string, string> } {
+  const actionShortIdMap = buildWorkerActionShortIdMap(modules);
 
   const lines: string[] = [];
   lines.push("const componentRegistry = new Map();");
@@ -1569,7 +1592,7 @@ function buildWorkerComponentRegistryCode(
         exportName === "default" ? `${importName}.default` : `${importName}.${exportName}`;
       if (actionExports.has(exportName)) {
         const fullId = `${entry.moduleId}#${exportName}`;
-        const shortId = getShortId(fullId);
+        const shortId = actionShortIdMap.get(fullId)!;
         lines.push(`if (typeof ${accessExpression} === "function") {`);
         lines.push(`  actionRegistry.set(${JSON.stringify(shortId)}, ${accessExpression});`);
         lines.push(`  workerActions[${JSON.stringify(shortId)}] = ${accessExpression};`);
@@ -1624,7 +1647,7 @@ function buildGeneratedWorkerEntryCode(experimentalActionBatchRefresh: boolean):
 import { createWorkerRowHandler } from "@lib/rsc-prism/server";
 import { encodedArgsFromMessage } from "@lib/rsc-prism/actions";
 import { createWorkerRowTransportMessageHandler } from "@lib/rsc-prism/transport";
-import { flightErrorRow } from "@lib/rsc-prism/flight-runtime/wire";
+import { flightDoneRow, flightErrorRow, flightModelRow } from "@lib/rsc-prism/flight-runtime/wire";
 import { resolveWorkerComponent, workerActions } from "./worker-component-registry";
 
 const ACTION_BATCH_REFRESH = ${experimentalActionBatchRefresh ? "true" : "false"};
@@ -1636,6 +1659,13 @@ async function renderRowsToArray(element) {
     rows.push(row);
   });
   return rows;
+}
+
+function resolveActionRows(actionValue) {
+  if (actionValue === undefined) {
+    return Promise.resolve([flightModelRow(0, undefined), flightDoneRow()]);
+  }
+  return renderRowsToArray(actionValue);
 }
 
 function splitTerminalRow(rows) {
@@ -1679,44 +1709,49 @@ self.addEventListener(
         return;
       }
 
-      const actionValue = await handler.executeAction(actionId, encodedArgs);
-      const actionRows = await renderRowsToArray(actionValue);
-      const { contentRows, terminalRow } = splitTerminalRow(actionRows);
+      try {
+        const actionValue = await handler.executeAction(actionId, encodedArgs);
+        const actionRows = await resolveActionRows(actionValue);
+        const { contentRows, terminalRow } = splitTerminalRow(actionRows);
 
-      const entries = [];
-      for (let i = 0; i < refreshTargets.length; i += 1) {
-        const refreshTarget = refreshTargets[i];
-        const targetKey = typeof refreshTarget?.targetKey === "string" ? refreshTarget.targetKey : "";
-        const componentId =
-          typeof refreshTarget?.componentId === "string" ? refreshTarget.componentId : "";
-        const component = resolveWorkerComponent(componentId);
-        if (component == null) {
-          entries.push({
-            targetKey,
-            error: "Missing or unknown worker component reference: " + componentId,
-          });
-          continue;
+        const entries = [];
+        for (let i = 0; i < refreshTargets.length; i += 1) {
+          const refreshTarget = refreshTargets[i];
+          const targetKey = typeof refreshTarget?.targetKey === "string" ? refreshTarget.targetKey : "";
+          const componentId =
+            typeof refreshTarget?.componentId === "string" ? refreshTarget.componentId : "";
+          const component = resolveWorkerComponent(componentId);
+          if (component == null) {
+            entries.push({
+              targetKey,
+              error: "Missing or unknown worker component reference: " + componentId,
+            });
+            continue;
+          }
+          try {
+            const rows = await renderRowsToArray(component(refreshTarget.componentProps ?? {}));
+            entries.push({ targetKey, rows });
+          } catch (error) {
+            entries.push({
+              targetKey,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
-        try {
-          const rows = await renderRowsToArray(component(refreshTarget.componentProps ?? {}));
-          entries.push({ targetKey, rows });
-        } catch (error) {
-          entries.push({
-            targetKey,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
 
-      controls.setActionRefreshBatch({
-        seq: typeof request.refreshBatchSeq === "number" ? request.refreshBatchSeq : 0,
-        entries,
-      });
-      for (let i = 0; i < contentRows.length; i += 1) {
-        emit(contentRows[i]);
+        controls.setActionRefreshBatch({
+          seq: typeof request.refreshBatchSeq === "number" ? request.refreshBatchSeq : 0,
+          entries,
+        });
+        for (let i = 0; i < contentRows.length; i += 1) {
+          emit(contentRows[i]);
+        }
+        emit(terminalRow);
+        return;
+      } catch (error) {
+        emit(flightErrorRow(error instanceof Error ? error.message : String(error)));
+        return;
       }
-      emit(terminalRow);
-      return;
     }
 
     throw new Error("Unsupported operation");
@@ -2526,9 +2561,10 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
           importBinding.resolvedAbsolutePath != null
             ? mapModuleId(importBinding.resolvedAbsolutePath)
             : importBinding.sourceSpecifier;
+        const fullActionId = `${importedModuleId}#${importBinding.importedName}`;
         actionRefLines.push(
           `const ${importBinding.localName} = createActionRefStub(${JSON.stringify(
-            `${importedModuleId}#${importBinding.importedName}`,
+            actionShortIdMap.get(fullActionId) ?? fullActionId,
           )});`,
         );
         continue;
@@ -2802,7 +2838,16 @@ function createRscPrismPlugin(options: RscPrismInternalPluginOptions): Plugin {
     await mkdir(inlineComponentsDir, { recursive: true });
 
     await ensureRefIdMap();
-    const workerRuntimeCollection = await collectWorkerModulesForRuntime();
+    let workerRuntimeCollection = await collectWorkerModulesForRuntime();
+    actionShortIdMap = buildWorkerActionShortIdMap(workerRuntimeCollection.modules);
+    // Inline worker component extraction can discover extra client modules.
+    // Rebuild ref ids against that expanded set before writing inline sources,
+    // or worker-side createClientRef() calls can drift from the main table.
+    inferredClientModulePaths = workerRuntimeCollection.inferredClientModules;
+    refIdMapCache = null;
+    await ensureRefIdMap();
+    workerRuntimeCollection = await collectWorkerModulesForRuntime();
+    actionShortIdMap = buildWorkerActionShortIdMap(workerRuntimeCollection.modules);
     for (const inlineSource of workerRuntimeCollection.inlineSources) {
       const inlinePath = path.resolve(inlineComponentsDir, inlineSource.fileName);
       await writeFile(inlinePath, inlineSource.sourceCode, "utf8");

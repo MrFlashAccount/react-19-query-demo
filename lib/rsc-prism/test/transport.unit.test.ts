@@ -208,6 +208,44 @@ describe("transport", () => {
     expect(legacyInvalidate).not.toHaveBeenCalled();
   });
 
+  it("worker row transport resolves undefined action results during batched refresh", async () => {
+    const endpoint = new MockWorkerEndpoint();
+    const applyBatch = vi.fn();
+    const legacyInvalidate = vi.fn();
+    setRSCRefreshRuntime({
+      collectTargets: () => [
+        {
+          targetKey: 'worker-view.tsx#TodoWorkerView|props:{"filter":"all"}',
+          componentId: "worker-view.tsx#TodoWorkerView",
+          componentProps: { filter: "all" },
+        },
+      ],
+      applyBatch,
+      legacyInvalidate,
+    });
+
+    endpoint.onPostMessage = (message) => {
+      const request = message as WorkerTransportRequestMessage;
+      endpoint.emitMessage({
+        type: "rsc.transport.response.row",
+        id: request.id,
+        rows: [flightModelRow(0, undefined), flightDoneRow()],
+      } satisfies WorkerRowResponseMessage);
+    };
+
+    const transport = createWorkerRowTransport(endpoint, {
+      experimentalActionBatchRefresh: true,
+    });
+    await expect(
+      transport.sendActionDirect({
+        actionId: "actions#save",
+        body: "[]",
+      }),
+    ).resolves.toBeUndefined();
+    expect(applyBatch).not.toHaveBeenCalled();
+    expect(legacyInvalidate).not.toHaveBeenCalled();
+  });
+
   it("worker row transport falls back to legacy invalidate when no refresh targets are mounted", async () => {
     const endpoint = new MockWorkerEndpoint();
     const applyBatch = vi.fn();

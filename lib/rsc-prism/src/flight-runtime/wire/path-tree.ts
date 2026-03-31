@@ -28,12 +28,6 @@ function setValueAtPath(
   const lastKey = String(path[path.length - 1]);
   const lastSegment = (current as Record<string, unknown>)[lastKey];
   const revived = reviver(lastSegment as string);
-  console.log("setValueAtPath", {
-    current: { ...current },
-    lastKey,
-    lastSegment,
-    revived,
-  });
   (current as Record<string, unknown>)[lastKey] = revived;
 }
 
@@ -46,8 +40,6 @@ function applyFlatPathReplacements(
     if (path.length === 0) continue;
     setValueAtPath(root, path, reviver);
   }
-
-  console.log("applyFlatPathReplacements", { root, paths });
 }
 
 /** Walks the tree and revives only $X strings at leaf paths; skips the rest of the model. */
