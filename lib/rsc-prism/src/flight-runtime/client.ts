@@ -65,13 +65,19 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   return typeof value === "object" && value != null && "then" in value;
 }
 
-function isLazyWrapper(
-  value: unknown,
-): value is { $$typeof: symbol; _payload: unknown; _init: (payload: unknown) => unknown } {
+function isLazyWrapper(value: unknown): value is {
+  $$typeof: symbol;
+  _payload: unknown;
+  _init: (payload: unknown) => unknown;
+} {
   if (typeof value !== "object" || value == null) {
     return false;
   }
-  const candidate = value as { $$typeof?: unknown; _payload?: unknown; _init?: unknown };
+  const candidate = value as {
+    $$typeof?: unknown;
+    _payload?: unknown;
+    _init?: unknown;
+  };
   return candidate.$$typeof === REACT_LAZY_SYMBOL && typeof candidate._init === "function";
 }
 

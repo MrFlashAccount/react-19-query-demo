@@ -286,7 +286,9 @@ function traverseElementTuplesOnlyInternal<Chunk>(
     const rawProps = value[3];
     let props: Record<string, unknown>;
     if (Array.isArray(rawProps)) {
-      props = { children: traverseElementTuplesOnlyInternal(rawProps, context) };
+      props = {
+        children: traverseElementTuplesOnlyInternal(rawProps, context),
+      };
     } else {
       props = rawProps as Record<string, unknown>;
       const children = props.children;

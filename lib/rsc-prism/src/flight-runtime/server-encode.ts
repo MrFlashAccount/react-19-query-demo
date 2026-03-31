@@ -5,37 +5,24 @@
  */
 
 import type { FlightRowMessage, StreamEncodeContext } from "./wire";
-import {
-  binaryWireTagFromKind,
-  encodeStreamType,
-  encodeStreamValue,
-} from "./wire";
+import { binaryWireTagFromKind, encodeStreamType, encodeStreamValue } from "./wire";
 import { CHR, REACT_FRAGMENT_SYMBOL } from "./wire/constants";
 import { isClientReference, isReactElementLike } from "./wire/shared";
 
 const FLIGHT_ROW_ENCODER = new TextEncoder();
 
 export function isThenable(value: unknown): value is PromiseLike<unknown> {
-  if (
-    (typeof value !== "object" && typeof value !== "function") ||
-    value == null
-  ) {
+  if ((typeof value !== "object" && typeof value !== "function") || value == null) {
     return false;
   }
   return "then" in value;
 }
 
 export function encodeFlightRow(id: number, value: unknown): Uint8Array {
-  return FLIGHT_ROW_ENCODER.encode(
-    `${id.toString(16)}:${JSON.stringify(value)}\n`,
-  );
+  return FLIGHT_ROW_ENCODER.encode(`${id.toString(16)}:${JSON.stringify(value)}\n`);
 }
 
-export function encodeBinaryFlightRow(
-  id: number,
-  kind: string,
-  bytes: Uint8Array,
-): Uint8Array {
+export function encodeBinaryFlightRow(id: number, kind: string, bytes: Uint8Array): Uint8Array {
   const tag = binaryWireTagFromKind(kind);
   const prefix = FLIGHT_ROW_ENCODER.encode(
     `${id.toString(16)}:${tag}${bytes.byteLength.toString(16)},`,
@@ -47,18 +34,12 @@ export function encodeBinaryFlightRow(
   return output;
 }
 
-export type FlightRowEmit = (
-  row: FlightRowMessage,
-  transfer?: Transferable[],
-) => void;
+export type FlightRowEmit = (row: FlightRowMessage, transfer?: Transferable[]) => void;
 
 export interface RenderSink {
   readonly settled: boolean;
   emitModelRow: (id: number, value: unknown) => void;
-  emitMetadataRow: (
-    id: number,
-    revivePaths: ReadonlyArray<(string | number)[]>,
-  ) => void;
+  emitMetadataRow: (id: number, revivePaths: ReadonlyArray<(string | number)[]>) => void;
   emitBinaryRow: (id: number, kind: string, bytes: Uint8Array) => void;
 }
 
@@ -111,11 +92,7 @@ function encodeServerNode(
     return encodeServerNode(renderedValue, context, path);
   }
   if (type === REACT_FRAGMENT_SYMBOL) {
-    const children = encodeServerNode(value.props.children, context, [
-      ...path,
-      3,
-      "children",
-    ]);
+    const children = encodeServerNode(value.props.children, context, [...path, 3, "children"]);
     return children;
   }
 
@@ -159,10 +136,7 @@ function encodeServerElement(
   const propsPath = [...path, 3];
 
   for (let i = 0; i < len; i += 1) {
-    const v = encodeServerNode(value.props[propKeys[i]], context, [
-      ...propsPath,
-      propKeys[i],
-    ]);
+    const v = encodeServerNode(value.props[propKeys[i]], context, [...propsPath, propKeys[i]]);
     encodedValues[i] = v;
     if (!hasAsync && isThenable(v)) hasAsync = true;
   }

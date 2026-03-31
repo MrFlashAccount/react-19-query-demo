@@ -27,9 +27,14 @@ function setValueAtPath(
   }
   const lastKey = String(path[path.length - 1]);
   const lastSegment = (current as Record<string, unknown>)[lastKey];
-  (current as Record<string, unknown>)[lastKey] = reviver(
-    lastSegment as string,
-  );
+  const revived = reviver(lastSegment as string);
+  console.log("setValueAtPath", {
+    current: { ...current },
+    lastKey,
+    lastSegment,
+    revived,
+  });
+  (current as Record<string, unknown>)[lastKey] = revived;
 }
 
 function applyFlatPathReplacements(

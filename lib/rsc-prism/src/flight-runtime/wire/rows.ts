@@ -5,13 +5,7 @@
  * without copying. Other rows are plain objects for JSON serialization.
  */
 import type { FlightRowMessage } from "./types";
-import {
-  ROW_BINARY,
-  ROW_DONE,
-  ROW_ERROR,
-  ROW_METADATA,
-  ROW_MODEL,
-} from "./constants";
+import { ROW_BINARY, ROW_DONE, ROW_ERROR, ROW_METADATA, ROW_MODEL } from "./constants";
 import { binaryWireTagFromKind } from "./binary";
 
 /** Ensures buffer is transferable (not a view into SharedArrayBuffer); required for postMessage. */

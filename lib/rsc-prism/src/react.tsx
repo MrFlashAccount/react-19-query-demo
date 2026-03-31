@@ -395,7 +395,10 @@ export function rsc<Props = unknown>(reference: ComponentReference<Props>) {
       }
     }
 
-    const promise = fetchRSC(reference, { props });
+    const promise = fetchRSC(reference, { props }).then((result) => {
+      console.log("fetchRSC promise resolved", { result });
+      return result;
+    });
     const entry = { key: cacheKey, promise } as const;
     store.cache.set(cacheKey, entry);
 
@@ -408,7 +411,7 @@ let runtimePromise: Promise<{
   dispose: () => void;
 }> | null = null;
 
-function getRuntimePromise() {
+function getRuntimePromiseSingleton() {
   if (runtimePromise == null) {
     runtimePromise = bootstrapWorkerRuntime().then((runtime) => ({
       runtime,
@@ -419,6 +422,6 @@ function getRuntimePromise() {
 }
 
 export function RuntimeProvider({ children }: React.PropsWithChildren) {
-  use(getRuntimePromise());
+  use(getRuntimePromiseSingleton());
   return children;
 }

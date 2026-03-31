@@ -251,10 +251,7 @@ export async function fetchRSC<Props, Target extends ComponentReference<Props>>(
   }
   const manifest = resolveClientManifestOrThrow();
   return transport.fetchRSCDirect<Awaited<ReturnType<Target>>>(
-    {
-      componentId: workerComponent.$$id,
-      componentProps: props,
-    },
+    { componentId: workerComponent.$$id, componentProps: props },
     { manifest, callServer: resolvedCallServer },
   );
 }

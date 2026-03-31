@@ -24,6 +24,7 @@ Emit metadata with **paths** to values that need revival. The client then does *
 ```
 
 **Revival kinds** (optional, for future optimization):
+
 - `clientRef` – resolve via `resolveClientReference`
 - `serverRef` – create via `createServerReference`
 - `lazyChunk` – wrap via `createLazyChunkWrapper`
@@ -41,6 +42,7 @@ For v1, paths alone suffice; the client can infer kind from the value at that pa
 Add optional `collectRevivePaths?: (path: (string | number)[], kind: ReviveKind) => void` to `StreamEncodeContext`.
 
 When encoding a value that needs revival:
+
 - `$C` (clientRef) → `collectRevivePaths(currentPath, "clientRef")`
 - `$F` (serverRef) → `collectRevivePaths(currentPath, "serverRef")`
 - `$L` / `$`+hex (lazy chunk) → `collectRevivePaths(currentPath, "lazyChunk")`
@@ -108,6 +110,7 @@ function reviveModelValueTreeWithPaths<Chunk>(
 Path set: use a serialized form like `"props.children.0.props.onClick"` for fast `has(prefix)` checks.
 
 **Pruned recursion logic:**
+
 - At each node, current path = `pathPrefix`.
 - If no path in `revivePaths` has `pathPrefix` as prefix, **return value as-is** (no recursion). This is the prune.
 - If current path is in `revivePaths`, apply revival (parseModelString / maybeDecodeElementTuple).
@@ -147,21 +150,25 @@ Same approach: `decodeWireValueInternal` gets optional `revivePaths`. When prese
 ## 5. Implementation Phases
 
 ### Phase 1: Stream format, server
+
 - Add `collectRevivePaths` to `StreamEncodeContext`.
 - Thread path through `encodeStreamValueInternal` and `encodeServerNode`.
 - Emit metadata row `M{id}:{paths}` before each model row when collector is present.
 
 ### Phase 2: Stream format, client
+
 - Parse metadata rows, build `Map<rowId, revivePaths>`.
 - Implement `reviveModelValueTreePruned`.
 - Use pruned revival when paths exist for a row.
 
 ### Phase 3: Wire format
+
 - Add path collection to `encodeWireValueImpl`.
 - Implement pruned `decodeWireValueInternal`.
 - Wire format is used for action replies; ensure metadata is passed through.
 
 ### Phase 4: Optimize path storage
+
 - Consider path compression (shared prefixes, dictionary).
 - Measure metadata size vs. tree size.
 

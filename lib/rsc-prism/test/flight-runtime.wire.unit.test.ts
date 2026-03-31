@@ -195,7 +195,9 @@ describe("flight wire decode correctness", () => {
     const encoded = encodeWireValue(payload) as Record<string, unknown>;
     expect(encoded.bytes).toBeInstanceOf(Uint8Array);
     expect(Array.from(encoded.bytes as Uint8Array)).toEqual([5, 6, 7]);
-    const decoded = decodeWireValue(encoded, (id) => `client:${id}`) as { bytes: Uint8Array };
+    const decoded = decodeWireValue(encoded, (id) => `client:${id}`) as {
+      bytes: Uint8Array;
+    };
     expect(Array.from(decoded.bytes)).toEqual([5, 6, 7]);
   });
 });
@@ -267,7 +269,10 @@ describe("flight wire compact stream format", () => {
   });
 
   it("creates callable server references that delegate to callServer", async () => {
-    const callServer = vi.fn(async (actionId: string, args: unknown[]) => ({ actionId, args }));
+    const callServer = vi.fn(async (actionId: string, args: unknown[]) => ({
+      actionId,
+      args,
+    }));
     const serverRefChunk = {
       status: 2,
       value: { id: "actions#save" },
@@ -293,7 +298,10 @@ describe("flight wire compact stream format", () => {
       $$bound: null;
     };
 
-    await expect(action("a", 2)).resolves.toEqual({ actionId: "actions#save", args: ["a", 2] });
+    await expect(action("a", 2)).resolves.toEqual({
+      actionId: "actions#save",
+      args: ["a", 2],
+    });
     expect(callServer).toHaveBeenCalledWith("actions#save", ["a", 2]);
     expect(action.$$typeof).toBe(Symbol.for("react.server.reference"));
     expect(action.$$id).toBe("actions#save");
@@ -582,7 +590,10 @@ describe("flight wire decode perf baselines", () => {
   });
 
   it("decodes large arrays within baseline", () => {
-    const payload = Array.from({ length: 20000 }, (_, i) => ({ n: i, ok: true }));
+    const payload = Array.from({ length: 20000 }, (_, i) => ({
+      n: i,
+      ok: true,
+    }));
     const elapsed = measureDecodeMs(payload, 2);
     expect(elapsed).toBeLessThan(5000);
   });
