@@ -1,29 +1,19 @@
 # goat-query
 
-`goat-query` is a React 19-native query library for people who want data fetching to feel like React, not like a second framework living next to it.
+`goat-query` is a query library built around the way React 19 already wants to work.
 
-The short version: if you like `Suspense`, `use(promise)`, transitions, and strong TypeScript, this is a small, readable query layer built around those ideas.
+I made it because I wanted the nice parts of query libraries - caching, invalidation, mutations, retries, devtools - without feeling like I was bolting a second framework onto React.
 
-## Why this exists
+If you like `Suspense`, `use(promise)`, transitions, and strong TypeScript, that's the whole pitch.
 
-A lot of query libraries were shaped before React 19. `goat-query` is designed around React 19-style data flows from the start.
+## Why I like it
 
-Instead of wrapping React with a big abstraction, it leans on React's own primitives:
-
-- `useQuery()` gives you a promise you can read with `use()`
-- `QueryProvider` updates through `startTransition()`
-- `useMutation()` is built around React 19 transitions, with typed optimistic-update definitions in the mutation API
-- the package build runs through the React Compiler plugin
-
-So the mental model stays simple: define queries and mutations once, connect them with a dependency graph, and let the client handle caching, refetching, and invalidation.
-
-## Why it's nice
-
-- **React 19-oriented** — Suspense, `use(promise)`, and transitions are part of the normal flow.
-- **React Compiler-aware** — the library build runs with `babel-plugin-react-compiler`.
-- **Lean by design** — the surface area is intentionally small: core, React bindings, and devtools.
-- **Strong end-to-end typing** — query params/results stay typed, invalidation targets are typed, and optimistic-update definitions stay typed with the mutation API.
-- **Devtools included** — `QueryDevtools`, `QueryLogger`, `QueryPerformanceTracker`, and `QueryFlameGraph` ship as first-class exports.
+- **React 19-first** — `useQuery()` gives you a promise you can read with `use()`.
+- **Transitions-native** — updates flow through React transitions instead of fighting them.
+- **React Compiler-aware** — the build runs through `babel-plugin-react-compiler`.
+- **Typed all the way through** — query params, results, invalidation targets, and optimistic-update definitions stay typed.
+- **Small surface area** — core primitives, React bindings, and devtools. That's basically it.
+- **Devtools included** — `QueryDevtools`, `QueryLogger`, `QueryPerformanceTracker`, and `QueryFlameGraph` are first-class exports.
 
 ## Install
 
@@ -35,106 +25,138 @@ pnpm add @lib/goat-query react react-dom
 
 ## Quick start
 
+Here's the smallest useful shape.
+
+### Step 1: define a query
+
 ```tsx
-import { Suspense, use } from "react";
-import {
-  query,
-  mutation,
-  DependencyGraph,
-  QueryClient,
-  QueryProvider,
-  useQuery,
-  useMutation,
-} from "@lib/goat-query/react";
+import { query } from "@lib/goat-query/react";
 
-type Movie = { id: string; title: string };
-type MovieApi = {
-  searchMovies: (searchQuery: string, movieLimit: number) => Promise<Movie[]>;
-  updateMovieRating: (movieId: string, rating: number) => Promise<unknown>;
-};
-
-const moviesQuery = query({
-  queryFn: (params: { searchQuery: string; movieLimit: number }, ctx) =>
-    ctx.api.searchMovies(params.searchQuery, params.movieLimit),
+export const moviesQuery = query({
+  queryFn: async (params: { search: string }, ctx) => {
+    return ctx.api.searchMovies(params.search);
+  },
   staleTime: 5_000,
   gcTime: 60_000,
 });
+```
 
-const updateMovieRatingMutation = mutation({
-  mutationFn: (params: { movieId: string; rating: number }, ctx) =>
-    ctx.api.updateMovieRating(params.movieId, params.rating),
-  invalidates: [moviesQuery],
-});
+### Step 2: create a client
 
-const graph = new DependencyGraph([moviesQuery, updateMovieRatingMutation]);
-const queryClient = new QueryClient({ graph });
+```tsx
+import { DependencyGraph, QueryClient } from "@lib/goat-query/react";
 
-export function App({ api }: { api: MovieApi }) {
-  return (
-    <QueryProvider queryClient={queryClient} context={{ api }}>
-      <Suspense fallback={<p>Loading movies…</p>}>
-        <Movies searchQuery="alien" movieLimit={10} />
-      </Suspense>
-    </QueryProvider>
-  );
-}
+const graph = new DependencyGraph([moviesQuery]);
+export const queryClient = new QueryClient({ graph });
+```
 
-function Movies({ searchQuery, movieLimit }: { searchQuery: string; movieLimit: number }) {
+`DependencyGraph` sounds more dramatic than it is. It's just the place where you register queries and mutations so the client knows how they relate.
+
+### Step 3: read data with Suspense
+
+```tsx
+import { Suspense, use } from "react";
+import { QueryProvider, useQuery } from "@lib/goat-query/react";
+
+function Movies({ search }: { search: string }) {
   const { promise } = useQuery({
     query: moviesQuery,
-    params: { searchQuery, movieLimit },
+    params: { search },
   });
 
   const movies = use(promise);
-  const { mutate: updateRating } = useMutation({
-    mutation: updateMovieRatingMutation,
-  });
 
   return (
     <ul>
       {movies.map((movie) => (
-        <li key={movie.id}>
-          {movie.title}
-          <button onClick={() => updateRating({ movieId: movie.id, rating: 5 })}>
-            Rate 5
-          </button>
-        </li>
+        <li key={movie.id}>{movie.title}</li>
       ))}
     </ul>
   );
 }
+
+export function App({
+  api,
+}: {
+  api: {
+    searchMovies: (search: string) => Promise<Array<{ id: string; title: string }>>;
+  };
+}) {
+  return (
+    <QueryProvider queryClient={queryClient} context={{ api }}>
+      <Suspense fallback={<p>Loading movies…</p>}>
+        <Movies search="alien" />
+      </Suspense>
+    </QueryProvider>
+  );
+}
 ```
 
-## Tiny overview
+That's already the main loop:
 
-There are really only three pieces to keep in your head:
+1. describe how to fetch data
+2. give the client a graph
+3. call `useQuery()`
+4. read the promise with `use()`
 
-1. **Define queries and mutations** with `query()` and `mutation()`.
-2. **Connect them in a `DependencyGraph`** so invalidation relationships live in one place and the client can follow them consistently.
-3. **Use the React bindings** with `QueryProvider`, `useQuery()`, and `useMutation()`.
+## When you need mutations
 
-That gives you:
+This is where the graph starts paying rent.
 
-- cached query instances by definition + params
+```tsx
+import { mutation } from "@lib/goat-query/react";
+
+export const updateMovieRatingMutation = mutation({
+  mutationFn: (params: { movieId: string; rating: number }, ctx) =>
+    ctx.api.updateMovieRating(params.movieId, params.rating),
+  invalidates: [moviesQuery],
+});
+```
+
+Then register it in the same graph:
+
+```tsx
+const graph = new DependencyGraph([moviesQuery, updateMovieRatingMutation]);
+```
+
+And use it in React:
+
+```tsx
+const { mutate, isPending } = useMutation({
+  mutation: updateMovieRatingMutation,
+});
+```
+
+The nice part is that the typing stays connected. You define the mutation once, keep the invalidation next to it, and stop scattering that logic around the app.
+
+## What you get out of the box
+
+- cache entries keyed by query definition + params
 - stale time and garbage collection controls
-- typed mutation invalidation and typed optimistic-update definitions in the API
-- a React 19-first Suspense flow
-- optional devtools when you want to inspect what's happening
+- retries
+- typed mutation invalidation
+- typed optimistic-update definitions in the mutation API
+- React 19-style Suspense flows
+- optional devtools when you want to inspect what is happening
 
 ## Devtools
-
-If you want visibility while building, import from `@lib/goat-query/devtools`:
 
 ```tsx
 import { QueryDevtools } from "@lib/goat-query/devtools";
 ```
 
-Other available exports are `QueryLogger`, `QueryPerformanceTracker`, and `QueryFlameGraph`.
+Other exports:
+
+- `QueryLogger`
+- `QueryPerformanceTracker`
+- `QueryFlameGraph`
 
 ## Package entry points
 
-- `@lib/goat-query` — core client/cache/graph primitives
+- `@lib/goat-query` — core client, cache, graph primitives
 - `@lib/goat-query/react` — React bindings plus core exports
 - `@lib/goat-query/devtools` — debugging and inspection tools
 
-If you want a concrete example, the `examples/movies-db` app in this repo shows the intended shape pretty well.
+## Want a real example?
+
+Check `examples/movies-db` in this repo. That's the best place to see the intended shape in a real app.
