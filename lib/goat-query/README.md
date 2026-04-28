@@ -2,18 +2,13 @@
 
 `goat-query` is a query library built around the way React 19 already wants to work.
 
-I made it because I wanted the nice parts of query libraries - caching, invalidation, mutations, retries, devtools - without feeling like I was bolting a second framework onto React.
+It handles caching, retries, mutations, and invalidation without pulling you away from `Suspense`, `use(promise)`, and transitions.
 
-If you like `Suspense`, `use(promise)`, transitions, and strong TypeScript, that's the whole pitch.
+## Why use it
 
-## Why I like it
-
-- **React 19-first** — `useQuery()` gives you a promise you can read with `use()`.
-- **Transitions-native** — updates flow through React transitions instead of fighting them.
-- **React Compiler-aware** — the build runs through `babel-plugin-react-compiler`.
-- **Typed all the way through** — query params, results, invalidation targets, and optimistic-update definitions stay typed.
-- **Small surface area** — core primitives, React bindings, and devtools. That's basically it.
-- **Devtools included** — `QueryDevtools`, `QueryLogger`, `QueryPerformanceTracker`, and `QueryFlameGraph` are first-class exports.
+- Works naturally with React 19 data flows.
+- Gives you the usual query-library basics without a lot of extra ceremony.
+- Keeps query and mutation logic close to the code that uses it.
 
 ## Install
 
@@ -25,40 +20,43 @@ pnpm add @lib/goat-query react react-dom
 
 ## Quick start
 
-Here's the smallest useful shape.
+Three tiny pieces.
 
 ### Step 1: define a query
 
 ```tsx
 import { query } from "@lib/goat-query/react";
 
+async function fetchMovies(search: string) {
+  const res = await fetch(`/api/movies?search=${encodeURIComponent(search)}`);
+  if (!res.ok) throw new Error("Failed to load movies");
+  return res.json() as Promise<Array<{ id: string; title: string }>>;
+}
+
 export const moviesQuery = query({
-  queryFn: async (params: { search: string }, ctx) => {
-    return ctx.api.searchMovies(params.search);
-  },
+  queryFn: ({ search }: { search: string }) => fetchMovies(search),
   staleTime: 5_000,
   gcTime: 60_000,
 });
 ```
 
-### Step 2: create a client
+### Step 2: make the app registry
 
 ```tsx
-import { DependencyGraph, QueryClient } from "@lib/goat-query/react";
+import { DependencyGraph } from "@lib/goat-query/react";
 
 const graph = new DependencyGraph([moviesQuery]);
-export const queryClient = new QueryClient({ graph });
 ```
 
-`DependencyGraph` sounds more dramatic than it is. It's just the place where you register queries and mutations so the client knows how they relate.
+This is just the app-level registry. You list your queries and mutations there so `goat-query` knows what exists and what should refresh later.
 
-### Step 3: read data with Suspense
+### Step 3: render it
 
 ```tsx
 import { Suspense, use } from "react";
 import { QueryProvider, useQuery } from "@lib/goat-query/react";
 
-function Movies({ search }: { search: string }) {
+function MoviesList({ search }: { search: string }) {
   const { promise } = useQuery({
     query: moviesQuery,
     params: { search },
@@ -75,40 +73,45 @@ function Movies({ search }: { search: string }) {
   );
 }
 
-export function App({
-  api,
-}: {
-  api: {
-    searchMovies: (search: string) => Promise<Array<{ id: string; title: string }>>;
-  };
-}) {
+export function App() {
   return (
-    <QueryProvider queryClient={queryClient} context={{ api }}>
+    <QueryProvider graph={graph}>
       <Suspense fallback={<p>Loading movies…</p>}>
-        <Movies search="alien" />
+        <MoviesList search="alien" />
       </Suspense>
     </QueryProvider>
   );
 }
 ```
 
-That's already the main loop:
+That is the loop:
 
 1. describe how to fetch data
-2. give the client a graph
+2. register the query
 3. call `useQuery()`
 4. read the promise with `use()`
 
 ## When you need mutations
 
-This is where the graph starts paying rent.
+Same idea for writes.
 
 ```tsx
-import { mutation } from "@lib/goat-query/react";
+import { mutation, useMutation } from "@lib/goat-query/react";
+
+async function updateMovieRating(movieId: string, rating: number) {
+  const res = await fetch(`/api/movies/${movieId}/rating`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rating }),
+  });
+
+  if (!res.ok) throw new Error("Failed to update rating");
+  return res.json();
+}
 
 export const updateMovieRatingMutation = mutation({
-  mutationFn: (params: { movieId: string; rating: number }, ctx) =>
-    ctx.api.updateMovieRating(params.movieId, params.rating),
+  mutationFn: ({ movieId, rating }: { movieId: string; rating: number }) =>
+    updateMovieRating(movieId, rating),
   invalidates: [moviesQuery],
 });
 ```
